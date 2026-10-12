@@ -52,6 +52,40 @@ export const labelWidth = (lb: Pick<LabelBox, "text" | "fontSize">): number => {
 export const labelHeight = (lb: Pick<LabelBox, "text" | "fontSize">): number =>
 	lb.text.split("\n").length * lb.fontSize * 1.1
 
+/** Height of the label as DRAWN: a wrapped label's `<tspan>`s step 1.2em
+ *  per line (`renderMultilineTspans`), so its block is a little taller than
+ *  the 1.1-per-line collision box; a single line keeps `labelHeight`. The
+ *  text-background rect and the edge alignment below both size from this
+ *  so they agree with the glyphs. */
+export const labelBlockHeight = (
+	lb: Pick<LabelBox, "text" | "fontSize">
+): number => {
+	const lines = lb.text.split("\n").length
+	return lines > 1 ? lines * lb.fontSize * 1.2 : labelHeight(lb)
+}
+
+/** Which edge of the label block sits on the anchor's y. The layer draws
+ *  every label centered on `cy` (`dominantBaseline="middle"`, wrapped lines
+ *  centered as a block), so "top" / "bottom" are realized by shifting `cy`
+ *  half a block — see `alignBoxToAnchorEdge`. Absent = "middle". */
+export type LabelVAlign = "top" | "middle" | "bottom"
+
+/** Shift a box so the edge named by its `vAlign` lands where its center
+ *  was: "top" moves the block DOWN half its height (the top edge stays on
+ *  the anchor), "bottom" moves it UP. Runs after wrapping and endpoint
+ *  recomposition — the block height must be the final text's — and before
+ *  overlap avoidance, so collisions see the block where it's drawn. A box
+ *  without `vAlign` (or "middle") is returned as-is. */
+export const alignBoxToAnchorEdge = <
+	T extends Pick<LabelBox, "cy" | "text" | "fontSize"> & { vAlign?: LabelVAlign },
+>(
+	box: T
+): T => {
+	if (!box.vAlign || box.vAlign === "middle") return box
+	const half = labelBlockHeight(box) / 2
+	return { ...box, cy: box.vAlign === "top" ? box.cy + half : box.cy - half }
+}
+
 /** Filter `boxes` down to "the last anchor per series" — the rightmost /
  *  bottom-most box per series, depending on `axis`. Ties (multiple anchors
  *  at the same primary-axis position, e.g. stacked bars in the same

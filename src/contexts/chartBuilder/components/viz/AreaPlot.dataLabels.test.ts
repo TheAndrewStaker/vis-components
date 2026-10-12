@@ -203,3 +203,80 @@ describe("buildAreaAnchors — label series + rank per scope", () => {
 		}
 	})
 })
+
+describe("buildAreaAnchors — layer position along the measure extent", () => {
+	// Stack mode, category 1: A runs 0→10 (px 400→360), B runs 10→40
+	// (px 360→240). Vertical areas grow UP, so "inside" the top edge is a
+	// larger y and "outside" a smaller one.
+	const anchorsAt = (
+		position?: "edge" | "center" | "inside-base" | "inside-end" | "outside-end"
+	) =>
+		Object.fromEntries(
+			buildAreaAnchors({
+				aggregation: aggregation as any,
+				categoryScale,
+				measureScale,
+				stackMode: "stack",
+				decimals: null,
+				position,
+				outsideOffsetPx: 4,
+			}).map((a) => [a.key, a])
+		)
+
+	it("defaults to the layer's top edge — the pre-control placement", () => {
+		expect(anchorsAt(undefined)["1|B"].cy).toBeCloseTo(240, 5)
+		expect(anchorsAt("edge")["1|B"].cy).toBeCloseTo(240, 5)
+	})
+
+	it("center sits halfway between the layer's base and its top edge", () => {
+		const at = anchorsAt("center")
+		expect(at["1|A"].cy).toBeCloseTo(380, 5) // midpoint of 400→360
+		expect(at["1|B"].cy).toBeCloseTo(300, 5) // midpoint of 360→240
+	})
+
+	it("inside-base sits just above the stacked layer's base, not the baseline", () => {
+		const at = anchorsAt("inside-base")
+		expect(at["1|A"].cy).toBeCloseTo(396, 5)
+		expect(at["1|B"].cy).toBeCloseTo(356, 5) // B's base is A's top
+	})
+
+	it("inside-end / outside-end straddle the top edge by the pad", () => {
+		expect(anchorsAt("inside-end")["1|B"].cy).toBeCloseTo(244, 5)
+		expect(anchorsAt("outside-end")["1|B"].cy).toBeCloseTo(236, 5)
+	})
+
+	it("names the label-block edge that meets the anchor, per placement", () => {
+		expect(anchorsAt(undefined)["1|B"].vAlign).toBeUndefined()
+		expect(anchorsAt("center")["1|B"].vAlign).toBeUndefined()
+		expect(anchorsAt("inside-end")["1|B"].vAlign).toBe("top")
+		expect(anchorsAt("inside-base")["1|B"].vAlign).toBe("bottom")
+		expect(anchorsAt("outside-end")["1|B"].vAlign).toBe("bottom")
+	})
+
+	it("horizontal areas leave the edge alignment to the Alignment control", () => {
+		const anchors = buildAreaAnchors({
+			aggregation: { ...aggregation, isVertical: false } as any,
+			categoryScale,
+			measureScale,
+			stackMode: "stack",
+			decimals: null,
+			position: "inside-end",
+		})
+		expect(anchors.every((a) => a.vAlign === undefined)).toBe(true)
+	})
+
+	it("overlay: every layer's base is the zero baseline", () => {
+		const at = Object.fromEntries(
+			buildAreaAnchors({
+				aggregation: aggregation as any,
+				categoryScale,
+				measureScale,
+				stackMode: "overlay",
+				decimals: null,
+				position: "inside-base",
+			}).map((a) => [a.key, a])
+		)
+		expect(at["1|A"].cy).toBeCloseTo(396, 5)
+		expect(at["1|B"].cy).toBeCloseTo(396, 5)
+	})
+})

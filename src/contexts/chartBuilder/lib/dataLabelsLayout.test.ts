@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest"
 
 import {
 	CHAR_WIDTH_RATIO,
+	alignBoxToAnchorEdge,
 	estimateDataLabelMargins,
 	keepLastPerSeries,
+	labelBlockHeight,
 	labelHeight,
 	labelWidth,
 	leaderLineSegment,
@@ -650,5 +652,29 @@ describe("selectEndpointsPerSeries — explicit rank", () => {
 		)
 		expect(byText.get("left")).toBe("first")
 		expect(byText.get("right")).toBe("last")
+	})
+})
+
+describe("alignBoxToAnchorEdge — which edge of the label block meets the anchor", () => {
+	const single = { cy: 100, text: "12", fontSize: 10 }
+	const wrapped = { cy: 100, text: "North\nAmerica\nTotal", fontSize: 10 }
+
+	it("single-line block height is the collision height; wrapped steps 1.2em per line", () => {
+		expect(labelBlockHeight(single)).toBeCloseTo(11, 5)
+		expect(labelBlockHeight(wrapped)).toBeCloseTo(36, 5)
+	})
+
+	it("no vAlign / 'middle' leaves the box untouched", () => {
+		expect(alignBoxToAnchorEdge(wrapped).cy).toBe(100)
+		expect(alignBoxToAnchorEdge({ ...wrapped, vAlign: "middle" as const }).cy).toBe(100)
+	})
+
+	it("'top' hangs the block below the anchor; 'bottom' stands it above", () => {
+		// Wrapped: 3 lines × 12px = 36px block, so half = 18.
+		expect(alignBoxToAnchorEdge({ ...wrapped, vAlign: "top" as const }).cy).toBeCloseTo(118, 5)
+		expect(alignBoxToAnchorEdge({ ...wrapped, vAlign: "bottom" as const }).cy).toBeCloseTo(82, 5)
+		// Single line shifts by half its one-line height, so the edge rule is
+		// the same whether or not the label wrapped.
+		expect(alignBoxToAnchorEdge({ ...single, vAlign: "top" as const }).cy).toBeCloseTo(105.5, 5)
 	})
 })

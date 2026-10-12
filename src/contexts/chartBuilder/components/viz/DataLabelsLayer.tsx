@@ -5,6 +5,7 @@ import {
 	type HueConfig,
 } from "../../lib/channelConfig"
 import {
+	alignBoxToAnchorEdge,
 	labelHeight,
 	labelWidth,
 	leaderLineSegment,
@@ -12,6 +13,7 @@ import {
 	selectEndpointsPerSeries,
 	spreadOverlaps2D,
 	type LabelBox,
+	type LabelVAlign,
 } from "../../lib/dataLabelsLayout"
 import {
 	populationOverrides,
@@ -116,6 +118,14 @@ export type DataLabelAnchor = {
 	 * `label`; without it the anchor stays pre-formatted. Bars set it; area
 	 * / pie / tile anchors don't yet. */
 	row?: Record<string, unknown>
+	/** Which edge of the label block sits on `cy`. Renderers that place
+	 * labels against a mark edge set it so a tall (wrapped) label stays on
+	 * the intended side: an area's "inside, near end" anchors the TOP of the
+	 * block just under the layer's edge; "inside, near base" / "outside the
+	 * top edge" anchor the BOTTOM. Applied by the layer after wrapping and
+	 * before overlap avoidance (`alignBoxToAnchorEdge`). Absent = centered,
+	 * the historical placement. */
+	vAlign?: LabelVAlign
 }
 
 type Props = {
@@ -702,13 +712,32 @@ export const DataLabelsLayer = ({
 	// empty still enters the pass — its series-end populations may compose
 	// something — and empties are dropped here.
 	const selectAndSpread = (boxes: RenderBox[]): RenderBox[] => {
-		const filtered = expandLabelPopulations(
-			boxes.map(wrapBoxForLayout),
-			cfg,
-			selection,
-			lastAxis,
-			recomposeForPopulation
-		).filter((b) => b.label !== "")
+		// Edge alignment runs LAST in the positioning chain — after wrapping
+		// and population recomposition settle each label's final line count,
+		// so the half-block shift is the drawn block's — and before the
+		// overlap pass, so collisions see the block where it lands.
+		// Separate variables expand per variable: each variable's boxes are
+		// one per anchor, so the endpoint ranking sees the same anchors it
+		// would for a combined label (two boxes on one anchor would tie and
+		// only one could be tagged "last").
+		const wrapped = boxes.map(wrapBoxForLayout)
+		const expand = (bs: RenderBox[]) =>
+			expandLabelPopulations(
+				bs,
+				expansionCfg,
+				selection,
+				lastAxis,
+				recomposeForPopulation
+			)
+		const filtered = (
+			separate
+				? separateFields.flatMap((f) =>
+						expand(wrapped.filter((b) => b.ownField === f))
+					)
+				: expand(wrapped)
+		)
+			.filter((b) => b.label !== "")
+			.map(alignBoxToAnchorEdge)
 		// Overlap pass: seriesless anchors (maps, layout-placed labels) spread
 		// colliding labels in ANY direction (a downward-only pile looks
 		// lopsided around a ring or with leader lines); series charts keep the

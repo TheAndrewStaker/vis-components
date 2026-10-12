@@ -228,6 +228,9 @@ export const DataLabelsPanel = () => {
 	// the only mode where "Bar position" (label placement along the measure
 	// axis) applies — gate the control on it.
 	const isBarMode = chartMode === "bars-x" || chartMode === "bars-y"
+	// Area charts get the same placements along each layer's measure extent
+	// ("Layer position"), plus the layer's top edge as the default.
+	const isAreaMode = chartMode === "areas-x" || chartMode === "areas-y"
 	// "Of each" scope for the series ends. Shown only where it can change
 	// anything: bars grouped (a group-mode channel) or layered (stack /
 	// overlay), stacked areas, or several pies with a wedge channel — AND
@@ -237,7 +240,7 @@ export const DataLabelsPanel = () => {
 	// stands down there (every wedge is its own series, as before).
 	const scopeFamily: ScopeFamily | null = isBarMode
 		? "bars"
-		: chartMode === "areas-x" || chartMode === "areas-y"
+		: isAreaMode
 			? "areas"
 			: chartMode === "pies-x" || chartMode === "pies-y"
 				? "pies"
@@ -383,6 +386,7 @@ export const DataLabelsPanel = () => {
 		merged.yOffset !== 0 ||
 		(merged.positionRules ?? []).length > 0 ||
 		(isBarMode && (merged.barLabelPosition ?? "center") !== "center") ||
+		(isAreaMode && (merged.areaLabelPosition ?? "edge") !== "edge") ||
 		(isPolarMode &&
 			((merged.polarLabelAngle ?? 0) !== 0 ||
 				(merged.polarLabelRadius ?? 100) !== 100)) ||
@@ -985,6 +989,31 @@ export const DataLabelsPanel = () => {
 						/>
 						<p className="vc-help">
 							Where labels sit along the bar&apos;s measure axis.
+						</p>
+					</>
+				)}
+				{isAreaMode && (
+					<>
+						<SelectInput
+							label="Layer position"
+							labelClassName={LABEL_COL}
+							value={
+								(merged.areaLabelPosition ?? "edge") as NonNullable<
+									DataLabelsConfig["areaLabelPosition"]
+								>
+							}
+							options={[
+								{ value: "edge", label: "On the top edge (default)" },
+								{ value: "center", label: "Center of layer" },
+								{ value: "inside-base", label: "Inside, near base" },
+								{ value: "inside-end", label: "Inside, near end" },
+								{ value: "outside-end", label: "Outside the top edge" },
+							]}
+							onChange={(areaLabelPosition) => updateCfg({ areaLabelPosition })}
+						/>
+						<p className="vc-help">
+							Where labels sit between each layer&apos;s base and its top
+							edge. In a stacked area the base is the layer below.
 						</p>
 					</>
 				)}

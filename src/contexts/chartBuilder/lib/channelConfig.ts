@@ -1729,9 +1729,26 @@ export type DataLabelsConfig = {
 	 *     stack-bottom for stacked bars.
 	 *  - `"inside-end"`: just inside the bar near the top / stack-top.
 	 *  - `"outside-end"`: just outside the bar past the top of the slice.
-	 * Has no effect on scatter / area / pie / tile renderers (they have no
-	 * "measure axis end" to refer to). */
+	 * Has no effect on scatter / pie / tile renderers (they have no
+	 * "measure axis end" to refer to); areas have their own
+	 * `areaLabelPosition` because their default differs. */
 	barLabelPosition?: "center" | "inside-base" | "inside-end" | "outside-end"
+	/** Where labels sit along an area layer's measure axis, when the chart is
+	 * an area chart. The layer runs from its base (the zero baseline, or the
+	 * cumulative bottom of a stacked layer) to its top edge (the line).
+	 *  - `"edge"` (default): ON the layer's top edge — where the line is.
+	 *     Saved visuals from before the control keep this placement.
+	 *  - `"center"`: halfway between base and top ("middle of the stack").
+	 *  - `"inside-base"`: just inside the layer above its base.
+	 *  - `"inside-end"`: just inside the layer below its top edge.
+	 *  - `"outside-end"`: just outside the layer past its top edge.
+	 * Same four placements as `barLabelPosition`, plus the edge. */
+	areaLabelPosition?:
+		| "edge"
+		| "center"
+		| "inside-base"
+		| "inside-end"
+		| "outside-end"
 	/** When true, only the LAST label per series is rendered — useful for
 	 * directly labeling line charts and stacked bar charts at their end so
 	 * the legend can be turned off. "Series" is the value of the hue field
@@ -1974,6 +1991,7 @@ export const DEFAULT_DATA_LABELS_CONFIG: DataLabelsConfig = {
 	fieldFormats: {},
 	fieldColors: {},
 	barLabelPosition: "center",
+	areaLabelPosition: "edge",
 	onlyLastLabel: false,
 	// labelPoints deliberately ABSENT from the defaults: merged configs are
 	// `{...DEFAULT, ...saved}`, and a concrete "all" here would override the

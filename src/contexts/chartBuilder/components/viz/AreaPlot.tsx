@@ -18,6 +18,7 @@ import {
 	type LineDashPattern,
 	type StackMode,
 	type LabelPointsScope,
+	type DataLabelsConfig,
 } from "../../lib/channelConfig"
 import { getChartMode } from "../../lib/chartMode"
 import type { MeasureAxisRendererProps, ScatterRendererProps } from "../../lib/chartRendererProps"
@@ -601,6 +602,7 @@ export const AreaPlot = (props: AreaPlotProps = {}) => {
 							stackMode,
 							decimals: dataLabelsDecimals,
 							formatSpec: dataLabelsFormatSpec,
+							position: dataLabelsCfg?.areaLabelPosition ?? "edge",
 							sizeField: dataLabels?.size?.field ?? null,
 							encodings,
 							rows: rowsForChart,
@@ -1395,7 +1397,10 @@ const buildAreas = ({
  *  its stack — labels follow the visible top of the stacked area instead of
  *  the raw row's y value. For overlay (and group, which degrades to
  *  overlay), every layer draws from the baseline so each anchor sits at the
- *  layer's slice value directly.
+ *  layer's slice value directly. `position` moves the anchor along the
+ *  layer's measure extent (base → top edge) with the same placements bars
+ *  offer — center, inside-base, inside-end, outside-end — defaulting to
+ *  the top edge itself.
  *
  *  Without this, labels in `AreaPlot` were positioned by the row-based path
  *  (raw `xScale(row[x]), yScale(row[y])`) and ignored the stack the user
@@ -1409,6 +1414,8 @@ export const buildAreaAnchors = ({
 	stackMode,
 	decimals,
 	formatSpec,
+	position,
+	outsideOffsetPx,
 	sizeField,
 	encodings,
 	rows,
@@ -1424,6 +1431,13 @@ export const buildAreaAnchors = ({
 	/** The mapped value field's Label format spec (from
 	 *  `DataLabelsConfig.fieldFormats`); wins over `decimals` when set. */
 	formatSpec?: string | null
+	/** Where the label sits on the layer's measure extent
+	 *  (`DataLabelsConfig.areaLabelPosition`). Defaults to "edge": on the
+	 *  layer's top edge. */
+	position?: NonNullable<DataLabelsConfig["areaLabelPosition"]>
+	/** Pixel pad pushing "inside-base" / "inside-end" / "outside-end" off the
+	 * literal layer edge so labels don't kiss it. Same default as bars. */
+	outsideOffsetPx?: number
 	/** When mapped, aggregates the size field across rows in each (stack,
 	 *  layer) cell and surfaces the sum as the anchor's `sizeValue` so
 	 *  DataLabelsLayer can render the label at the right font size. */
@@ -1458,6 +1472,23 @@ export const buildAreaAnchors = ({
 	// the rendered polygon edges exactly.
 	const effectiveStackMode: "stack" | "overlay" =
 		stackMode === "stack" ? "stack" : "overlay"
+	const pos = position ?? "edge"
+	const pad = outsideOffsetPx ?? 4
+	// Which edge of the label block meets the anchor, so a tall (wrapped)
+	// label stays on the side of the edge its placement names: "inside,
+	// near end" hangs DOWN from just under the top edge (block top on the
+	// anchor); "inside, near base" and "outside the top edge" rise UP from
+	// theirs (block bottom on the anchor); "edge" / "center" stay centered.
+	// Vertical areas only — on a horizontal area the measure axis is x, and
+	// the user's Alignment control already picks the label's horizontal
+	// edge.
+	const vAlign: DataLabelAnchor["vAlign"] = !aggregation.isVertical
+		? undefined
+		: pos === "inside-end"
+			? "top"
+			: pos === "inside-base" || pos === "outside-end"
+				? "bottom"
+				: undefined
 
 	// Discover every layer key in the same order `buildAreas` does — each
 	// stack's slice order, deduped — so anchors emit in a stable, layer-major
@@ -1516,9 +1547,21 @@ export const buildAreaAnchors = ({
 				aggregation.categoryType
 			)
 			if (px === null) return
-			// Anchor at the visible TOP edge of this layer's contribution to
-			// this stack — that's where the user sees the layer "is".
-			const measurePoint = measureScale(top)
+			// The layer's measure extent in pixels: base (stack bottom or
+			// the zero baseline) → top edge (the line). Default anchors ON
+			// the top edge — that's where the user sees the layer "is"; the
+			// other placements mirror `buildBarAnchors` exactly.
+			const basePx = measureScale(bottom)
+			const edgePx = measureScale(top)
+			const measurePoint = (() => {
+				if (pos === "edge") return edgePx
+				if (pos === "center") return (basePx + edgePx) / 2
+				const direction = edgePx >= basePx ? 1 : -1
+				if (pos === "inside-base") return basePx + direction * pad
+				if (pos === "inside-end") return edgePx - direction * pad
+				// outside-end: just past the top edge
+				return edgePx + direction * pad
+			})()
 			const labelValue = valueFieldMapped
 				? sv.byKeyText.get(layerKey)
 				: (sv.byKeyText.get(layerKey) ?? value)
@@ -1584,6 +1627,7 @@ export const buildAreaAnchors = ({
 				hueValue,
 				sizeValue,
 				opacityMul: sliceOpacity?.(meta?.groupValues ?? {}),
+				vAlign,
 			})
 		})
 	})

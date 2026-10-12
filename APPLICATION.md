@@ -2153,8 +2153,22 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   panel title when empty panels are hidden). The selection is ignored
   — every label draws — when the chart stops being faceted, so a stored
   selection never blanks an unfaceted chart.
-- **Bar label position** — center / inside-base / inside-end /
-  outside-end (only meaningful for bars).
+- **Bar position** (bars only) — center (default) / inside, near base /
+  inside, near end / outside the end of the bar, along each slice's
+  measure extent.
+- **Layer position** (areas only) — the same four placements along each
+  layer's measure extent (its base — the zero baseline, or the layer
+  below in a stacked area — to its top edge), plus **On the top edge**
+  (default): the label sits on the line, which is how areas labeled
+  before the control existed, so saved visuals don't move. On a
+  vertical area the placement also picks which edge of the label
+  block meets the anchor, so a tall (wrapped) label stays on the side
+  its placement names: inside, near end hangs DOWN from just under the
+  top edge (block top on the anchor); inside, near base and outside
+  the top edge stand UP from theirs (block bottom on the anchor); on
+  the top edge and center stay vertically centered. The 4px pad
+  applies on top. Horizontal areas keep the label centered and leave
+  its horizontal edge to the Alignment control.
 - **Position rules** (Adjust position → "+ Add rule") — conditional
   X/Y offsets, evaluated against the label's backing value with the
   same condition grammar and first-match-wins walk as the text color
