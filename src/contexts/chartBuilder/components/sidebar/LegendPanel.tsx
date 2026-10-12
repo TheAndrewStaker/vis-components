@@ -96,11 +96,11 @@ const DEFAULT_SWATCH_FILL = "#4f8eda"
 const DEFAULT_SWATCH_STROKE = "#ffffff"
 
 const POSITION_OPTIONS = [
-	{ value: "right", label: "Right (outside)" },
-	{ value: "left", label: "Left (outside)" },
-	{ value: "top", label: "Top (outside)" },
-	{ value: "bottom", label: "Bottom (outside)" },
-	{ value: "inside", label: "Inside (custom coords)" },
+	{ value: "right", label: "Right" },
+	{ value: "left", label: "Left" },
+	{ value: "top", label: "Top" },
+	{ value: "bottom", label: "Bottom" },
+	{ value: "inside", label: "Custom coordinates" },
 ] as const satisfies ReadonlyArray<{ value: LegendPosition; label: string }>
 
 const ORIENTATION_OPTIONS = [

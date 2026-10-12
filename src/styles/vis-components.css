@@ -373,6 +373,24 @@
 		flex-shrink: 1;
 		min-width: 0;
 	}
+	/* A wrapped label's swatch sits on its FIRST line, not the vertical
+	 * middle of the whole block (which `items-center` would give, floating
+	 * the swatch between lines two and three of a long label). The entry
+	 * row aligns its cells by BASELINE, and the swatch cell gets a text
+	 * baseline of its own from a zero-width space: that pseudo text is a
+	 * flex item centered in the cell exactly like the graphic, so its
+	 * baseline — and therefore the label's first-line baseline — passes
+	 * through the graphic's vertical center whatever the swatch height
+	 * (tall area/size circles included, with no overlap between rows).
+	 * Single-line entries render exactly as before. Scoped to fixed-width
+	 * legends because only they wrap. Export walks live layout rects, so
+	 * the alignment carries into images unchanged. */
+	.vc-legend-fixed-width :has(> .vc-swatch-cell) {
+		align-items: baseline;
+	}
+	.vc-legend-fixed-width .vc-swatch-cell::before {
+		content: "\200b";
+	}
 
 	/* Entry-label alignment ("Legend text" → Align in the Legend panel). The
 	 * container carries the `text-align`; this makes each label cell GROW to

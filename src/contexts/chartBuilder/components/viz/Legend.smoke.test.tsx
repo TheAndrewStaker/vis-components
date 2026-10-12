@@ -1116,6 +1116,36 @@ describe("categorical legend ordering follows the pinned field order", () => {
 	})
 })
 
+describe("fixed-width wrapping — swatch sits on the label's FIRST line", () => {
+	// The CSS that puts a wrapped label's swatch on its first line (rather
+	// than the block's vertical middle) keys on two DOM facts, which this
+	// pins: every categorical entry row is the DIRECT parent of its
+	// `.vc-swatch-cell` (so `.vc-legend-fixed-width :has(> .vc-swatch-cell)`
+	// can switch the row to baseline alignment), and the label is the cell's
+	// next sibling (so the baseline the cell synthesizes lines up with the
+	// label's first line). happy-dom lays nothing out, so the pixel result is
+	// checked in a real browser, not here.
+	const cats = ["A very long category label", "B"]
+	it("categorical rows are the swatch cell's direct parent, with the label beside it", () => {
+		const { container } = render(
+			<CombinedGroupLegend
+				channels={["hue"]}
+				type="categorical"
+				values={cats}
+				configs={EMPTY_CHANNEL_CONFIGS}
+				reverseCategorical={false}
+			/>
+		)
+		const cells = container.querySelectorAll(".vc-swatch-cell")
+		expect(cells.length).toBe(cats.length)
+		for (const cell of cells) {
+			const row = cell.parentElement as HTMLElement
+			expect(row.className).toContain("items-center")
+			expect(cell.nextElementSibling?.tagName).toBe("SPAN")
+		}
+	})
+})
+
 describe("entryColumns — single legend wraps entries across columns", () => {
 	const cats = ["A", "B", "C", "D", "E", "F"]
 

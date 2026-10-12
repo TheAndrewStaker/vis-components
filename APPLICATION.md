@@ -2389,7 +2389,9 @@ horizontally" toggle instead).
 
 ## 8. Legend
 
-Position options: left, right, top, bottom, inside. Inside placement
+Position options: left, right, top, bottom, inside (labeled "Custom
+coordinates" in the picker; the outside options are bare "Left",
+"Right", "Top", "Bottom"). Inside placement
 uses two number inputs labeled "X" and "Y" (0–1, relative to plot
 rect corners).
 
@@ -2412,7 +2414,11 @@ narrow for its text, labels WRAP onto extra lines — stacked entries
 stop truncating with an ellipsis, and horizontal entries shrink to
 fit the row instead of pushing it wider. (The "legends grow rather
 than wrap" rule describes AUTO sizing; an explicit width is the user
-asking for wrapping.) Image export reproduces each wrapped line.
+asking for wrapping.) A wrapped entry keeps its swatch on the label's
+FIRST line — centered on that line, whatever the swatch's height — not
+floating at the vertical middle of the whole wrapped block; single-line
+entries look exactly as they always have. Image export reproduces each
+wrapped line and the swatch placement.
 
 **Orientation and Legend columns are independent controls, and each
 owns exactly one axis of the layout.** Orientation (Stacked /
