@@ -55,8 +55,9 @@ as a small table — every column, numbers right-aligned, the first
 six rows (with "first 6 shown" when
 there are more), scrolling sideways when wide — or the parse
 complaint, and refuses a paste with no data rows. With no
-visual open it asks for a data set name (required, and checked
-against existing names) and creates the data set on the spot; with
+visual open it asks for a data set name (required; a name another
+data set already carries only WARNS — see "Data set names" below) and
+creates the data set on the spot; with
 a visual open there is no name field — the parsed rows go to the
 same Add-data prompt a dropped file reaches, which collects the name
 on its "start a new visualization" branch. A pasted version carries
@@ -113,6 +114,27 @@ columns, since those are per-visual and wouldn't survive a re-upload.
 Headers are the fields' CURRENT names; a renamed variable re-imports
 through its `sourceNames` alias. The file is named after the dataset
 (slugified, `.csv`).
+
+**Data set names.** The id is a data set's identity; the name is a
+label, and two data sets MAY share one. Every path that names a new
+data set (the Add-data prompt's "start a new visualization" branch,
+the Paste-data dialog) warns — amber, not blocking — when the name
+another data set already carries (`nameCollides`: trimmed,
+case-folded) is typed, so the user knows two entries will read alike;
+the fresh-editor upload, which takes the filename with no prompt,
+creates silently. The only refusal left is an upload whose hash
+matches an existing same-named data set (a probable byte-identical
+re-upload) that the store couldn't load to confirm — storing it would
+be the very copy dedupe exists to prevent. The bound data set's name
+in the summary line is a click-to-edit rename control (the same
+hover-pencil affordance as a field name in the Fields panel): Enter
+or blur commits, Escape or an emptied box cancels, and a colliding
+draft shows the same warning inline without blocking. The rename
+writes the body through `mutateDatasetBodyAtom` with a refreshed
+`contentHash`; the index derives from the loaded body, so the library
+table and grid, the data-set filter, and the version badge show the
+new name with no second write. There is no cascade — visuals bind by
+id.
 
 ### 2.1b Reshape (wide → long)
 The tool wants long data (one observation per row), but users often
@@ -3022,8 +3044,9 @@ implementation, `lib/storage/syncDatasetVersions.ts`, serves both the
 IndexedDB layer and the HTTP adapter — its skip-cache keys on the rows
 array, so a metadata-only edit like a version note never re-writes
 rows). Any mutation that changes a dataset's content (append or delete
-a version) recomputes the cached `contentHash`, which the upload-time
-duplicate hint compares against. The full-corpus read
+a version, or a rename — the name is part of the hash) recomputes the
+cached `contentHash`, which the upload-time duplicate hint compares
+against. The full-corpus read
 (`loadDatasetsAsync`, sanctioned for bundle export/import only) is
 all-or-nothing: an index-listed dataset whose body can't be read makes
 it throw rather than silently produce an incomplete backup.

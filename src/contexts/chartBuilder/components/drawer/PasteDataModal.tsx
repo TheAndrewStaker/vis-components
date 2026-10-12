@@ -70,12 +70,12 @@ const PasteDataForm = ({
 	}, [text])
 
 	const needsName = visualId === null
+	// Same-named data sets are allowed (the id is the identity); a collision
+	// only warns so the user knows two entries will read alike.
 	const collides =
 		needsName && nameCollides(name, Object.values(datasetIndex))
 	const canSubmit =
-		!busy &&
-		preview?.ok === true &&
-		(!needsName || (name.trim() !== "" && !collides))
+		!busy && preview?.ok === true && (!needsName || name.trim() !== "")
 
 	const onSubmit = async () => {
 		if (!canSubmit) return
@@ -131,9 +131,9 @@ const PasteDataForm = ({
 						}}
 					/>
 					{collides && (
-						<div className="rounded-sm bg-red-50 px-2 py-1 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300">
-							A data set named &ldquo;{name.trim()}&rdquo; already exists.
-							Pick a different name.
+						<div className="rounded-sm border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+							A data set named &ldquo;{name.trim()}&rdquo; already exists. This
+							will be saved as a separate data set with the same name.
 						</div>
 					)}
 				</div>

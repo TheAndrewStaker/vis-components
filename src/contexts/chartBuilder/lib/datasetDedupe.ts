@@ -75,8 +75,9 @@ export const findDuplicateByHash = (
  *  dataset's content — appending or deleting a version. Every such mutation
  *  MUST come through here (or set the hash itself, as fresh uploads do): a
  *  stale stored hash makes the upload-time duplicate hint claim a match the
- *  verification step then rejects — and the false hint also disables the
- *  name-collision guard, so a same-named duplicate dataset gets created. */
+ *  verification step then rejects, and a missed match stores a byte-identical
+ *  copy instead of reusing the existing data set. The name is part of the
+ *  hash, so a rename comes through here too. */
 export const withFreshContentHash = (d: Dataset): Dataset => ({
 	...d,
 	contentHash: datasetContentHash(d),

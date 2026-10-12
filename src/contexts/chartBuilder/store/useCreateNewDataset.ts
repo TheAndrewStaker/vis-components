@@ -37,12 +37,13 @@ import {
 	previewVersionIdAtom,
 } from "./atoms"
 
-/** Thrown when an upload would mint a second dataset under an existing name.
+/** Thrown when an upload probably duplicates an existing dataset (same name,
+ *  same content hash) but the stored body couldn't be loaded to confirm it.
  *  The name identifies the error to UI catch blocks, whose message is shown
  *  to the user verbatim (unlike arbitrary network errors). */
-const nameConflictError = (message: string): Error => {
+const datasetCompareError = (message: string): Error => {
 	const error = new Error(message)
-	error.name = "DatasetNameConflictError"
+	error.name = "DatasetCompareError"
 	return error
 }
 
@@ -137,17 +138,16 @@ export const useCreateNewDataset = () =>
 				set(currentDerivedVariablesAtom, DEFAULT_DERIVED_VARIABLES_CONFIG)
 				return existingId
 			}
-			if (hashMatch) {
-				// A hash hint always names a SAME-NAMED dataset, and its presence
-				// suppressed the upload modal's name-collision guard ("it will be
-				// reused, not duplicated"). Falling through here would mint exactly
-				// the same-named duplicate that guard exists to prevent — so an
-				// unverifiable or failed match refuses instead of storing a copy.
-				throw nameConflictError(
-					matchedBody
-						? `A data set named "${finalName}" already exists. Pick a different name.`
-						: `A data set named "${finalName}" already exists and this upload ` +
-							`couldn't be compared against it. Check your connection and try again.`
+			if (hashMatch && !matchedBody) {
+				// The hash hint named a probable duplicate — the same file under
+				// the same name — but its body couldn't be loaded to confirm.
+				// Storing a copy now is exactly what dedupe exists to prevent (and
+				// a store that can't read is unlikely to write), so refuse and let
+				// the user retry. A loaded body that merely DIFFERS falls through:
+				// same-named data sets are allowed, the id is the identity.
+				throw datasetCompareError(
+					`A data set named "${finalName}" already exists and this upload ` +
+						`couldn't be compared against it. Check your connection and try again.`
 				)
 			}
 			const id = newDatasetId()

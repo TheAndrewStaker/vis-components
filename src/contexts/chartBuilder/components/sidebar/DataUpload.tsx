@@ -79,9 +79,7 @@ export const DataUpload = () => {
 			/>
 			{currentDataset && (
 				<div className="text-sm vc-muted">
-					<div className="truncate font-medium vc-text">
-						{currentDataset.name}
-					</div>
+					<DatasetNameEditor id={currentDataset.id} name={currentDataset.name} />
 					<div>
 						{currentDataset.rows.length} row
 						{currentDataset.rows.length === 1 ? "" : "s"} ·{" "}
@@ -116,6 +114,113 @@ export const DataUpload = () => {
 			 *  populated when a Visual is already open; first-time uploads on
 			 *  /editor/new skip the modal and create directly. */}
 			<UploadPromptModal />
+		</div>
+	)
+}
+
+/** Click-to-edit rename control for the bound data set — the same hover-
+ *  pencil affordance the Fields panel gives a column. Enter/blur commits,
+ *  Escape cancels, and an emptied box cancels too (a data set always has a
+ *  name). Same-named data sets are allowed — the id is the identity — so a
+ *  name another data set already carries only warns while typing. The rename
+ *  goes through `mutateDatasetBodyAtom` (which loads the body first when this
+ *  session only holds the lazy per-version rows) and refreshes the content
+ *  hash, which covers the name: a stale hash would make the next upload of
+ *  this file under its new name miss the reuse hint. The index derives from
+ *  the loaded body, so the library table/grid and the version badge pick the
+ *  new name up without any further write. */
+const DatasetNameEditor = ({ id, name }: { id: string; name: string }) => {
+	const mutateDatasetBody = useSetAtom(mutateDatasetBodyAtom)
+	const datasetIndex = useAtomValue(datasetIndexAtom)
+	const [editing, setEditing] = useState(false)
+	const [draft, setDraft] = useState(name)
+	const [error, setError] = useState<string | null>(null)
+	const collides =
+		editing && nameCollides(draft, Object.values(datasetIndex), id)
+
+	const startEditing = () => {
+		setDraft(name)
+		setError(null)
+		setEditing(true)
+	}
+
+	const cancel = () => {
+		setDraft(name)
+		setError(null)
+		setEditing(false)
+	}
+
+	const commit = async () => {
+		const trimmed = draft.trim()
+		if (trimmed === "" || trimmed === name) {
+			cancel()
+			return
+		}
+		try {
+			const found = await mutateDatasetBody(id, (d) =>
+				withFreshContentHash({ ...d, name: trimmed })
+			)
+			if (!found) throw new Error("dataset not found")
+			setError(null)
+			setEditing(false)
+		} catch {
+			setError(
+				"Couldn't load this data set to rename it. Check your connection and try again."
+			)
+		}
+	}
+
+	if (!editing) {
+		return (
+			<button
+				type="button"
+				onClick={startEditing}
+				title={`${name} — click to rename`}
+				aria-label="Rename data set"
+				className="group flex w-full min-w-0 items-center gap-1 text-left font-medium vc-text"
+			>
+				<span className="min-w-0 truncate">{name}</span>
+				<svg
+					viewBox="0 0 16 16"
+					width={11}
+					height={11}
+					aria-hidden
+					className="flex-shrink-0 text-stone-400 opacity-0 group-hover:opacity-100 dark:text-stone-500"
+				>
+					<path
+						d="M11.7 1.6l2.7 2.7-9.2 9.2-3.4.7.7-3.4 9.2-9.2z"
+						fill="currentColor"
+					/>
+				</svg>
+			</button>
+		)
+	}
+
+	return (
+		<div className="flex min-w-0 flex-col gap-0.5">
+			<input
+				type="text"
+				value={draft}
+				onChange={(e) => setDraft(e.target.value)}
+				onBlur={() => void commit()}
+				onKeyDown={(e) => {
+					if (e.key === "Enter") void commit()
+					if (e.key === "Escape") cancel()
+				}}
+				aria-label="New data set name"
+				// eslint-disable-next-line jsx-a11y/no-autofocus -- initial focus for the inline rename editor the user just opened
+				autoFocus
+				onFocus={(e) => e.target.select()}
+				className="min-w-0 rounded border border-blue-400 bg-white px-1 py-0 text-sm font-medium outline-none dark:bg-stone-900 vc-text"
+			/>
+			{collides && (
+				<p className="text-xs text-amber-800 dark:text-amber-300">
+					A data set named &ldquo;{draft.trim()}&rdquo; already exists.
+				</p>
+			)}
+			{error && (
+				<p className="text-xs text-red-700 dark:text-red-300">{error}</p>
+			)}
 		</div>
 	)
 }
@@ -157,7 +262,7 @@ const UploadPromptModal = () => {
 	}, [pendingKey])
 
 	// Everything display-level here — the bound dataset's name and fields for
-	// the compatibility diff, the name-collision list, the duplicate hint —
+	// the compatibility diff, the same-name warning, the duplicate hint —
 	// is metadata, so it reads the INDEX, which knows every dataset. The
 	// loaded-bodies map only holds what this session opened; reading it here
 	// made the schema guard and both collision checks silently blind.
@@ -171,10 +276,11 @@ const UploadPromptModal = () => {
 			: null
 	const compatible = diff ? isCompatible(diff) : true
 	// An upload identical to an existing dataset (same exact name AND content)
-	// is not a collision: confirming reuses that dataset rather than storing a
-	// second copy. Display-level hint via the cached content hash; the actual
-	// reuse decision inside `useCreateNewDataset` re-verifies against that
-	// dataset's real rows before acting.
+	// is reused rather than stored as a second copy. Display-level hint via the
+	// cached content hash; the actual reuse decision inside
+	// `useCreateNewDataset` re-verifies against that dataset's real rows before
+	// acting. A same-named upload with DIFFERENT content is allowed (the id is
+	// the identity) and only warns, so the user knows two names will match.
 	// Memoized (and the hash inside is computed lazily, only on a name match):
 	// this runs per keystroke in the name field, and hashing stringifies every
 	// pending row.
@@ -242,7 +348,7 @@ const UploadPromptModal = () => {
 					: []
 			// The append changed the dataset's content, so the cached content hash
 			// must follow — a stale one makes the next upload of the ORIGINAL file
-			// hint a reuse it can't verify, with the name-collision guard disabled.
+			// hint a reuse it can't verify.
 			return withFreshContentHash({
 				...d,
 				fields:
@@ -279,16 +385,16 @@ const UploadPromptModal = () => {
 				if (!currentDatasetMeta || !compatible) return
 				if (!(await appendVersion(pending))) return
 			} else {
-				if (!newName.trim() || newNameCollides) return
+				if (!newName.trim()) return
 				await startNewVisualization(pending)
 			}
 		} catch (error) {
 			// The body load (or the save/navigate) failed — keep the modal (and
 			// the pending upload) so the user can retry, and say why nothing
-			// happened. A name-conflict refusal carries its own user-facing
+			// happened. A failed duplicate check carries its own user-facing
 			// message; anything else gets the generic connection line.
 			setConfirmError(
-				error instanceof Error && error.name === "DatasetNameConflictError"
+				error instanceof Error && error.name === "DatasetCompareError"
 					? error.message
 					: "Couldn't load the existing data set to update it. Check your connection and try again."
 			)
@@ -390,9 +496,10 @@ const UploadPromptModal = () => {
 										autoFocus
 									/>
 									{newNameCollides && (
-										<div className="rounded-sm bg-red-50 px-2 py-1 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300">
+										<div className="rounded-sm border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
 											A data set named &ldquo;{newName.trim()}&rdquo; already
-											exists. Pick a different name.
+											exists. This upload will be saved as a separate data set
+											with the same name.
 										</div>
 									)}
 									{reusableDatasetId !== null && (
@@ -422,8 +529,7 @@ const UploadPromptModal = () => {
 							onClick={onConfirm}
 							disabled={
 								(mode === "addVersion" && (!currentDatasetMeta || !compatible)) ||
-								(mode === "newVisualization" &&
-									(!newName.trim() || newNameCollides))
+								(mode === "newVisualization" && !newName.trim())
 							}
 						>
 							{mode === "addVersion"

@@ -46,8 +46,7 @@ import type { Dataset } from "./types"
  *  v2: prune orphaned fields left behind by deleted additive versions.
  *  v3: refresh stale content hashes — before lazy loading shipped, appending
  *  or deleting a version never updated the creation-time hash, and a stale
- *  hash makes upload dedupe hint a false match that also disables the
- *  name-collision guard. */
+ *  hash makes upload dedupe hint a false match. */
 const CLEANUP_VERSION = 3
 
 export type SweepInput<T = Dataset> = {

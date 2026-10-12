@@ -96,8 +96,8 @@ describe("Paste data into the tray", () => {
 		expect(screen.getByText("Add data").closest("button")!.disabled).toBe(true)
 	})
 
-	it("refuses a name another data set already has", () => {
-		mount((s) => {
+	it("warns about a name another data set already has, but still creates a separate one", async () => {
+		const { store } = mount((s) => {
 			s.set(loadedDatasetsAtom, {
 				"ds-1": {
 					id: "ds-1",
@@ -117,7 +117,18 @@ describe("Paste data into the tray", () => {
 			target: { value: "andes sales" },
 		})
 		expect(dialog.textContent).toContain("already exists")
-		expect(screen.getByText("Add data").closest("button")!.disabled).toBe(true)
+		const addButton = screen.getByText("Add data").closest("button")!
+		// Same-named data sets are allowed: the id is the identity.
+		expect(addButton.disabled).toBe(false)
+		fireEvent.click(addButton)
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+		const id = store.get(currentDatasetIdAtom)
+		expect(id).not.toBeNull()
+		expect(id).not.toBe("ds-1")
+		const datasets = store.get(loadedDatasetsAtom)
+		expect(Object.keys(datasets).sort()).toEqual(["ds-1", id!].sort())
+		expect(datasets["ds-1"].name).toBe("Andes sales")
+		expect(datasets[id!].name).toBe("andes sales")
 	})
 
 	it("hands off to the Add-data prompt when a Visual is open, with no name field", async () => {
