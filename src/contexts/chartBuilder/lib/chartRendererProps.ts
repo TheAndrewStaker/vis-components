@@ -115,8 +115,9 @@ export type MeasureAxisRendererProps = PerAxisScalesRendererProps & {
 /** Scatter's specialized form: per-axis quantitative domain overrides on
  *  TOP of the per-axis scale-row overrides. */
 export type ScatterRendererProps = PerAxisScalesRendererProps & {
-	/** Per-axis numeric bounds. Only honored when the mapped field's
-	 *  type is quantitative (or numeric-ordinal). */
+	/** Per-axis bounds (epoch ms on a date axis). Honored when the mapped
+	 *  field's type is quantitative, numeric-ordinal or temporal — on
+	 *  scatter / hexbin axes and an area chart's continuous category axis. */
 	xMinOverride?: number
 	xMaxOverride?: number
 	yMinOverride?: number

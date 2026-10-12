@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useId, useMemo, useState } from "react"
 import { scaleBand, scaleLinear } from "d3-scale"
 import { useAtomValue } from "jotai"
 import {
@@ -20,7 +20,7 @@ import {
 	type LabelPointsScope,
 } from "../../lib/channelConfig"
 import { getChartMode } from "../../lib/chartMode"
-import type { MeasureAxisRendererProps } from "../../lib/chartRendererProps"
+import type { MeasureAxisRendererProps, ScatterRendererProps } from "../../lib/chartRendererProps"
 import { resolveConnectionStroke } from "../../lib/connectionStroke"
 import { resolveConnectionThickness } from "../../lib/connectionThickness"
 import { cartesian } from "./coords"
@@ -47,7 +47,9 @@ import {
 	parseNumericCell,
 	parseValue,
 	type PositionScale,
+	overrideLinearDomain,
 } from "../../lib/scales"
+import { dateColumnText } from "../../lib/rawTextByTime"
 import {
 	labelSeriesChannelsFromEncodings,
 	labelSeriesResolver,
@@ -85,7 +87,9 @@ import { Plot, type CoordFactory, type PlotContext } from "./Plot"
 
 const FALLBACK_FILL = "#6b7280"
 
-type AreaPlotProps = MeasureAxisRendererProps
+// Scale range min / max on the continuous category axis arrive as the
+// per-axis overrides scatter uses (`xMinOverride` on vertical areas).
+type AreaPlotProps = MeasureAxisRendererProps & ScatterRendererProps
 
 type Aggregation =
 	| {
@@ -151,6 +155,7 @@ export const AreaPlot = (props: AreaPlotProps = {}) => {
 	const legendHighlight = useLegendHighlight()
 	const markHover = useMarkHoverHighlight(aestheticScales.hue?.field.name ?? null)
 	const [hovered, setHovered] = useState<TooltipState | null>(null)
+	const layerClipId = useId()
 
 	const showX = props.showXAxis !== false
 	const showY = props.showYAxis !== false
@@ -322,6 +327,10 @@ export const AreaPlot = (props: AreaPlotProps = {}) => {
 		levelOrders,
 		props.measureMaxOverride,
 		props.measureMinOverride,
+		props.xMinOverride,
+		props.xMaxOverride,
+		props.yMinOverride,
+		props.yMaxOverride,
 		// Recompute when the user picks a different DataLabels.value field
 		// — without this the per-slice `textValue` aggregate goes stale and
 		// labels keep showing the previous mapping.
@@ -388,11 +397,23 @@ export const AreaPlot = (props: AreaPlotProps = {}) => {
 		const categoryRange: [number, number] = isVertical
 			? [inner.x0, inner.x1]
 			: [inner.y0, inner.y1]
-		const categoryScale = buildCategoryScale(
-			scaleCategories,
+		// Scale range min / max on the CATEGORY axis (x on vertical areas, y on
+		// horizontal) pin a continuous — date or numeric — category domain the
+		// way they pin a scatter axis; a band (categorical) axis ignores them.
+		// Applied after the auto-fit `.nice()`, never re-niced.
+		const categoryContinuous =
+			categoryType === "quantitative" || categoryType === "temporal"
+		const catMin = isVertical ? props.xMinOverride : props.yMinOverride
+		const catMax = isVertical ? props.xMaxOverride : props.yMaxOverride
+		const categoryScale = overrideLinearDomain(
+			buildCategoryScale(scaleCategories, categoryType, categoryRange),
 			categoryType,
-			categoryRange
+			categoryContinuous ? catMin : undefined,
+			categoryContinuous ? catMax : undefined
 		)
+		const categoryPinned = categoryContinuous && catMin != null && catMax != null
+		const categoryRawText =
+			categoryType === "temporal" ? dateColumnText(rowsForChart, categoryField) : undefined
 		const measureScale = scaleLinear<number, number>()
 			.domain([measureMin, measureMax])
 			.range(isVertical ? [inner.y1, inner.y0] : [inner.x0, inner.x1])
@@ -412,8 +433,10 @@ export const AreaPlot = (props: AreaPlotProps = {}) => {
 		return cartesian({
 			xScale,
 			yScale,
-			xDomainPinned: !isVertical && measurePinned,
-			yDomainPinned: isVertical && measurePinned,
+			xDomainPinned: isVertical ? categoryPinned : measurePinned,
+			yDomainPinned: isVertical ? measurePinned : categoryPinned,
+			xRawText: isVertical ? categoryRawText : undefined,
+			yRawText: isVertical ? undefined : categoryRawText,
 			xAxisConfig: channelConfigs.x,
 			yAxisConfig: channelConfigs.y,
 			xLabel: isVertical
@@ -496,6 +519,28 @@ export const AreaPlot = (props: AreaPlotProps = {}) => {
 		const measureScale = (
 			aggregation.isVertical ? yScale : xScale
 		) as ReturnType<typeof scaleLinear<number, number>>
+		// A pinned category range (Scale range on a date / numeric x) can cut
+		// through the data; the layers are clipped to the plot so rows outside
+		// the range don't paint over the margins or legend. Band axes ignore
+		// the pins, so they never clip.
+		const categoryContinuous =
+			aggregation.categoryType === "quantitative" ||
+			aggregation.categoryType === "temporal"
+		const categoryRangePinned =
+			categoryContinuous &&
+			(aggregation.isVertical
+				? props.xMinOverride != null || props.xMaxOverride != null
+				: props.yMinOverride != null || props.yMaxOverride != null)
+		const clipRect = (() => {
+			const [x0, x1] = (xScale as unknown as { range: () => number[] }).range()
+			const [y0, y1] = (yScale as unknown as { range: () => number[] }).range()
+			return {
+				x: Math.min(x0, x1),
+				y: Math.min(y0, y1),
+				width: Math.abs(x1 - x0),
+				height: Math.abs(y1 - y0),
+			}
+		})()
 		const stackMode: StackMode = resolveStackMode(channelConfigs, encodings)
 		// A mapped label column (distinct from the measure) is authoritative:
 		// layers where it's blank get NO label — sparse columns are the way to
@@ -512,24 +557,31 @@ export const AreaPlot = (props: AreaPlotProps = {}) => {
 					markHover.leave()
 				}}
 			>
-				{buildAreas({
-					aggregation,
-					aestheticScales,
-					channelConfigs,
-					categoryScale,
-					measureScale,
-					stackMode,
-					onLayerHover,
-					highlight: legendHighlight,
-					dataset,
-					drawOrderLevels: channelConfigs.drawOrder?.field
-						? levelOrders[channelConfigs.drawOrder.field]
-						: undefined,
-					patternOptions: {
-						defaultToNone: connectionMapped,
-						includeDefaultPattern: true,
-					},
-				})}
+				{categoryRangePinned && (
+					<clipPath id={layerClipId}>
+						<rect {...clipRect} />
+					</clipPath>
+				)}
+				<g clipPath={categoryRangePinned ? `url(#${layerClipId})` : undefined}>
+					{buildAreas({
+						aggregation,
+						aestheticScales,
+						channelConfigs,
+						categoryScale,
+						measureScale,
+						stackMode,
+						onLayerHover,
+						highlight: legendHighlight,
+						dataset,
+						drawOrderLevels: channelConfigs.drawOrder?.field
+							? levelOrders[channelConfigs.drawOrder.field]
+							: undefined,
+						patternOptions: {
+							defaultToNone: connectionMapped,
+							includeDefaultPattern: true,
+						},
+					})}
+				</g>
 				{anyDataLabelsMapped && (
 					<DataLabelsLayer
 						rows={rowsForChart}
