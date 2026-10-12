@@ -10,6 +10,9 @@ export type SeedFixture = {
 	datasetName: string
 	fields: Array<{ name: string; inferredType: string }>
 	rows: Array<Record<string, string>>
+	/** Per-visual field type overrides (the Fields panel dropdown), e.g.
+	 *  a numeric-looking Year column read as temporal. */
+	fieldTypeOverrides?: Record<string, string>
 	encodings: Record<string, { field: string } | undefined>
 	/** Extra channelConfigs merged into the built config (e.g. a histogram
 	 *  config under `x`, or a pattern config). Shallow-merged over the
@@ -249,7 +252,7 @@ const buildVisualScript = (fixture: SeedFixture): string => `
 		folderId: null,
 		datasetId: fixture.datasetId,
 		createdAtVersionId: "v1",
-		fieldTypeOverrides: {},
+		fieldTypeOverrides: fixture.fieldTypeOverrides ?? {},
 		encodings,
 		channelConfigs,
 		labelsConfig,

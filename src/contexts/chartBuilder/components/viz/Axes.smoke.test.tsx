@@ -1015,6 +1015,68 @@ describe("Axis custom breaks (pinned tick positions)", () => {
 		// Two in-domain breaks → two ticks; the 2025 break is dropped.
 		expect(labels).toHaveLength(2)
 	})
+
+	const timeAxisLabels = (
+		customFormat: string,
+		extra: Record<string, unknown> = {},
+		rawTextByValue?: { byTime: ReadonlyMap<number, string>; format: ((d: Date) => string) | null }
+	) => {
+		// A pinned 1949-01-01 … 2019-01-01 axis, Count 8 (the user-reported
+		// case), bounds at LOCAL midnight like the Scale range picker stores.
+		const timeScale = scaleTime()
+			.domain([new Date(1949, 0, 1), new Date(2019, 0, 1)])
+			.range([inner.x0, inner.x1])
+		const { container } = render(
+			wrapInSvg(
+				<Axis
+					scale={timeScale}
+					orientation="x"
+					inner={inner}
+					label="T"
+					fieldType="temporal"
+					domainPinned
+					rawTextByValue={rawTextByValue}
+					config={cfg([], { tickCount: 8, customFormat, ...extra })}
+				/>
+			)
+		)
+		return [...container.querySelectorAll("text")]
+			.map((t) => t.textContent)
+			.filter((s): s is string => !!s && s !== "T")
+	}
+	const DECADES = ["1949", "1959", "1969", "1979", "1989", "1999", "2009", "2019"]
+
+	it("a pinned date axis draws calendar-snapped ticks in ONE format (Auto)", () => {
+		expect(timeAxisLabels("")).toEqual(DECADES)
+	})
+
+	it("Literal on a date axis prints the same years, not String(Date)", () => {
+		expect(timeAxisLabels("literal")).toEqual(DECADES)
+		expect(timeAxisLabels("literal AD")).toEqual(DECADES.map((y) => `${y} AD`))
+	})
+
+	it("Literal prints ticks in the data column's text shape, or the cell behind a tick", () => {
+		// A column of "1947"-style cells: every tick prints as a bare year.
+		const yearColumn = { byTime: new Map<number, string>(), format: (d: Date) => String(d.getFullYear()) }
+		expect(timeAxisLabels("literal", {}, yearColumn)).toEqual(DECADES)
+		// No recognised shape: the cell behind a tick ("FY1949") wins, and a
+		// tick with no row (1959) falls back to ISO at the set's granularity.
+		const byTime = new Map(
+			DECADES.filter((y) => y !== "1959").map((y) => [new Date(Number(y), 0, 1).getTime(), `FY${y}`])
+		)
+		expect(timeAxisLabels("literal", {}, { byTime, format: null })).toEqual(
+			DECADES.map((y) => (y === "1959" ? "1959" : `FY${y}`))
+		)
+	})
+
+	it("one finer tick switches the WHOLE date axis to one finer format", () => {
+		// A mid-year custom break among year-start ticks: every label gains
+		// the month, rather than d3 labelling the break alone as "Jul".
+		const labels = timeAxisLabels("", { breaks: [new Date(1988, 6, 1).getTime()] })
+		expect(labels).toContain("Jul 1988")
+		expect(labels).toContain("Jan 1949")
+		expect(labels).not.toContain("1949")
+	})
 })
 
 describe("Axis 'Adjust position' nudge (tick labels only)", () => {

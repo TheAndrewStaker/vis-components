@@ -266,3 +266,19 @@ describe("buildTickFormatterWithAuto", () => {
 		expect(bare(20000, "20000")).toBe("20k")
 	})
 })
+
+describe("'literal' on Date values", () => {
+	it("prints ISO calendar text, not JavaScript's full date-time string", () => {
+		const f = buildTickFormatter({ customFormat: "literal" }, "temporal")!
+		expect(f(new Date(1988, 0, 1))).toBe("1988")
+		expect(f(new Date(1988, 6, 1))).toBe("1988-07")
+		expect(f(new Date(1988, 6, 15))).toBe("1988-07-15")
+	})
+
+	it("takes the axis's tick-set formatter so every label shares one shape", () => {
+		const f = buildTickFormatter({ customFormat: "literal units" }, "temporal", undefined, {
+			literalDate: (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+		})!
+		expect(f(new Date(1988, 0, 1))).toBe("1988-01 units")
+	})
+})

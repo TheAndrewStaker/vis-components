@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { useAtomValue } from "jotai"
 import { computeKde } from "../../lib/aggregators/distributions"
+import { dateColumnText } from "../../lib/rawTextByTime"
 import {
 	DEFAULT_DISTRIBUTION_OVERLAY_CONFIG,
 	type DistributionOverlayConfig,
@@ -202,6 +203,8 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 			yMaxTicks,
 			xDomainPinned: props.xMinOverride != null && props.xMaxOverride != null,
 			yDomainPinned: props.yMinOverride != null && props.yMaxOverride != null,
+			xRawText: xField && xType === "temporal" ? dateColumnText(rowsForXScale, xField) : undefined,
+			yRawText: yField && yType === "temporal" ? dateColumnText(rowsForYScale, yField) : undefined,
 			showXAxis: showX,
 			showYAxis: showY,
 			showXAxisTitle: props.showXAxisTitle ?? true,

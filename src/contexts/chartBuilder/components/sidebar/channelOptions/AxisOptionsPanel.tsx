@@ -17,6 +17,7 @@ import {
 	type TickmarkConfig,
 } from "../../../lib/channelConfig"
 import { formatBreaksInput, parseBreaksInput } from "../../../lib/legendBreaks"
+import { formatLocalDate, parseLocalDate } from "../../../lib/localDate"
 import { naturalWrapAlignFor } from "../../../lib/tickLabelWrap"
 import { axisConfigFromTheme, spineThemeFor, valueChanged } from "../../../lib/themeConfig"
 import type { FontConfig, LabelAlignment } from "../../../lib/labelsConfig"
@@ -48,6 +49,7 @@ import { SelectInput } from "../../../../../components/ui/SelectInput"
 import { Toggle } from "../../../../../components/ui/Toggle"
 import { AlignmentControl, FontEditor } from "../LabelsPanel"
 import { Input } from "../../../../../components/ui/Input"
+import { DateInput } from "../../../../../components/ui/DateInput"
 
 type Props = {
 	channel: "x" | "y" | "r"
@@ -975,6 +977,9 @@ const NumericBoundField = ({
 /** Bound / max text inputs shared by Scale range and the mirror's side maxes. */
 const BOUND_INPUT_CLASS =
 	"w-24"
+/** Native date pickers draw "mm/dd/yyyy" plus a calendar button, which
+ *  clips the year at the numeric fields' width. */
+const DATE_BOUND_INPUT_CLASS = "w-40"
 /** Field label: bold purple when the value differs from the theme default. */
 const boundLabelClass = (on: boolean | undefined) =>
 	on
@@ -1005,19 +1010,6 @@ const ScaleRangeControls = ({
 	changed?: { min?: boolean; max?: boolean }
 }) => {
 	const lbl = boundLabelClass
-	const toDateInput = (ms: number | null): string =>
-		ms === null ? "" : new Date(ms).toISOString().slice(0, 10)
-	const parseBound = (raw: string): number | null | undefined => {
-		if (raw.trim() === "") return null
-		const n = isTemporal ? new Date(raw).getTime() : Number(raw)
-		// Bad input (e.g. mid-typing): leave the stored bound untouched.
-		return Number.isFinite(n) ? n : undefined
-	}
-	const commitBound = (bound: "min" | "max", raw: string) => {
-		const parsed = parseBound(raw)
-		if (parsed === undefined) return
-		onChange({ [bound]: parsed })
-	}
 
 	const inputClass = BOUND_INPUT_CLASS
 
@@ -1034,11 +1026,11 @@ const ScaleRangeControls = ({
 				<label className="flex items-center gap-2">
 					<span className={`w-24 ${lbl(changed?.min)}`}>min</span>
 					{isTemporal ? (
-						<Input
-							type="date"
-							value={toDateInput(min)}
-							onChange={(e) => commitBound("min", e.target.value)}
-							className={inputClass}
+						<DateInput
+							value={min}
+							onChange={(ms) => onChange({ min: ms })}
+							aria-label="Scale range min"
+							className={DATE_BOUND_INPUT_CLASS}
 						/>
 					) : (
 						<NumericBoundField
@@ -1051,11 +1043,11 @@ const ScaleRangeControls = ({
 				<label className="flex items-center gap-2">
 					<span className={`w-24 ${lbl(changed?.max)}`}>max</span>
 					{isTemporal ? (
-						<Input
-							type="date"
-							value={toDateInput(max)}
-							onChange={(e) => commitBound("max", e.target.value)}
-							className={inputClass}
+						<DateInput
+							value={max}
+							onChange={(ms) => onChange({ max: ms })}
+							aria-label="Scale range max"
+							className={DATE_BOUND_INPUT_CLASS}
 						/>
 					) : (
 						<NumericBoundField
@@ -1096,12 +1088,12 @@ const BreaksField = ({
 					.split(/[,;]+/)
 					.map((s) => s.trim())
 					.filter((s) => s !== "")
-					.map((s) => new Date(s).getTime())
+					.map(parseLocalDate)
 					.filter((n) => Number.isFinite(n))
 			: parseBreaksInput(text)
 	const formatBreaks = (vals: number[]): string =>
 		isTemporal
-			? vals.map((ms) => new Date(ms).toISOString().slice(0, 10)).join(", ")
+			? vals.map(formatLocalDate).join(", ")
 			: formatBreaksInput(vals)
 
 	const [breaksText, setBreaksText] = useState<string>(

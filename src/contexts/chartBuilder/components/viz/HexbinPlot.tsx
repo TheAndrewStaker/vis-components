@@ -6,6 +6,7 @@
 // tile exactly, hexagons stretch to the plot's aspect ratio).
 import { useAtomValue } from "jotai"
 import { DEFAULT_SHAPE_CONFIG } from "../../lib/channelConfig"
+import { dateColumnText } from "../../lib/rawTextByTime"
 import type { UniversalRendererProps } from "../../lib/chartRendererProps"
 import { cartesian } from "./coords"
 import { effectiveType } from "../../lib/fieldType"
@@ -120,6 +121,8 @@ export const HexbinPlot = (props: UniversalRendererProps = {}) => {
 			yMaxTicks,
 			xDomainPinned: props.xMinOverride != null && props.xMaxOverride != null,
 			yDomainPinned: props.yMinOverride != null && props.yMaxOverride != null,
+			xRawText: xField && xType === "temporal" ? dateColumnText(rowsForXScale, xField) : undefined,
+			yRawText: yField && yType === "temporal" ? dateColumnText(rowsForYScale, yField) : undefined,
 			showXAxis: props.showXAxis !== false,
 			showYAxis: props.showYAxis !== false,
 			showXAxisTitle: props.showXAxisTitle ?? true,

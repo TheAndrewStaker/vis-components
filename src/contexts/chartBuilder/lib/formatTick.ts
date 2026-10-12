@@ -2,6 +2,7 @@ import { format as d3Format, formatSpecifier } from "d3-format"
 import { timeFormat } from "d3-time-format"
 
 import type { AxisConfig } from "./channelConfig"
+import { literalDateText } from "./timeTickFormat"
 import type { FieldType } from "./types"
 
 /** For an SI-prefix spec (d3 type `s`, e.g. `.2s` → "3.0k"), a formatter
@@ -147,18 +148,36 @@ export const composeFormatSpec = ({ prefix, spec, suffix }: FormatSpecParts): st
 export const applyFormatAffixes = (parts: FormatSpecParts, text: string): string =>
 	text === "" ? "" : `${parts.prefix}${text}${parts.suffix}`
 
-/** Spec-only formatter for the INNER spec (affixes already stripped):
- * null for Auto, else literal / time / numeric routing. */
-const innerFormatter = (spec: string): ValueFormatter | null => {
-	const trimmed = spec.trim()
-	if (trimmed === "") return null
-	// Literal: stringify as-is, bypassing both formatters. Must come before the
-	// time/numeric routing so a numeric axis can opt out of any coercion.
-	if (trimmed.toLowerCase() === LITERAL_FORMAT) return (v) => String(v ?? "")
-	return isTimeFormatSpec(trimmed) ? safeTimeFormat(trimmed) : safeFormat(trimmed)
+/** Options for the value kinds whose "as-is" text is not `String(v)`. */
+export type TickFormatterOptions = {
+	/** Literal text for a Date. Default: ISO at the date's own granularity
+	 *  ("1988", "1988-07"). A date AXIS passes the formatter for its whole
+	 *  tick set (`uniformTimeLiteral`) so every label shares one shape. */
+	literalDate?: (d: Date) => string
 }
 
-const literalFormatter: ValueFormatter = (v) => String(v ?? "")
+/** Literal: stringify as-is, bypassing both formatters. A Date is the one
+ * value whose `String()` is not "as-is" in any useful sense ("Fri Jan 01
+ * 1988 00:00:00 GMT-0600 (Central Standard Time)"), so it prints as ISO
+ * calendar text instead. */
+const literalFormatterWith = (opts?: TickFormatterOptions): ValueFormatter => {
+	const date = opts?.literalDate ?? literalDateText
+	return (v) => (v instanceof Date ? date(v) : String(v ?? ""))
+}
+
+/** Spec-only formatter for the INNER spec (affixes already stripped):
+ * null for Auto, else literal / time / numeric routing. */
+const innerFormatter = (
+	spec: string,
+	opts?: TickFormatterOptions
+): ValueFormatter | null => {
+	const trimmed = spec.trim()
+	if (trimmed === "") return null
+	// Literal must come before the time/numeric routing so a numeric axis
+	// can opt out of any coercion.
+	if (trimmed.toLowerCase() === LITERAL_FORMAT) return literalFormatterWith(opts)
+	return isTimeFormatSpec(trimmed) ? safeTimeFormat(trimmed) : safeFormat(trimmed)
+}
 
 /**
  * Build a tick formatter for the given axis config + field type.
@@ -178,25 +197,28 @@ const literalFormatter: ValueFormatter = (v) => String(v ?? "")
 export function buildTickFormatter(
 	config: Pick<AxisConfig, "customFormat">,
 	type: FieldType,
-	fallback: ValueFormatter
+	fallback: ValueFormatter,
+	opts?: TickFormatterOptions
 ): ValueFormatter
 export function buildTickFormatter(
 	config: Pick<AxisConfig, "customFormat">,
 	type: FieldType,
-	fallback?: ValueFormatter
+	fallback?: ValueFormatter,
+	opts?: TickFormatterOptions
 ): ValueFormatter | null
 export function buildTickFormatter(
 	// Only the format spec is consulted — `Pick` so non-axis callers (the
 	// chord ring axis, data labels, legends) can pass a bare `{ customFormat }`.
 	config: Pick<AxisConfig, "customFormat">,
 	_type: FieldType,
-	fallback?: ValueFormatter
+	fallback?: ValueFormatter,
+	opts?: TickFormatterOptions
 ): ValueFormatter | null {
 	const parts = parseFormatSpec(config.customFormat)
-	const inner = innerFormatter(parts.spec)
+	const inner = innerFormatter(parts.spec, opts)
 	const affixed = parts.prefix !== "" || parts.suffix !== ""
 	if (!inner && !affixed) return fallback ?? null
-	const base = inner ?? fallback ?? literalFormatter
+	const base = inner ?? fallback ?? literalFormatterWith(opts)
 	if (!affixed) return base
 	return (v) => applyFormatAffixes(parts, base(v))
 }

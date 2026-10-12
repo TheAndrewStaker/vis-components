@@ -13,8 +13,10 @@ import { ptToPx, resolveTickFontSizePx } from "../../lib/fontUnit"
 import { estimateLongestLineWidth } from "../../lib/estimateMargins"
 import { format as d3Format } from "d3-format"
 
-import { evenlySpacedTicks } from "../../lib/evenTicks"
-import { buildTickFormatter } from "../../lib/formatTick"
+import { evenlySpacedTicks, evenlySpacedTimeTicks } from "../../lib/evenTicks"
+import { buildTickFormatter, type TickFormatterOptions } from "../../lib/formatTick"
+import { uniformTimeFormat, uniformTimeLiteral } from "../../lib/timeTickFormat"
+import { type DateColumnText, literalTimeLabel } from "../../lib/rawTextByTime"
 import { mirrorTickBreaks } from "../../lib/mirrorAxis"
 import {
 	textAnchorFromAlignment,
@@ -112,6 +114,12 @@ type Props = {
 	 * list. Set by the coord system from the bar renderer only — the flag on
 	 * a config is inert for every other renderer. */
 	mirrored?: boolean
+	/** A date axis's data cells keyed by the instant they parse to
+	 * (`dateColumnText`). The tick Format's "Literal" prints every tick in
+	 * the column's own text shape ("1949" for a column of "1947"-style
+	 * cells), the cell itself when a tick lands on one, and ISO text at the
+	 * tick set's granularity only when the shape isn't recognised. Only temporal axes with a field pass this. */
+	rawTextByValue?: DateColumnText
 }
 
 const DEFAULT_TICK_COUNT = 5
@@ -135,6 +143,7 @@ export const Axis = ({
 	spinePosition,
 	domainPinned = false,
 	mirrored = false,
+	rawTextByValue,
 }: Props) => {
 	const drawBack = layer !== "front"
 	const drawFront = layer !== "back" && showTicksAndLabels
@@ -206,8 +215,10 @@ export const Axis = ({
 	/** The tick Format resolved over `auto`, the default label text for this
 	 * axis: the user's spec when set, `auto` wrapped in any Before / After
 	 * text when the spec is Auto, `auto` itself when nothing is set. */
-	const formatterOver = (auto: (v: unknown) => string) =>
-		config ? buildTickFormatter(config, fieldType, auto) : auto
+	const formatterOver = (
+		auto: (v: unknown) => string,
+		opts?: TickFormatterOptions
+	) => (config ? buildTickFormatter(config, fieldType, auto, opts) : auto)
 
 	// A continuous (quantitative / temporal) scale exposes `.ticks()`;
 	// categorical scalePoint / scaleBand don't.
@@ -244,7 +255,10 @@ export const Axis = ({
 	// list and the gridlines' "match tick count" / explicit-count modes.
 	// Default: d3's nice ticks (`count` is a density hint). Fully pinned
 	// domain: exactly `count` evenly spaced values from min to max inclusive
-	// — the user chose both ends, so the ticks land on them.
+	// — the user chose both ends, so the ticks land on them. A pinned DATE
+	// axis snaps those even values to calendar boundaries (year starts for
+	// a ten-year step), or leap days leave them hours off midnight and the
+	// time formatter labels the stray hours / milliseconds.
 	const useEvenTicks = domainPinned && isContinuousScale
 	const autoTicks = (count: number): unknown[] => {
 		if (count <= 0 || !isContinuousScale) return []
@@ -255,12 +269,11 @@ export const Axis = ({
 		if (!useEvenTicks) return s.ticks(count)
 		const dom = s.domain()
 		const toNum = (v: unknown) => (v instanceof Date ? v.getTime() : Number(v))
-		const even = evenlySpacedTicks(
-			toNum(dom[0]),
-			toNum(dom[dom.length - 1]),
-			count
-		)
-		return fieldType === "temporal" ? even.map((ms) => new Date(ms)) : even
+		const lo = toNum(dom[0])
+		const hi = toNum(dom[dom.length - 1])
+		return fieldType === "temporal"
+			? evenlySpacedTimeTicks(lo, hi, count).map((ms) => new Date(ms))
+			: evenlySpacedTicks(lo, hi, count)
 	}
 
 	const ticks: Array<{ pos: number; label: string }> = (() => {
@@ -276,17 +289,34 @@ export const Axis = ({
 			const auto = autoTicks(tickCount)
 			const values = [...auto, ...(customBreaks ?? [])]
 			if (values.length === 0) return []
+			// A date axis labels EVERY tick in one format, chosen from the tick
+			// set's finest calendar component ("1949 … 2019" for year starts,
+			// "Jan 1988 … Oct 1988" once a month start is among them). d3's
+			// own multi-scale `tickFormat` picks per tick and mixes "1988",
+			// "Jul" and "04 PM" on one axis. Literal prints the same ticks as
+			// ISO text at that granularity.
+			const dates =
+				fieldType === "temporal"
+					? values.filter((v): v is Date => v instanceof Date)
+					: null
 			// Even ticks on a pinned quantitative axis can step by values d3's
 			// nice-step precision would truncate (0–1 in 4 → 0.333…), so
 			// format them at their own precision, trimming trailing zeros.
-			// Temporal axes keep d3's multi-scale time formatter.
-			const fallback =
-				useEvenTicks && fieldType !== "temporal"
+			const fallback = dates
+				? ((f) => (v: unknown) => (v instanceof Date ? f(v) : String(v)))(
+						uniformTimeFormat(dates)
+					)
+				: useEvenTicks
 					? (v: unknown) => d3Format(",~f")(Number(v))
 					: s.tickFormat?.(
 							tickCount > 0 ? tickCount : Math.max(2, DEFAULT_TICK_COUNT)
 						)
-			const fmt = formatterOver(fallback ?? ((v: unknown) => String(v)))
+			const fmt = formatterOver(
+				fallback ?? ((v: unknown) => String(v)),
+				dates
+					? { literalDate: literalTimeLabel(rawTextByValue, uniformTimeLiteral(dates)) }
+					: undefined
+			)
 			// Sort by axis value (breaks land between the auto ticks) and de-dup
 			// on pixel position so a break that coincides with an auto tick
 			// draws one tick + label, not two.
@@ -610,6 +640,7 @@ export const Axis = ({
 									{/* Tick STROKE moved to the back pass above so it draws
 										behind overlapping marks; only the label renders here. */}
 									<text
+										data-vc-tick-label={orientation}
 										x={labelOffsetX}
 										y={labelOffsetY}
 										transform={

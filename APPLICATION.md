@@ -1524,7 +1524,22 @@ The X-axis and Y-axis panels (under Encodings) configure:
   axis lays out exactly Count evenly spaced ticks from min to max
   inclusive — 0.04–0.24 with Count 6 gives 0.04, 0.08, 0.12, 0.16,
   0.20, 0.24 — and "Match tick count" gridlines follow the same
-  layout. Pinned bounds are also respected exactly on bar / area
+  layout. Date bounds are entered as YYYY-MM-DD or picked from a small
+  calendar whose Month and Year are SEPARATE dropdowns over a day grid
+  (never the browser's one long "Month YYYY" list); a blank clears the
+  bound.
+  layout. On a DATE axis the even ticks snap to the calendar unit the
+  step reads as (year starts for a ten-year step, month starts for a
+  six-week one, midnight for a daily one), so 1949–2019 with Count 8
+  reads 1949, 1959 … 2019 rather than the stray hours leap days would
+  leave. The ticks step by a WHOLE number of that unit from the first
+  boundary after min (1950–2019 with Count 8 reads 1950, 1960 … 2010,
+  2019, never 1980, 1989, 1999 from rounding each tick), so a date axis
+  may draw one more or one fewer tick than Count; an END within a hair
+  of a boundary snaps onto it, a deliberate mid-year end keeps its own
+  value. Typed and picked dates (min, max,
+  Custom breaks) are local-calendar days, the same clock the axis
+  ticks on. Pinned bounds are also respected exactly on bar / area
   measure axes (the auto-fit rounding-outward applies only to blank
   ends).
 - **Use a mirrored axis** (Ticks section, its own ruled mini-section
@@ -1641,7 +1656,20 @@ The X-axis and Y-axis panels (under Encodings) configure:
   (`,.0f kg` → "1,234 kg"; a d3 code never contains whitespace, so the
   split is at the first space). The text is kept verbatim — the space
   in `literal units` is the gap, `literal%` has none. Time-format codes
-  are used whole (`%Y years` already prints its text). The explicit
+  are used whole (`%Y years` already prints its text). A DATE axis's
+  Auto labels share ONE format, chosen from the finest calendar
+  component across its ticks: year starts read "1949 … 2019", a set
+  with a month start among them reads "Jan 1988 … Oct 1988", day starts
+  "Mar 5, 2024", then "… 09:00", "… 09:00:15" (never d3's per-tick mix
+  of "1988", "Jul" and "04 PM"). Literal on a date axis means the value
+  straight from the data column: the column's text SHAPE is read from
+  its cells and every tick prints in it — a column of "1947", "1948" …
+  labels ticks "1949", "1959" (never "1949-01"), a column of "7/15/1988"
+  labels them M/D/YYYY. A tick landing
+  exactly on a cell prints that cell; only a column whose cells don't
+  share a recognised shape falls back to ISO text at the tick set's
+  granularity ("1988", "1988-07", "2024-03-05"). A lone date elsewhere
+  (a data label) prints ISO at its own granularity. The explicit
   form `prefix{spec}suffix` covers the rest: `{}%` wraps the Auto
   labels ("0%", "5%", "10%"), `~{,.0f}` puts text before a d3 code. An
   empty value stays empty (never a bare "%"). Everything is the ONE

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import type { DateColumnText } from "../../../lib/rawTextByTime"
 
 import { Axis } from "../Axes"
 import type { AxisConfig } from "../../../lib/channelConfig"
@@ -34,6 +35,10 @@ export type CartesianInput = {
 	 * to max (see `Axis.domainPinned`). */
 	xDomainPinned?: boolean
 	yDomainPinned?: boolean
+	/** A temporal axis's data cells keyed by parsed instant — what the tick
+	 * Format's "Literal" prints (see `Axis.rawTextByValue`). */
+	xRawText?: DateColumnText
+	yRawText?: DateColumnText
 	/** True when this axis is a bar chart's measure axis rendered under "Use
 	 * a mirrored axis": tick labels show magnitudes and the mirror's custom
 	 * breaks (mirrored around 0) replace the plain ones (see
@@ -145,6 +150,7 @@ export const cartesian = (input: CartesianInput): CoordSystem => {
 							fieldType={input.xFieldType}
 							maxMeaningfulTicks={input.xMaxTicks}
 							domainPinned={input.xDomainPinned}
+							rawTextByValue={input.xRawText}
 							mirrored={input.xMirrored}
 							tickFont={input.tickFont}
 							titleFont={input.xAxisTitleFont}
@@ -170,6 +176,7 @@ export const cartesian = (input: CartesianInput): CoordSystem => {
 							fieldType={input.yFieldType}
 							maxMeaningfulTicks={input.yMaxTicks}
 							domainPinned={input.yDomainPinned}
+							rawTextByValue={input.yRawText}
 							mirrored={input.yMirrored}
 							tickFont={input.tickFont}
 							titleFont={input.yAxisTitleFont}
