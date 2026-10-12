@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	DEFAULT_AXIS_CONFIG,
 	DEFAULT_FACET_CONFIG,
+	DEFAULT_HISTOGRAM_CONFIG,
 	type FacetConfig,
 } from "../../../lib/channelConfig"
 import { buildTickFormatter } from "../../../lib/formatTick"
@@ -10,6 +11,8 @@ import {
 	DEFAULT_LABELS_CONFIG,
 	resolveTextFont,
 } from "../../../lib/labelsConfig"
+import { AreasXMode } from "../../../lib/chartModes/areasX"
+import { BarsXMode } from "../../../lib/chartModes/barsX"
 import { resolveFacetPanels } from "../../../lib/resolveFacetPanels"
 import {
 	emptyEncodings,
@@ -45,25 +48,30 @@ const build = ({
 	facetCfg = { ...DEFAULT_FACET_CONFIG },
 	channelConfigs = {},
 	isFaceted = false,
+	mode,
+	overrides = {},
 }: {
 	rows: Array<Record<string, string>>
 	encodings: Encodings
 	facetCfg?: FacetConfig
 	channelConfigs?: Parameters<typeof buildSolverPanelInputs>[0]["channelConfigs"]
 	isFaceted?: boolean
+	mode?: Parameters<typeof buildSolverPanelInputs>[0]["mode"]
+	overrides?: Parameters<typeof buildSolverPanelInputs>[0]["overrides"]
 }) => {
 	const dataset = view(rows)
-	const panelData = resolveFacetPanels(dataset, encodings, {}, {}, facetCfg)
+	const panelData = resolveFacetPanels(dataset, encodings, {}, overrides, facetCfg)
 	return buildSolverPanelInputs({
 		dataset,
 		encodings,
-		overrides: {},
+		overrides,
 		channelConfigs,
 		bounds,
 		isFaceted,
 		facetCfg,
 		panelData,
 		tickFont,
+		mode,
 	})
 }
 
@@ -96,7 +104,7 @@ describe("buildSolverPanelInputs", () => {
 		).toEqual([])
 	})
 
-	it("samples categorical x labels and min/max quantitative y labels for a single panel", () => {
+	it("samples categorical x labels and the nice'd tick labels of a quantitative y for a single panel", () => {
 		const inputs = build({
 			rows: [
 				{ cat: "a", val: "10", g: "g1" },
@@ -117,8 +125,10 @@ describe("buildSolverPanelInputs", () => {
 		expect(p.row).toBe(0)
 		expect(p.col).toBe(0)
 		expect(p.xLabels).toEqual(["a", "b"])
-		// min/max, trimmed to ~4 significant figures like the rendered ticks
-		expect(p.yLabels).toEqual(["3", "148.5"])
+		// The ticks the axis draws: d3 nice()s [3, 148.5] out to [0, 160] and
+		// lays five-ish ticks across it — NOT the raw data min / max ("148.5"
+		// is narrower than the "150" that actually renders).
+		expect(p.yLabels).toEqual(["0", "50", "100", "150"])
 		expect(p.xAxisContinuous).toBe(false)
 		expect(p.xWeight).toBe(1)
 		expect(p.yWeight).toBe(1)
@@ -146,7 +156,114 @@ describe("buildSolverPanelInputs", () => {
 		})
 		const fmt = buildTickFormatter({ customFormat: "$,.0f" }, "quantitative")
 		expect(fmt).not.toBeNull()
-		expect(inputs[0].yLabels).toEqual([fmt?.(1000), fmt?.(140000)])
+		// Every sampled tick carries the format; the top tick is the widest.
+		expect(inputs[0].yLabels).toContain(fmt?.(140000))
+		expect(inputs[0].yLabels.every((l) => l.startsWith("$"))).toBe(true)
+	})
+
+	it("follows a pinned Scale range and the axis tick Count", () => {
+		const inputs = build({
+			rows: [
+				{ cat: "a", val: "3", g: "g1" },
+				{ cat: "b", val: "7", g: "g1" },
+			],
+			encodings: xyEncodings("cat", "val"),
+			channelConfigs: {
+				y: { ...DEFAULT_AXIS_CONFIG, min: 0, max: 1000, tickCount: 3 },
+			},
+		})
+		// Both ends pinned → exactly `count` evenly spaced ticks, ends included.
+		expect(inputs[0].yLabels).toEqual(["0", "500", "1000"])
+	})
+
+	it("adds custom breaks inside the domain to the sampled labels", () => {
+		const inputs = build({
+			rows: [
+				{ cat: "a", val: "0", g: "g1" },
+				{ cat: "b", val: "10", g: "g1" },
+			],
+			encodings: xyEncodings("cat", "val"),
+			channelConfigs: {
+				y: { ...DEFAULT_AXIS_CONFIG, tickCount: 0, breaks: [2.5, 99] },
+			},
+		})
+		// Count 0 → no auto ticks; only the in-domain break labels.
+		expect(inputs[0].yLabels).toEqual(["2.5"])
+	})
+
+	// Vertical bars / areas draw the `length` measure on y. Sampling
+	// `encodings.y` here found no field, measured a 0px label width, and
+	// let the y-title gap collapse onto the tick labels (the stacked-area
+	// report of Oct 2026).
+	it("samples y labels from the length measure for vertical bars", () => {
+		const e = emptyEncodings()
+		e.x = { field: "cat" }
+		e.length = { field: "val" }
+		const inputs = build({
+			rows: [
+				{ cat: "a", val: "10", g: "g1" },
+				{ cat: "b", val: "25", g: "g1" },
+			],
+			encodings: e,
+			mode: BarsXMode,
+		})
+		expect(inputs[0].xLabels).toEqual(["a", "b"])
+		expect(inputs[0].yLabels.length).toBeGreaterThan(0)
+		expect(inputs[0].yLabels).toContain("25")
+	})
+
+	it("samples the stacked total, not the raw column max, on a stacked measure axis", () => {
+		const e = emptyEncodings()
+		e.x = { field: "cat" }
+		e.length = { field: "val" }
+		e.hue = { field: "g" }
+		const rows = [
+			{ cat: "a", val: "60", g: "g1" },
+			{ cat: "a", val: "40", g: "g2" },
+			{ cat: "b", val: "30", g: "g1" },
+		]
+		// Default stack mode: category "a" stacks to 100 though no row exceeds 60.
+		const stacked = build({ rows, encodings: e, mode: AreasXMode })
+		expect(stacked[0].yLabels).toContain("100")
+		// Group mode: bars sit side by side, so the axis tops out at the row max.
+		const grouped = build({
+			rows,
+			encodings: e,
+			mode: BarsXMode,
+			channelConfigs: {
+				hue: { kind: "categorical", colors: {}, stackMode: "group" },
+			},
+		})
+		expect(grouped[0].yLabels).not.toContain("100")
+		expect(grouped[0].yLabels).toContain("60")
+	})
+
+	it("samples the count axis of a histogram, which has no field of its own", () => {
+		const e = emptyEncodings()
+		e.x = { field: "val" }
+		const inputs = build({
+			rows: Array.from({ length: 12 }, (_, i) => ({
+				cat: "a",
+				val: String(i < 9 ? 1 : 9),
+				g: "g1",
+			})),
+			encodings: e,
+			mode: BarsXMode,
+			channelConfigs: {
+				x: {
+					...DEFAULT_AXIS_CONFIG,
+					histogram: {
+						...DEFAULT_HISTOGRAM_CONFIG,
+						enabled: true,
+						binCount: 2,
+						mode: "count",
+					},
+				},
+			},
+		})
+		// Nine rows land in the low bin: the count axis spans 0–9 and ticks
+		// 0, 2, … 8 — the same nice ticks the renderer's count scale draws.
+		expect(inputs[0].yLabels).toEqual(["0", "2", "4", "6", "8"])
 	})
 
 	it("honors per-axis tick-label font size overrides", () => {
@@ -248,5 +365,71 @@ describe("buildSolverPanelInputs", () => {
 		})
 		expect(inputs.length).toBeGreaterThan(1)
 		expect(inputs.every((p) => p.yWeight === 1)).toBe(true)
+	})
+})
+
+describe("buildSolverPanelInputs — temporal axes", () => {
+	// `cat` holds the dates; the temporal override is what the Fields panel
+	// stores when the user retypes a column.
+	const temporal = { cat: "temporal" as const }
+
+	it("samples a date axis's labels as d3's time ticks, not epoch numbers", () => {
+		const inputs = build({
+			rows: [
+				{ cat: "2019-03-01", val: "1", g: "g1" },
+				{ cat: "2021-06-15", val: "2", g: "g1" },
+				{ cat: "2023-11-01", val: "3", g: "g1" },
+			],
+			encodings: xyEncodings("cat", "val"),
+			overrides: temporal,
+		})
+		const labels = inputs[0].xLabels
+		// Nice'd to year starts and ticked yearly: "2019" … "2024".
+		expect(labels.length).toBeGreaterThanOrEqual(5)
+		expect(labels.every((l) => /^\d{4}$/.test(l))).toBe(true)
+	})
+
+	it("reads a pinned date range as dates and keeps the labels short and level", () => {
+		// A line chart over Year 1947–2025 (bare years parse as Jan 1) with the
+		// Scale range pinned to 1949-01-01 … 2019-01-01 (epoch ms) and Count 8.
+		// Sampling the raw ms values produced thirteen-character labels that
+		// "collided" at narrow widths and reserved a rotated-label band the
+		// real "1949" labels never needed.
+		const rows = Array.from({ length: 79 }, (_, i) => ({
+			cat: String(1947 + i),
+			val: String(i),
+			g: "g1",
+		}))
+		const inputs = build({
+			rows,
+			encodings: xyEncodings("cat", "val"),
+			overrides: temporal,
+			channelConfigs: {
+				x: {
+					...DEFAULT_AXIS_CONFIG,
+					tickCount: 8,
+					min: -662688000000,
+					max: 1546300800000,
+				},
+			},
+		})
+		const labels = inputs[0].xLabels
+		expect(labels.length).toBe(8)
+		expect(labels.some((l) => /\d{6,}/.test(l))).toBe(false)
+		expect(labels).toContain("1959")
+		expect(inputs[0].xLabelAngleDeg).toBe(0)
+	})
+
+	it("runs date ticks through the axis Format", () => {
+		const inputs = build({
+			rows: [
+				{ cat: "2019-03-01", val: "1", g: "g1" },
+				{ cat: "2023-11-01", val: "3", g: "g1" },
+			],
+			encodings: xyEncodings("cat", "val"),
+			overrides: temporal,
+			channelConfigs: { x: { ...DEFAULT_AXIS_CONFIG, customFormat: "'%y" } },
+		})
+		expect(inputs[0].xLabels.every((l) => /^'\d{2}$/.test(l))).toBe(true)
 	})
 })

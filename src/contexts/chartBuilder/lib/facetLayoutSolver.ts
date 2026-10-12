@@ -13,6 +13,7 @@
  *  caller may pre-measure widths via canvas.measureText and pass them in
  *  to tighten the result. */
 
+import { DEFAULT_TICKMARK_CONFIG } from "./channelConfig"
 import {
 	estimateExtraBottomMargin,
 	estimateExtraLeftMargin,
@@ -106,8 +107,9 @@ export type SolverPanelInput = {
 	readonly key: string
 	readonly row: number
 	readonly col: number
-	/** Sample of x-axis tick labels for margin estimation. Empty for
-	 *  quantitative axes (the scale generates labels later). */
+	/** Sample of x-axis tick labels for margin estimation: the category
+	 *  values, or for a continuous axis the formatted tick labels the axis
+	 *  will draw (see `buildSolverPanelInputs`). */
 	readonly xLabels: readonly string[]
 	readonly yLabels: readonly string[]
 	readonly xLabelAngleDeg: number
@@ -162,6 +164,13 @@ export type SolverInput = {
 	 *  renderer does. Omitted = 0. */
 	readonly yTickLabelDx?: number
 	readonly xTickLabelDy?: number
+
+	/** Tick-mark length per axis (px). Axes.tsx insets the tick labels from
+	 *  the spine by `tick.length + 4` (y) / `tick.length + 12` (x), so the
+	 *  axis-title gaps — which target a fixed distance from the labels'
+	 *  rendered edge — grow with the tick. Omitted = the default tick length. */
+	readonly xTickLength?: number
+	readonly yTickLength?: number
 
 	/** Per-panel facet label band. Omit for single-panel charts. */
 	readonly facetLabel?: FacetLabelInput
@@ -1029,7 +1038,17 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 	// draw. The away component is ignored — titles never chase labels
 	// inward.
 	const yLabelNudgeTowardTitle = Math.max(0, -(input.yTickLabelDx ?? 0))
-	const xLabelNudgeTowardTitle = Math.max(0, input.xTickLabelDy ?? 0)
+	// A tick mark longer than the default pushes the labels outward by the
+	// difference (Axes.tsx insets labels by the tick length); fold that in
+	// alongside the nudge so the title still clears the labels. Never
+	// negative: a shorter tick doesn't pull the title inward.
+	const xTickExtra = Math.max(
+		0,
+		(input.xTickLength ?? DEFAULT_TICKMARK_CONFIG.length) -
+			DEFAULT_TICKMARK_CONFIG.length
+	)
+	const xLabelNudgeTowardTitle =
+		Math.max(0, input.xTickLabelDy ?? 0) + xTickExtra
 
 	const { left: estimatedLeftFloor, bottom: estimatedBottomFloor } =
 		estimateGlobalFloors(
@@ -1147,15 +1166,20 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 	// `tickFontSize` past the tick-line pad.
 	const TITLE_LABEL_GAP_PX = 25
 	const TICK_LINE_PAD = 6
+	// Where the y tick labels' outer edge actually lands: Axes.tsx anchors
+	// them (text-anchor end) at `-(tick.length + 4)` from the spine.
+	const Y_LABEL_PAD = 4
+	const yLabelInset =
+		(input.yTickLength ?? DEFAULT_TICKMARK_CONFIG.length) + Y_LABEL_PAD
 	const yTitleGap = input.yTitle
 		? Math.max(
 				// Floor for very short labels — keeps the title from sitting
 				// directly on the plot edge.
 				24 + yTitleFontSize / 2,
 				input.yTitle.horizontal
-					? longestYLabelPx + TICK_LINE_PAD + TITLE_LABEL_GAP_PX
+					? longestYLabelPx + yLabelInset + TITLE_LABEL_GAP_PX
 					: longestYLabelPx +
-							TICK_LINE_PAD +
+							yLabelInset +
 							TITLE_LABEL_GAP_PX +
 							yTitleFontSize / 2
 			) + yLabelNudgeTowardTitle

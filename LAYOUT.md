@@ -342,7 +342,7 @@ xTitleGap = TICK_LINE_PAD (6)
 
 yTitleGap = max(24 + fontSize/2,
                 longestYLabelPx
-                + TICK_LINE_PAD (6)
+                + yLabelInset            ← yTickLength + 4: where Axes.tsx anchors the labels
                 + TITLE_LABEL_GAP_PX (25)
                 + (yTitleHorizontal ? 0 : fontSize/2))
                   ↑ rotated y-title's bbox-half-extent
@@ -350,7 +350,31 @@ yTitleGap = max(24 + fontSize/2,
 ```
 
 `longestYLabelPx` comes from PlotCanvas's `canvas.measureText` measurement
-when available; otherwise the 0.55-char-width estimate.
+when available; otherwise the 0.55-char-width estimate. The x-side folds a
+longer-than-default tick mark in the same way the nudge is folded
+(`max(0, xTickLength − 4)` on both `xTitleGap` and `bottomFloor`); a
+shorter tick never pulls a title inward.
+
+**What gets measured.** `buildSolverPanelInputs` samples, per panel, the
+labels the axis will actually DRAW, not the raw column: the field each
+axis reads comes from `axisFieldsFor(mode)` (vertical bars / areas draw
+`length` on y, horizontal ones on x — reading `encodings.y` there sampled
+nothing, measured 0px and let the y-title land on the tick labels), and a
+continuous axis contributes its tick labels — d3's nice ticks at the axis
+Count over the data extent, `count` even ticks when both Scale-range ends
+are pinned, plus in-domain Custom breaks — run through the axis Format.
+A DATE axis is sampled as dates: cells parse through `parseValue`
+(epoch ms), the ticks are `scaleTime`'s (calendar-snapped even ticks when
+both ends are pinned) and the labels come from the axis's ONE uniform
+time format (`uniformTimeFormat`), so the solver measures "1949", not "-662688000000". Sampling
+the raw ms numbers made the auto-rotate check see collisions the drawn
+labels never had and reserve a rotated-label band under a level axis —
+the blank strip between the tick labels and the x title on a line chart
+with a pinned date range (October 2026).
+The measure axis of bars / areas uses the renderer's extent rules: the
+per-category STACK total under Stack mode (`computePanelMeasureMax`), a
+negative floor only for `supportsNegativeMeasure` modes, and the per-bin
+row count (or density share) for a histogram, which has no field at all.
 
 The tick-label "Adjust position" nudge moves ONLY the tick labels (the
 spine, tick marks, title, and gridlines stay put), so the labels' rendered

@@ -1,5 +1,6 @@
 import {
 	colSizingMeaningful,
+	DEFAULT_TICKMARK_CONFIG,
 	migrateProportionalSizing,
 	migrateShareValue,
 	rowSizingMeaningful,
@@ -230,6 +231,13 @@ export const buildSolverInput = ({
 		yTickLabelDx:
 			channelConfigs.y?.offsetX ?? -(channelConfigs.y?.offset ?? 0),
 		xTickLabelDy: channelConfigs.x?.offsetY ?? (channelConfigs.x?.offset ?? 0),
+		// Tick-mark lengths: Axes.tsx insets the labels by the tick length
+		// plus a pad, so a longer tick pushes the labels' rendered edge
+		// toward the title and the gap must track it.
+		xTickLength:
+			channelConfigs.x?.tickmarks?.length ?? DEFAULT_TICKMARK_CONFIG.length,
+		yTickLength:
+			channelConfigs.y?.tickmarks?.length ?? DEFAULT_TICKMARK_CONFIG.length,
 		facetLabel:
 			panelData.mode === "grid"
 				? panelData.compact !== undefined

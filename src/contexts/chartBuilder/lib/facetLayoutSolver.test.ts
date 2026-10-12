@@ -510,6 +510,38 @@ describe("solveFacetLayout — shared titles", () => {
 		expect(gapFrom(inward)).toBeCloseTo(gapFrom(without), 1)
 	})
 
+	// Longer tick marks inset the labels further from the spine (Axes.tsx
+	// anchors y labels at `-(tick.length + 4)`), so the title must move out
+	// by the same amount; a shorter tick never pulls the title inward.
+	it("y-title gap grows with the tick-mark length", () => {
+		const gapFrom = (spec: ReturnType<typeof solveFacetLayout>) =>
+			spec.panels[0]!.inner.x - spec.yTitle!.x
+		const panels = makePanels(1, 1, {
+			yLabels: ["1,000,000", "2,000,000"],
+			yLabelMaxWidthPx: 70,
+		})
+		const base = solveFacetLayout(baseline({ yTitle: yt, panels }))
+		const longer = solveFacetLayout(
+			baseline({ yTitle: yt, panels, yTickLength: 14 })
+		)
+		expect(gapFrom(longer)).toBeCloseTo(gapFrom(base) + 10, 1)
+		const shorter = solveFacetLayout(
+			baseline({ yTitle: yt, panels, yTickLength: 0 })
+		)
+		expect(gapFrom(shorter)).toBeCloseTo(gapFrom(base) - 4, 1)
+	})
+
+	it("x-title gap grows with the tick-mark length, never shrinks", () => {
+		const xt = { text: "x", fontSize: 14, align: "center" as const }
+		const gapFrom = (spec: ReturnType<typeof solveFacetLayout>) =>
+			spec.xTitle!.y - (spec.panels[0]!.inner.y + spec.panels[0]!.inner.height)
+		const base = solveFacetLayout(baseline({ xTitle: xt }))
+		const longer = solveFacetLayout(baseline({ xTitle: xt, xTickLength: 14 }))
+		expect(gapFrom(longer)).toBeCloseTo(gapFrom(base) + 10, 1)
+		const shorter = solveFacetLayout(baseline({ xTitle: xt, xTickLength: 0 }))
+		expect(gapFrom(shorter)).toBeCloseTo(gapFrom(base), 1)
+	})
+
 	// Mirror for the x-axis: labels nudged DOWN (positive dy) push the
 	// x-title further below the plot's bottom edge.
 	it("x-title keeps its label gap under a downward tick-label nudge", () => {

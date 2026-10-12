@@ -351,6 +351,7 @@ export const PlotCanvas = () => {
 				facetCfg,
 				panelData,
 				tickFont,
+				mode,
 			}),
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- the callback forwards whole objects (channelConfigs, facetCfg, tickFont, bounds) to buildSolverPanelInputs, but the deps below list exactly the fields it reads — including the channelConfigs.x/.y parent-object choice the comment inside explains; widening to the whole objects would over-invalidate
 		[
@@ -359,6 +360,15 @@ export const PlotCanvas = () => {
 		isFaceted,
 		overrides,
 		panelData,
+		// The mode picks which encoding each axis draws and whether an axis
+		// is the stacked measure axis; the stack channels' configs carry
+		// the Stack / Group / Overlay choice that decides the measure max.
+		mode,
+		channelConfigs.hue,
+		channelConfigs.pattern,
+		channelConfigs.brightness,
+		channelConfigs.opacity,
+		channelConfigs.saturation,
 		// React Compiler infers the whole `channelConfigs.x` / `.y` objects as
 		// the dependency (the memo body reads several sub-properties of each),
 		// so we depend on the parent objects rather than the individual

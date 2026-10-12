@@ -1,14 +1,23 @@
+import { scaleLinear, scaleTime } from "d3-scale"
 import { autoLabelAngleFor } from "../../../lib/autoLabelAngle"
+import { axisFieldsFor } from "../../../lib/axisFields"
 import {
 	migrateProportionalSizing,
 	migrateShareValue,
 	type ChannelConfigs,
 	type FacetConfig,
 } from "../../../lib/channelConfig"
+import type { ChartMode } from "../../../lib/chartMode"
+import type { ChartModeDef } from "../../../lib/chartModes/types"
+import { evenlySpacedTicks, evenlySpacedTimeTicks } from "../../../lib/evenTicks"
 import type { SolverPanelInput } from "../../../lib/facetLayoutSolver"
 import { effectiveType } from "../../../lib/fieldType"
+import { parseValue } from "../../../lib/scales"
 import { resolveTickFontSizePx } from "../../../lib/fontUnit"
 import { buildTickFormatter } from "../../../lib/formatTick"
+import { uniformTimeFormat, uniformTimeLiteral } from "../../../lib/timeTickFormat"
+import { type DateColumnText, dateColumnText, literalTimeLabel } from "../../../lib/rawTextByTime"
+import { binnedCounts, computeHistogramBins } from "../../../lib/histogramBins"
 import type { TextFontConfig } from "../../../lib/labelsConfig"
 import {
 	panelFacetValues,
@@ -24,8 +33,18 @@ import type {
 	Encodings,
 	FieldType,
 } from "../../../lib/types"
+import { resolveStackModes } from "../../../lib/stackMode"
 import { measureLabelWidths, measureMaxLabelWidth } from "./measureText"
-import { groupRowsByShareGroup, panelGroupKeys } from "./panelGrouping"
+import {
+	computePanelMeasureMax,
+	computePanelMeasureMin,
+	groupRowsByShareGroup,
+	panelGroupKeys,
+} from "./panelGrouping"
+
+/** Mirror of Axes.tsx's `DEFAULT_TICK_COUNT`: the tick density a continuous
+ *  axis draws when the user hasn't set a Count. */
+const DEFAULT_TICK_COUNT = 5
 
 /** Per-panel label sample for solver margin estimation: one SolverPanelInput
  *  per panel — representative tick labels (formatted, wrapped, canvas-
@@ -42,6 +61,7 @@ export const buildSolverPanelInputs = ({
 	facetCfg,
 	panelData,
 	tickFont,
+	mode,
 }: {
 	dataset: DatasetView | undefined
 	encodings: Encodings
@@ -52,11 +72,41 @@ export const buildSolverPanelInputs = ({
 	facetCfg: FacetConfig
 	panelData: FacetPanels
 	tickFont: TextFontConfig
+	/** The detected chart mode. Decides which encoding each axis actually
+	 *  draws (vertical bars / areas put the `length` measure on y) and
+	 *  whether an axis is the stacked / counted measure axis. Omitted (older
+	 *  callers, tests) → x/y read their own channels, as a scatter does. */
+	mode?: ChartModeDef
 }): SolverPanelInput[] => {
 	const ds = dataset
 	if (!ds) return []
-	const xField = encodings.x?.field ?? null
-	const yField = encodings.y?.field ?? null
+	// The field each axis DRAWS, per mode — not the channel that shares the
+	// axis's name. Vertical bars / areas draw `length` on y (horizontal ones
+	// on x); reading `encodings.y` here sampled NO labels for that whole
+	// chart family, so the measured width came back 0 and the y-title gap
+	// collapsed onto its floor, overlapping the tick labels.
+	const axisFields = mode
+		? axisFieldsFor(mode.id as ChartMode, encodings)
+		: {
+				xField: encodings.x?.field ?? null,
+				yField: encodings.y?.field ?? null,
+			}
+	const xField = axisFields.xField
+	const yField = axisFields.yField
+	const xType = xField ? effectiveType(ds, xField, overrides) : null
+	const yType = yField ? effectiveType(ds, yField, overrides) : null
+	// Measure-axis geometry the renderer applies on top of the raw column:
+	// stacked bars / areas tick up to the per-category STACK TOTAL (a 100%
+	// stack ticks "100%" when no single row exceeds 73), diverging bars
+	// reach below zero, and a histogram's axis is a row COUNT with no
+	// field behind it at all.
+	const measureAxis = mode?.canvas.measureAxis ?? null
+	const measureField = mode?.canvas.resolveMeasureField?.(encodings) ?? null
+	const stackModes = resolveStackModes(channelConfigs, encodings)
+	const groupModeFields = stackModes
+		.filter((m) => m.mode === "group")
+		.map((m) => encodings[m.channel]?.field)
+		.filter((f): f is string => !!f)
 	// Stand-in for d3's default tick formatter: trim trailing zeros /
 	// unnecessary precision. The rendered axis formats ticks (e.g. d3 picks
 	// "150" for an axis whose data goes to 148.50000000001), so we mirror
@@ -79,29 +129,201 @@ export const buildSolverPanelInputs = ({
 	const yTickFmt = channelConfigs.y
 		? buildTickFormatter({ customFormat: channelConfigs.y.customFormat }, "quantitative", autoMarginLabel)
 		: autoMarginLabel
+	type Extent = { min: number; max: number }
+	const fieldExtent = (
+		field: string,
+		panelRows: Array<Record<string, unknown>>,
+		type: FieldType | null = null,
+	): Extent | null => {
+		const nums: number[] = []
+		for (const r of panelRows) {
+			// A temporal cell is a date string ("2024-03-01", "1947"): read it
+			// through the same parser the scale uses, as epoch ms. `Number()`
+			// on an ISO date is NaN, which sampled NO labels for the axis.
+			const n =
+				type === "temporal"
+					? (() => {
+							const d = parseValue(r[field], "temporal")
+							return d instanceof Date ? d.getTime() : NaN
+						})()
+					: Number(r[field])
+			if (Number.isFinite(n)) nums.push(n)
+		}
+		if (nums.length === 0) return null
+		return { min: Math.min(...nums), max: Math.max(...nums) }
+	}
+	/** The measure axis's data extent as the bar / area renderer builds its
+	 *  scale: per-category stack totals (`computePanelMeasureMax`, the same
+	 *  walk the shared-axis path uses), a negative floor only for modes whose
+	 *  marks can hang below zero, and per-bin row counts for a histogram. */
+	const measureExtent = (
+		axis: "x" | "y",
+		panelRows: Array<Record<string, unknown>>,
+	): Extent | null => {
+		const catChannel = axis === "y" ? "x" : "y"
+		const categoryField = encodings[catChannel]?.field ?? null
+		const histogramCfg = channelConfigs[catChannel]?.histogram
+		if (
+			histogramCfg?.enabled &&
+			categoryField &&
+			effectiveType(ds, categoryField, overrides) === "quantitative"
+		) {
+			const values = panelRows.map((r) => r[categoryField])
+			const binning = computeHistogramBins(
+				values,
+				histogramCfg.binCount ?? 10,
+				undefined,
+				{
+					min: channelConfigs[catChannel]?.min ?? null,
+					max: channelConfigs[catChannel]?.max ?? null,
+				},
+			)
+			const counts = binning
+				? binnedCounts(values, binning)
+				: new Map<string, number>()
+			const maxCount = counts.size > 0 ? Math.max(0, ...counts.values()) : 0
+			const total = [...counts.values()].reduce((a, b) => a + b, 0)
+			// Density: bars are bin shares (count / panel total), so the axis
+			// tops out at the largest share (≤ 1).
+			return {
+				min: 0,
+				max:
+					histogramCfg.mode === "density" && total > 0
+						? maxCount / total
+						: maxCount,
+			}
+		}
+		if (!measureField) return null
+		if (!categoryField) return fieldExtent(measureField, panelRows)
+		return {
+			min: mode?.canvas.supportsNegativeMeasure
+				? computePanelMeasureMin(
+						panelRows,
+						categoryField,
+						measureField,
+						stackModes,
+						groupModeFields,
+					)
+				: 0,
+			max: computePanelMeasureMax(
+				panelRows,
+				categoryField,
+				measureField,
+				stackModes,
+				groupModeFields,
+			),
+		}
+	}
+	/** A DATE axis's tick labels, as Axes.tsx draws them: a `scaleTime` over
+	 *  the data extent, nice'd to calendar boundaries, with a user-pinned
+	 *  Scale-range end replacing the nice'd end (`overrideLinearDomain`
+	 *  never re-nices); d3's time ticks at the axis Count, or the calendar-
+	 *  snapped even ticks when BOTH ends are pinned; the axis's ONE uniform
+	 *  time format (`uniformTimeFormat`) under the axis Format. Sampling the epoch-ms numbers
+	 *  instead ("-662688000000", thirteen characters a tick) made the
+	 *  solver's auto-rotate see collisions the real "1949" labels never
+	 *  have, and it reserved a rotated-label band under a level axis —
+	 *  the blank strip between the tick labels and the x title on a line
+	 *  chart with a pinned date range (user-reported October 2026). */
+	const timeTickLabelsFor = (
+		cfg: typeof channelConfigs.x,
+		extent: Extent,
+		pinMin: number | null,
+		pinMax: number | null,
+		rawText?: DateColumnText,
+	): string[] => {
+		const scale = scaleTime()
+			.domain([new Date(extent.min), new Date(extent.max)])
+			.nice()
+		const [niceLo, niceHi] = scale.domain()
+		const lo = pinMin ?? niceLo.getTime()
+		const hi = pinMax ?? niceHi.getTime()
+		if (!Number.isFinite(lo) || !Number.isFinite(hi)) return []
+		scale.domain([new Date(lo), new Date(hi)])
+		const count = cfg?.tickCount ?? DEFAULT_TICK_COUNT
+		const auto: Date[] =
+			count <= 0
+				? []
+				: pinMin !== null && pinMax !== null
+					? evenlySpacedTimeTicks(lo, hi, count).map((ms) => new Date(ms))
+					: scale.ticks(count)
+		const dLo = Math.min(lo, hi)
+		const dHi = Math.max(lo, hi)
+		const breaks = (cfg?.breaks ?? [])
+			.filter((b) => b >= dLo && b <= dHi)
+			.map((b) => new Date(b))
+		const ticks = [...auto, ...breaks]
+		const timeFmt = uniformTimeFormat(ticks)
+		const fmt = buildTickFormatter(
+			{ customFormat: cfg?.customFormat ?? "" },
+			"temporal",
+			(v) => timeFmt(v as Date),
+			{ literalDate: literalTimeLabel(rawText, uniformTimeLiteral(ticks)) }
+		)
+		return ticks.map(fmt)
+	}
+	/** The tick labels a continuous axis draws over `extent`, laid out the
+	 *  way Axes.tsx lays them out: a user-pinned Scale range end replaces the
+	 *  data end, the auto ticks are d3's nice ticks at the axis's Count (or
+	 *  `count` evenly spaced values when BOTH ends are pinned), and Custom
+	 *  breaks inside the domain add their own labels. Sampling only the raw
+	 *  data min / max under-measured here: "148.5" is narrower than the
+	 *  "150" d3 actually draws, and a nice'd top of "100" is a digit wider
+	 *  than a data max of "98". */
+	const tickLabelsFor = (
+		axis: "x" | "y",
+		extent: Extent,
+		type: FieldType | null = null,
+		rawText?: DateColumnText,
+	): string[] => {
+		const cfg = axis === "x" ? channelConfigs.x : channelConfigs.y
+		const pinMin = typeof cfg?.min === "number" ? cfg.min : null
+		const pinMax = typeof cfg?.max === "number" ? cfg.max : null
+		if (type === "temporal") return timeTickLabelsFor(cfg, extent, pinMin, pinMax, rawText)
+		const lo = pinMin ?? extent.min
+		const hi = pinMax ?? extent.max
+		if (!Number.isFinite(lo) || !Number.isFinite(hi)) return []
+		const count = cfg?.tickCount ?? DEFAULT_TICK_COUNT
+		const auto: number[] =
+			count <= 0
+				? []
+				: pinMin !== null && pinMax !== null
+					? evenlySpacedTicks(lo, hi, count)
+					: scaleLinear().domain([lo, hi]).nice().ticks(count)
+		const dLo = Math.min(lo, hi)
+		const dHi = Math.max(lo, hi)
+		const breaks = (cfg?.breaks ?? []).filter((b) => b >= dLo && b <= dHi)
+		const fmtForMargin = axis === "x" ? xTickFmt : yTickFmt
+		return [...auto, ...breaks].map(fmtForMargin)
+	}
 	const labelsAxisFor = (axis: "x" | "y", panelRows: Array<Record<string, unknown>>): string[] => {
 		const field = axis === "x" ? xField : yField
-		if (!field) return []
-		const type = effectiveType(ds, field, overrides)
-		if (type === "categorical" || type === "ordinal") {
+		const type = field ? effectiveType(ds, field, overrides) : null
+		if (field && (type === "categorical" || type === "ordinal")) {
 			return [
 				...new Set(
 					panelRows.map((r) => String(r[field] ?? "")).filter(Boolean)
 				),
 			]
 		}
-		// Quantitative: use min/max as representative tick labels.
-		const nums: number[] = []
-		for (const r of panelRows) {
-			const n = Number(r[field])
-			if (Number.isFinite(n)) nums.push(n)
-		}
-		if (nums.length === 0) return []
-		const fmtForMargin = axis === "x" ? xTickFmt : yTickFmt
-		return [
-			fmtForMargin(Math.min(...nums)),
-			fmtForMargin(Math.max(...nums)),
-		]
+		// Continuous: sample the tick labels the axis will draw. The measure
+		// axis has its own extent rules (stacking, negative floor, counts) and
+		// may have no field of its own (histogram).
+		const extent =
+			axis === measureAxis
+				? measureExtent(axis, panelRows)
+				: field
+					? fieldExtent(field, panelRows, type)
+					: null
+		if (!extent) return []
+		// The measure axis of bars / areas is always numeric (sums, counts).
+		const axisType = axis === measureAxis ? null : type
+		return tickLabelsFor(
+			axis,
+			extent,
+			axisType,
+			field && axisType === "temporal" ? dateColumnText(panelRows, field) : undefined,
+		)
 	}
 	// Pre-compute the quantitative-axis data range per panel for
 	// "size panels by unit" mode (spec §4.5). Axis-aware: returns the
@@ -109,8 +331,6 @@ export const buildSolverPanelInputs = ({
 	// apply each to the matching dimension. When a panel's axis
 	// isn't quantitative/temporal, that axis's range collapses to 0
 	// (caller floors to 1).
-	const xType = xField ? effectiveType(ds, xField, overrides) : null
-	const yType = yField ? effectiveType(ds, yField, overrides) : null
 	const isQuant = (t: FieldType | null): boolean =>
 		t === "quantitative" || t === "temporal"
 	const extentOnAxis = (
