@@ -81,6 +81,10 @@ const mount = () => {
 	)
 }
 
+/** The hex text box of a ColorInput, by its accessible name. */
+const hexBox = (c: HTMLElement, name: string) =>
+	c.querySelector<HTMLInputElement>(`input[aria-label="${name} hex"]`)
+
 /** Titles of the collapsible subheaders, in document order. */
 const subheaders = (c: HTMLElement): string[] =>
 	[...c.querySelectorAll("button[aria-expanded]")].map(
@@ -124,5 +128,59 @@ describe("ColorPanel — area outline organization", () => {
 		fireEvent.click(outlineBtn) // expand
 		// The line-palette dropdown offers "Match fill" as the linked default.
 		expect(getByText("Match fill")).toBeTruthy()
+	})
+
+	it("Outline palette offers 'Single color', which exposes one uniform swatch", () => {
+		const { container, getByLabelText, queryByLabelText } = mount()
+		const outlineBtn = [
+			...container.querySelectorAll("button[aria-expanded]"),
+		].find((b) => b.textContent?.trim() === "Outline")!
+		fireEvent.click(outlineBtn) // expand
+		// The outline Palette dropdown is the one carrying the "Single color"
+		// sentinel option (Fill has its own Palette dropdown).
+		const select = [...container.querySelectorAll("select")].find((sel) =>
+			[...sel.options].some((o) => o.value === "__single__")
+		)!
+		expect(select).toBeTruthy()
+		expect(
+			[...select.options].find((o) => o.value === "__single__")?.textContent
+		).toBe("Single color")
+		expect(select.value).toBe("")
+		expect(queryByLabelText("Color")).toBeNull()
+
+		fireEvent.change(select, { target: { value: "__single__" } })
+		// Mode is derived from `connection.strokeColor`, so the dropdown sticks
+		// and a single "Color" swatch REPLACES the per-value rows (which would
+		// out-rank the single color in the renderer).
+		expect(select.value).toBe("__single__")
+		expect(getByLabelText("Color")).toBeTruthy()
+		expect(hexBox(container, "Line color for A")).toBeNull()
+
+		fireEvent.change(select, { target: { value: "" } })
+		expect(select.value).toBe("")
+		expect(queryByLabelText("Color")).toBeNull()
+		expect(hexBox(container, "Line color for A")).toBeTruthy()
+	})
+
+	it("entering Single color clears leftover per-level outline overrides", () => {
+		const { container } = mount()
+		const outlineBtn = [
+			...container.querySelectorAll("button[aria-expanded]"),
+		].find((b) => b.textContent?.trim() === "Outline")!
+		fireEvent.click(outlineBtn) // expand
+		// Override one level while in Match-fill mode.
+		const hexA = hexBox(container, "Line color for A")!
+		fireEvent.change(hexA, { target: { value: "#ffffff" } })
+		expect(hexA.value.toLowerCase()).toBe("#ffffff")
+
+		const select = [...container.querySelectorAll("select")].find((sel) =>
+			[...sel.options].some((o) => o.value === "__single__")
+		)!
+		fireEvent.change(select, { target: { value: "__single__" } })
+		// Back to Match fill: the override must be gone, so A's row shows its
+		// fill default again rather than the stale white.
+		fireEvent.change(select, { target: { value: "" } })
+		const hexAgain = hexBox(container, "Line color for A")!
+		expect(hexAgain.value.toLowerCase()).not.toBe("#ffffff")
 	})
 })

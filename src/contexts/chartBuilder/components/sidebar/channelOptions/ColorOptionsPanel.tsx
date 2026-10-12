@@ -731,11 +731,16 @@ const CategoricalPanel = ({
  *  (not nested under it). The outline is colored per layer/polygon by the SAME
  *  hue field as the fill (one layer = one hue value), so there is no
  *  independent "Vary by" — fill and outline are linked. The user picks a
- *  palette (default "Match fill", which inherits each layer's fill color) plus
- *  optional per-value overrides. Storage lives on `connection.linePalette` /
- *  `connection.lineColors`, which AreaPlot/RadarPlot already read. Renders
+ *  palette (default "Match fill", which inherits each layer's fill color;
+ *  "Single color" strokes every layer uniformly) plus optional per-value
+ *  overrides. Storage lives on `connection.linePalette` / `connection.lineColors`
+ *  / `connection.strokeColor`, which AreaPlot/RadarPlot already read. Renders
  *  nothing unless a categorical/ordinal hue field is mapped (the per-value grid
  *  only makes sense then — mirrors the Fill swatch editor). */
+/** Sentinel dropdown value for the area/radar outline "Single color" mode.
+ *  Never stored — the mode is derived from `connection.strokeColor`. */
+const SINGLE_OUTLINE_COLOR = "__single__"
+
 export const AreaRadarOutlinePanel = () => {
 	const overrides = useAtomValue(currentFieldOverridesAtom)
 	const encodings = useAtomValue(currentEncodingsAtom)
@@ -845,37 +850,78 @@ export const AreaRadarOutlinePanel = () => {
 		})
 
 	// "Match fill" (default) clears the line palette so each outline inherits its
-	// layer's fill color; a named palette colors the outlines from it instead.
+	// layer's fill color; "Single color" strokes every layer with one uniform
+	// color (`connection.strokeColor`, which the renderer already ranks below
+	// per-value overrides and above the fill); a named palette colors the
+	// outlines from it instead. The dropdown value is DERIVED — a set
+	// `strokeColor` means single-color mode, so no extra mode field is stored.
+	const strokeColor = configs.connection?.strokeColor ?? null
+	const isSingleColor = strokeColor !== null
 	const linePaletteOptions = [
 		{ value: "", label: "Match fill" },
+		{ value: SINGLE_OUTLINE_COLOR, label: "Single color" },
 		...theme.categoricalPalettes.map((p) => ({ value: p.id, label: p.name })),
 	]
+	const paletteValue = isSingleColor
+		? SINGLE_OUTLINE_COLOR
+		: (configs.connection?.linePaletteId ?? "")
+	// Seed the single color from the same fallback the no-hue swatch displays,
+	// so switching modes starts from a familiar color. Per-value overrides
+	// out-rank `strokeColor` in the renderer, so entering single-color mode
+	// CLEARS them (same as the no-hue branch) — otherwise levels left over from
+	// a palette pick would silently override the single color — and the
+	// per-value rows are hidden while in this mode.
+	const singleColorSeed = configs.defaultFill ?? theme.defaultFill
+	const changeLinePalette = (id: string) =>
+		setConfigs((prev) => {
+			const single = id === SINGLE_OUTLINE_COLOR
+			const pal =
+				id && !single
+					? (theme.categoricalPalettes.find((p) => p.id === id) ?? null)
+					: null
+			return {
+				...prev,
+				connection: {
+					...(prev.connection ?? DEFAULT_CONNECTION_CONFIG),
+					strokeColor: single
+						? (prev.connection?.strokeColor ?? singleColorSeed)
+						: null,
+					linePaletteId: single ? null : id || null,
+					linePalette: pal?.colors ?? null,
+					...(single ? { lineColors: {} } : {}),
+				},
+			}
+		})
+	const setSingleColor = (color: string) =>
+		setConfigs((prev) => ({
+			...prev,
+			connection: {
+				...(prev.connection ?? DEFAULT_CONNECTION_CONFIG),
+				strokeColor: color,
+			},
+		}))
 
 	return (
 		<div className="flex flex-col gap-1.5">
 			<SelectInput
 				label="Palette"
 				labelClassName={LABEL_COL}
-				value={configs.connection?.linePaletteId ?? ""}
+				value={paletteValue}
 				options={linePaletteOptions}
-				onChange={(id) =>
-					setConfigs((prev) => {
-						const pal = id
-							? (theme.categoricalPalettes.find((p) => p.id === id) ?? null)
-							: null
-						return {
-							...prev,
-							connection: {
-								...(prev.connection ?? DEFAULT_CONNECTION_CONFIG),
-								linePaletteId: id || null,
-								linePalette: pal?.colors ?? null,
-							},
-						}
-					})
-				}
+				onChange={changeLinePalette}
 				selectClassName="flex-1"
 			/>
-			{orderedLevels(uniqueValues, type, levelOrder).map(({ value: v, index: i }) => {
+			{isSingleColor && (
+				<ColorInput
+					label="Color"
+					labelClassName={LABEL_COL}
+					value={strokeColor}
+					onChange={setSingleColor}
+					palette={scheme}
+					pickerLabel="Pick palette outline color"
+				/>
+			)}
+			{!isSingleColor && orderedLevels(uniqueValues, type, levelOrder).map(({ value: v, index: i }) => {
 				const linePaletteColors = configs.connection?.linePalette ?? null
 				const paletteLineColor = linePaletteColors
 					? (linePaletteColors[i % linePaletteColors.length] ?? null)

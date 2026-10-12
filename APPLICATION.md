@@ -1780,7 +1780,11 @@ padding so the inner rects stay aligned.
   feature, not a scatter-wide one.
 - **AreaPlot** — stacked or overlaid filled regions. Line vs area
   fill toggle controls outline-only vs filled rendering, and exposes
-  independent line and area colors.
+  independent line and area colors. The Color menu's Outline subheader
+  (areas and filled radars) offers "Match fill" (each layer's outline
+  inherits its fill), "Single color" (one uniform stroke via
+  `connection.strokeColor`), or a theme palette; per-value overrides
+  win on top in every mode.
 - **PiePlot** — single centered pie or grid of pies along x / y.
 - **TilePlot** — heatmap grid with hue per (x, y) cell. Cells tile
   FLUSH (zero band padding); like the treemap mosaic, separation comes
