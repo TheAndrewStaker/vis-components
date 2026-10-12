@@ -19,6 +19,7 @@ import {
 	type Encodings,
 } from "../../../lib/types"
 import { resolveFacetTitleStyles } from "./facetTitleStyles"
+import { NO_ANNOTATION_RESERVE } from "./annotationReserve"
 import { buildSolverInput } from "./solverSpec"
 
 const view = (rows: Array<Record<string, string>>): DatasetView => ({
@@ -93,6 +94,7 @@ const build = ({
 		sharedYAxisTitle,
 		dataLabelOverflow,
 		captionReserve,
+		annotationReserve: NO_ANNOTATION_RESERVE,
 	})
 
 const gridEncodings = (): Encodings => {

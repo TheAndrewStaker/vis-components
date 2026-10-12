@@ -2751,8 +2751,23 @@ default to no background — and share the theme's annotation *text*
 font with the rectangle's inner label.
 
 All four kinds render per-panel in PlotCanvas, using each panel's own
-position scales in Values mode and clipping to the panel's plot area.
-The exception is radar: value-mode circles are rendered inside
+position scales in Values mode. An annotation may sit **anywhere on the
+canvas**, not just inside the plot: Percent coordinates past 0–100 (or
+below 0) and, on a single-panel chart, Values outside the axis domain
+place it beside the y-axis, above the title, below the x-axis, or past
+the right edge, and nothing clips it. Like a wide legend, an
+end-of-line data label, or the caption band, an annotation that would
+run past the canvas edge **pushes the figure away**: the layout
+reserves just enough room on that side (left / right / top / bottom)
+and the plot shrinks (or, with scrolling or a fixed panel size, the
+canvas grows) so the whole annotation stays in the viewport. Percent
+coordinates are fractions of the plot, so the reserve is solved
+iteratively (LAYOUT.md §2). The one case that still clips to the
+panel's plot area is a **Values-mode annotation on a faceted chart**:
+each panel draws it in its own data coordinates, and one whose range
+falls outside a panel's (independent-axis) domain draws nothing there
+rather than spilling into a neighbor — it keeps its true geometry and
+only the in-bounds portion paints. The other exception is radar: value-mode circles are rendered inside
 RadarPlot itself (via `computePolarCirclePixels`, since RadarPlot owns
 the radial scales), and value-mode line segments and text annotations
 are skipped on radar entirely; percent-mode shapes still render

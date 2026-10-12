@@ -1,3 +1,4 @@
+import type { AnnotationReserve } from "./annotationReserve"
 import {
 	colSizingMeaningful,
 	DEFAULT_TICKMARK_CONFIG,
@@ -54,6 +55,7 @@ export const buildSolverInput = ({
 	sharedYAxisTitle,
 	dataLabelOverflow,
 	captionReserve,
+	annotationReserve,
 }: {
 	bounds: { width: number; height: number }
 	isFaceted: boolean
@@ -73,6 +75,11 @@ export const buildSolverInput = ({
 	sharedYAxisTitle: string
 	dataLabelOverflow: { left: number; right: number }
 	captionReserve: number
+	/** Per-side room for annotations placed past the plot edge — see
+	 *  `annotationReserve.ts`. Left / right add to the data-label reserve
+	 *  (and share its fit-mode clamp); bottom adds to the caption band; top
+	 *  is the only top-side reserve. */
+	annotationReserve: AnnotationReserve
 }): SolverInput => {
 	const {
 		facetTitleFont,
@@ -376,9 +383,10 @@ export const buildSolverInput = ({
 		// Applies to BOTH faceted and single-panel charts: a non-faceted
 		// chart with 50 categories on its y-axis can also overflow.
 		minPanelPx: (channelConfigs.scrollMode ?? "fit") === "scroll" ? 200 : 0,
-		extraRightMargin: dataLabelOverflow.right,
-		extraLeftMargin: dataLabelOverflow.left,
-		extraBottomMargin: captionReserve,
+		extraRightMargin: dataLabelOverflow.right + annotationReserve.right,
+		extraLeftMargin: dataLabelOverflow.left + annotationReserve.left,
+		extraBottomMargin: captionReserve + annotationReserve.bottom,
+		extraTopMargin: annotationReserve.top,
 		isPolar,
 	}
 	return input

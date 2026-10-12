@@ -242,6 +242,11 @@ export type SolverInput = {
 	 *  sits in a reserved band at the bottom of the canvas — instead of
 	 *  growing the canvas past the viewport. Adds to outerReserves.bottom. */
 	readonly extraBottomMargin?: number
+	/** Extra pixels reserved ABOVE the plot grid, below the chart title /
+	 *  subtitle band. Annotations placed above the plot pass their spill
+	 *  here so the grid moves down and they stay inside the canvas. Adds to
+	 *  outerReserves.top. */
+	readonly extraTopMargin?: number
 
 	/** True for polar chart modes (radar, pies, pies-x, pies-y). Polar
 	 *  charts don't draw cartesian axes — angle/r ticks sit inside the
@@ -684,7 +689,12 @@ const computeOuterReserves = (
 	// this by adding `bottomGrow` to `outerReserves.bottom`, which
 	// subtracts from inner.height in the main solver.
 	return {
-		top: titleHeight + subtitleHeight + topGrow + columnHeaderBand,
+		top:
+			titleHeight +
+			subtitleHeight +
+			topGrow +
+			columnHeaderBand +
+			(input.extraTopMargin ?? 0),
 		bottom: bottomGrow + (input.extraBottomMargin ?? 0),
 		left: leftGrow + labelReserve.left + rowHeaderBand,
 		right: labelReserve.right,

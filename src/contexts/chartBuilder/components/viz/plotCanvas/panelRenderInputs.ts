@@ -40,7 +40,10 @@ export const resolvePanelRenderInputs = ({
 	panelRadiusScale,
 	mirrorActive = false,
 }: {
-	p: SolverPanelOutput
+	/** Only the panel identity is read (key + grid position), so the solver
+	 *  INPUT works too — the annotation reserve resolves these ahead of the
+	 *  solve. */
+	p: Pick<SolverPanelOutput, "key" | "row" | "col">
 	panelData: FacetPanels
 	isPolar: boolean
 	shareXMode: "none" | "perGroup" | "all"

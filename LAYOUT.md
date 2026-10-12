@@ -29,20 +29,44 @@ coordinates.
 ```
 Canvas
 ├─ Outer reserves (around the whole grid)
-│  ├─ top:    chartTitle + subtitle + topGrow
+│  ├─ top:    chartTitle + subtitle + topGrow + extraTopMargin
 │  │            (topGrow = max(titleAwayGrow, subtitleAwayGrow) =
-│  │             max(0, -chartTitle.offsetY) / -subtitle.offsetY)
-│  ├─ bottom: bottomGrow  (max(0, xTitle.offsetY) — shrinks plot to give
-│  │                       x-title-offset its "title stays, graph shrinks" effect)
+│  │             max(0, -chartTitle.offsetY) / -subtitle.offsetY;
+│  │             extraTopMargin = annotation spill above the canvas)
+│  ├─ bottom: bottomGrow + extraBottomMargin
+│  │            (bottomGrow = max(0, xTitle.offsetY) — shrinks plot to give
+│  │             x-title-offset its "title stays, graph shrinks" effect;
+│  │             extraBottomMargin = caption band + annotation spill below)
 │  ├─ left:   leftGrow + extraLeftMargin
 │  │            (leftGrow = max(0, -yTitle.offsetX);
-│  │             extraLeftMargin = data-label overflow for right-aligned labels)
+│  │             extraLeftMargin = data-label overflow for right-aligned labels
+│  │                               + annotation spill past the left edge)
 │  └─ right:  max(extraRightMargin, xTickRightOverhang)
 │               extraRightMargin = data-label overflow for left-aligned labels
 │                                  with positive xOffset
+│                                  + annotation spill past the right edge
 │               xTickRightOverhang = half-width of the rightmost x-tick label
 │                                    that spills past inner.x1 on a CONTINUOUS
 │                                    x-axis (see §5); 0 for band axes
+│
+│  Annotation reserves (plotCanvas/annotationReserve.ts) keep every
+│  annotation inside the canvas: PlotCanvas solves once, lays every
+│  unclipped annotation out against the solved panels (the SAME
+│  `layoutPanelAnnotations` the renderer draws from, stroke half-width
+│  included, + ANNOTATION_RESERVE_PAD_PX), measures how far the outermost
+│  edge spills past each canvas edge, and re-solves with that spill added
+│  to the four extra margins. A percent coordinate is a FRACTION of the
+│  plot the reserve shrinks (x = 130% sits 30% of the plot past its edge),
+│  so the spill is a function of the reserve and `solveWithAnnotationReserves`
+│  root-finds it per side: the plain step (reserve += spill) overshoots
+│  and brackets the root, then regula falsi (Illinois-damped) lands on the
+│  piecewise-affine fixed point — typically 3 solves, capped at 1 + 8.
+│  A visual with no annotations costs exactly one solve. Left/right spill
+│  rides the data-label pair through `clampLabelReserves`, so in fit mode
+│  an annotation wider than the viewport clips there like an over-wide
+│  label; top/bottom add to the title band / caption band. Only value-mode
+│  annotations on a multi-panel chart clip to their panel (and so never
+│  reserve) — see APPLICATION.md §11.
 │
 │  The data-label reserves are UNCAPPED at the source (dataLabelReserve.ts
 │  canvas-measures EVERY distinct rendered label with the label font and
@@ -687,6 +711,7 @@ explicit justification in the doc but materially affect layout:
 | `DEFAULT_MIN_PX_PER_CATEGORY` | 20 | facetLayoutSolver.ts | Scroll-mode floor: each category gets ≥20px |
 | `DEFAULT_MIN_PANEL_PX` | 200 | facetLayoutSolver.ts | Scroll-mode floor: each panel gets ≥200px |
 | `LABEL_RESERVE_PAD_PX` | 4 | dataLabelReserve.ts | Breathing pad on the overflowing side of the data-label edge reserve, so measureText's side-bearing/subpixel shortfall can't nibble the last glyph (§2) |
+| `ANNOTATION_RESERVE_PAD_PX` | 2 | annotationReserve.ts | Breathing pad past an annotation's outermost edge (stroke half-width already counted) before it reserves canvas room (§2) |
 
 ---
 

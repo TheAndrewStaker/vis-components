@@ -78,6 +78,13 @@ import {
 	positionCaptionBox,
 } from "./plotCanvas/captionLayout"
 import { AnnotationRects, annotationOnPanel } from "./plotCanvas/annotations"
+import type { PanelAnnotationScaleInputs } from "./plotCanvas/annotationLayout"
+import {
+	measureAnnotationSpill,
+	NO_ANNOTATION_RESERVE,
+	solveWithAnnotationReserves,
+	type AnnotationReserve,
+} from "./plotCanvas/annotationReserve"
 import { FacetPanelContext } from "./plotCanvas/FacetPanelContext"
 
 /** Unified single-SVG renderer for both single-panel and faceted charts.
@@ -404,6 +411,169 @@ export const PlotCanvas = () => {
 		],
 	)
 
+	// ─── Tri-state share-axis: resolve modes + per-group row sources ──────
+	//
+	// shareXMode / shareYMode are the migrated tri-state ("none" / "perGroup"
+	// / "all"); colRowsByColKey / rowRowsByRowKey are the per-column /
+	// per-row row unions used under "perGroup", keyed by share-group key
+	// (facet value in grid mode — see panelGroupKeys). Computed once for the
+	// whole render so every panel below picks its scale source via the same
+	// logic.
+	const shareXMode: "none" | "perGroup" | "all" = isFaceted
+		? migrateShareValue(facetCfg.shareX)
+		: "none"
+	const shareYMode: "none" | "perGroup" | "all" = isFaceted
+		? migrateShareValue(facetCfg.shareY)
+		: "none"
+	// Empty before a data set loads — this block now runs ahead of the
+	// no-data early return so the annotation reserve below can use it.
+	const allDatasetRows = dataset?.rows ?? []
+	const { colRowsByColKey, rowRowsByRowKey } = groupRowsByShareGroup(panelData)
+
+	// Shared measure-axis max per panel for bar / area charts — see
+	// computeGroupMeasureMax (empty when not bar/area or share mode "none").
+	const measureAxis = mode.canvas.measureAxis
+	// "Use a mirrored axis" (bar measure axis): the flag lives on the measure
+	// axis's config. `mirrorActive` swaps that axis's pinned bounds to the
+	// mirror's side maxes; `mirrorRows` applies the direction sign to a
+	// panel's rows so the shared floor / ceiling match the bars the renderer
+	// draws (BarPlot runs the same `applyMirrorSign` before aggregating).
+	// Gated on the mode trait — the flag is inert on every other renderer.
+	const measureAxisConfig = measureAxis ? channelConfigs[measureAxis] : undefined
+	// A histogram's count axis is never mirrored (BarPlot ignores the flag
+	// there), so its pinned bounds must not swap to the side maxes either.
+	const categoryAxis =
+		measureAxis === "x" ? "y" : measureAxis === "y" ? "x" : null
+	const categoryField = categoryAxis ? encodings[categoryAxis]?.field : undefined
+	const histogramBars =
+		categoryAxis !== null &&
+		!!categoryField &&
+		channelConfigs[categoryAxis]?.histogram?.enabled === true &&
+		getType(categoryField) === "quantitative"
+	const mirrorActive =
+		measureAxis !== null &&
+		mode.canvas.supportsNegativeMeasure === true &&
+		!histogramBars &&
+		measureAxisConfig?.mirror?.enabled === true &&
+		!!encodings.length?.field
+	const mirrorDirection = mirrorActive
+		? resolveMirrorDirection(
+				measureAxisConfig?.mirror,
+				allDatasetRows,
+				(name) => getType(name) ?? "categorical",
+				levelOrders
+			)
+		: null
+	const mirrorMeasureField = mode.canvas.resolveMeasureField?.(encodings) ?? null
+	const mirrorRows: MirrorRows =
+		mirrorDirection && mirrorMeasureField
+			? (rows) => applyMirrorSign(rows, mirrorMeasureField, mirrorDirection)
+			: identityRows
+	const groupMeasureMaxByKey = computeGroupMeasureMax({
+		mode,
+		measureAxis,
+		shareXMode,
+		shareYMode,
+		encodings,
+		channelConfigs,
+		panelData,
+		getType,
+		mirrorRows,
+	})
+	// Its mirror for the axis floor — non-empty only for modes whose marks
+	// can point below zero (bars). See computeGroupMeasureMin.
+	const groupMeasureMinByKey = computeGroupMeasureMin({
+		mode,
+		measureAxis,
+		shareXMode,
+		shareYMode,
+		encodings,
+		channelConfigs,
+		panelData,
+		getType,
+		mirrorRows,
+	})
+
+
+	// Polar "Size panels by unit": per-panel 0..1 drawn-radius factors — see
+	// computePanelRadiusScale (empty when the feature is off).
+	const panelRadiusScale = computePanelRadiusScale({
+		isPolar,
+		isFaceted,
+		facetCfg,
+		encodings,
+		panelData,
+		mode,
+	})
+
+
+	// ─── Annotation reserve inputs ────────────────────────────────────────
+	// Per-panel scale inputs for the annotation layout — the same share-aware
+	// row sources and domain overrides the render loop resolves below, built
+	// here (ahead of the solve) so the solver can measure how far annotations
+	// spill past the canvas and reserve room for them. Empty when the visual
+	// has no annotations, which keeps the solve single-pass.
+	const isRadar = mode.canvas.valueAnnotationsInRenderer ?? false
+	const hasAnnotations =
+		annotations.rectangles.length > 0 ||
+		(annotations.circles?.length ?? 0) > 0 ||
+		(annotations.lineSegments?.length ?? 0) > 0 ||
+		(annotations.texts?.length ?? 0) > 0
+	const annotationScaleInputsByPanel = useMemo(() => {
+		const map = new Map<string, PanelAnnotationScaleInputs>()
+		if (!hasAnnotations) return map
+		for (const pi of panelInputs) {
+			const rows = panelData.rowsByValue.get(pi.key) ?? []
+			const r = resolvePanelRenderInputs({
+				p: pi,
+				panelData,
+				isPolar,
+				shareXMode,
+				shareYMode,
+				allDatasetRows,
+				colRowsByColKey,
+				rowRowsByRowKey,
+				measureAxis,
+				axisFields,
+				channelConfigs,
+				facetCfg,
+				groupMeasureMaxByKey,
+				groupMeasureMinByKey,
+				panelRadiusScale,
+				mirrorActive,
+			})
+			map.set(pi.key, {
+				xScaleRows: r.xScaleRows ?? rows,
+				yScaleRows: r.yScaleRows ?? rows,
+				xDomainOverride:
+					measureAxis === "x"
+						? { min: r.measureMinOverride, max: r.measureMaxOverride }
+						: { min: r.xMinOverride, max: r.xMaxOverride },
+				yDomainOverride:
+					measureAxis === "y"
+						? { min: r.measureMinOverride, max: r.measureMaxOverride }
+						: { min: r.yMinOverride, max: r.yMaxOverride },
+				radiusScale: r.radiusScale,
+			})
+		}
+		return map
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- the share-mode / measure-group maps and mirror helpers captured here are rebuilt every render from exactly the inputs listed below (dataset, overrides, encodings, channelConfigs, facetCfg, panelData, mode, levelOrders); depending on the per-render Maps themselves would recompute every render
+	}, [
+		hasAnnotations,
+		panelInputs,
+		panelData,
+		isPolar,
+		isFaceted,
+		dataset,
+		overrides,
+		encodings,
+		channelConfigs,
+		facetCfg,
+		mode,
+		axisFields,
+		levelOrders,
+	])
+
 	// ─── Build SolverInput + call solver ──────────────────────────────────
 	// Measure the caption box against the container so the solver can reserve a
 	// matching band at the bottom of the canvas. Width/height are independent of
@@ -415,8 +585,15 @@ export const PlotCanvas = () => {
 		measureCaptionBox(caption, bounds.width || 0, bounds.height || 0),
 	)
 
-	const spec: FacetLayoutSpec = useMemo(
-		() =>
+	// Annotations placed past the plot edge (percent coords outside 0–100, or
+	// an out-of-domain value on a single panel) reserve canvas margins the
+	// same way data labels and the caption do, so they stay in view instead
+	// of clipping at the SVG edge. The reserve depends on the solved plot
+	// size (a percent coordinate is a fraction of the plot), so
+	// solveWithAnnotationReserves re-solves until the spill is gone — one
+	// plain solve when the visual has no annotations.
+	const spec: FacetLayoutSpec = useMemo(() => {
+		const solve = (annotationReserve: AnnotationReserve) =>
 			solveFacetLayout(
 				buildSolverInput({
 					bounds,
@@ -437,8 +614,22 @@ export const PlotCanvas = () => {
 					sharedYAxisTitle,
 					dataLabelOverflow,
 					captionReserve,
+					annotationReserve,
 				}),
-			),
+			)
+		if (annotationScaleInputsByPanel.size === 0)
+			return solve(NO_ANNOTATION_RESERVE)
+		return solveWithAnnotationReserves(solve, (solved) =>
+			measureAnnotationSpill({
+				spec: solved,
+				annotations,
+				scaleInputsByPanel: annotationScaleInputsByPanel,
+				axisFields,
+				levelOrders,
+				isRadar,
+			}),
+		)
+	},
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- facet title aligns/offsets and facetRow/Col fields are pure derivations of labels.titleAlignments / labels.titleOffsets / encodings via panelData, which are already deps, so they can never go stale; the callback also forwards whole objects (labels, channelConfigs, facetCfg, bounds, facetTitles) to buildSolverInput, but the deps below list exactly the fields it reads
 		[
 			bounds.width,
@@ -482,7 +673,15 @@ export const PlotCanvas = () => {
 			channelConfigs.aspectRatio,
 			dataLabelOverflow,
 			captionReserve,
-		isPolar,
+			isPolar,
+			// Annotation reserve inputs. Text annotations are canvas-measured,
+			// so re-run once their font has loaded.
+			annotations,
+			annotationScaleInputsByPanel,
+			axisFields,
+			levelOrders,
+			isRadar,
+			fontsVersion,
 		],
 	)
 
@@ -562,87 +761,6 @@ export const PlotCanvas = () => {
 
 	const Renderer = MODE_RENDERERS[modeId]
 
-	// ─── Tri-state share-axis: resolve modes + per-group row sources ──────
-	//
-	// shareXMode / shareYMode are the migrated tri-state ("none" / "perGroup"
-	// / "all"); colRowsByColKey / rowRowsByRowKey are the per-column /
-	// per-row row unions used under "perGroup", keyed by share-group key
-	// (facet value in grid mode — see panelGroupKeys). Computed once for the
-	// whole render so every panel below picks its scale source via the same
-	// logic.
-	const shareXMode: "none" | "perGroup" | "all" = isFaceted
-		? migrateShareValue(facetCfg.shareX)
-		: "none"
-	const shareYMode: "none" | "perGroup" | "all" = isFaceted
-		? migrateShareValue(facetCfg.shareY)
-		: "none"
-	const allDatasetRows = dataset.rows
-	const { colRowsByColKey, rowRowsByRowKey } = groupRowsByShareGroup(panelData)
-
-	// Shared measure-axis max per panel for bar / area charts — see
-	// computeGroupMeasureMax (empty when not bar/area or share mode "none").
-	const measureAxis = mode.canvas.measureAxis
-	// "Use a mirrored axis" (bar measure axis): the flag lives on the measure
-	// axis's config. `mirrorActive` swaps that axis's pinned bounds to the
-	// mirror's side maxes; `mirrorRows` applies the direction sign to a
-	// panel's rows so the shared floor / ceiling match the bars the renderer
-	// draws (BarPlot runs the same `applyMirrorSign` before aggregating).
-	// Gated on the mode trait — the flag is inert on every other renderer.
-	const measureAxisConfig = measureAxis ? channelConfigs[measureAxis] : undefined
-	// A histogram's count axis is never mirrored (BarPlot ignores the flag
-	// there), so its pinned bounds must not swap to the side maxes either.
-	const categoryAxis =
-		measureAxis === "x" ? "y" : measureAxis === "y" ? "x" : null
-	const categoryField = categoryAxis ? encodings[categoryAxis]?.field : undefined
-	const histogramBars =
-		categoryAxis !== null &&
-		!!categoryField &&
-		channelConfigs[categoryAxis]?.histogram?.enabled === true &&
-		getType(categoryField) === "quantitative"
-	const mirrorActive =
-		measureAxis !== null &&
-		mode.canvas.supportsNegativeMeasure === true &&
-		!histogramBars &&
-		measureAxisConfig?.mirror?.enabled === true &&
-		!!encodings.length?.field
-	const mirrorDirection = mirrorActive
-		? resolveMirrorDirection(
-				measureAxisConfig?.mirror,
-				dataset.rows,
-				(name) => getType(name) ?? "categorical",
-				levelOrders
-			)
-		: null
-	const mirrorMeasureField = mode.canvas.resolveMeasureField?.(encodings) ?? null
-	const mirrorRows: MirrorRows =
-		mirrorDirection && mirrorMeasureField
-			? (rows) => applyMirrorSign(rows, mirrorMeasureField, mirrorDirection)
-			: identityRows
-	const groupMeasureMaxByKey = computeGroupMeasureMax({
-		mode,
-		measureAxis,
-		shareXMode,
-		shareYMode,
-		encodings,
-		channelConfigs,
-		panelData,
-		getType,
-		mirrorRows,
-	})
-	// Its mirror for the axis floor — non-empty only for modes whose marks
-	// can point below zero (bars). See computeGroupMeasureMin.
-	const groupMeasureMinByKey = computeGroupMeasureMin({
-		mode,
-		measureAxis,
-		shareXMode,
-		shareYMode,
-		encodings,
-		channelConfigs,
-		panelData,
-		getType,
-		mirrorRows,
-	})
-
 	// Histogram measure-color (Fill color / opacity varying by Count /
 	// Density): ONE global [0, max] domain shared by every panel's bars and
 	// the legend ramp. Color scales are global in this app (aesthetic scales
@@ -666,28 +784,23 @@ export const PlotCanvas = () => {
 			)?.max
 		: undefined
 
-	// Polar "Size panels by unit": per-panel 0..1 drawn-radius factors — see
-	// computePanelRadiusScale (empty when the feature is off).
-	const panelRadiusScale = computePanelRadiusScale({
-		isPolar,
-		isFaceted,
-		facetCfg,
-		encodings,
-		panelData,
-		mode,
-	})
-
 	// Position the caption in the reserved bottom band. The solver already
 	// shrank the plot by `captionReserve`, so the default placement fits inside
-	// the canvas; the SVG only grows if the user NUDGES the box past the edge.
+	// the canvas; the SVG only grows if the user NUDGES what the caption DRAWS
+	// past the edge. The auto-width box spans the whole canvas, so an invisible
+	// box counts only its text ink — otherwise a few px of nudge would grow the
+	// SVG (and add scrollbars) while the text still has plenty of room.
 	const captionLayout = captionBox
 		? positionCaptionBox(caption, captionBox, spec.canvas.width, spec.canvas.height)
 		: null
-	const svgWidth = captionLayout
-		? Math.max(spec.canvas.width, captionLayout.left + captionLayout.width)
+	const captionExtent = captionLayout
+		? captionDrawnExtent(caption, captionLayout)
+		: null
+	const svgWidth = captionExtent
+		? Math.max(spec.canvas.width, captionExtent.right)
 		: spec.canvas.width
-	const svgHeight = captionLayout
-		? Math.max(spec.canvas.height, captionLayout.top + captionLayout.height)
+	const svgHeight = captionExtent
+		? Math.max(spec.canvas.height, captionExtent.bottom)
 		: spec.canvas.height
 
 	const svg = (
@@ -1051,8 +1164,9 @@ export const PlotCanvas = () => {
 							xDomainOverride={annoXDomainOverride}
 							yDomainOverride={annoYDomainOverride}
 							levelOrders={levelOrders}
-							isRadar={mode.canvas.valueAnnotationsInRenderer ?? false}
+							isRadar={isRadar}
 							radiusScale={radiusScale}
+							multiPanel={spec.panels.length > 1}
 						/>
 						{/* The Renderer reads from Jotai for everything else;
 						    inner + rowsOverride steer the per-panel render.
@@ -1078,8 +1192,9 @@ export const PlotCanvas = () => {
 							xDomainOverride={annoXDomainOverride}
 							yDomainOverride={annoYDomainOverride}
 							levelOrders={levelOrders}
-							isRadar={mode.canvas.valueAnnotationsInRenderer ?? false}
+							isRadar={isRadar}
 							radiusScale={radiusScale}
+							multiPanel={spec.panels.length > 1}
 						/>
 					</g>
 				)
