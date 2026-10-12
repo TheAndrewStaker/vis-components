@@ -73,6 +73,7 @@ import { resolvePanelRenderInputs } from "./plotCanvas/panelRenderInputs"
 import { SharedText, TITLE_FILL_FALLBACK } from "./plotCanvas/SharedText"
 import {
 	CaptionOverlay,
+	captionDrawnExtent,
 	captionReservePx,
 	measureCaptionBox,
 	positionCaptionBox,

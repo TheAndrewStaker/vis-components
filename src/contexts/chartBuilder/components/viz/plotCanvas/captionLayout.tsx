@@ -2,6 +2,7 @@ import {
 	type CaptionConfig,
 	type CaptionUnit,
 } from "../../../lib/captionConfig"
+import { charWidthFactor } from "../../../lib/estimateMargins"
 import { ptToPx } from "../../../lib/fontUnit"
 import {
 	renderMultilineTspans,
@@ -63,7 +64,7 @@ export const measureCaptionBox = (
 export const captionReservePx = (box: CaptionBox | null): number =>
 	box ? box.height + CAPTION_GAP * 2 : 0
 
-type CaptionLayout = {
+export type CaptionLayout = {
 	left: number
 	top: number
 	width: number
@@ -120,6 +121,44 @@ export const positionCaptionBox = (
 		textAnchor,
 		lines: box.lines,
 	}
+}
+
+/** Whether the caption BOX itself is drawn (a visible background fill or a
+ *  border). Without either, only the text ink is visible on the canvas. */
+const captionBoxVisible = (caption: CaptionConfig): boolean =>
+	caption.backgroundOpacity > 0 ||
+	(caption.borderEnabled && caption.borderWidth > 0)
+
+/** Right and bottom edges of what the caption actually DRAWS. A visible box
+ *  (background or border) counts in full; an invisible box — the default —
+ *  counts only its text ink, estimated with the same px/char heuristic that
+ *  wrapped it. PlotCanvas grows the SVG (and adds a scroll viewport) only when
+ *  this extent passes the canvas edge, so nudging an invisible auto-width
+ *  caption a few px sideways doesn't summon scrollbars while the text itself
+ *  still has room. */
+export const captionDrawnExtent = (
+	caption: CaptionConfig,
+	layout: CaptionLayout
+): { right: number; bottom: number } => {
+	if (captionBoxVisible(caption)) {
+		return {
+			right: layout.left + layout.width,
+			bottom: layout.top + layout.height,
+		}
+	}
+	const fontSize = Math.max(1, ptToPx(caption.fontSize))
+	const widestChars = layout.lines.reduce((m, l) => Math.max(m, l.length), 0)
+	const widest = widestChars * fontSize * charWidthFactor
+	const right =
+		layout.textAnchor === "start"
+			? layout.textX + widest
+			: layout.textAnchor === "middle"
+				? layout.textX + widest / 2
+				: layout.textX
+	// Lines stack 1.2em apart from the first baseline; descenders hang a
+	// quarter em below the last one.
+	const lastBaseline = layout.firstBaseline + fontSize * 1.2 * (layout.lines.length - 1)
+	return { right, bottom: lastBaseline + fontSize * 0.25 }
 }
 
 /** Render the caption box (optional background rect + border + wrapped text)

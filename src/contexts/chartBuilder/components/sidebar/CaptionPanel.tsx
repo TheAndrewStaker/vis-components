@@ -65,8 +65,10 @@ const OffsetField = ({
  *  free-floating text box rendered inside the plot SVG. The figure reserves a
  *  band at the bottom and shrinks to fit the caption (it never pushes content
  *  past the viewport). Position offsets nudge the box from its default
- *  (centered, pinned to the bottom of the canvas); width/height each carry a
- *  px/% unit and step from the current rendered size. */
+ *  (centered, pinned to the bottom of the canvas); the figure only grows (and
+ *  scrolls) when what the caption DRAWS — its text, or the box when it has a
+ *  background or border — is nudged past the canvas edge. Width/height each
+ *  carry a px/% unit and step from the current rendered size. */
 export const CaptionPanel = () => {
 	const [cfg, setCfg] = useAtom(currentCaptionConfigAtom)
 	const renderedBox = useAtomValue(currentRenderedCaptionBoxAtom)
