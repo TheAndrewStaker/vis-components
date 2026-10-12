@@ -219,6 +219,158 @@ describe("computeDataLabelOverflow", () => {
 	})
 })
 
+describe("computeDataLabelOverflow — series-end populations touch one edge", () => {
+	/** Stacked area: temporal-ish x, quantitative y, one series per `name`. */
+	const areaEncodings = (): Encodings => {
+		const e = emptyEncodings()
+		e.x = { field: "cat" }
+		e.length = { field: "val" }
+		e.hue = { field: "name" }
+		e.connection = { field: "name" }
+		return e
+	}
+	/** Horizontal bars: categorical y, length on x — series ends are the
+	 *  top / bottom anchors, so either one can touch either side. */
+	const barsYEncodings = (): Encodings => {
+		const e = emptyEncodings()
+		e.y = { field: "cat" }
+		e.length = { field: "val" }
+		return e
+	}
+
+	it("a right-aligned LAST label hangs over the plot: no left reserve", () => {
+		// The reported bug: "Last" + right alignment opened a label-wide
+		// gutter on the left for a label that only renders at the right edge.
+		const r = computeDataLabelOverflow({
+			...base,
+			dataset: view(ROWS),
+			encodings: areaEncodings(),
+			dataLabels: labelsOn({
+				alignment: "right",
+				xOffset: -14,
+				labelPoints: "last",
+			}),
+		})
+		expect(r).toEqual({ left: 0, right: 0 })
+	})
+
+	it("a left-aligned LAST label still reserves on the right", () => {
+		const dataLabels = labelsOn({ alignment: "left", xOffset: 0, labelPoints: "last" })
+		const r = computeDataLabelOverflow({
+			...base,
+			dataset: view(ROWS),
+			encodings: areaEncodings(),
+			dataLabels,
+		})
+		expect(r.left).toBe(0)
+		expect(r.right).toBe(cap(labelPx(LONG, dataLabels) + LABEL_RESERVE_PAD_PX - BASE_MARGIN.right))
+	})
+
+	it("a right-aligned FIRST label reserves on the left only", () => {
+		const dataLabels = labelsOn({ alignment: "right", xOffset: 0, labelPoints: "first" })
+		const r = computeDataLabelOverflow({
+			...base,
+			dataset: view(ROWS),
+			encodings: areaEncodings(),
+			dataLabels,
+		})
+		expect(r.right).toBe(0)
+		expect(r.left).toBe(cap(labelPx(LONG, dataLabels) + LABEL_RESERVE_PAD_PX - BASE_MARGIN.left))
+	})
+
+	it("a left-aligned FIRST label hangs over the plot: no reserve", () => {
+		const r = computeDataLabelOverflow({
+			...base,
+			dataset: view(ROWS),
+			encodings: areaEncodings(),
+			dataLabels: labelsOn({ alignment: "left", xOffset: 0, labelPoints: "first" }),
+		})
+		expect(r).toEqual({ left: 0, right: 0 })
+	})
+
+	it("'all' labels keep reserving on the side the alignment extends toward", () => {
+		const dataLabels = labelsOn({ alignment: "right", xOffset: 0, labelPoints: "all" })
+		const r = computeDataLabelOverflow({
+			...base,
+			dataset: view(ROWS),
+			encodings: areaEncodings(),
+			dataLabels,
+		})
+		expect(r.right).toBe(0)
+		expect(r.left).toBe(cap(labelPx(LONG, dataLabels) + LABEL_RESERVE_PAD_PX - BASE_MARGIN.left))
+	})
+
+	it("horizontal bars rank ends on y, so a LAST label may sit at either side", () => {
+		const dataLabels = labelsOn({ alignment: "right", xOffset: 0, labelPoints: "last" })
+		const r = computeDataLabelOverflow({
+			...base,
+			dataset: view(ROWS),
+			encodings: barsYEncodings(),
+			dataLabels,
+		})
+		expect(r.left).toBe(cap(labelPx(LONG, dataLabels) + LABEL_RESERVE_PAD_PX - BASE_MARGIN.left))
+	})
+
+	it("a single x value makes every series end both first and last", () => {
+		const dataLabels = labelsOn({ alignment: "right", xOffset: 0, labelPoints: "last" })
+		const r = computeDataLabelOverflow({
+			...base,
+			dataset: view([
+				{ cat: "a", val: "1", name: LONG },
+				{ cat: "a", val: "2", name: "short" },
+			]),
+			encodings: areaEncodings(),
+			dataLabels,
+		})
+		expect(r.left).toBe(cap(labelPx(LONG, dataLabels) + LABEL_RESERVE_PAD_PX - BASE_MARGIN.left))
+	})
+})
+
+describe("computeDataLabelOverflow — series ends per facet panel", () => {
+	/** Vertical bars faceted by `name`: the dataset has two x values, but
+	 *  each panel holds ONE bar, so its series end is first AND last. */
+	const facetedBars = (): Encodings => {
+		const e = emptyEncodings()
+		e.x = { field: "cat" }
+		e.length = { field: "val" }
+		e.facet = { field: "name" }
+		return e
+	}
+	const cap = (n: number) => Math.max(0, Math.ceil(n))
+
+	it("one bar per facet keeps both edges, so Last reserves like All", () => {
+		// User report: switching Which labels from All to Last / First on a
+		// one-bar-per-facet chart moved the labels — the left reserve was
+		// dropped because the WHOLE dataset has several x values.
+		const rows = [
+			{ cat: "a", val: "1", name: LONG },
+			{ cat: "b", val: "2", name: "short" },
+		]
+		const all = computeDataLabelOverflow({
+			...base,
+			dataset: view(rows),
+			encodings: facetedBars(),
+			dataLabels: labelsOn({ alignment: "right", labelPoints: "all" }),
+		})
+		for (const labelPoints of ["last", "first"] as const) {
+			const r = computeDataLabelOverflow({
+				...base,
+				dataset: view(rows),
+				encodings: facetedBars(),
+				dataLabels: labelsOn({ alignment: "right", labelPoints }),
+			})
+			expect(r).toEqual(all)
+		}
+		expect(all.left).toBe(
+			cap(
+				labelPx(LONG, labelsOn({ alignment: "right" })) +
+					LABEL_RESERVE_PAD_PX -
+					BASE_MARGIN.left
+			)
+		)
+	})
+})
+
 describe("computeDataLabelOverflow — per-variable label populations", () => {
 	const multiEncodings = () => ({
 		...emptyDataLabelsEncodings(),

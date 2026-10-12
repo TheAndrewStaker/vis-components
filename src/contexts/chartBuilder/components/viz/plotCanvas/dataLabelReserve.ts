@@ -1,5 +1,6 @@
+import { axisFieldsFor } from "../../../lib/axisFields"
 import type { ChannelConfigs, DataLabelsConfig } from "../../../lib/channelConfig"
-import { getChartModeDef } from "../../../lib/chartMode"
+import { getChartModeDef, type ChartMode } from "../../../lib/chartMode"
 import {
 	populationOverrides,
 	populationTemplate,
@@ -210,7 +211,7 @@ export const computeDataLabelOverflow = ({
 	// the longest label could take any rule's offset over-reserves slightly,
 	// the same conservatism the sizeMax path applies.
 	for (const rule of dataLabels.positionRules ?? []) {
-		profiles.push({ ...baseProfile, xOffset: rule.xOffset })
+		profiles.push({ ...baseProfile, xOffset: rule.xOffset, edges: "both" })
 	}
 	// Candidate RENDERED labels per distinct template, composed identically
 	// to the layer via `buildLabelText`. In multi-field mode that's the full
@@ -307,9 +308,14 @@ export const computeDataLabelOverflow = ({
 		const leftExtent =
 			leftFraction > 0 ? labelPx * leftFraction + LABEL_RESERVE_PAD_PX : 0
 		// Subtract BASE_MARGIN on each side — the chart already reserves
-		// space there; only excess past the natural margin counts.
-		right = Math.max(right, cap(p.xOffset + rightExtent - BASE_MARGIN.right))
-		left = Math.max(left, cap(-p.xOffset + leftExtent - BASE_MARGIN.left))
+		// space there; only excess past the natural margin counts. A
+		// population pinned to one edge contributes to that edge only.
+		if (p.edges !== "left") {
+			right = Math.max(right, cap(p.xOffset + rightExtent - BASE_MARGIN.right))
+		}
+		if (p.edges !== "right") {
+			left = Math.max(left, cap(-p.xOffset + leftExtent - BASE_MARGIN.left))
+		}
 	}
 	return { left, right }
 }
