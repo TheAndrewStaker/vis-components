@@ -145,7 +145,12 @@ export const LabelColorPanel = ({
 						paletteKind="text"
 						pickerLabel="Pick palette color for label text"
 					/>
-					<TextColorRulesRow cfg={cfg} onChange={onChange} theme={theme} />
+					<TextColorRulesRow
+						rules={cfg.textColorRules ?? []}
+						onChange={(textColorRules) => onChange({ textColorRules })}
+						defaultColor={cfg.color}
+						theme={theme}
+					/>
 				</>
 			)}
 			{multiFields.length > 0 && (
@@ -160,7 +165,10 @@ export const LabelColorPanel = ({
 						<CollapsibleSubsection
 							key={name}
 							title={name}
-							changed={cfg.fieldColors?.[name] != null}
+							changed={
+								cfg.fieldColors?.[name] != null ||
+								(cfg.fieldColorRules?.[name]?.length ?? 0) > 0
+							}
 						>
 							<ColorSlotControls
 								labelPrefix={name}
@@ -198,6 +206,26 @@ export const LabelColorPanel = ({
 										},
 									})
 								}}
+							/>
+							{/* The variable's own conditional rules, compared against
+							 *  ITS value; the slot above is the "else". */}
+							<TextColorRulesRow
+								rules={cfg.fieldColorRules?.[name] ?? []}
+								onChange={(rules) => {
+									const next = { ...(cfg.fieldColorRules ?? {}) }
+									if (rules.length === 0) delete next[name]
+									else next[name] = rules
+									onChange({ fieldColorRules: next })
+								}}
+								defaultColor={cfg.fieldColors?.[name]?.singleColor ?? cfg.color}
+								theme={theme}
+								ruleLabel={name}
+								help={
+									<>
+										Compared against each label&apos;s <strong>{name}</strong>{" "}
+										value; the color above applies when no rule matches.
+									</>
+								}
 							/>
 						</CollapsibleSubsection>
 					))}
@@ -283,20 +311,33 @@ const LabelSwatchList = ({
  *  fallback color can't read against every cell in the gradient. The user
  *  types a comparison expression (`> 0`, `< 50`) and picks a color; the
  *  first matching rule wins. Always renders at least one slot so the
- *  feature is discoverable; an empty condition is a no-op. */
+ *  feature is discoverable; an empty condition is a no-op. Shared by the
+ *  layer-wide rules (`textColorRules`) and each variable's own rules
+ *  (`fieldColorRules[field]`), which differ only in which value they
+ *  compare against. */
 const TextColorRulesRow = ({
-	cfg,
-	onChange,
+	rules: stored,
+	onChange: update,
+	defaultColor,
 	theme,
+	ruleLabel,
+	help,
 }: {
-	cfg: DataLabelsConfig
-	onChange: (patch: Partial<DataLabelsConfig>) => void
+	rules: TextColorRule[]
+	onChange: (rules: TextColorRule[]) => void
+	/** Seed color for a new rule — the color the rules fall back to. */
+	defaultColor: string
 	theme: AtomValueType<typeof themeAtom>
+	/** Distinguishes the a11y labels when several rule lists share a panel
+	 *  (one per variable). */
+	ruleLabel?: string
+	/** Extra help prose below the grammar note. */
+	help?: React.ReactNode
 }) => {
-	const stored = cfg.textColorRules ?? []
 	const display: TextColorRule[] =
-		stored.length === 0 ? [{ condition: "", color: cfg.color }] : stored
-	const update = (next: TextColorRule[]) => onChange({ textColorRules: next })
+		stored.length === 0 ? [{ condition: "", color: defaultColor }] : stored
+	const ruleName = (i: number) =>
+		ruleLabel ? `${ruleLabel} rule ${i + 1}` : `rule ${i + 1}`
 	const setRule = (i: number, patch: Partial<TextColorRule>) => {
 		const merged = display.map((r, idx) => (idx === i ? { ...r, ...patch } : r))
 		update(merged)
@@ -304,7 +345,7 @@ const TextColorRulesRow = ({
 	const removeRule = (i: number) =>
 		update(display.filter((_, idx) => idx !== i))
 	const addRule = () =>
-		update([...display, { condition: "", color: cfg.color }])
+		update([...display, { condition: "", color: defaultColor }])
 	// Same palette the base label-color swatch offers — the theme's TEXT
 	// palette, since a rule colors label TEXT; the popover's chevron reaches
 	// the other palettes.
@@ -331,24 +372,24 @@ const TextColorRulesRow = ({
 						value={rule.condition}
 						onChange={(e) => setRule(i, { condition: e.target.value })}
 						placeholder="> 0"
-						aria-label={`Condition for rule ${i + 1}`}
+						aria-label={`Condition for ${ruleName(i)}`}
 						className="w-24"
 					/>
 					<ColorInput
-						label={`Color for rule ${i + 1}`}
+						label={`Color for ${ruleName(i)}`}
 						labelClassName="sr-only"
 						value={rule.color}
 						onChange={(color) => setRule(i, { color })}
 						showHexInput={false}
 						palette={palette}
-						pickerLabel={`Pick palette color for rule ${i + 1}`}
+						pickerLabel={`Pick palette color for ${ruleName(i)}`}
 					/>
 					{stored.length > 0 && (
 						<button
 							type="button"
 							onClick={() => removeRule(i)}
 							className="rounded px-1 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
-							aria-label={`Remove rule ${i + 1}`}
+							aria-label={`Remove ${ruleName(i)}`}
 						>
 							×
 						</button>
@@ -367,6 +408,7 @@ const TextColorRulesRow = ({
 				<code>{">="}</code>, <code>{"<="}</code>, <code>==</code>, or{" "}
 				<code>!=</code> followed by a number.
 			</p>
+			{help && <p className="vc-help">{help}</p>}
 		</CollapsibleSubsection>
 	)
 }

@@ -228,6 +228,12 @@ describe("renameFieldInConfigs — standard (view-field) rewrite", () => {
 			labelTemplate: "{region}: {sales} ({sales})",
 			fieldFormats: { sales: ".1%" },
 			fieldColors: { sales: { field: "sales", singleColor: "#000" } },
+			fieldColorRules: { sales: [{ condition: "> 0", color: "#fff" }] },
+			fieldSizes: { sales: 14 },
+			fieldFonts: { sales: { fontWeight: 700 } },
+			fieldBackgrounds: { sales: { textBackground: true } },
+			fieldAlignments: { sales: "left" },
+			fieldOffsets: { sales: { xOffset: 4 } },
 			firstLabel: { labelTemplate: "start {sales}" },
 			lastLabel: { labelTemplate: "end {sales}" },
 		}
@@ -238,6 +244,20 @@ describe("renameFieldInConfigs — standard (view-field) rewrite", () => {
 		expect(next.dataLabelsConfig.fieldFormats).toEqual({ revenue: ".1%" })
 		expect(next.dataLabelsConfig.fieldColors).toEqual({
 			revenue: { field: "revenue", singleColor: "#000" },
+		})
+		expect(next.dataLabelsConfig.fieldColorRules).toEqual({
+			revenue: [{ condition: "> 0", color: "#fff" }],
+		})
+		expect(next.dataLabelsConfig.fieldSizes).toEqual({ revenue: 14 })
+		expect(next.dataLabelsConfig.fieldFonts).toEqual({
+			revenue: { fontWeight: 700 },
+		})
+		expect(next.dataLabelsConfig.fieldBackgrounds).toEqual({
+			revenue: { textBackground: true },
+		})
+		expect(next.dataLabelsConfig.fieldAlignments).toEqual({ revenue: "left" })
+		expect(next.dataLabelsConfig.fieldOffsets).toEqual({
+			revenue: { xOffset: 4 },
 		})
 		expect(next.dataLabelsConfig.firstLabel?.labelTemplate).toBe(
 			"start {revenue}"

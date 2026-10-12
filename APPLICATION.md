@@ -1975,8 +1975,8 @@ config field), resolves through the same alias table the join uses
 every other chart type and geography level — other dropdowns are
 unchanged.
 
-Geo modes add a **Show leader lines** toggle under Label selection and
-overlap (geo-only; hidden elsewhere). When on, every label that sits
+Geo modes add a **Show leader lines** toggle under Label selection
+(geo-only; hidden elsewhere). When on, every label that sits
 away from its region's centroid — displaced by the X/Y offsets or by
 overlap avoidance — draws a straight line from the centroid to the
 nearest edge of the label's box (including the text-background rect's
@@ -2040,7 +2040,14 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   pixel-range inputs appear only when a size source is mapped (a field,
   or the tree layouts' derived "Nesting depth"), since the range only
   takes effect then. Default size still applies to values the mapped
-  source can't size (non-numeric).
+  source can't size (non-numeric). With **two or more label variables**
+  the panel adds one block per variable (named by field, like the Color
+  panel's slots) holding a single **Size** input: blank (the default)
+  means the label's size — the Default size, or the mapped size — and a
+  value sets that variable's text to that many points regardless of
+  either (`DataLabelsConfig.fieldSizes`). The solver's margin reserve
+  measures with the largest configured per-variable size, the same
+  conservatism it applies to a mapped size's Max.
 - **Which labels** — All labels / First per series / Last per series /
   First and last per series. Endpoint selection is position-ranked along
   the chart's primary axis (rightmost = last for vertical charts,
@@ -2094,12 +2101,32 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   series name as a separate label — the direct-labeling recipe. (A
   one-point series takes the last label, plus the first label only when
   that population shows a variable the last one doesn't.)
+  **Combine variables into single label** (under Value → Fields to
+  include, after the field checkboxes; checked by default) decides what
+  a variable's membership means. Checked: the variables of a population
+  ARRANGE into one label per anchor through the Label text box(es)
+  below the checkbox. Unchecked: every checked variable is its OWN
+  label at each anchor it applies to — one text per variable, composed
+  from just that variable (its Text format still applies) — so the
+  Label text boxes are hidden and the templates are ignored
+  (`DataLabelsConfig.combineVariables`, unset = combined). Separate
+  labels position PER VARIABLE: under Adjust position and alignment the
+  Alignment control and the X / Y nudges become one row per variable
+  (each showing its effective value — its own, else the layer's — and
+  writing `DataLabelsConfig.fieldAlignments` / `fieldOffsets`), so a
+  value can sit centered in its bar while the category hangs left-aligned
+  off the end; the population split (All / First / Last rows) and the
+  endpoint override blocks don't apply to separate labels, while position
+  rules still replace a matching label's base offsets. Their per-variable
+  Size / Text properties / Text background / Color apply per label. The
+  solver reserve then measures each population's widest single variable
+  at that variable's alignment and offset.
   Two or more populations present = a **split** selection, and only
   then do the controls split, one block per present population, living
   where those controls normally live rather than in this subsection:
-  - Under **Value** (multi-field mode), "Label text" becomes one box per
-    population: **Label text** (the all-labels arrangement), **First
-    label text**, **Last label text**. The all-labels box pre-fills with
+  - Under **Value** (multi-field mode, variables combined), "Label text"
+    becomes one box per population: **Label text** (the all-labels
+    arrangement), **First label text**, **Last label text**. The all-labels box pre-fills with
     its own variables joined (and tracks the checklist / selects until
     hand-edited); an empty series-end box uses the placeholder — its own
     variables joined (e.g. `{series}` for a last-only series name), or,
@@ -2124,7 +2151,10 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   so templates, per-field formats, and per-variable colors all apply to
   bar labels. Area / pie / tile labels are still pre-formatted single
   values and ignore multi-field templates.
-- **Avoid overlapping labels** — colliding labels spread apart
+- **Avoid overlapping labels** (under Adjust position and alignment,
+  right after Wrap text — it moves labels, so it sits with the other
+  placement controls rather than with the selection of WHICH labels
+  render) — colliding labels spread apart
   vertically (up or down), each staying as close to its own anchor as
   the minimum gaps allow, preserving vertical order. Stacked end-of-line
   labels are solved exactly (least total displacement); scattered label
@@ -2143,8 +2173,8 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   coast or an empty neighbor drift there without ever flying far just
   to reach water. Non-colliding labels never move; a label with no
   free spot within ~12 rings stays put (best-effort, as elsewhere).
-- **Label all facets** (faceted charts only; shown right after Avoid
-  overlapping labels) — checked by default: every panel draws its
+- **Label all facets** (faceted charts only; under Label selection,
+  after Which labels) — checked by default: every panel draws its
   labels. Unchecking lists the chart's facet panels as checkboxes (all
   ticked at first) so the user keeps labels on just the panels they
   tick; an unticked panel renders no labels at all. The list uses the
@@ -2184,7 +2214,12 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   dark heatmap cells, black on light).
 - **Per-variable colors** (multi-field labels with 2+ variables) — the
   Color panel replaces the single base color stack with one color slot
-  per label variable. An UNCONFIGURED slot inherits the label's base
+  per label variable. Each variable's block also carries its own **Text
+  color rules** (`DataLabelsConfig.fieldColorRules`), the same condition
+  grammar as the layer-wide rules but compared against THAT variable's
+  own value in the row (the layer-wide rules compare against the
+  label's primary value); a matching rule wins over the variable's
+  color slot, whose color is the "else". An UNCONFIGURED slot inherits the label's base
   color chain — so with a field mapped on the layer's Color channel,
   its "Vary by" dropdown reads "Main Color mapping (field)" and the
   variable's segments follow that mapping; picking it again after a
@@ -2196,6 +2231,36 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   (`wrapSegments` splits a piece that straddles a break, keeping its
   fill), with each line's start position derived from the label's
   alignment.
+- **Per-variable text properties and backgrounds** (multi-field labels
+  with 2+ variables) — exactly like the Color panel: the Text properties
+  and Text background subsections REPLACE their layer-wide controls with
+  one collapsible block per variable, named by field. Each block shows
+  the variable's effective values (its own entry, else the layer-wide
+  value the single-variable panel edits) and writes only that variable's
+  entry; a control's reset link drops it back to the layer value:
+  - Text properties: **Family**, **Weight**, and the **Style** I / U
+    toggles, applying to that variable's text alone
+    (`DataLabelsConfig.fieldFonts`, sparse per key).
+  - Text background: the **Show text background** toggle, then
+    Background color, Corner radius, and the two paddings, applying
+    behind that variable's text alone
+    (`DataLabelsConfig.fieldBackgrounds`) — so a label can carry a boxed
+    category beside an unboxed value. At render time adjacent
+    pieces with the SAME effective background share one rect (so a
+    label whose variables all follow the layer keeps the one
+    whole-label box it always had — literal text between variables
+    follows the layer too), and a run with a different background, or
+    none, gets its own rect or a gap; wrapped lines are boxed per line.
+  A variable's size / font / background / color all resolve per piece:
+  the label's `<text>` keeps the layer-wide styling and each piece's
+  `<tspan>` carries only what differs, so a label whose variables all
+  inherit renders exactly as before. Mixed-size pieces share one
+  baseline; line steps come from the label's own size. The overlap and
+  edge-alignment boxes measure such a label at its largest piece size
+  (conservative, like the width heuristic). These apply wherever
+  multi-field labels compose (row-based renderers and bar anchors); the
+  pre-formatted area / pie / tile / geo labels ignore them, as they do
+  per-variable colors.
 
 When data labels are enabled, the solver reserves extra right-margin
 space if the rightmost label would extend past the plot edge. The

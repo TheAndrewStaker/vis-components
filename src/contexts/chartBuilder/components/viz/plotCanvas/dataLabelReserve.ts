@@ -108,33 +108,101 @@ export const computeDataLabelOverflow = ({
 		},
 		value
 	)
+	/** Which canvas edge(s) a population's labels can sit against. */
+	type ReserveEdges = "left" | "right" | "both"
 	type ReserveProfile = {
 		template: string | undefined
 		xOffset: number
 		alignment: "left" | "center" | "right"
+		edges: ReserveEdges
 	}
 	const baseProfile: ReserveProfile = {
 		template: dataLabels.labelTemplate,
 		xOffset: dataLabels.xOffset ?? 0,
 		alignment: dataLabels.alignment ?? "center",
+		edges: "both",
 	}
+	// Series-end populations only touch ONE horizontal edge when the series
+	// run along x: "first" anchors are the leftmost points, "last" the
+	// rightmost (DataLabelsLayer ranks endpoints on `lastAxis`, which is x
+	// unless the y field is categorical / ordinal — horizontal bars, where
+	// the ends are top / bottom and either one can sit at either side). A
+	// right-aligned LAST label hangs leftward over the plot, so it needs no
+	// left reserve — treating it as if it could also sit at the left edge
+	// opened a label-wide gutter on the left for a label that only ever
+	// renders on the right. A series with a single anchor is first AND last
+	// at once, so a lone x value keeps both edges.
+	const { xField, yField } = axisFieldsFor(memoMode.id as ChartMode, encodings)
+	const yType = yField ? effectiveType(dataset, yField, overrides) : null
+	const endpointAxisIsX = !(yType === "categorical" || yType === "ordinal")
+	// Counted PER FACET PANEL: a faceted chart with one bar per panel has a
+	// single x value in every panel even though the dataset holds many, and
+	// each panel's series end is then both first and last — dropping an
+	// edge's reserve there shifted the whole plot when "Which labels"
+	// changed, with no label actually moving.
+	const singleAnchorPerSeries = (() => {
+		if (!xField) return true
+		const facetFields = [
+			encodings.facet?.field,
+			encodings.facetRow?.field,
+			encodings.facetCol?.field,
+		].filter((f): f is string => !!f)
+		const seenByPanel = new Map<string, Set<unknown>>()
+		for (const row of dataset.rows) {
+			const panel = facetFields.map((f) => String(row[f] ?? "")).join("\u0000")
+			let seen = seenByPanel.get(panel)
+			if (!seen) {
+				seen = new Set()
+				seenByPanel.set(panel, seen)
+			}
+			seen.add(row[xField])
+		}
+		for (const seen of seenByPanel.values()) if (seen.size <= 1) return true
+		return false
+	})()
+	const edgeGated =
+		memoMode.canvas.coordFamily === "cartesian" &&
+		endpointAxisIsX &&
+		!singleAnchorPerSeries
+	const edgesFor = (pop: "all" | "first" | "last"): ReserveEdges =>
+		!edgeGated || pop === "all" ? "both" : pop === "first" ? "left" : "right"
 	const templateCfg = {
 		labelTemplate: dataLabels.labelTemplate,
 		firstLabel: dataLabels.firstLabel,
 		lastLabel: dataLabels.lastLabel,
 	}
-	const profiles: ReserveProfile[] = presentPopulations(selection).map(
+	// Separate variables (multi-field, "Combine variables" unchecked): each
+	// variable is its own label, so a population reserves for its widest
+	// single variable rather than the arranged template.
+	const separate = isMulti && dataLabels.combineVariables === false
+	const profiles: ReserveProfile[] = presentPopulations(selection).flatMap(
 		(pop) => {
 			const ov = populationOverrides(templateCfg, selection, pop)
-			return {
-				// Templates only matter in multi-field mode (one field needs no
-				// arrangement); each population composes with its own.
-				template: isMulti
-					? populationTemplate(templateCfg, selection, pop)
-					: baseProfile.template,
+			const shape = {
 				xOffset: ov.xOffset ?? baseProfile.xOffset,
 				alignment: ov.alignment ?? baseProfile.alignment,
+				edges: edgesFor(pop),
 			}
+			if (separate) {
+				// Each variable's own alignment / offset (its base), else the
+				// layer's. Endpoint overrides don't apply to separate labels.
+				return selection.fields[pop].map((f) => ({
+					edges: shape.edges,
+					xOffset: dataLabels.fieldOffsets?.[f]?.xOffset ?? baseProfile.xOffset,
+					alignment: dataLabels.fieldAlignments?.[f] ?? baseProfile.alignment,
+					template: `{${f}}`,
+				}))
+			}
+			return [
+				{
+					...shape,
+					// Templates only matter in multi-field mode (one field needs no
+					// arrangement); each population composes with its own.
+					template: isMulti
+						? populationTemplate(templateCfg, selection, pop)
+						: baseProfile.template,
+				},
+			]
 		}
 	)
 	// Position rules can push a matching subset of labels past either edge
@@ -180,11 +248,23 @@ export const computeDataLabelOverflow = ({
 	// The label width estimate has to use the LARGEST possible size
 	// (sizeMax) so the canvas reserves enough room for the biggest
 	// label, not just the default font-size case.
+	// Per-variable sizes (multi-field mode) can likewise enlarge a piece of
+	// the label, so the largest configured one joins the estimate — the
+	// same conservatism as sizeMax.
 	const sizeMapped = !!dataLabelsEncodings.size?.field
+	const perVariableMax = isMulti
+		? Math.max(
+				0,
+				...(value.fields ?? []).map((f) => dataLabels.fieldSizes?.[f] ?? 0)
+			)
+		: 0
 	const fontSizeForEstimate = ptToPx(
-		sizeMapped
-			? Math.max(dataLabels.fontSize, dataLabels.sizeMax ?? dataLabels.fontSize)
-			: dataLabels.fontSize
+		Math.max(
+			sizeMapped
+				? Math.max(dataLabels.fontSize, dataLabels.sizeMax ?? dataLabels.fontSize)
+				: dataLabels.fontSize,
+			perVariableMax
+		)
 	)
 	// Whole pixels, never negative. No upper cap (see the module comment).
 	const cap = (n: number) => Math.max(0, Math.ceil(n))

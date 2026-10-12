@@ -371,6 +371,19 @@ export const DataLabelsPanel = () => {
 		})
 	}
 
+	// Multi-field label variables: the Size / Text properties / Text
+	// background panels add one block per variable when there are two or
+	// more (one variable has nothing to differ from). Same gate as the Color
+	// panel's per-variable slots.
+	const multiFields = encodings.value.multiField
+		? (encodings.value.fields ?? [])
+		: []
+	const perVariable = multiFields.length > 1
+	const anyPerVariable = (map: Record<string, unknown> | undefined) =>
+		perVariable && multiFields.some((f) => map?.[f] != null)
+	// Separate labels (Combine variables unchecked) position per variable:
+	// Alignment and the X / Y nudges become one row per variable.
+	const perVariablePosition = perVariable && merged.combineVariables === false
 	// "Changed" dot for the Position Adjustment and Alignment subsection —
 	// lights when ANY control inside deviates from its default. Mode-gated
 	// values (polar nudges, bar position, endpoint overrides) only count when
@@ -382,8 +395,12 @@ export const DataLabelsPanel = () => {
 		(merged.alignment ?? "center") !== "center" ||
 		(merged.textAngle ?? 0) !== 0 ||
 		merged.wrapText === true ||
+		merged.avoidOverlaps === true ||
 		merged.xOffset !== 0 ||
 		merged.yOffset !== 0 ||
+		(perVariablePosition &&
+			(anyPerVariable(merged.fieldAlignments) ||
+				anyPerVariable(merged.fieldOffsets))) ||
 		(merged.positionRules ?? []).length > 0 ||
 		(isBarMode && (merged.barLabelPosition ?? "center") !== "center") ||
 		(isAreaMode && (merged.areaLabelPosition ?? "edge") !== "edge") ||
@@ -405,20 +422,29 @@ export const DataLabelsPanel = () => {
 	const selectionChanged =
 		selection.present.first ||
 		selection.present.last ||
-		merged.avoidOverlaps === true ||
 		(isFaceted && merged.facetKeys != null) ||
 		(isGeoMode && merged.leaderLines === true)
 	const textPositionChanged = (merged.arcWrapLevels ?? []).length > 0
 	// Text Properties compares against the THEME's data-label defaults — the
-	// same baseline the panel's reset links restore.
-	const textPropertiesChanged =
-		merged.fontFamily !== themeDefaults.fontFamily ||
-		merged.fontWeight !== themeDefaults.fontWeight ||
-		(merged.italic ?? false) !== (themeDefaults.italic ?? false) ||
-		(merged.underline ?? false) !== (themeDefaults.underline ?? false)
+	// same baseline the panel's reset links restore. With per-variable
+	// blocks (which replace the layer-wide controls) any variable's own
+	// entry lights it.
+	const textPropertiesChanged = perVariable
+		? anyPerVariable(merged.fieldFonts)
+		: merged.fontFamily !== themeDefaults.fontFamily ||
+			merged.fontWeight !== themeDefaults.fontWeight ||
+			(merged.italic ?? false) !== (themeDefaults.italic ?? false) ||
+			(merged.underline ?? false) !== (themeDefaults.underline ?? false)
 	// Every other background control is gated behind the toggle, so the
-	// toggle alone decides the dot (stored-but-hidden values don't count).
-	const textBackgroundChanged = merged.textBackground === true
+	// toggle alone decides the dot (stored-but-hidden values don't count);
+	// per-variable blocks light it when any variable's background is on.
+	const textBackgroundChanged = perVariable
+		? multiFields.some(
+				(f) =>
+					(merged.fieldBackgrounds?.[f]?.textBackground ??
+						merged.textBackground) === true
+			)
+		: merged.textBackground === true
 
 	const setField = (channel: DataLabelsChannel, fieldName: string) => {
 		// Reserved option values = the hierarchy-derived sources. Writing
@@ -720,15 +746,18 @@ export const DataLabelsPanel = () => {
 					themeDefaults={themeDefaults}
 					sizeMapped={sizeByDepth || Boolean(encodings.size.field)}
 					depthNote={sizeByDepth}
+					multiFields={perVariable ? multiFields : []}
 				/>
 			</DataLabelChannelRow>
 
 			{/* One purple panel wraps the layer-wide fine-tuning so it reads as
 			 *  a single group, distinct from the per-channel mappings above. */}
 			<div className="vc-option-panel">
-			{/* Layer-wide toggles: which labels to keep and how to handle
-			 *  collisions. Grouped under their own subsection so they read as
-			 *  a distinct concern from the per-channel mappings above. */}
+			{/* Layer-wide selection: which labels to keep (and, on faceted
+			 *  charts / maps, where). Grouped under their own subsection so
+			 *  they read as a distinct concern from the per-channel mappings
+			 *  above. Overlap avoidance lives with the other placement knobs
+			 *  under "Adjust position and alignment". */}
 			{/* Selection / overlap / position controls act on the shared label
 			 *  layer's positioned labels — inert for the self-drawn packed /
 			 *  treemap labels, so they stand down there (as does Text
@@ -737,7 +766,7 @@ export const DataLabelsPanel = () => {
 			{fineTuningApplies && (
 			<>
 			<CollapsibleSubsection
-				title="Label selection and overlap"
+				title="Label selection"
 				changed={selectionChanged}
 			>
 				<div className="flex flex-col gap-2">
@@ -799,11 +828,6 @@ export const DataLabelsPanel = () => {
 						</p>
 					</>
 				)}
-				<Toggle
-					label="Avoid overlapping labels"
-					checked={merged.avoidOverlaps === true}
-					onChange={(avoidOverlaps) => updateCfg({ avoidOverlaps })}
-				/>
 				{/* Faceted charts only: which panels draw labels. Checked (the
 				 *  default, stored as null) = every panel; unchecking lists the
 				 *  facets so the user ticks the ones that keep their labels.
@@ -896,7 +920,31 @@ export const DataLabelsPanel = () => {
 				changed={positionChanged}
 			>
 				<div className="flex flex-col gap-2">
-				{splitEndpoints ? (
+				{perVariablePosition ? (
+					<div className="flex flex-col gap-2">
+						{/* Separate labels: one alignment per VARIABLE — effective
+						 *  value shown (its own, else the layer's); writes the
+						 *  variable's entry. */}
+						{multiFields.map((name) => (
+							<div key={name} className="flex items-center gap-2 text-sm">
+								<span className={`${LABEL_COL} truncate`}>{name}</span>
+								<AlignmentControl
+									value={
+										merged.fieldAlignments?.[name] ?? merged.alignment ?? "center"
+									}
+									onChange={(alignment) =>
+										updateCfg({
+											fieldAlignments: {
+												...(merged.fieldAlignments ?? {}),
+												[name]: alignment,
+											},
+										})
+									}
+								/>
+							</div>
+						))}
+					</div>
+				) : splitEndpoints ? (
 					<div className="flex flex-col gap-2">
 						{/* One alignment per population — effective value shown; the
 						 *  all-labels row writes the base, the series ends write their
@@ -969,6 +1017,14 @@ export const DataLabelsPanel = () => {
 						/>
 					</div>
 				)}
+				{/* Collision handling sits with the other placement knobs: it
+				 *  moves labels, so it belongs beside wrap / nudges rather than
+				 *  with the selection of WHICH labels render. */}
+				<Toggle
+					label="Avoid overlapping labels"
+					checked={merged.avoidOverlaps === true}
+					onChange={(avoidOverlaps) => updateCfg({ avoidOverlaps })}
+				/>
 				{isBarMode && (
 					<>
 						<SelectInput
@@ -1089,7 +1145,47 @@ export const DataLabelsPanel = () => {
 						</p>
 					</>
 				)}
-				{splitEndpoints ? (
+				{perVariablePosition ? (
+					<>
+						{/* Separate labels: one X/Y pair per VARIABLE — effective
+						 *  values shown (its own, else the layer's). */}
+						{multiFields.map((name) => {
+							const own = merged.fieldOffsets?.[name] ?? {}
+							const patch = (p: { xOffset?: number; yOffset?: number }) =>
+								updateCfg({
+									fieldOffsets: {
+										...(merged.fieldOffsets ?? {}),
+										[name]: { ...own, ...p },
+									},
+								})
+							return (
+								<div key={name} className="flex flex-col gap-2">
+									<span className="text-sm vc-muted truncate">{name}</span>
+									<div className="ml-6 flex flex-col gap-2 text-sm">
+										<NumberInput
+											label="X"
+											labelClassName={LABEL_COL_NESTED}
+											value={own.xOffset ?? merged.xOffset}
+											step={1}
+											onChange={(xOffset) => patch({ xOffset })}
+											inputClassName="w-16"
+											suffix="px"
+										/>
+										<NumberInput
+											label="Y"
+											labelClassName={LABEL_COL_NESTED}
+											value={-(own.yOffset ?? merged.yOffset)}
+											step={1}
+											onChange={(n) => patch({ yOffset: -n })}
+											inputClassName="w-16"
+											suffix="px"
+										/>
+									</div>
+								</div>
+							)
+						})}
+					</>
+				) : splitEndpoints ? (
 					<>
 						{/* One X/Y pair per population — effective values shown; the
 						 *  all-labels pair writes the base offsets, the series ends
@@ -1182,6 +1278,7 @@ export const DataLabelsPanel = () => {
 					cfg={merged}
 					onChange={updateCfg}
 					themeDefaults={themeDefaults}
+					multiFields={perVariable ? multiFields : []}
 				/>
 			</CollapsibleSubsection>
 
@@ -1191,6 +1288,7 @@ export const DataLabelsPanel = () => {
 					cfg={merged}
 					onChange={updateCfg}
 					vizBackground={vizBackground}
+					multiFields={perVariable ? multiFields : []}
 				/>
 			</CollapsibleSubsection>
 			)}

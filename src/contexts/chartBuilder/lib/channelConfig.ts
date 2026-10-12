@@ -1710,6 +1710,14 @@ export type DataLabelsConfig = {
 	 * verbatim; a token whose name isn't a selected field is left as-is.
 	 * Empty / unset = join the selected fields (in check order) with ", ". */
 	labelTemplate?: string
+	/** Multi-field mode only: whether the selected variables COMBINE into
+	 * one label per anchor (the default — arranged by `labelTemplate` and
+	 * the per-population templates) or each variable renders as its OWN
+	 * label at the anchor (`false`). Separate labels sit on the same anchor
+	 * until positioned apart (overlap avoidance, position rules); each one
+	 * is one variable's text alone, so the templates don't apply and the
+	 * panel hides the Label text boxes. Unset = combined. */
+	combineVariables?: boolean
 	/** Multi-field mode only: per-field number format, keyed by field name.
 	 * Each value is a d3-format spec (the same specs the axes use, via
 	 * `buildTickFormatter`) — e.g. `".1%"` → `32.0%`, `"$,.0f"` → `$1,200`.
@@ -1722,6 +1730,38 @@ export type DataLabelsConfig = {
 	 * category can be tinted to match its line while a delta varies by value.
 	 * No entry → that variable uses the label's normal color chain. */
 	fieldColors?: Record<string, ColorSlotConfig>
+	/** Multi-field mode only: per-field TEXT COLOR RULES, keyed by field
+	 * name — the same conditional rules as `textColorRules`, but evaluated
+	 * against THAT variable's own value (the base rules compare against the
+	 * label's primary value). A matching rule wins over the variable's color
+	 * slot; the slot's color is the "else". No entry → no per-variable rules. */
+	fieldColorRules?: Record<string, TextColorRule[]>
+	/** Multi-field mode only: per-field font SIZE in POINTS, keyed by field
+	 * name — so a value can render larger than the category beside it. A
+	 * field with no entry takes the label's size (`fontSize`, or the mapped
+	 * Size scale when a size source is mapped). */
+	fieldSizes?: Record<string, number>
+	/** Multi-field mode only: per-field text properties (family / weight /
+	 * italic / underline), keyed by field name. Every key left unset inherits
+	 * the layer-wide value, so a sparse `{ fontWeight: 700 }` bolds one
+	 * variable and changes nothing else. */
+	fieldFonts?: Record<string, LabelFontOverrides>
+	/** Multi-field mode only: per-field text background, keyed by field
+	 * name. `textBackground` null / unset follows the layer-wide toggle;
+	 * `true` / `false` show / hide a background behind THAT variable's text
+	 * regardless of it. The color / radius / padding keys apply when the
+	 * variable's background shows and fall back to the layer-wide values
+	 * when unset. Adjacent variables with identical backgrounds share one
+	 * rect; differing ones get their own. */
+	fieldBackgrounds?: Record<string, LabelBackgroundOverrides>
+	/** Separate-variables mode only (`combineVariables === false`, where
+	 * each variable is its own label): per-variable horizontal alignment,
+	 * keyed by field name. Unset → the layer-wide `alignment`. */
+	fieldAlignments?: Record<string, "left" | "center" | "right">
+	/** Separate-variables mode only: per-variable X / Y pixel nudges, keyed
+	 * by field name — the variable's own base offsets (a matching position
+	 * rule still replaces them). Unset keys → the layer-wide offsets. */
+	fieldOffsets?: Record<string, { xOffset?: number; yOffset?: number }>
 	/** Where labels sit along a bar's measure axis, when the chart is a bar
 	 * chart and Data Labels' position-axis isn't mapped to a field.
 	 *  - `"center"` (default): slice midpoint — current behavior.
@@ -1908,6 +1948,27 @@ export type DataLabelsConfig = {
 }
 
 export type LabelPointsMode = "all" | "first" | "last" | "first-last"
+
+/** One variable's text-property overrides (`DataLabelsConfig.fieldFonts`).
+ *  Sparse: an unset key inherits the layer-wide value. */
+export type LabelFontOverrides = {
+	fontFamily?: string
+	fontWeight?: number
+	italic?: boolean
+	underline?: boolean
+}
+
+/** One variable's text-background overrides
+ *  (`DataLabelsConfig.fieldBackgrounds`). `textBackground` null / unset =
+ *  follow the layer-wide toggle; the styling keys fall back to the
+ *  layer-wide values (and, for the color, the visualization background). */
+export type LabelBackgroundOverrides = {
+	textBackground?: boolean | null
+	textBackgroundColor?: string | null
+	textBackgroundRadius?: number | null
+	textBackgroundPadX?: number | null
+	textBackgroundPadY?: number | null
+}
 export type LabelPointsScope = "series" | "group" | "stack"
 
 /** Overrides one endpoint's labels can apply on top of the layer-wide
@@ -1988,8 +2049,15 @@ export const DEFAULT_DATA_LABELS_CONFIG: DataLabelsConfig = {
 	yOffset: 0,
 	decimals: null,
 	labelTemplate: "",
+	combineVariables: true,
 	fieldFormats: {},
 	fieldColors: {},
+	fieldColorRules: {},
+	fieldSizes: {},
+	fieldFonts: {},
+	fieldBackgrounds: {},
+	fieldAlignments: {},
+	fieldOffsets: {},
 	barLabelPosition: "center",
 	areaLabelPosition: "edge",
 	onlyLastLabel: false,

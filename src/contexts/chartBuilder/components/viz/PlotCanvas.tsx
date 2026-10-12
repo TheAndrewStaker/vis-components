@@ -150,8 +150,13 @@ export const PlotCanvas = () => {
 			dataLabels.fontWeight,
 			dataLabels.italic,
 			dataLabels.sizeMax,
+			// Stored map — stable reference unless a per-variable size is edited.
+			dataLabels.fieldSizes,
 			dataLabels.decimals,
 			dataLabels.labelTemplate,
+			dataLabels.combineVariables,
+			dataLabels.fieldAlignments,
+			dataLabels.fieldOffsets,
 			dataLabels.fieldFormats,
 			// Endpoint-mode primitives + override blocks. The blocks are stable
 			// references (module default `{}` or the atom's stored object), so

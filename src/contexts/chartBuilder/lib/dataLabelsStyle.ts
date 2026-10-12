@@ -236,6 +236,122 @@ export const labelHueScaleParts = (
 	return { hueConfig, customPalette }
 }
 
+/** A variable's resolved text properties for one label segment — the
+ *  per-field overrides (`fieldFonts[field]`) laid over the layer-wide
+ *  values. A literal segment (no field) or an unconfigured field resolves
+ *  to the layer-wide values exactly. */
+export type ResolvedLabelFont = {
+	fontFamily: string
+	fontWeight: number
+	italic: boolean
+	underline: boolean
+}
+
+export const resolveFieldFont = (
+	cfg: Pick<DataLabelsConfig, "fontFamily" | "fontWeight" | "italic" | "underline" | "fieldFonts">,
+	field: string | null
+): ResolvedLabelFont => {
+	const ov = field ? cfg.fieldFonts?.[field] : undefined
+	return {
+		fontFamily: ov?.fontFamily ?? cfg.fontFamily,
+		fontWeight: ov?.fontWeight ?? cfg.fontWeight,
+		italic: ov?.italic ?? cfg.italic ?? false,
+		underline: ov?.underline ?? cfg.underline ?? false,
+	}
+}
+
+/** A variable's font size in PX for one label segment: its `fieldSizes`
+ *  entry (points, converted here) when set, else the label's own size —
+ *  `basePx`, which the caller resolved from the default size or the mapped
+ *  Size scale. Literal segments always take `basePx`. */
+export const resolveFieldSizePx = (
+	cfg: Pick<DataLabelsConfig, "fieldSizes">,
+	field: string | null,
+	basePx: number
+): number => {
+	const pt = field ? cfg.fieldSizes?.[field] : undefined
+	return pt != null && Number.isFinite(pt) ? ptToPx(pt) : basePx
+}
+
+/** One resolved text-background style — what a rect behind the text draws
+ *  with. `null` = no background. */
+export type ResolvedLabelBackground = {
+	color: string
+	radius: number
+	padX: number
+	padY: number
+}
+
+/** Fallback padding (px) for the text-background rect when the config
+ *  hasn't set explicit values — matches the historical baked-in look. */
+export const DEFAULT_BG_PAD_X = 3
+export const DEFAULT_BG_PAD_Y = 1.5
+
+/** The LAYER-wide text background (`null` when the toggle is off).
+ *  `vizBackground` is the chart's own background — the color a null
+ *  `textBackgroundColor` inherits. */
+export const resolveLayerBackground = (
+	cfg: Pick<
+		DataLabelsConfig,
+		| "textBackground"
+		| "textBackgroundColor"
+		| "textBackgroundRadius"
+		| "textBackgroundPadX"
+		| "textBackgroundPadY"
+	>,
+	vizBackground: string
+): ResolvedLabelBackground | null =>
+	cfg.textBackground
+		? {
+				color: cfg.textBackgroundColor ?? vizBackground,
+				radius: cfg.textBackgroundRadius ?? 0,
+				padX: cfg.textBackgroundPadX ?? DEFAULT_BG_PAD_X,
+				padY: cfg.textBackgroundPadY ?? DEFAULT_BG_PAD_Y,
+			}
+		: null
+
+/** A variable's text background for one label segment: its
+ *  `fieldBackgrounds` entry decides on / off (null = follow the layer
+ *  toggle) and overrides any styling key it sets; everything else falls
+ *  back to the layer-wide values. Literal segments (no field) take the
+ *  layer background. */
+export const resolveFieldBackground = (
+	cfg: Pick<
+		DataLabelsConfig,
+		| "textBackground"
+		| "textBackgroundColor"
+		| "textBackgroundRadius"
+		| "textBackgroundPadX"
+		| "textBackgroundPadY"
+		| "fieldBackgrounds"
+	>,
+	field: string | null,
+	vizBackground: string
+): ResolvedLabelBackground | null => {
+	const ov = field ? cfg.fieldBackgrounds?.[field] : undefined
+	const shown = ov?.textBackground ?? cfg.textBackground ?? false
+	if (!shown) return null
+	return {
+		color: ov?.textBackgroundColor ?? cfg.textBackgroundColor ?? vizBackground,
+		radius: ov?.textBackgroundRadius ?? cfg.textBackgroundRadius ?? 0,
+		padX: ov?.textBackgroundPadX ?? cfg.textBackgroundPadX ?? DEFAULT_BG_PAD_X,
+		padY: ov?.textBackgroundPadY ?? cfg.textBackgroundPadY ?? DEFAULT_BG_PAD_Y,
+	}
+}
+
+/** Two resolved backgrounds draw identically (both off, or same style). */
+export const sameBackground = (
+	a: ResolvedLabelBackground | null,
+	b: ResolvedLabelBackground | null
+): boolean =>
+	a === b ||
+	(a !== null &&
+		b !== null &&
+		a.color === b.color &&
+		a.radius === b.radius &&
+		a.padX === b.padX &&
+		a.padY === b.padY)
+
 /** One label's fill through the Data Labels precedence chain:
  * per-category override → conditional numeric rule → hue-scale color →
  * the single fallback `cfg.color`. `hueColor` arrives pre-resolved (the

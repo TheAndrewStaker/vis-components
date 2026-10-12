@@ -353,6 +353,12 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 					renameKey(dlc.fieldColors, oldName, newName),
 					(s) => renameSlotField(s, oldName, newName)
 				) as Record<string, ColorSlotConfig> | undefined,
+				fieldColorRules: renameKey(dlc.fieldColorRules, oldName, newName),
+				fieldSizes: renameKey(dlc.fieldSizes, oldName, newName),
+				fieldFonts: renameKey(dlc.fieldFonts, oldName, newName),
+				fieldBackgrounds: renameKey(dlc.fieldBackgrounds, oldName, newName),
+				fieldAlignments: renameKey(dlc.fieldAlignments, oldName, newName),
+				fieldOffsets: renameKey(dlc.fieldOffsets, oldName, newName),
 				firstLabel: dlc.firstLabel
 					? patched(dlc.firstLabel, {
 							labelTemplate: renameLabelTokens(

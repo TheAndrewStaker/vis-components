@@ -6,6 +6,7 @@ import {
 } from "../../lib/channelConfig"
 import {
 	alignBoxToAnchorEdge,
+	labelBlockHeight,
 	labelHeight,
 	labelWidth,
 	leaderLineSegment,
@@ -26,8 +27,15 @@ import {
 import {
 	buildLabelSegments,
 	labelHueScaleParts,
+	resolveFieldBackground,
+	resolveFieldFont,
+	resolveFieldSizePx,
 	resolveLabelFill,
 	resolveLabelSize,
+	resolveLayerBackground,
+	sameBackground,
+	type ResolvedLabelBackground,
+	type ResolvedLabelFont,
 } from "../../lib/dataLabelsStyle"
 import { ptToPx } from "../../lib/fontUnit"
 import { effectiveType } from "../../lib/fieldType"
@@ -44,7 +52,7 @@ import {
 	type HueScale,
 	type PositionScale,
 } from "../../lib/scales"
-import { firstMatchingRule } from "../../lib/textColorRules"
+import { firstMatchingRule, resolveRuleColor } from "../../lib/textColorRules"
 import {
 	emptyDataLabelsEncodings,
 	type DataLabelsEncodings,
@@ -174,15 +182,23 @@ type RenderableLabel = {
 	cx: number
 	cy: number
 	text: string
+	/** LAYOUT font size (px): the size the collision / edge-alignment boxes
+	 *  measure with. Equals the label's own size, except for a label whose
+	 *  pieces carry per-variable sizes, where it's the LARGEST piece so the
+	 *  box stays conservative. */
 	fontSize: number
+	/** The `<text>` element's own font size (px) — the label's resolved
+	 *  size before any per-variable override. Pieces whose size differs
+	 *  carry their own. Unset → `fontSize`. */
+	baseFontSize?: number
 	fill: string
 	label: string
 	key: string
-	/** Per-variable colored pieces (multi-field labels with field colors).
-	 *  When present, each piece renders as its own `<tspan>` fill; with
-	 *  wrapping on, pieces line-break at the plain label's wrap points via
-	 *  `wrapSegments`. */
-	segments?: { text: string; fill: string }[]
+	/** Per-variable styled pieces (multi-field labels with per-variable
+	 *  colors / sizes / fonts / backgrounds). When present, each piece
+	 *  renders as its own `<tspan>`; with wrapping on, pieces line-break at
+	 *  the plain label's wrap points via `wrapSegments`. */
+	segments?: LabelPiece[]
 	/** Per-box alignment override (endpoint labels). Unset → `cfg.alignment`. */
 	alignment?: "left" | "center" | "right"
 	/** Legend-hover fade for this label (1 / unset = no fade). Mirrors the
@@ -246,7 +262,7 @@ const expandLabelPopulations = <T extends EndpointAwareBox>(
 				key: `${b.key}:${pop}`,
 				cx: ov.xOffset != null ? b.anchorX + ov.xOffset : b.cx,
 				cy: ov.yOffset != null ? b.anchorY + ov.yOffset : b.cy,
-				alignment: ov.alignment ?? undefined,
+				alignment: ov.alignment ?? b.alignment,
 			}
 			if (recompose) {
 				const r = recompose(next, pop)
@@ -259,38 +275,106 @@ const expandLabelPopulations = <T extends EndpointAwareBox>(
 	return out
 }
 
-/** Emit the tspans for a WRAPPED segmented (per-variable colored) label:
- *  one entry per line, each piece carrying its own fill. Every line anchors
- *  its FIRST tspan at the line's computed start x — estimated from the same
- *  CHAR_WIDTH_RATIO heuristic the layout boxes use — with
- *  `textAnchor="start"`, so center / right alignment positions the whole
- *  line rather than just its first colored piece (an x-anchored tspan is
- *  positioned individually by SVG; inline followers just flow after it). */
-const renderSegmentedLines = (
-	segLines: { text: string; fill: string }[][],
+/** One styled piece of a multi-variable label: a variable's (or literal)
+ *  text with its resolved fill, size, font, and background. Pieces are
+ *  carried only when some piece differs from the label's base styling —
+ *  a uniformly styled label keeps the plain render path. */
+type LabelPiece = {
+	text: string
+	field: string | null
+	fill: string
+	/** px */
+	fontSize: number
+	font: ResolvedLabelFont
+	bg: ResolvedLabelBackground | null
+}
+
+/** A line of a segmented label laid out for drawing: each piece's start x
+ *  and width (the same CHAR_WIDTH_RATIO heuristic the layout boxes use),
+ *  the line's start x per the label's alignment, and its total width. */
+type PieceLine = {
+	pieces: { piece: LabelPiece; x: number; width: number }[]
+	startX: number
+	width: number
+}
+
+const layoutPieceLines = (
+	segLines: LabelPiece[][],
 	cx: number,
-	fontSize: number,
-	anchor: "start" | "middle" | "end",
+	anchor: "start" | "middle" | "end"
+): PieceLine[] =>
+	segLines.map((pieces) => {
+		const widths = pieces.map((p) =>
+			labelWidth({ text: p.text, fontSize: p.fontSize })
+		)
+		const width = widths.reduce((a, b) => a + b, 0)
+		const startX =
+			anchor === "start" ? cx : anchor === "end" ? cx - width : cx - width / 2
+		let x = startX
+		const laid = pieces.map((piece, i) => {
+			const out = { piece, x, width: widths[i] }
+			x += widths[i]
+			return out
+		})
+		return { pieces: laid, startX, width }
+	})
+
+/** The tspan attributes a piece needs beyond the parent `<text>`'s: only
+ *  what differs from the label's base styling, so a plain piece stays a
+ *  bare `<tspan fill>` (and the DOM of existing visuals is unchanged). */
+const pieceStyleAttrs = (
+	p: LabelPiece,
+	baseFontSize: number,
+	baseFont: ResolvedLabelFont
+) => ({
+	fontSize: p.fontSize !== baseFontSize ? p.fontSize : undefined,
+	fontFamily:
+		p.font.fontFamily !== baseFont.fontFamily ? p.font.fontFamily : undefined,
+	fontWeight:
+		p.font.fontWeight !== baseFont.fontWeight ? p.font.fontWeight : undefined,
+	fontStyle:
+		p.font.italic !== baseFont.italic
+			? p.font.italic
+				? "italic"
+				: "normal"
+			: undefined,
+	textDecoration:
+		p.font.underline !== baseFont.underline
+			? p.font.underline
+				? "underline"
+				: "none"
+			: undefined,
+})
+
+/** Emit the tspans for a WRAPPED segmented (per-variable styled) label:
+ *  one entry per line, each piece carrying its own styling. Every line
+ *  anchors its FIRST tspan at the line's computed start x with
+ *  `textAnchor="start"`, so center / right alignment positions the whole
+ *  line rather than just its first piece (an x-anchored tspan is
+ *  positioned individually by SVG; inline followers just flow after it).
+ *  Line steps are in px off the label's base size — an `em` step would
+ *  follow whichever piece happens to start the line. */
+const renderSegmentedLines = (
+	lines: PieceLine[],
+	baseFontSize: number,
+	baseFont: ResolvedLabelFont,
 	keyBase: string
 ): React.ReactNode[] => {
 	// Same vertical-centering shift as `renderMultilineTspans` — the parent
 	// `<text>` anchors with dominantBaseline="middle".
-	const firstDy = `${-0.6 * (segLines.length - 1)}em`
-	return segLines.flatMap((pieces, i) => {
-		const lineText = pieces.map((p) => p.text).join("")
-		const w = labelWidth({ text: lineText, fontSize })
-		const startX =
-			anchor === "start" ? cx : anchor === "end" ? cx - w : cx - w / 2
-		const dy = i === 0 ? firstDy : "1.2em"
+	const firstDy = -0.6 * (lines.length - 1) * baseFontSize
+	const step = 1.2 * baseFontSize
+	return lines.flatMap((line, i) => {
+		const dy = i === 0 ? firstDy : step
 		// An empty line still contributes vertical space (same convention as
 		// renderMultilineTspans — an empty tspan would collapse).
-		if (pieces.length === 0) {
+		if (line.pieces.length === 0) {
 			return [
 				<tspan
 					// Line index IS its identity.
 					// eslint-disable-next-line react/no-array-index-key
 					key={`${keyBase}-l${i}`}
-					x={startX}
+					x={line.startX}
 					dy={dy}
 					textAnchor="start"
 				>
@@ -298,26 +382,74 @@ const renderSegmentedLines = (
 				</tspan>,
 			]
 		}
-		return pieces.map((p, j) => (
+		return line.pieces.map(({ piece }, j) => (
 			<tspan
 				// Piece order is stable → position is its identity.
 				// eslint-disable-next-line react/no-array-index-key
 				key={`${keyBase}-l${i}-s${j}`}
-				x={j === 0 ? startX : undefined}
+				x={j === 0 ? line.startX : undefined}
 				dy={j === 0 ? dy : undefined}
 				textAnchor={j === 0 ? "start" : undefined}
-				fill={p.fill}
+				fill={piece.fill}
+				{...pieceStyleAttrs(piece, baseFontSize, baseFont)}
 			>
-				{p.text}
+				{piece.text}
 			</tspan>
 		))
 	})
 }
 
-/** Fallback padding (px) for the text-background rect when the config hasn't
- * set explicit values — matches the historical baked-in look. */
-const DEFAULT_BG_PAD_X = 3
-const DEFAULT_BG_PAD_Y = 1.5
+/** Background rects for a segmented label whose pieces DON'T all share
+ *  the layer background: per line, contiguous pieces with the same
+ *  background form one run and draw one rect (so two variables with the
+ *  same background still share a box; a variable without one leaves a
+ *  gap). A run's rect is as tall as its tallest piece plus the padding,
+ *  centered on its line. */
+const renderPieceBackgrounds = (
+	lines: PieceLine[],
+	cy: number,
+	baseFontSize: number,
+	keyBase: string
+): React.ReactNode[] => {
+	const step = 1.2 * baseFontSize
+	const firstCy = cy - ((lines.length - 1) / 2) * step
+	return lines.flatMap((line, li) => {
+		const lineCy = firstCy + li * step
+		const rects: React.ReactNode[] = []
+		let run: PieceLine["pieces"] = []
+		const flush = () => {
+			const bg = run[0]?.piece.bg
+			if (run.length > 0 && bg) {
+				const x0 = run[0].x
+				const x1 = run[run.length - 1].x + run[run.length - 1].width
+				const tallest = Math.max(...run.map((r) => r.piece.fontSize))
+				const h = tallest * 1.1 + bg.padY * 2
+				rects.push(
+					<rect
+						// Runs are ordered along the line → position is identity.
+						// eslint-disable-next-line react/no-array-index-key
+						key={`${keyBase}-bg-l${li}-${rects.length}`}
+						x={x0 - bg.padX}
+						y={lineCy - h / 2}
+						width={x1 - x0 + bg.padX * 2}
+						height={h}
+						rx={bg.radius}
+						fill={bg.color}
+					/>
+				)
+			}
+			run = []
+		}
+		for (const entry of line.pieces) {
+			if (run.length > 0 && !sameBackground(run[0].piece.bg, entry.piece.bg)) {
+				flush()
+			}
+			run.push(entry)
+		}
+		flush()
+		return rects
+	})
+}
 
 /** Emit the `<text>` elements (plus optional background rects) for a list of
  * resolved label boxes. Shared by the anchor-based and row-based paths so the
@@ -325,11 +457,10 @@ const DEFAULT_BG_PAD_Y = 1.5
 const renderLabels = (
 	boxes: RenderableLabel[],
 	cfg: DataLabelsConfig,
-	bgColor: string
+	layerBg: ResolvedLabelBackground | null
 ): React.ReactElement => {
 	const baseAnchor = alignmentAnchor(cfg.alignment)
-	const padX = cfg.textBackgroundPadX ?? DEFAULT_BG_PAD_X
-	const padY = cfg.textBackgroundPadY ?? DEFAULT_BG_PAD_Y
+	const baseFont = resolveFieldFont(cfg, null)
 	const wrap = cfg.wrapText === true
 	const wrapMaxChars = cfg.wrapMaxChars ?? DEFAULT_DATA_LABELS_CONFIG.wrapMaxChars ?? 20
 	// Text angle rotates each label (and its background rect) around its own
@@ -345,26 +476,46 @@ const renderLabels = (
 				const textAnchor = b.alignment
 					? alignmentAnchor(b.alignment)
 					: baseAnchor
-				// Per-variable colored segments render as colored tspans; when
+				// Per-variable styled pieces render as their own tspans; when
 				// wrapping is on they line-break at the same points the plain
 				// label would (`wrapSegments` splits straddling pieces).
 				const segs = b.segments ?? []
 				const segmented = segs.length > 0
+				const baseFontSize = b.baseFontSize ?? b.fontSize
 				// Split into lines up-front so the background rect and the
 				// `<tspan>` emission agree on the label's footprint. A short
 				// label (or wrapping off) yields a single line, keeping the
 				// non-wrapped render byte-identical to before.
 				const lines = wrap ? wrapByCharCount(b.label, wrapMaxChars) : [b.label]
 				const multiline = lines.length > 1
-				let rect: React.ReactElement | null = null
-				if (cfg.textBackground) {
+				const pieceLines = segmented
+					? layoutPieceLines(
+							multiline ? wrapSegments(segs, wrapMaxChars) : [segs],
+							b.cx,
+							textAnchor
+						)
+					: []
+				// Pieces whose backgrounds all match the layer's share the one
+				// whole-label rect below (the historical render); any piece
+				// with its own background switches the label to per-run rects.
+				const perPieceBg =
+					segmented && segs.some((p) => !sameBackground(p.bg, layerBg))
+				let rect: React.ReactNode = null
+				if (perPieceBg) {
+					rect = renderPieceBackgrounds(pieceLines, b.cy, baseFontSize, b.key)
+				} else if (layerBg) {
+					const { padX, padY } = layerBg
 					// Size to the widest wrapped line; height grows per line at
-					// the same 1.2em step `renderMultilineTspans` uses.
+					// the same 1.2em step `renderMultilineTspans` uses. A label
+					// with mixed-size pieces measures its pieces individually.
 					const w =
-						Math.max(...lines.map((l) => labelWidth({ text: l, fontSize: b.fontSize }))) +
+						(segmented
+							? Math.max(...pieceLines.map((l) => l.width))
+							: Math.max(
+									...lines.map((l) => labelWidth({ text: l, fontSize: b.fontSize }))
+								)) +
 						padX * 2
-					const h =
-						(multiline ? lines.length * b.fontSize * 1.2 : labelHeight(b)) + padY * 2
+					const h = labelBlockHeight({ text: lines.join("\n"), fontSize: b.fontSize }) + padY * 2
 					// Align the rect's left edge to the text's start the same way
 					// the text-anchor positions the glyphs, so the box hugs the
 					// label regardless of alignment.
@@ -380,8 +531,8 @@ const renderLabels = (
 							y={b.cy - h / 2}
 							width={w}
 							height={h}
-							rx={cfg.textBackgroundRadius ?? 0}
-							fill={bgColor}
+							rx={layerBg.radius}
+							fill={layerBg.color}
 						/>
 					)
 				}
@@ -409,7 +560,7 @@ const renderLabels = (
 							y={b.cy}
 							fill={b.fill}
 							fontFamily={cfg.fontFamily}
-							fontSize={b.fontSize}
+							fontSize={baseFontSize}
 							fontWeight={cfg.fontWeight}
 							fontStyle={cfg.italic ? "italic" : undefined}
 							textDecoration={cfg.underline ? "underline" : undefined}
@@ -419,10 +570,9 @@ const renderLabels = (
 							{segmented
 								? multiline
 									? renderSegmentedLines(
-											wrapSegments(segs, wrapMaxChars),
-											b.cx,
-											b.fontSize,
-											textAnchor,
+											pieceLines,
+											baseFontSize,
+											baseFont,
 											b.key
 										)
 									: segs.map((s, i) => (
@@ -431,6 +581,7 @@ const renderLabels = (
 												// eslint-disable-next-line react/no-array-index-key
 												key={`${b.key}-s${i}`}
 												fill={s.fill}
+												{...pieceStyleAttrs(s, baseFontSize, baseFont)}
 											>
 												{s.text}
 											</tspan>
@@ -516,8 +667,8 @@ export const DataLabelsLayer = ({
 	// Text-background fill: an explicit override wins, else inherit the
 	// visualization's own background (white when that's transparent) so the
 	// rect masks gridlines by blending into the chart canvas.
-	const textBgColor =
-		cfg.textBackgroundColor ?? chartChannelConfigs.backgroundColor ?? "#ffffff"
+	const vizBackground = chartChannelConfigs.backgroundColor ?? "#ffffff"
+	const layerBg = resolveLayerBackground(cfg, vizBackground)
 
 	const xField = encodings.x.field
 	const yField = encodings.y.field
@@ -626,13 +777,17 @@ export const DataLabelsLayer = ({
 	}
 	// One label segment's fill. Literal (fieldless) segments and unconfigured
 	// fields use the label's base fill; a configured slot uses its scale (vary
-	// by a field) or its single color.
+	// by a field) or its single color. The variable's own text-color rules
+	// come first, compared against ITS value in the row — the slot is the
+	// "else".
 	const resolveSegmentFill = (
 		field: string | null,
 		row: Record<string, unknown>,
 		baseFill: string
 	): string => {
 		if (!field) return baseFill
+		const ruleColor = resolveRuleColor(cfg.fieldColorRules?.[field], row[field])
+		if (ruleColor) return ruleColor
 		const slotCfg = cfg.fieldColors?.[field]
 		if (!slotCfg) return baseFill
 		if (slotCfg.field) {
@@ -642,16 +797,20 @@ export const DataLabelsLayer = ({
 		}
 		return slotCfg.singleColor ?? baseFill
 	}
+	const baseFont = resolveFieldFont(cfg, null)
 	/** Compose one label from a row: single-field formats the one field;
 	 *  multi-field arranges the selected fields per `template`. Returns the
-	 *  joined text plus per-variable colored segments — only carried when
-	 *  some segment's fill differs from the base, so single-color labels keep
-	 *  the plain (wrappable) render path. Null when nothing renders. */
+	 *  joined text plus per-variable styled pieces — only carried when some
+	 *  piece's fill / size / font / background differs from the label's base,
+	 *  so uniformly styled labels keep the plain (wrappable) render path —
+	 *  and the LAYOUT font size: the largest piece when pieces are carried,
+	 *  else the label's own. Null when nothing renders. */
 	const composeLabel = (
 		row: Record<string, unknown>,
 		template: string,
-		baseFill: string
-	): { label: string; segments?: { text: string; fill: string }[] } | null => {
+		baseFill: string,
+		baseFontSize: number
+	): { label: string; segments?: LabelPiece[]; fontSize: number } | null => {
 		const segs = buildLabelSegments(
 			row,
 			encodings.value,
@@ -660,30 +819,81 @@ export const DataLabelsLayer = ({
 		)
 		if (!segs) return null
 		const label = segs.map((s) => s.text).join("")
-		const coloredSegs = segs.map((s) => ({
+		const pieces: LabelPiece[] = segs.map((s) => ({
 			text: s.text,
+			field: s.field,
 			fill: resolveSegmentFill(s.field, row, baseFill),
+			fontSize: resolveFieldSizePx(cfg, s.field, baseFontSize),
+			font: resolveFieldFont(cfg, s.field),
+			bg: resolveFieldBackground(cfg, s.field, vizBackground),
 		}))
-		const segments = coloredSegs.some((s) => s.fill !== baseFill)
-			? coloredSegs
-			: undefined
-		return { label, segments }
+		const styled = pieces.some(
+			(p) =>
+				p.fill !== baseFill ||
+				p.fontSize !== baseFontSize ||
+				p.font.fontFamily !== baseFont.fontFamily ||
+				p.font.fontWeight !== baseFont.fontWeight ||
+				p.font.italic !== baseFont.italic ||
+				p.font.underline !== baseFont.underline ||
+				!sameBackground(p.bg, layerBg)
+		)
+		if (!styled) return { label, fontSize: baseFontSize }
+		return {
+			label,
+			segments: pieces,
+			fontSize: Math.max(baseFontSize, ...pieces.map((p) => p.fontSize)),
+		}
 	}
 	// Boxes are built with the all-labels template; the population pass
 	// recomposes series-end labels with theirs.
 	const allTemplate = populationTemplate(cfg, selection, "all")
+	// "Combine variables into single label" unchecked: every checked
+	// variable is its OWN label at each anchor (one box per variable, each
+	// composing just `{Field}`), instead of one arranged label. A variable
+	// outside a population composes nothing there.
+	const separate = multi && cfg.combineVariables === false
+	const separateFields: (string | null)[] = separate
+		? (encodings.value.fields ?? [])
+		: [null]
+	// Separate labels position per variable: a variable's own alignment /
+	// X / Y (else the layer's), never the endpoint override blocks — so the
+	// expansion below sees no overrides in that mode.
+	const ownAlignment = (own: string | null) =>
+		own === null ? undefined : cfg.fieldAlignments?.[own]
+	const ownOffset = (own: string | null) => ({
+		x: (own === null ? undefined : cfg.fieldOffsets?.[own]?.xOffset) ?? cfg.xOffset,
+		y: (own === null ? undefined : cfg.fieldOffsets?.[own]?.yOffset) ?? cfg.yOffset,
+	})
+	const expansionCfg: DataLabelsConfig = separate
+		? { ...cfg, firstLabel: {}, lastLabel: {} }
+		: cfg
+	const ownTemplate = (
+		own: string | null,
+		pop: LabelPopulation
+	): string | null =>
+		own === null
+			? populationTemplate(cfg, selection, pop)
+			: selection.fields[pop].includes(own)
+				? `{${own}}`
+				: null
 
 	type RenderBox = EndpointAwareBox & {
 		fill: string
+		/** See `RenderableLabel.baseFontSize`. */
+		baseFontSize: number
 		opacityMul?: number
-		/** Per-variable colored pieces (multi-field mode with field colors).
-		 *  When set, `renderLabels` draws one `<tspan>` per segment with its
-		 *  own fill instead of the single-color `label`. */
-		segments?: { text: string; fill: string }[]
+		/** Per-variable styled pieces (multi-field mode with per-variable
+		 *  colors / sizes / fonts / backgrounds). When set, `renderLabels`
+		 *  draws one `<tspan>` per piece instead of the plain `label`. */
+		segments?: LabelPiece[]
 		/** The row the label composes from (multi-field): the dataset row on
 		 *  the row path, the slice's synthetic row on bar anchors. Absent for
 		 *  pre-formatted anchors, which keep their text through the pass. */
 		row?: Record<string, unknown>
+		/** See `DataLabelAnchor.vAlign`; row-based boxes never carry one. */
+		vAlign?: LabelVAlign
+		/** Separate-variables mode: the one variable this box shows. */
+		ownField?: string
 	}
 	// Series-end label recomposition (multi-field): rebuild the box's text —
 	// and its per-variable colored segments — from the population's template.
@@ -695,16 +905,15 @@ export const DataLabelsLayer = ({
 		pop: LabelPopulation
 	): RenderBox | null => {
 		if (!multi || !box.row) return box
-		const composed = composeLabel(
-			box.row,
-			populationTemplate(cfg, selection, pop),
-			box.fill
-		)
+		const template = ownTemplate(box.ownField ?? null, pop)
+		if (template === null) return null
+		const composed = composeLabel(box.row, template, box.fill, box.baseFontSize)
 		if (!composed) return null
 		return wrapBoxForLayout({
 			...box,
 			label: composed.label,
 			text: composed.label,
+			fontSize: composed.fontSize,
 			segments: composed.segments,
 		})
 	}
@@ -779,9 +988,11 @@ export const DataLabelsLayer = ({
 		const renderBoxes: RenderBox[] = anchors.flatMap((a, i) => {
 			// Pre-formatted anchors (single-field, or renderers that don't carry
 			// a row) skip when their renderer produced no text. Multi-field
-			// anchors with a row compose below instead.
+			// anchors with a row compose below instead — one box per variable
+			// in separate mode.
 			const composes = multi && a.row !== undefined
 			if (!composes && a.label === null) return []
+			return (composes ? separateFields : [null]).flatMap((own) => {
 			const hueColor =
 				hueScale && a.hueValue !== undefined
 					? (applyHueScale(hueScale, a.hueValue, hueFieldType) ?? null)
@@ -798,21 +1009,26 @@ export const DataLabelsLayer = ({
 			// Multi-field: arrange the slice's row with the all-labels template
 			// (empty when that population has nothing to say here — the
 			// selection pass may still add a series-end label).
+			const template = composes ? ownTemplate(own, "all") : null
 			const composed =
-				composes && a.row ? composeLabel(a.row, allTemplate, fill) : null
+				composes && a.row && template !== null
+					? composeLabel(a.row, template, fill, fontSize)
+					: null
 			const label = composes ? (composed?.label ?? "") : (a.label ?? "")
 			// A matching position rule REPLACES the base offsets for this label
 			// (same first-match-wins walk — and same backing value — as the
 			// text-color rules).
 			const posRule = firstMatchingRule(cfg.positionRules, a.labelValue)
+			const off = ownOffset(own)
 			return [
 				{
-					cx: a.cx + (posRule?.xOffset ?? cfg.xOffset),
-					cy: a.cy + (posRule?.yOffset ?? cfg.yOffset),
+					cx: a.cx + (posRule?.xOffset ?? off.x),
+					cy: a.cy + (posRule?.yOffset ?? off.y),
 					anchorX: a.cx,
 					anchorY: a.cy,
 					text: label,
-					fontSize,
+					fontSize: composed?.fontSize ?? fontSize,
+					baseFontSize: fontSize,
 					// Bars hand over an explicit series + rank (their stack /
 					// group layout, per the label scope). Other anchor-based
 					// renderers (areas, pies) carry the hue value as the de-facto
@@ -825,17 +1041,21 @@ export const DataLabelsLayer = ({
 						(a.hueValue === undefined ? "" : String(a.hueValue ?? "")),
 					rank: a.rank,
 					index: i,
-					key: a.key,
+					key: own === null ? a.key : `${a.key}#${own}`,
 					fill,
 					label,
 					segments: composed?.segments,
 					row: composes ? a.row : undefined,
 					opacityMul: a.opacityMul,
+					vAlign: a.vAlign,
+					ownField: own ?? undefined,
+					alignment: ownAlignment(own),
 				},
 			]
+			})
 		})
 		const finalBoxes = selectAndSpread(renderBoxes)
-		const labels = renderLabels(finalBoxes, cfg, textBgColor)
+		const labels = renderLabels(finalBoxes, cfg, layerBg)
 		// Maps only: leader lines from each region's centroid (the raw anchor)
 		// to its label's box edge, drawn UNDER the labels. A label still on its
 		// centroid produces no line (`leaderLineSegment` returns null when the
@@ -849,10 +1069,8 @@ export const DataLabelsLayer = ({
 		// The box the line stops at: the text footprint plus the background
 		// rect's padding when one is drawn, plus a small breathing gap so the
 		// line never kisses the glyphs.
-		const leaderPadX =
-			(cfg.textBackground ? (cfg.textBackgroundPadX ?? DEFAULT_BG_PAD_X) : 0) + 2
-		const leaderPadY =
-			(cfg.textBackground ? (cfg.textBackgroundPadY ?? DEFAULT_BG_PAD_Y) : 0) + 2
+		const leaderPadX = (layerBg?.padX ?? 0) + 2
+		const leaderPadY = (layerBg?.padY ?? 0) + 2
 		const leaderLines = finalBoxes.flatMap((b) => {
 			const w = labelWidth(b)
 			const left =
@@ -961,12 +1179,6 @@ export const DataLabelsLayer = ({
 			hueColor,
 			labelValue
 		)
-		// Text: single-field formats one field's value (nothing to show →
-		// no box); multi-field composes the all-labels arrangement, keeping
-		// an empty box so a series-end population can still label the point.
-		const composed = composeLabel(row, allTemplate, fill)
-		if (!composed && !multi) return []
-		const label = composed?.label ?? ""
 		const fontSize = sizeField
 			? resolveLabelSize(row[sizeField], cfg, sizeValues)
 			: ptToPx(cfg.fontSize)
@@ -977,20 +1189,32 @@ export const DataLabelsLayer = ({
 		// Position rules evaluate against the same backing value the text-color
 		// rules use; a match replaces the base offsets for this label.
 		const posRule = firstMatchingRule(cfg.positionRules, labelValue)
+		return (multi ? separateFields : [null]).flatMap((own) => {
+		// Text: single-field formats one field's value (nothing to show →
+		// no box); multi-field composes the all-labels arrangement (or, in
+		// separate mode, this one variable), keeping an empty box so a
+		// series-end population can still label the point.
+		const template = multi ? ownTemplate(own, "all") : allTemplate
+		const composed =
+			template !== null ? composeLabel(row, template, fill, fontSize) : null
+		if (!composed && !multi) return []
+		const label = composed?.label ?? ""
+		const off = ownOffset(own)
 		return [
 			{
-				cx: anchorX + (posRule?.xOffset ?? cfg.xOffset),
-				cy: anchorY + (posRule?.yOffset ?? cfg.yOffset),
+				cx: anchorX + (posRule?.xOffset ?? off.x),
+				cy: anchorY + (posRule?.yOffset ?? off.y),
 				anchorX,
 				anchorY,
 				text: label,
-				fontSize,
+				fontSize: composed?.fontSize ?? fontSize,
+				baseFontSize: fontSize,
 				series,
 				index: i,
 				// Rows lack a stable id, so the existing renderer keys by index
 				// (which was already eslint-disabled below). We carry that
 				// through here.
-				key: `row-${i}`,
+				key: own === null ? `row-${i}` : `row-${i}#${own}`,
 				fill,
 				label,
 				segments: composed?.segments,
@@ -998,8 +1222,11 @@ export const DataLabelsLayer = ({
 				// `rowHighlight` guards on the hovered field being a column of
 				// the row, so an unrelated legend hover leaves labels alone.
 				opacityMul: rowHighlight(legendHighlight, row).opacityMul,
+				ownField: own ?? undefined,
+				alignment: ownAlignment(own),
 			},
 		]
+		})
 	})
-	return renderLabels(selectAndSpread(renderBoxes), cfg, textBgColor)
+	return renderLabels(selectAndSpread(renderBoxes), cfg, layerBg)
 }

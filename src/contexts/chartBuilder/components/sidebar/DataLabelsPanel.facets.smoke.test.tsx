@@ -31,7 +31,7 @@ import {
 
 import { DataLabelsPanel } from "./DataLabelsPanel"
 
-/** "Label all facets" under Label selection and overlap: shown only on
+/** "Label all facets" under Label selection: shown only on
  *  faceted charts, checked by default (facetKeys null = every panel), and
  *  unchecking lists the facet panels so the user ticks which keep labels. */
 
@@ -123,7 +123,7 @@ const sectionHeader = (container: HTMLElement, title: string) =>
 	) ?? null
 
 const expandSelection = (container: HTMLElement) => {
-	const header = sectionHeader(container, "Label selection and overlap")
+	const header = sectionHeader(container, "Label selection")
 	expect(header).not.toBeNull()
 	fireEvent.click(header!)
 }
@@ -148,18 +148,20 @@ describe("DataLabelsPanel — Label all facets", () => {
 	it("is hidden on an unfaceted chart", () => {
 		const { container } = mountPanel({ faceted: false })
 		expandSelection(container)
-		expect(container.textContent).toContain("Avoid overlapping labels")
+		expect(container.textContent).toContain("Which labels")
 		expect(container.textContent).not.toContain("Label all facets")
+		// Overlap avoidance moved out to Adjust position and alignment.
+		expect(container.textContent).not.toContain("Avoid overlapping labels")
 	})
 
-	it("shows checked by default on a faceted chart, right after Avoid overlapping labels", () => {
+	it("shows checked by default on a faceted chart, under Label selection", () => {
 		const { container } = mountPanel({ faceted: true })
 		expandSelection(container)
 		const text = container.textContent ?? ""
-		const avoidAt = text.indexOf("Avoid overlapping labels")
+		const whichAt = text.indexOf("Which labels")
 		const allAt = text.indexOf("Label all facets")
-		expect(avoidAt).toBeGreaterThan(-1)
-		expect(allAt).toBeGreaterThan(avoidAt)
+		expect(whichAt).toBeGreaterThan(-1)
+		expect(allAt).toBeGreaterThan(whichAt)
 		const toggle = checkboxLabeled(container, "Label all facets")
 		expect(toggle?.checked).toBe(true)
 		// No per-facet list while every facet is labeled.

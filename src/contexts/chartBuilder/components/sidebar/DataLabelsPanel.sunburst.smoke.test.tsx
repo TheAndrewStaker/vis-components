@@ -108,7 +108,7 @@ describe("DataLabelsPanel — sunburst fine-tuning", () => {
 		const c = mountPanel("sunburst")
 		expect(sectionHeader(c, "Text background")).not.toBeNull()
 		expect(sectionHeader(c, "Adjust position and alignment")).not.toBeNull()
-		expect(sectionHeader(c, "Label selection and overlap")).not.toBeNull()
+		expect(sectionHeader(c, "Label selection")).not.toBeNull()
 		// Position rows stay hidden — the layout places labels.
 		expect(c.textContent).not.toContain("X position")
 		expect(c.textContent).toContain("fine-tune placement")
@@ -116,8 +116,10 @@ describe("DataLabelsPanel — sunburst fine-tuning", () => {
 
 	it("sunburst hides the per-series 'Which labels' select but keeps Avoid overlaps", () => {
 		const c = mountPanel("sunburst")
-		expand(c, "Label selection and overlap")
+		expand(c, "Label selection")
 		expect(c.textContent).not.toContain("Which labels")
+		// Overlap avoidance lives with the placement knobs.
+		expand(c, "Adjust position and alignment")
 		expect(c.textContent).toContain("Avoid overlapping labels")
 	})
 
@@ -137,7 +139,7 @@ describe("DataLabelsPanel — sunburst fine-tuning", () => {
 			const c = mountPanel(layout)
 			expect(sectionHeader(c, "Text background")).toBeNull()
 			expect(sectionHeader(c, "Adjust position and alignment")).toBeNull()
-			expect(sectionHeader(c, "Label selection and overlap")).toBeNull()
+			expect(sectionHeader(c, "Label selection")).toBeNull()
 			expect(sectionHeader(c, "Text properties")).not.toBeNull()
 			cleanup()
 		}

@@ -9,6 +9,7 @@ import {
 
 import { TickFormatControl } from "../channelOptions/AxisOptionsPanel"
 import { Input } from "../../../../../components/ui/Input"
+import { Toggle } from "../../../../../components/ui/Toggle"
 
 // ---------------------------------------------------------------------------
 // Value panel — multi-field mode only ("Multiple variables…"): pick which
@@ -41,6 +42,8 @@ export const ValuePanel = ({
 	const toggleField = (name: string, on: boolean) =>
 		onFieldsChange(on ? [...fields, name] : fields.filter((f) => f !== name))
 	const emptyHint = fields.length > 0 ? null : "Check some fields above"
+	// Unset = combined (the historical behavior).
+	const combine = cfg.combineVariables !== false
 
 	return (
 		<div className="flex flex-col gap-3">
@@ -65,6 +68,23 @@ export const ValuePanel = ({
 						</label>
 					))
 				)}
+				{/* Checked (default): the variables arrange into ONE label per
+				 *  anchor via the Label text box(es) below. Unchecked: each
+				 *  variable is its own label and the boxes stand down. */}
+				{allFields.length > 0 && (
+					<Toggle
+						label="Combine variables into single label"
+						checked={combine}
+						onChange={(combineVariables) => onChange({ combineVariables })}
+						className="mt-1"
+					/>
+				)}
+				{!combine && (
+					<p className="vc-help">
+						Each variable is its own label on the same anchor. Use Avoid
+						overlapping labels or a position rule to space them.
+					</p>
+				)}
 			</div>
 
 			{/* Editable label text — pre-filled with the checked fields (kept in
@@ -75,8 +95,9 @@ export const ValuePanel = ({
 			 *  single box splits into one per population: "Label text" for the
 			 *  all-labels text, "First label text" / "Last label text" for the
 			 *  series ends. The end boxes write their endpoint's template
-			 *  override; an empty one uses the placeholder's arrangement. */}
-			{selection.split ? (
+			 *  override; an empty one uses the placeholder's arrangement.
+			 *  Hidden entirely when the variables aren't combined. */}
+			{!combine ? null : selection.split ? (
 				presentPopulations(selection).map((pop) =>
 					pop === "all" ? (
 						<label key={pop} className="flex flex-col gap-1 text-sm">
