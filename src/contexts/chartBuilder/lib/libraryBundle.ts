@@ -57,7 +57,15 @@ export type BundleMergeResult = LibraryCollections & {
 
 export type ParseBundleResult =
 	| { ok: true; bundle: SeedBundle }
-	| { ok: false; error: string }
+	| {
+			ok: false
+			/** One-line headline: the single problem, or a count when there are
+			 *  several. */
+			error: string
+			/** Every problem found, one per entry, so a hand-authored file can be
+			 *  fixed in one pass rather than one rejection at a time. */
+			problems: string[]
+	  }
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v)
@@ -71,81 +79,112 @@ const freshId = (prefix: string): string =>
  * Parsing / validation
  * ------------------------------------------------------------------ */
 
-/** Parse and structurally validate a bundle file. Returns a discriminated
- *  result rather than throwing: a malformed file must produce a readable
- *  message and leave the library untouched, never a half-applied import. The
- *  checks are deliberately strict on the identity fields (the ones the merge
- *  remaps) and tolerant of everything else — bundles from older builds
- *  legitimately lack optional config blobs, and the per-entity migrations
- *  handle those on load. */
+/** The id alphabet the self-host server accepts for every stored item
+ *  (`isSafeId` in server/src/datasetFiles.ts — mirrored by hand, since the
+ *  server shares no module with the frontend). Checked here so that a bundle
+ *  the browser accepts is one the server will store: the atoms' saves are
+ *  fire-and-forget, and an id the server rejects (an empty string, say) had
+ *  the import report success while the PUT quietly 405'd and the item
+ *  vanished on the next load. */
+const SAFE_ID = /^[A-Za-z0-9_-]{1,128}$/
+const ID_RULE = 'ids are 1–128 characters using only letters, digits, "_" and "-"'
+
+const FIELD_TYPES: ReadonlySet<string> = new Set([
+	"quantitative",
+	"categorical",
+	"temporal",
+	"ordinal",
+])
+
+/** Past this many problems the list is truncated — a file that is wrong
+ *  everywhere needs regenerating, not a thousand-line report. */
+const MAX_PROBLEMS = 30
+
+const quote = (v: unknown): string => {
+	const s = isString(v) ? v : String(v)
+	return `"${s.length > 48 ? `${s.slice(0, 45)}…` : s}"`
+}
+
+/** How a problem names its entity: position first (stable even when the
+ *  name is what's broken), name beside it when there is one. */
+const describe = (kind: string, index: number, name: unknown): string =>
+	isString(name) && name.trim() !== ""
+		? `${kind} #${index + 1} (${quote(name)})`
+		: `${kind} #${index + 1}`
+
+const idProblem = (what: string, id: unknown): string | null => {
+	if (id === undefined || id === null || id === "") return `${what} has no id`
+	if (!isString(id)) return `${what} has a malformed id`
+	if (!SAFE_ID.test(id)) {
+		return `${what} has an invalid id ${quote(id)}; ${ID_RULE}`
+	}
+	return null
+}
+
+/** First cell that isn't a string, or first row that isn't an object. Rows
+ *  come from CSV parsing, so every cell is text — a bare number in a
+ *  hand-written file would survive import and then misbehave in sorting,
+ *  formatting and type inference. */
+const firstNonTextCell = (
+	rows: unknown[]
+): { row: number; column: string | null } | null => {
+	for (let i = 0; i < rows.length; i++) {
+		const row = rows[i]
+		if (!isRecord(row)) return { row: i, column: null }
+		for (const key of Object.keys(row)) {
+			if (!isString(row[key])) return { row: i, column: key }
+		}
+	}
+	return null
+}
+
+/** Parse and validate a bundle file. Returns a discriminated result rather
+ *  than throwing: a bad file must produce readable messages and leave the
+ *  library untouched, never a half-applied import.
+ *
+ *  Strict on everything the merge keys on — ids (non-empty and in the
+ *  server's alphabet), and every reference between entities (a visual's data
+ *  set, version pin and folder; a folder's parent; a data set's latest
+ *  version) must resolve INSIDE the file. The app's own exports always carry
+ *  what their visuals need, so a dangling reference is an authoring error,
+ *  and the user is told exactly which one rather than getting a visual that
+ *  silently arrives without its data. Data-set rows and field types are
+ *  checked for the same reason: they are the parts a hand-written file gets
+ *  wrong. The per-visual config blobs (encodings, channel configs, labels)
+ *  stay unchecked — bundles from older builds legitimately lack keys there,
+ *  and the per-entity migrations handle those on load.
+ *
+ *  Problems are collected, not short-circuited, so a file can be fixed in
+ *  one pass. */
 export const parseLibraryBundle = (text: string): ParseBundleResult => {
+	const fail = (problem: string): ParseBundleResult => ({
+		ok: false,
+		error: problem,
+		problems: [problem],
+	})
+
 	let parsed: unknown
 	try {
 		parsed = JSON.parse(text)
 	} catch {
-		return { ok: false, error: "that file isn't valid JSON" }
+		return fail("that file isn't valid JSON")
 	}
-	if (!isRecord(parsed)) {
-		return { ok: false, error: "that file isn't a library bundle" }
-	}
+	if (!isRecord(parsed)) return fail("that file isn't a library bundle")
 
 	const visualsRaw = parsed.visuals ?? []
-	if (!Array.isArray(visualsRaw)) {
-		return { ok: false, error: "the bundle's visuals aren't a list" }
-	}
-	for (const [i, v] of visualsRaw.entries()) {
-		if (!isRecord(v) || !isString(v.id) || !isString(v.name)) {
-			return { ok: false, error: `visualization #${i + 1} is malformed` }
-		}
-	}
-
+	if (!Array.isArray(visualsRaw)) return fail("the bundle's visuals aren't a list")
 	const foldersRaw = parsed.folders ?? []
-	if (!Array.isArray(foldersRaw)) {
-		return { ok: false, error: "the bundle's folders aren't a list" }
-	}
-	for (const [i, f] of foldersRaw.entries()) {
-		if (
-			!isRecord(f) ||
-			!isString(f.id) ||
-			!isString(f.name) ||
-			!(f.parentId === null || f.parentId === undefined || isString(f.parentId))
-		) {
-			return { ok: false, error: `folder #${i + 1} is malformed` }
-		}
-	}
-
+	if (!Array.isArray(foldersRaw)) return fail("the bundle's folders aren't a list")
 	const datasetsRaw = parsed.datasets ?? {}
 	if (!isRecord(datasetsRaw)) {
-		return { ok: false, error: "the bundle's data sets aren't an object" }
+		return fail("the bundle's data sets aren't an object")
 	}
-	for (const [key, d] of Object.entries(datasetsRaw)) {
-		if (
-			!isRecord(d) ||
-			!isString(d.id) ||
-			!isString(d.name) ||
-			!Array.isArray(d.fields) ||
-			!Array.isArray(d.versions) ||
-			d.versions.some((ver) => !isRecord(ver) || !Array.isArray(ver.rows))
-		) {
-			return { ok: false, error: `data set "${key}" is malformed` }
-		}
-	}
-
 	const themesRaw = parsed.themes ?? []
-	if (!Array.isArray(themesRaw)) {
-		return { ok: false, error: "the bundle's themes aren't a list" }
-	}
-	for (const [i, t] of themesRaw.entries()) {
-		if (!isRecord(t) || !isString(t.id) || !isString(t.name)) {
-			return { ok: false, error: `theme #${i + 1} is malformed` }
-		}
-	}
+	if (!Array.isArray(themesRaw)) return fail("the bundle's themes aren't a list")
 
 	const exportedAt = parsed.exportedAt
-	if (
-		!(exportedAt === null || exportedAt === undefined || isString(exportedAt))
-	) {
-		return { ok: false, error: "the bundle's export timestamp is malformed" }
+	if (!(exportedAt === null || exportedAt === undefined || isString(exportedAt))) {
+		return fail("the bundle's export timestamp is malformed")
 	}
 	const userDefaultThemeId = parsed.userDefaultThemeId
 	if (
@@ -155,7 +194,7 @@ export const parseLibraryBundle = (text: string): ParseBundleResult => {
 			isString(userDefaultThemeId)
 		)
 	) {
-		return { ok: false, error: "the bundle's default theme id is malformed" }
+		return fail("the bundle's default theme id is malformed")
 	}
 
 	if (
@@ -163,7 +202,192 @@ export const parseLibraryBundle = (text: string): ParseBundleResult => {
 		themesRaw.length === 0 &&
 		Object.keys(datasetsRaw).length === 0
 	) {
-		return { ok: false, error: "that bundle is empty" }
+		return fail("that bundle is empty")
+	}
+
+	const problems: string[] = []
+
+	// --- data sets first: visuals reference them ----------------------------
+	/** Data set id → the ids of its versions (what a visual's pin may name). */
+	const versionIdsByDataset = new Map<string, Set<string>>()
+	for (const [key, d] of Object.entries(datasetsRaw)) {
+		const bare = `data set ${quote(key)}`
+		if (!isRecord(d)) {
+			problems.push(`${bare} is malformed (not an object)`)
+			continue
+		}
+		const what =
+			isString(d.name) && d.name.trim() !== "" ? `${bare} (${quote(d.name)})` : bare
+		if (!isString(d.name)) problems.push(`${what} has no name`)
+		const idErr = idProblem(what, d.id)
+		if (idErr) problems.push(idErr)
+		else if (d.id !== key) {
+			problems.push(
+				`${what} is stored under key ${quote(key)} but its id is ${quote(d.id)}; the two must match`
+			)
+		}
+
+		if (!Array.isArray(d.fields)) {
+			problems.push(`${what} has no fields list`)
+		} else {
+			d.fields.forEach((f, i) => {
+				if (!isRecord(f) || !isString(f.name) || f.name === "") {
+					problems.push(`${what} variable #${i + 1} is malformed (needs a name)`)
+				} else if (!isString(f.inferredType) || !FIELD_TYPES.has(f.inferredType)) {
+					problems.push(
+						`${what} variable ${quote(f.name)} has an unknown type ${quote(
+							f.inferredType
+						)}; expected quantitative, categorical, temporal or ordinal`
+					)
+				}
+			})
+		}
+
+		const versionIds = new Set<string>()
+		if (!Array.isArray(d.versions)) {
+			problems.push(`${what} has no versions list`)
+		} else if (d.versions.length === 0) {
+			problems.push(`${what} has no versions (it needs at least one, carrying the rows)`)
+		} else {
+			d.versions.forEach((ver, i) => {
+				const vbare = `${what} version #${i + 1}`
+				if (!isRecord(ver)) {
+					problems.push(`${vbare} is malformed (not an object)`)
+					return
+				}
+				const vErr = idProblem(vbare, ver.id)
+				if (vErr) problems.push(vErr)
+				else versionIds.add(ver.id as string)
+				const vwhat =
+					isString(ver.id) && ver.id !== "" ? `${what} version ${quote(ver.id)}` : vbare
+				if (!Array.isArray(ver.rows)) {
+					problems.push(`${vwhat} has no rows list`)
+					return
+				}
+				const bad = firstNonTextCell(ver.rows)
+				if (bad === null) return
+				problems.push(
+					bad.column === null
+						? `${vwhat} row #${bad.row + 1} is malformed (not an object)`
+						: `${vwhat} row #${bad.row + 1} has a non-text value for ${quote(
+								bad.column
+							)}; every cell must be a string (e.g. "1200", not 1200)`
+				)
+			})
+		}
+
+		if (!isString(d.latestVersionId) || d.latestVersionId === "") {
+			problems.push(`${what} has no latestVersionId`)
+		} else if (versionIds.size > 0 && !versionIds.has(d.latestVersionId)) {
+			problems.push(
+				`${what} names ${quote(d.latestVersionId)} as its latest version, which it doesn't have`
+			)
+		}
+		if (isString(d.id)) versionIdsByDataset.set(d.id, versionIds)
+	}
+
+	// --- folders: ids, then parents against the file's own folders ----------
+	const folderIds = new Set<string>()
+	for (const f of foldersRaw) {
+		if (isRecord(f) && isString(f.id) && SAFE_ID.test(f.id)) folderIds.add(f.id)
+	}
+	for (const [i, f] of foldersRaw.entries()) {
+		if (!isRecord(f)) {
+			problems.push(`folder #${i + 1} is malformed (not an object)`)
+			continue
+		}
+		const what = describe("folder", i, f.name)
+		if (!isString(f.name)) problems.push(`${what} has no name`)
+		const idErr = idProblem(what, f.id)
+		if (idErr) problems.push(idErr)
+		if (f.parentId === null || f.parentId === undefined) continue
+		if (!isString(f.parentId)) {
+			problems.push(`${what} has a malformed parentId`)
+		} else if (!folderIds.has(f.parentId)) {
+			problems.push(
+				`${what} points at parent folder ${quote(f.parentId)}, which isn't in the file`
+			)
+		}
+	}
+
+	// --- visuals: ids, then every reference against the file ---------------
+	for (const [i, v] of visualsRaw.entries()) {
+		if (!isRecord(v)) {
+			problems.push(`visualization #${i + 1} is malformed (not an object)`)
+			continue
+		}
+		const what = describe("visualization", i, v.name)
+		if (!isString(v.name)) problems.push(`${what} has no name`)
+		const idErr = idProblem(what, v.id)
+		if (idErr) problems.push(idErr)
+
+		let versionIds: Set<string> | undefined
+		if (v.datasetId !== null && v.datasetId !== undefined) {
+			if (!isString(v.datasetId)) {
+				problems.push(`${what} has a malformed datasetId`)
+			} else {
+				versionIds = versionIdsByDataset.get(v.datasetId)
+				if (!versionIds) {
+					problems.push(
+						`${what} points at data set ${quote(
+							v.datasetId
+						)}, which isn't in the file (a visual's data travels inside the same bundle)`
+					)
+				}
+			}
+		}
+		// The pin only means something with a data set to pin against; the
+		// merge nulls it otherwise.
+		if (versionIds && v.createdAtVersionId !== null && v.createdAtVersionId !== undefined) {
+			if (!isString(v.createdAtVersionId)) {
+				problems.push(`${what} has a malformed createdAtVersionId`)
+			} else if (versionIds.size > 0 && !versionIds.has(v.createdAtVersionId)) {
+				problems.push(
+					`${what} points at version ${quote(
+						v.createdAtVersionId
+					)}, which data set ${quote(v.datasetId)} doesn't have`
+				)
+			}
+		}
+		if (v.folderId !== null && v.folderId !== undefined) {
+			if (!isString(v.folderId)) {
+				problems.push(`${what} has a malformed folderId`)
+			} else if (!folderIds.has(v.folderId)) {
+				problems.push(
+					`${what} points at folder ${quote(v.folderId)}, which isn't in the file`
+				)
+			}
+		}
+	}
+
+	// --- themes: identity only; the merge normalizes the rest ---------------
+	for (const [i, t] of themesRaw.entries()) {
+		if (!isRecord(t)) {
+			problems.push(`theme #${i + 1} is malformed (not an object)`)
+			continue
+		}
+		const what = describe("theme", i, t.name)
+		if (!isString(t.name)) problems.push(`${what} has no name`)
+		const idErr = idProblem(what, t.id)
+		if (idErr) problems.push(idErr)
+	}
+
+	if (problems.length > 0) {
+		const shown =
+			problems.length > MAX_PROBLEMS
+				? [
+						...problems.slice(0, MAX_PROBLEMS),
+						`…and ${problems.length - MAX_PROBLEMS} more`,
+					]
+				: problems
+		return {
+			ok: false,
+			error:
+				problems.length === 1
+					? problems[0]
+					: `the file has ${problems.length} problems`,
+			problems: shown,
+		}
 	}
 
 	return {
@@ -425,7 +649,9 @@ export const mergeBundleIntoLibrary = (
 		usedVisualIds.add(id)
 		// A datasetId the bundle doesn't carry is dangling: null it out rather
 		// than let it coincidentally match one of the recipient's own data sets
-		// and render the visual against somebody else's numbers.
+		// and render the visual against somebody else's numbers. The parser
+		// rejects such a file outright, so for a parsed bundle this is
+		// defence in depth; the seed path reaches the merge unparsed.
 		const datasetId =
 			v.datasetId != null ? datasetIdMap.get(v.datasetId) ?? null : null
 		const createdAtVersionId =

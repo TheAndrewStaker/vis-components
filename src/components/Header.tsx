@@ -8,6 +8,7 @@ import {
 	currentDatasetIdAtom,
 	datasetIndexAtom,
 } from "../contexts/chartBuilder/store/atoms"
+import { ImportProblemList } from "./ImportProblemList"
 import {
 	useImportLibraryBundle,
 	type ImportBundleOutcome,
@@ -353,6 +354,7 @@ const ImportOutcomeModal = ({
 			<div className="text-sm vc-text">
 				{outcome?.message}
 			</div>
+			{outcome?.problems && <ImportProblemList problems={outcome.problems} />}
 			<div className="flex justify-end gap-2">
 				{outcome?.ok && showOpenLibrary && (
 					<Button compact onClick={onOpenLibrary}>

@@ -120,7 +120,9 @@ describe("parseLibraryBundle", () => {
 			})
 		)
 		expect(result.ok).toBe(false)
-		if (!result.ok) expect(result.error).toMatch(/ds-1/)
+		if (!result.ok) {
+			expect(result.problems.some((p) => /ds-1.*versions/.test(p))).toBe(true)
+		}
 	})
 
 	it("rejects a bundle with nothing in it", () => {
@@ -148,6 +150,146 @@ describe("parseLibraryBundle", () => {
 		const result = parseLibraryBundle(stringifyJsonDangerous(source as never))
 		expect(result.ok).toBe(true)
 		if (result.ok) expect(result.bundle.exportedAt).toBe(source.exportedAt)
+	})
+
+	/* --- strict identity + reference checks (hand-authored bundles) -------- */
+
+	const problemsOf = (value: unknown): string[] => {
+		const result = parseLibraryBundle(stringifyJsonDangerous(value as never))
+		return result.ok ? [] : result.problems
+	}
+
+	/** The minimal bundle an external tool authors: one visual, its data. */
+	const minimal = () => ({
+		visuals: [
+			{
+				id: "vs-chart-1",
+				name: "My chart",
+				folderId: null,
+				datasetId: "ds-data-1",
+				createdAtVersionId: "dv-data-1",
+			},
+		],
+		datasets: {
+			"ds-data-1": {
+				id: "ds-data-1",
+				name: "My data",
+				fields: [
+					{ name: "month", inferredType: "temporal" },
+					{ name: "sales", inferredType: "quantitative" },
+				],
+				versions: [
+					{
+						id: "dv-data-1",
+						filename: "my-data.csv",
+						createdAt: 0,
+						rows: [{ month: "2026-01", sales: "1200" }],
+					},
+				],
+				latestVersionId: "dv-data-1",
+				createdAt: 0,
+			},
+		},
+		folders: [],
+	})
+
+	it("accepts the minimal hand-authored bundle", () => {
+		expect(problemsOf(minimal())).toEqual([])
+	})
+
+	it("rejects an empty id, naming the visual by position and name", () => {
+		const b = minimal()
+		b.visuals[0]!.id = ""
+		const problems = problemsOf(b)
+		expect(problems).toHaveLength(1)
+		expect(problems[0]).toBe('visualization #1 ("My chart") has no id')
+	})
+
+	it("rejects an id the server would refuse, quoting the rule", () => {
+		const b = minimal()
+		b.visuals[0]!.id = "my chart.v1"
+		const [problem] = problemsOf(b)
+		expect(problem).toMatch(/invalid id "my chart.v1"/)
+		expect(problem).toMatch(/letters, digits/)
+	})
+
+	it("rejects a visual whose data set isn't in the file", () => {
+		const b = minimal()
+		b.visuals[0]!.datasetId = "ds-elsewhere"
+		const [problem] = problemsOf(b)
+		expect(problem).toMatch(/points at data set "ds-elsewhere", which isn't in the file/)
+	})
+
+	it("rejects a version pin the visual's data set doesn't have", () => {
+		const b = minimal()
+		b.visuals[0]!.createdAtVersionId = "dv-nope"
+		const [problem] = problemsOf(b)
+		expect(problem).toMatch(/version "dv-nope", which data set "ds-data-1" doesn't have/)
+	})
+
+	it("rejects a folder reference and a parent that aren't in the file", () => {
+		const b = minimal()
+		;(b.visuals[0] as { folderId: string | null }).folderId = "fl-missing"
+		;(b.folders as unknown[]).push({ id: "fl-a", name: "A", parentId: "fl-root" })
+		const problems = problemsOf(b)
+		expect(problems).toContain(
+			'folder #1 ("A") points at parent folder "fl-root", which isn\'t in the file'
+		)
+		expect(problems).toContain(
+			'visualization #1 ("My chart") points at folder "fl-missing", which isn\'t in the file'
+		)
+	})
+
+	it("rejects a data set whose latest-version pointer, key or field types are off", () => {
+		const b = minimal()
+		const d = b.datasets["ds-data-1"]!
+		d.latestVersionId = "dv-other"
+		d.fields[1]!.inferredType = "number"
+		;(b.datasets as Record<string, unknown>)["ds-renamed"] = {
+			...d,
+			latestVersionId: "dv-data-1",
+		}
+		const problems = problemsOf(b)
+		expect(problems).toContain(
+			'data set "ds-data-1" ("My data") names "dv-other" as its latest version, which it doesn\'t have'
+		)
+		expect(
+			problems.some((p) => /variable "sales" has an unknown type "number"/.test(p))
+		).toBe(true)
+		expect(
+			problems.some((p) => /stored under key "ds-renamed" but its id is "ds-data-1"/.test(p))
+		).toBe(true)
+	})
+
+	it("rejects a numeric cell and names the row and column", () => {
+		const b = minimal()
+		;(b.datasets["ds-data-1"]!.versions[0]!.rows as unknown[]).push({
+			month: "2026-02",
+			sales: 1300,
+		})
+		const [problem] = problemsOf(b)
+		expect(problem).toMatch(/version "dv-data-1" row #2 has a non-text value for "sales"/)
+	})
+
+	it("collects every problem and headlines the count", () => {
+		const b = minimal()
+		b.visuals[0]!.id = ""
+		b.visuals[0]!.datasetId = "ds-elsewhere"
+		const result = parseLibraryBundle(stringifyJsonDangerous(b as never))
+		expect(result.ok).toBe(false)
+		if (result.ok) return
+		expect(result.error).toBe("the file has 2 problems")
+		expect(result.problems).toHaveLength(2)
+	})
+
+	it("truncates a very long problem list", () => {
+		const b = minimal()
+		for (let i = 0; i < 40; i++) {
+			;(b.visuals as unknown[]).push({ id: "", name: `v${i}` })
+		}
+		const problems = problemsOf(b)
+		expect(problems).toHaveLength(31)
+		expect(problems[30]).toBe("…and 10 more")
 	})
 })
 

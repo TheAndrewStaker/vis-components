@@ -3322,10 +3322,25 @@ in the library:
   never overwritten. System themes are ignored — every build ships
   them. The starred default theme is adopted only when the recipient
   has never picked one.
-- A malformed file is rejected with a readable message and changes
-  nothing. The merge is pure; the caller lands the result through the
-  Jotai atoms, so the library updates without a reload and, in server
-  mode, the diffing HTTP adapter transmits only the imported items.
+- A bad file is rejected up front and changes nothing, and the user
+  is told every problem found (one per line, so a hand-written file can
+  be fixed in one pass). Rejected: a missing, empty or unsafe id on any
+  visual, folder, data set, version or theme (the server's own id rule:
+  1–128 characters of letters, digits, `_` and `-`); a visual whose
+  `datasetId`, `createdAtVersionId` or `folderId` doesn't resolve INSIDE
+  the file; a folder whose `parentId` doesn't; a data set whose
+  `latestVersionId` names no version of its own, whose key and `id`
+  differ, with no versions, with a variable of unknown type, or with a
+  row cell that isn't a string. The visuals' config blobs (encodings,
+  channel configs, labels) are not validated — older bundles
+  legitimately lack keys there, and the load-time migrations fill them.
+- The merge is pure; the caller lands the result through the Jotai
+  atoms, so the library updates without a reload and, in server mode,
+  the diffing HTTP adapter transmits only the imported items. The
+  import AWAITS those writes before reporting success: a storage
+  failure (a server rejecting a PUT) is reported as such, with a
+  prompt to reload, rather than as "Imported N visualizations" over
+  work that will be gone on the next load.
 
 The same import is also reachable from anywhere: the header's **New
 visualization** control is a split button. Its main segment starts a

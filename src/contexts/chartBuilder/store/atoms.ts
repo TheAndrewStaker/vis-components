@@ -196,7 +196,10 @@ const contentAtom = <T>(
 				s.value === UNSET ? bootstrap() : s.value
 			)
 			set(base, { value: next, touched: true })
-			void save(getStorageAdapter(), next)
+			// Returned, not awaited: callers that care whether the write landed
+			// (a bundle import reporting success) await the `set`; everyone else
+			// ignores it, exactly as before.
+			return save(getStorageAdapter(), next)
 		}
 	)
 }
@@ -263,7 +266,9 @@ export const visualsAtom = atom(
 		const raw = get(visualsBaseAtom)
 		const next = resolveUpdate(update, raw === UNSET ? loadVisuals() : raw)
 		set(visualsBaseAtom, next)
-		void getStorageAdapter().saveVisuals(next)
+		// Returned so a caller that must know the write landed can await it
+		// (see `contentAtom`); ordinary callers ignore it.
+		return getStorageAdapter().saveVisuals(next)
 	}
 )
 
@@ -445,14 +450,16 @@ export const loadedDatasetsAtom = atom(
 		update:
 			| Record<string, Dataset>
 			| ((prev: Record<string, Dataset>) => Record<string, Dataset>)
-	) => {
+	): Promise<void> => {
 		// prev must be the same merged value the getter reports — resolving
 		// against the bare base atom would hand functional updates an empty
 		// record in bootstrap-only environments and silently drop datasets.
 		// Reading our own atom guarantees the two can never drift.
 		const next = resolveUpdate(update, get(loadedDatasetsAtom))
 		set(loadedDatasetsBaseAtom, next)
-		void getStorageAdapter().saveDatasets(next)
+		// Returned so a caller that must know the write landed can await it
+		// (see `contentAtom`); ordinary callers ignore it.
+		return getStorageAdapter().saveDatasets(next)
 	}
 )
 

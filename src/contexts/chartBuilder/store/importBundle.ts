@@ -17,9 +17,22 @@ import {
 const plural = (n: number, one: string, many = `${one}s`): string =>
 	`${n} ${n === 1 ? one : many}`
 
-/** What one import attempt came to, phrased for the user. A failed import
- *  always leaves the library untouched, and the message says so. */
-export type ImportBundleOutcome = { ok: boolean; message: string }
+/** What one import attempt came to, phrased for the user.
+ *
+ *  A rejected file (`ok: false` with `problems`) leaves the library
+ *  untouched, and the message says so; `problems` lists every defect found
+ *  so the author can fix the file in one pass. A storage failure (`ok:
+ *  false`, no `problems`) means the merge was computed and handed to the
+ *  atoms but the adapter could not store it all — the message says to
+ *  reload, because what the user sees on screen may not be what was kept. */
+export type ImportBundleOutcome = {
+	ok: boolean
+	message: string
+	problems?: string[]
+}
+
+const errorText = (error: unknown): string =>
+	error instanceof Error ? error.message : String(error)
 
 /** Import a library bundle file (the JSON Settings → Sharing exports, which
  *  is also what a single visual's "Download JSON" produces) additively into
@@ -29,7 +42,11 @@ export type ImportBundleOutcome = { ok: boolean; message: string }
  *  Writes go through the Jotai atoms rather than the storage functions: the
  *  library UI updates without a reload, and in server mode the diffing HTTP
  *  adapter turns each whole-collection save into per-item PUTs, so the
- *  imported work is backed up server-side too. */
+ *  imported work is backed up server-side too. Each atom write returns its
+ *  adapter save, and the import AWAITS them before claiming success — the
+ *  atoms themselves are fire-and-forget, and an import that reported
+ *  "Imported 3 visualizations" while the server was rejecting the PUTs left
+ *  the user with visuals that vanished on the next load. */
 export const useImportLibraryBundle = () => {
 	const [importing, setImporting] = useState(false)
 
@@ -37,9 +54,11 @@ export const useImportLibraryBundle = () => {
 		useCallback(async (get, set, text: string): Promise<ImportBundleOutcome> => {
 			const parsed = parseLibraryBundle(text)
 			if (!parsed.ok) {
+				// One problem reads fine in the headline; several get the list.
 				return {
 					ok: false,
 					message: `Import failed — ${parsed.error}. Nothing was changed.`,
+					...(parsed.problems.length > 1 ? { problems: parsed.problems } : {}),
 				}
 			}
 			// The default-theme pointer is device-local in every mode, and is
@@ -61,16 +80,29 @@ export const useImportLibraryBundle = () => {
 				userDefaultThemeId: loadUserDefaultThemeId(),
 			})
 			// Folders and data sets first: the visuals write is what the library
-			// renders from, so its targets should already exist.
-			if (merged.added.folders > 0) set(foldersAtom, merged.folders)
-			if (merged.added.datasets > 0) set(loadedDatasetsAtom, merged.datasets)
-			if (merged.added.themes > 0) set(themesAtom, merged.themes)
-			if (merged.added.visuals > 0) set(visualsAtom, merged.visuals)
-			if (
-				merged.userDefaultThemeId !== null &&
-				merged.userDefaultThemeId !== get(userDefaultThemeIdAtom)
-			) {
-				set(userDefaultThemeIdAtom, merged.userDefaultThemeId)
+			// renders from, so its targets should already exist. Sequential, so
+			// a failure is reported against the collection that failed and
+			// nothing after it is attempted.
+			try {
+				if (merged.added.folders > 0) await set(foldersAtom, merged.folders)
+				if (merged.added.datasets > 0) {
+					await set(loadedDatasetsAtom, merged.datasets)
+				}
+				if (merged.added.themes > 0) await set(themesAtom, merged.themes)
+				if (merged.added.visuals > 0) await set(visualsAtom, merged.visuals)
+				if (
+					merged.userDefaultThemeId !== null &&
+					merged.userDefaultThemeId !== get(userDefaultThemeIdAtom)
+				) {
+					await set(userDefaultThemeIdAtom, merged.userDefaultThemeId)
+				}
+			} catch (error) {
+				return {
+					ok: false,
+					message: `Import failed while saving: ${errorText(
+						error
+					)}. Some of the imported items may not have been stored — reload the page to see what was kept.`,
+				}
 			}
 			const { added } = merged
 			// Themes the library already had are matched, not re-added — say so,
@@ -100,11 +132,11 @@ export const useImportLibraryBundle = () => {
 			try {
 				return await merge(await file.text())
 			} catch (error) {
+				// Reading the file or the existing data-set store failed — both
+				// happen before anything is written.
 				return {
 					ok: false,
-					message: `Import failed: ${
-						error instanceof Error ? error.message : String(error)
-					}. Nothing was changed.`,
+					message: `Import failed: ${errorText(error)}. Nothing was changed.`,
 				}
 			} finally {
 				setImporting(false)

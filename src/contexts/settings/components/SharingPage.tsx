@@ -5,7 +5,11 @@ import { buildSeedBundle } from "../../chartBuilder/lib/exampleSeed"
 import { LIBRARY_BUNDLE_FILENAME } from "../../chartBuilder/lib/libraryBundle"
 import { stringifyJsonDangerous } from "../../../lib/json"
 import { datasetIndexAtom, visualsAtom } from "../../chartBuilder/store/atoms"
-import { useImportLibraryBundle } from "../../chartBuilder/store/importBundle"
+import {
+	useImportLibraryBundle,
+	type ImportBundleOutcome,
+} from "../../chartBuilder/store/importBundle"
+import { ImportProblemList } from "../../../components/ImportProblemList"
 
 import { Button } from "../../../components/ui/Button"
 
@@ -28,7 +32,8 @@ export const SharingPage = () => {
 	const datasetIndex = useAtomValue(datasetIndexAtom)
 	const [status, setStatus] = useState<string | null>(null)
 	const [exporting, setExporting] = useState(false)
-	const [importStatus, setImportStatus] = useState<string | null>(null)
+	const [importStatus, setImportStatus] =
+		useState<ImportBundleOutcome | null>(null)
 	const { importing, importBundle } = useImportLibraryBundle()
 	const importInputRef = useRef<HTMLInputElement>(null)
 
@@ -64,7 +69,7 @@ export const SharingPage = () => {
 	const onImport = async (file: File) => {
 		if (importing) return
 		setImportStatus(null)
-		setImportStatus((await importBundle(file)).message)
+		setImportStatus(await importBundle(file))
 	}
 
 	// Count what the export will actually contain: the user's own visuals
@@ -146,10 +151,15 @@ export const SharingPage = () => {
 					</Button>
 					{importStatus && (
 						<span className="text-sm vc-muted">
-							{importStatus}
+							{importStatus.message}
 						</span>
 					)}
 				</div>
+				{importStatus?.problems && (
+					<div className="mt-3">
+						<ImportProblemList problems={importStatus.problems} />
+					</div>
+				)}
 				<input
 					ref={importInputRef}
 					type="file"
