@@ -1620,6 +1620,13 @@ export type ChannelConfigs = Partial<{
 	 * descending the lowest. Paint time ONLY: connection lines, scales, and
 	 * aggregations still see dataset order. */
 	drawOrder?: DrawOrderConfig | null
+	/** Aesthetics → Draw order → "Draw axes behind marks". Default (absent /
+	 * false): gridlines paint under the marks and the spine + ticks + tick
+	 * labels + axis title paint OVER them, so a bar or point crossing the
+	 * axis never hides it. True: the whole axis (both layers) paints under
+	 * the marks, so marks that cross the axis cover its spine and text.
+	 * Sparse — no migration; absent reads as false. */
+	axesBehindMarks?: boolean
 	/** Aesthetics → Aspect ratio (see AspectRatioConfig). Absent = off. */
 	aspectRatio: AspectRatioConfig
 	/** Aesthetics → Canvas size (see CanvasSizeConfig). Absent = off:

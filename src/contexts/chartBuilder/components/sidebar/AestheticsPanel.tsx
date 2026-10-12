@@ -41,6 +41,10 @@ export const AestheticsPanel = () => {
 	const setDrawOrder = (next: DrawOrderConfig | null) =>
 		setConfigs((prev) => ({ ...prev, drawOrder: next }))
 
+	const axesBehindMarks = configs.axesBehindMarks ?? false
+	const setAxesBehindMarks = (next: boolean) =>
+		setConfigs((prev) => ({ ...prev, axesBehindMarks: next || undefined }))
+
 	const aspect = configs.aspectRatio ?? null
 	const setAspect = (next: AspectRatioConfig | null) =>
 		setConfigs((prev) => ({ ...prev, aspectRatio: next ?? undefined }))
@@ -60,7 +64,7 @@ export const AestheticsPanel = () => {
 	// aspect ratio's inputs), so the toggle alone decides its half of the dot.
 	const canvasChanged = scrollMode !== "fit" || canvasSize?.enabled === true
 	const aspectChanged = aspect?.enabled === true
-	const drawOrderChanged = drawOrder !== null
+	const drawOrderChanged = drawOrder !== null || axesBehindMarks
 
 	return (
 		<>
@@ -311,6 +315,21 @@ export const AestheticsPanel = () => {
 						Dataset order draws later rows on top. Sorting only affects
 						the drawing order, never the data.
 					</p>
+					<div className="vc-divider-group">
+						<label className="flex items-center gap-2 text-sm vc-text">
+							<input
+								type="checkbox"
+								checked={axesBehindMarks}
+								onChange={(e) => setAxesBehindMarks(e.target.checked)}
+								className="cursor-pointer"
+							/>
+							Draw axes behind marks
+						</label>
+						<p className="vc-help">
+							Off: axis spines, ticks, and labels paint over any marks
+							that cross them. On: marks paint over the axes.
+						</p>
+					</div>
 				</div>
 			</CollapsibleSubsection>
 		</>

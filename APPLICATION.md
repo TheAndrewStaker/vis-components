@@ -2930,6 +2930,15 @@ A small catch-all panel:
   overlap. Paint order only: connection lines,
   scales, and aggregations are unaffected. Sorting the data tray
   never changes draw order — the tray sort is view-only.
+  **Draw axes behind marks** (checkbox, default off): by default each
+  panel paints gridlines under the marks and the axis spine, ticks,
+  tick labels, and title over them, so a bar or point that crosses an
+  axis never hides it. Checking it paints the whole axis under the
+  marks instead, so marks crossing an axis cover its spine and text.
+  Applies to cartesian and radial axes alike (gridlines stay
+  underneath either way); legends, annotations, and data labels are
+  unaffected. Stored as `ChannelConfigs.axesBehindMarks` (sparse —
+  absent reads as off).
 
 ---
 

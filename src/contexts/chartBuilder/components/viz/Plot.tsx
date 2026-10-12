@@ -1,5 +1,7 @@
+import { useAtomValue } from "jotai"
 import type { ReactNode } from "react"
 import type { CoordSystem } from "./coords"
+import { renderChannelConfigsAtom } from "../../store/renderConfigs"
 import { PatternDefs, type PatternDefSpec } from "../../lib/patternDefs"
 import { DEFAULT_RENDERER_INNER, type PlotInner } from "../../lib/plotLayout"
 
@@ -19,9 +21,12 @@ export type PlotContext = {
 
 /** Minimal rendering body for a single plot: back-layer axes (gridlines
  *  under marks), the mark renderer, then front-layer axes (spine + ticks
- *  + labels on top). Emits SVG fragments only — no `<svg>` wrapper, no
- *  measurement, no title rendering. The outer `<svg>` is owned by
- *  PlotCanvas; this is the per-panel rendering body.
+ *  + labels on top). Aesthetics → Draw order → "Draw axes behind marks"
+ *  (`ChannelConfigs.axesBehindMarks`) moves the front layer under the
+ *  marks too, so marks crossing an axis cover its spine and text. Emits
+ *  SVG fragments only — no `<svg>` wrapper, no measurement, no title
+ *  rendering. The outer `<svg>` is owned by PlotCanvas; this is the
+ *  per-panel rendering body.
  *
  *  Tooltip is rendered as a sibling of the axis sandwich. Tooltips use
  *  `createPortal(document.body)` internally, so embedding inside an
@@ -50,17 +55,24 @@ export const Plot = ({
 	tooltip,
 	patternDefs,
 }: PlotProps) => {
+	const axesBehindMarks =
+		useAtomValue(renderChannelConfigsAtom).axesBehindMarks ?? false
 	const resolvedInner = inner ?? DEFAULT_RENDERER_INNER
 	const resolvedCoord = coord(resolvedInner)
 	const ctx: PlotContext = { inner: resolvedInner, coord: resolvedCoord }
+	// The two axis passes keep their relative order (gridlines, then spine
+	// + ticks + labels) either way; the setting only decides whether the
+	// front pass paints before or after the marks.
+	const frontAxes = resolvedCoord.renderAxes("front", resolvedInner)
 	return (
 		<>
 			{patternDefs && patternDefs.length > 0 && (
 				<PatternDefs defs={patternDefs} />
 			)}
 			{resolvedCoord.renderAxes("back", resolvedInner)}
+			{axesBehindMarks && frontAxes}
 			{children(ctx)}
-			{resolvedCoord.renderAxes("front", resolvedInner)}
+			{!axesBehindMarks && frontAxes}
 			{tooltip}
 		</>
 	)
