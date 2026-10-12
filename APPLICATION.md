@@ -186,25 +186,55 @@ a blanked box saves as), then one of three **functions**:
   column substitute that row's cell, unknown tokens stay literal so
   typos are visible.
 - **If / else** — condition rules checked top to bottom, first
-  match wins, with an "Otherwise" fallback. Conditions are boolean
-  expressions over `{Variable}` tokens with the six comparison
-  operators (`> < >= <= == !=`, numeric when both sides read as
-  numbers, string equality otherwise; ordering is numeric-only;
-  blank cells never match) combined with `AND` / `OR`
-  (case-insensitive; AND binds tighter), e.g.
-  `{B} == 1 AND {C} > 3` or `1 < {B} OR {B} < 2`. Outputs — the
-  per-rule value and the "Otherwise" fallback alike — are templates
-  in the Combine-text grammar: tokens naming a present column
-  substitute that row's cell (so "otherwise keep `{B}`" passes B
-  through), unknown tokens stay literal, and plain text is just
-  text. Unparseable rules never fire.
+  match wins, with an "Otherwise" fallback. Each rule row is
+  **structured**: a left value box, a comparator dropdown (`=` `≠`
+  `>` `<` `≥` `≤`), a right value box, an arrow, and the output box.
+  Either value box takes a variable, a number, plain text, or a
+  formula (`{A} / {C}`) — plain text that isn't an expression
+  (`West`, `North East`) is quoted automatically, so users never
+  type quotes. When the left box is exactly one `{Variable}` token
+  naming a categorical or ordinal column (effective type, overrides
+  included), the comparator dropdown offers only `=` and `≠`
+  (ordering a category makes no sense; a stale ordering comparator
+  reads as `=`); a number / date variable, or any calculation
+  (`{A} + {B}`), keeps all six and an open right box. With at most
+  200 distinct levels, that same lone-category case makes the right
+  box a **dropdown of the column's levels** (discovery order, blank
+  "Choose a value…" first) instead of a text box, so a level can't
+  be misspelled. The dropdown shows only while the right value is
+  empty or one of the levels; clicking a variable button while the
+  dropdown is focused swaps a text box back in holding that token
+  (variable-vs-variable comparisons), and a stored right value
+  that's no longer a level keeps the text box. Comparison semantics: `==`/`!=` compare numerically
+  when both sides read as numbers and as strings otherwise; ordering
+  is numeric-only; blank cells never match. Outputs — the per-rule
+  value and the "Otherwise" fallback alike — are templates in the
+  Combine-text grammar: tokens naming a present column substitute
+  that row's cell (so "otherwise keep `{B}`" passes B through),
+  unknown tokens stay literal, and plain text is just text. A
+  half-filled row (one side blank, or an output with no comparison)
+  is a row-level error that blocks Save. Storage is still the
+  condition STRING (`DerivedRule.condition`, e.g.
+  `({A} / {C}) >= 0.5` or `{Region} == "West"`), composed from the
+  three boxes by `lib/derivedRuleForm.ts` and split back when
+  editing; the expression grammar (with `AND` / `OR`) is unchanged
+  underneath, so evaluation and `{Old}` → `{New}` renames are
+  untouched. A stored condition that isn't a single comparison (an
+  older rule combining comparisons with AND / OR) shows as the
+  previous single free-text box, with a note, so nothing is lost.
+  Unparseable rules never fire.
 
-An **"Insert variable"** dropdown puts a token at the cursor, and a
-live preview shows the first rows' referenced cells beside the
-computed result. Save is disabled while the draft can't apply (name
+A row of **variable buttons** — one chip per column the variable may
+reference, the same row for all three functions, between the
+Function picker and the body — inserts a `{Variable}` token at the
+cursor of the box that last had focus (the function's first box
+before anything is focused), so users never type braces. A live
+preview shows the first rows' referenced cells beside the computed
+result. Save is disabled while the draft can't apply (name
 collision, parse error, unknown variable, non-numeric column in a
 Math formula — shown as amber text). The numeric check reads the
-whole column, not the previewed rows.
+whole column, not the previewed rows. The popup is one fixed width
+and height regardless of function.
 
 Derived variables are **per-visual config, not a data rewrite**
 (`lib/derivedVariables.ts`, `Visual.derivedVariablesConfig`),

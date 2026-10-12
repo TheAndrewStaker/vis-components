@@ -135,13 +135,170 @@ describe("DerivedVariableModal", () => {
 		).toBe(true)
 	})
 
-	it("flips between the three function bodies", () => {
+	it("flips between the three function bodies, keeping the variable buttons", () => {
 		const utils = mount({ mode: "new" })
+		const buttons = () =>
+			utils.getByRole("group", { name: "Insert variable" })
+		expect(buttons().textContent).toBe("regionsales")
 		fireEvent.click(utils.getByRole("radio", { name: "If / else" }))
-		expect(utils.getByLabelText("Rule 1 condition")).toBeTruthy()
+		expect(utils.getByLabelText("Rule 1 left side")).toBeTruthy()
+		expect(utils.getByLabelText("Rule 1 comparison")).toBeTruthy()
+		expect(utils.getByLabelText("Rule 1 right side")).toBeTruthy()
 		expect(utils.getByLabelText("Otherwise output")).toBeTruthy()
+		expect(buttons().textContent).toBe("regionsales")
 		fireEvent.click(utils.getByRole("radio", { name: "Combine text" }))
 		expect(utils.getByPlaceholderText("Some text: {Region}")).toBeTruthy()
+		expect(buttons().textContent).toBe("regionsales")
+	})
+
+	it("variable buttons insert a braced token into the focused box", () => {
+		const utils = mount({ mode: "new" })
+		// Nothing focused yet: the function's only box takes it.
+		fireEvent.click(utils.getByRole("button", { name: "sales" }))
+		const formula = utils.getByLabelText("Formula") as HTMLInputElement
+		expect(formula.value).toBe("{sales}")
+		fireEvent.change(formula, { target: { value: "{sales} * " } })
+		formula.focus()
+		formula.setSelectionRange(formula.value.length, formula.value.length)
+		fireEvent.click(utils.getByRole("button", { name: "sales" }))
+		expect(formula.value).toBe("{sales} * {sales}")
+
+		// If/else: the last-focused box is the target, wherever it sits.
+		fireEvent.click(utils.getByRole("radio", { name: "If / else" }))
+		const right = utils.getByLabelText("Rule 1 right side") as HTMLInputElement
+		fireEvent.focus(right)
+		fireEvent.click(utils.getByRole("button", { name: "region" }))
+		expect(right.value).toBe("{region}")
+		expect(
+			(utils.getByLabelText("Rule 1 left side") as HTMLInputElement).value
+		).toBe("")
+	})
+
+	it("builds an If/else rule from the three boxes, quoting plain text", () => {
+		const utils = mount({ mode: "new" })
+		fireEvent.click(utils.getByRole("radio", { name: "If / else" }))
+		fireEvent.change(utils.getByLabelText("Rule 1 left side"), {
+			target: { value: "{region}" },
+		})
+		fireEvent.change(utils.getByLabelText("Rule 1 right side"), {
+			target: { value: "West" },
+		})
+		fireEvent.change(utils.getByLabelText("Rule 1 output"), {
+			target: { value: "yes" },
+		})
+		fireEvent.change(utils.getByLabelText("Otherwise output"), {
+			target: { value: "no" },
+		})
+		// Preview: West → yes, East → no.
+		expect(utils.getByText("yes")).toBeTruthy()
+		expect(utils.getByText("no")).toBeTruthy()
+		expect(
+			(utils.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+				.disabled
+		).toBe(false)
+
+		// A half-filled row blocks Save with a row-level message.
+		fireEvent.change(utils.getByLabelText("Rule 1 right side"), {
+			target: { value: "" },
+		})
+		expect(
+			utils.getByText("Both sides of the comparison need a value.")
+		).toBeTruthy()
+		expect(
+			(utils.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+				.disabled
+		).toBe(true)
+	})
+
+	it("offers a categorical variable's levels as a dropdown on the right side", () => {
+		const utils = mount({ mode: "new" })
+		fireEvent.click(utils.getByRole("radio", { name: "If / else" }))
+		const left = utils.getByLabelText("Rule 1 left side")
+		// A number column keeps the text box…
+		fireEvent.change(left, { target: { value: "{sales}" } })
+		expect(utils.getByLabelText("Rule 1 right side").tagName).toBe("INPUT")
+		// …a lone categorical token swaps in its levels.
+		fireEvent.change(left, { target: { value: "{region}" } })
+		const select = utils.getByLabelText("Rule 1 right side") as HTMLSelectElement
+		expect(select.tagName).toBe("SELECT")
+		expect([...select.options].map((o) => o.value)).toEqual(["", "West", "East"])
+		fireEvent.change(select, { target: { value: "East" } })
+		fireEvent.change(utils.getByLabelText("Rule 1 output"), {
+			target: { value: "yes" },
+		})
+		fireEvent.change(utils.getByLabelText("Otherwise output"), {
+			target: { value: "no" },
+		})
+		// Preview: West → no, East → yes.
+		expect(utils.getByText("yes")).toBeTruthy()
+		expect(utils.getByText("no")).toBeTruthy()
+		// A chip click while the list is selected turns it back into a text
+		// box holding the variable, so variable-vs-variable still works.
+		fireEvent.focus(utils.getByLabelText("Rule 1 right side"))
+		fireEvent.click(utils.getByRole("button", { name: "sales" }))
+		const right = utils.getByLabelText("Rule 1 right side") as HTMLInputElement
+		expect(right.tagName).toBe("INPUT")
+		expect(right.value).toBe("{sales}")
+	})
+
+	it("offers only = and ≠ for a lone categorical variable, all six otherwise", () => {
+		const utils = mount({ mode: "new" })
+		fireEvent.click(utils.getByRole("radio", { name: "If / else" }))
+		const left = utils.getByLabelText("Rule 1 left side")
+		const ops = () =>
+			[...(utils.getByLabelText("Rule 1 comparison") as HTMLSelectElement).options].map(
+				(o) => o.value
+			)
+		fireEvent.change(left, { target: { value: "{sales}" } })
+		expect(ops()).toEqual(["==", "!=", ">", "<", ">=", "<="])
+		fireEvent.change(utils.getByLabelText("Rule 1 comparison"), {
+			target: { value: ">" },
+		})
+		// A calculation keeps every comparator and an open right side.
+		fireEvent.change(left, { target: { value: "{sales} / 2" } })
+		expect(ops()).toEqual(["==", "!=", ">", "<", ">=", "<="])
+		expect(utils.getByLabelText("Rule 1 right side").tagName).toBe("INPUT")
+		// A lone category: two comparators, and the stale ">" reads as "=".
+		fireEvent.change(left, { target: { value: "{region}" } })
+		expect(ops()).toEqual(["==", "!="])
+		expect(
+			(utils.getByLabelText("Rule 1 comparison") as HTMLSelectElement).value
+		).toBe("==")
+	})
+
+	it("splits a stored comparison into the boxes and keeps AND / OR rules as text", () => {
+		const utils = mount(
+			{ mode: "edit", id: "dvr-2" },
+			{
+				variables: [
+					{
+						id: "dvr-2",
+						name: "bucket",
+						kind: "rules",
+						rules: {
+							rules: [
+								{ condition: '{region} == "West"', output: "W" },
+								{ condition: "{sales} > 5 AND {sales} < 20", output: "mid" },
+							],
+							fallback: "other",
+						},
+					},
+				],
+			}
+		)
+		expect(
+			(utils.getByLabelText("Rule 1 left side") as HTMLInputElement).value
+		).toBe("{region}")
+		expect(
+			(utils.getByLabelText("Rule 1 comparison") as HTMLSelectElement).value
+		).toBe("==")
+		expect(
+			(utils.getByLabelText("Rule 1 right side") as HTMLInputElement).value
+		).toBe("West")
+		expect(
+			(utils.getByLabelText("Rule 2 condition") as HTMLInputElement).value
+		).toBe("{sales} > 5 AND {sales} < 20")
+		expect(utils.queryByLabelText("Rule 2 left side")).toBeNull()
 	})
 
 	it("pre-fills when editing an existing variable and offers Delete", () => {

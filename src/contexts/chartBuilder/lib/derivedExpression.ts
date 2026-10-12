@@ -391,3 +391,63 @@ export const evaluateToCell = (
 	if (typeof v === "boolean") return v ? "true" : "false"
 	return v
 }
+
+/** Binding strength of a node, for re-parenthesizing on serialization.
+ * Mirrors the parser's precedence ladder: OR < AND < comparison < additive
+ * < multiplicative < unary minus < atoms. */
+const precedence = (e: Expr): number => {
+	switch (e.kind) {
+		case "num":
+		case "str":
+		case "field":
+			return 7
+		case "negate":
+			return 6
+		case "arith":
+			return e.op === "*" || e.op === "/" ? 5 : 4
+		case "compare":
+			return 3
+		case "logic":
+			return e.op === "and" ? 2 : 1
+	}
+}
+
+/** Quote a string literal in whichever quote style it doesn't contain;
+ * `null` when it holds both (the grammar has no escapes). */
+export const quoteStringLiteral = (value: string): string | null =>
+	!value.includes('"')
+		? `"${value}"`
+		: !value.includes("'")
+			? `'${value}'`
+			: null
+
+/** Serialize a parsed expression back to source the parser accepts, with
+ * parentheses only where the tree needs them. Used by the If/else editor
+ * to show each side of a stored comparison in its own box. */
+export const exprToSource = (e: Expr): string => {
+	const wrap = (child: Expr, parens: boolean): string =>
+		parens ? `(${exprToSource(child)})` : exprToSource(child)
+	switch (e.kind) {
+		case "num":
+			return String(e.value)
+		case "str":
+			// A parsed literal never holds its own delimiter, so one style fits.
+			return quoteStringLiteral(e.value) ?? `"${e.value}"`
+		case "field":
+			return `{${e.name}}`
+		case "negate":
+			return `-${wrap(e.operand, precedence(e.operand) < 6)}`
+		case "arith": {
+			const p = precedence(e)
+			// Left-associative: a right child at the same level keeps its parens
+			// ("a - (b + c)"), a left one doesn't ("a + b + c").
+			return `${wrap(e.left, precedence(e.left) < p)} ${e.op} ${wrap(e.right, precedence(e.right) <= p)}`
+		}
+		case "compare":
+			return `${wrap(e.left, precedence(e.left) <= 3)} ${e.op} ${wrap(e.right, precedence(e.right) <= 3)}`
+		case "logic": {
+			const p = precedence(e)
+			return `${wrap(e.left, precedence(e.left) < p)} ${e.op === "and" ? "AND" : "OR"} ${wrap(e.right, precedence(e.right) <= p)}`
+		}
+	}
+}

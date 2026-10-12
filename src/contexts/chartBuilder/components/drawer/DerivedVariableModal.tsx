@@ -5,7 +5,16 @@ import { Button } from "../../../../components/ui/Button"
 import { Input } from "../../../../components/ui/Input"
 import { ConfirmDialog, Modal } from "../../../../components/ui/Modal"
 import { RadioGroup } from "../../../../components/ui/RadioGroup"
-import { parseExpression } from "../../lib/derivedExpression"
+import {
+	parseExpression,
+	type ComparisonOp,
+} from "../../lib/derivedExpression"
+import {
+	COMPARISON_OPTIONS,
+	joinComparison,
+	makeLevelLookup,
+	splitComparison,
+} from "../../lib/derivedRuleForm"
 import {
 	applyDerivedVariablesToView,
 	buildDerivedCompute,
@@ -19,20 +28,26 @@ import {
 	type DerivedVariableKind,
 } from "../../lib/derivedVariables"
 import type { DatasetView } from "../../lib/types"
+import { effectiveType } from "../../lib/fieldType"
 import {
 	currentDatasetIdAtom,
 	currentDerivedVariablesAtom,
+	currentFieldOverridesAtom,
 	datasetIndexAtom,
 	derivedVariableEditorAtom,
 } from "../../store/atoms"
 import { preDerivedDatasetViewAtom } from "../../store/useCurrentDatasetView"
 import { renameFieldAcrossEditorAtoms } from "../../store/useRenameField"
 import { Select } from "../../../../components/ui/Select"
+import type { InputProps } from "../../../../components/ui/Input"
 
 const newDerivedVariableId = () =>
 	`dvr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 const PREVIEW_ROWS = 5
+
+/** The left box holding exactly one `{Variable}` token and nothing else. */
+const LONE_TOKEN_RE = /^\{([^{}]+)\}$/
 
 const KIND_OPTIONS: ReadonlyArray<{
 	value: DerivedVariableKind
@@ -43,29 +58,76 @@ const KIND_OPTIONS: ReadonlyArray<{
 	{ value: "rules", label: "If / else" },
 ]
 
-/** A `<select>` that inserts a `{Field}` token at the target input's cursor.
- * Always snaps back to the placeholder row, so it acts as a button menu. */
-const InsertVariableSelect = ({
-	fields,
-	onInsert,
-}: {
-	fields: string[]
-	onInsert: (fieldName: string) => void
-}) => (
-	<Select
-		value=""
-		aria-label="Insert variable"
-		onChange={(e) => {
-			if (e.target.value) onInsert(e.target.value)
-		}}
-	>
-		<option value="">Insert variable…</option>
-		{fields.map((f) => (
-			<option key={f} value={f}>
-				{f}
-			</option>
-		))}
-	</Select>
+/** One If/else row as the editor holds it. "compare" is the structured
+ * form (left box, comparator, right box); "text" keeps an older free-text
+ * condition that can't be shown as a single comparison (AND / OR), so
+ * nothing stored is lost. Both compose back to `DerivedRule.condition`. */
+type RuleDraft =
+	| {
+			form: "compare"
+			left: string
+			op: ComparisonOp
+			right: string
+			output: string
+	  }
+	| { form: "text"; condition: string; output: string }
+
+const blankRule = (): RuleDraft => ({
+	form: "compare",
+	left: "",
+	op: "==",
+	right: "",
+	output: "",
+})
+
+const draftFromRule = (rule: DerivedRule): RuleDraft => {
+	const parts = splitComparison(rule.condition)
+	return parts
+		? { form: "compare", ...parts, output: rule.output }
+		: { form: "text", condition: rule.condition, output: rule.output }
+}
+
+/** Compose a row back to its stored shape; `error` is the row's inline
+ * message (blank scaffold rows never scold). */
+const ruleFromDraft = (
+	d: RuleDraft
+): { rule: DerivedRule; error: string | null } => {
+	if (d.form === "text") {
+		const blank = d.condition.trim() === ""
+		const parsed = blank ? null : parseExpression(d.condition)
+		return {
+			rule: { condition: d.condition, output: d.output },
+			error: parsed && !parsed.ok ? parsed.error : null,
+		}
+	}
+	const joined = joinComparison(d)
+	if (!joined.ok) return { rule: { condition: "", output: d.output }, error: joined.error }
+	// An output with no comparison would never fire — say so rather than
+	// saving a dead rule.
+	if (joined.condition === "" && d.output.trim() !== "")
+		return {
+			rule: { condition: "", output: d.output },
+			error: "Both sides of the comparison need a value.",
+		}
+	return { rule: { condition: joined.condition, output: d.output }, error: null }
+}
+
+/** Where a variable button inserts: the box that last had focus. Keys name
+ * the editor's text boxes; rule boxes are positional. */
+type TokenKey = string
+const ruleKey = (
+	i: number,
+	part: "left" | "right" | "output" | "condition"
+): TokenKey => `rule-${i}-${part}`
+const RULE_KEY_RE = /^rule-(\d+)-(left|right|output|condition)$/
+
+/** An `Input` the variable buttons can target. */
+const TokenInput = ({
+	tokenKey,
+	onActivate,
+	...p
+}: InputProps & { tokenKey: TokenKey; onActivate: (key: TokenKey) => void }) => (
+	<Input data-token-key={tokenKey} onFocus={() => onActivate(tokenKey)} {...p} />
 )
 
 /** The create/edit popup for derived variables (math / combine text /
@@ -114,16 +176,18 @@ const DerivedVariableEditor = ({
 	)
 	const [formula, setFormula] = useState(existing?.math?.formula ?? "")
 	const [template, setTemplate] = useState(existing?.concat?.template ?? "")
-	const [rules, setRules] = useState<DerivedRule[]>(
+	const [rules, setRules] = useState<RuleDraft[]>(
 		existing?.rules?.rules?.length
-			? existing.rules.rules
-			: [{ condition: "", output: "" }]
+			? existing.rules.rules.map(draftFromRule)
+			: [blankRule()]
 	)
 	const [fallback, setFallback] = useState(existing?.rules?.fallback ?? "")
 	const [confirmingDelete, setConfirmingDelete] = useState(false)
 	const nameId = useId()
-	const formulaRef = useRef<HTMLInputElement>(null)
-	const templateRef = useRef<HTMLInputElement>(null)
+	// The variable buttons insert into the box that last had focus; null
+	// falls back to the current function's first box.
+	const [activeKey, setActiveKey] = useState<TokenKey | null>(null)
+	const fieldsRef = useRef<HTMLDivElement>(null)
 
 	// This variable's position in the evaluation order — it may reference the
 	// variables BEFORE it (and the upstream view columns), never itself or a
@@ -157,6 +221,58 @@ const DerivedVariableEditor = ({
 		() => upstream.fields.map((f) => f.name),
 		[upstream]
 	)
+	const overrides = useAtomValue(currentFieldOverridesAtom)
+	// Distinct levels of a categorical / ordinal column, in discovery order
+	// (matching the legend and the Fields panel), for the right-side
+	// dropdown. Scanned lazily, once per column; `null` means "no dropdown"
+	// (numeric / date column, or too many levels).
+	const levelsFor = useMemo(
+		() =>
+			makeLevelLookup(upstream.rows, (f) =>
+				effectiveType(upstream, f, overrides)
+			),
+		[upstream, overrides]
+	)
+	/** The variable a left box names when it holds exactly one `{Token}` of a
+	 * categorical / ordinal column — the case where ordering comparisons
+	 * ("greater than Peter") make no sense and the right side can list the
+	 * levels. A number / date variable, or any calculation, returns null:
+	 * every comparator applies and the right side stays open. */
+	const loneDiscreteField = (left: string): string | null => {
+		const m = LONE_TOKEN_RE.exec(left.trim())
+		if (!m || !upstreamNames.has(m[1])) return null
+		const type = effectiveType(upstream, m[1], overrides)
+		return type === "categorical" || type === "ordinal" ? m[1] : null
+	}
+	const comparatorsFor = (left: string) =>
+		loneDiscreteField(left) === null
+			? COMPARISON_OPTIONS
+			: COMPARISON_OPTIONS.filter((o) => o.value === "==" || o.value === "!=")
+	/** Levels to offer on a rule's right side: only when the left box is a
+	 * lone categorical / ordinal variable, and the right box is empty or
+	 * already one of its levels (a variable or free text inserted there keeps
+	 * the text box, so nothing typed is lost). */
+	const rightSideLevels = (left: string, right: string): string[] | null => {
+		const field = loneDiscreteField(left)
+		const levels = field === null ? null : levelsFor(field)
+		if (!levels || levels.length === 0) return null
+		return right === "" || levels.includes(right) ? levels : null
+	}
+	// Rows as the editor shows AND saves them: a comparator the left side no
+	// longer allows (a stored "{Region} > 3", or a left box edited from a
+	// number to a category) reads as "=". Derived, not written back, so
+	// editing the left side again restores what was there.
+	const shownRules = useMemo(
+		() =>
+			rules.map((r) =>
+				r.form === "compare" &&
+				!comparatorsFor(r.left).some((o) => o.value === r.op)
+					? { ...r, op: "==" as const }
+					: r
+			),
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- comparatorsFor reads only upstream / overrides / upstreamNames
+		[rules, upstream, overrides, upstreamNames]
+	)
 
 	// The name a blank box commits as: the stored name when editing, else the
 	// first free "Variable N". Shown as the placeholder, so what you see is
@@ -172,12 +288,19 @@ const DerivedVariableEditor = ({
 	)
 	const effectiveName = name.trim() || defaultName
 
+	// Each row composed back to its stored shape, with its inline error.
+	const compiledRules = useMemo(
+		() => shownRules.map(ruleFromDraft),
+		[shownRules]
+	)
 	// Fully-blank rule rows are editor scaffolding (one renders by default for
 	// discoverability) — they never save.
 	const meaningfulRules = useMemo(
 		() =>
-			rules.filter((r) => r.condition.trim() !== "" || r.output.trim() !== ""),
-		[rules]
+			compiledRules
+				.map((c) => c.rule)
+				.filter((r) => r.condition.trim() !== "" || r.output.trim() !== ""),
+		[compiledRules]
 	)
 
 	const draft: DerivedVariable = useMemo(
@@ -214,16 +337,10 @@ const DerivedVariableEditor = ({
 		return list
 	}, [draft, editIndex, upstreamNames, nonNumeric, config, effectiveName])
 
-	// Per-rule parse errors, keyed by row index (blank conditions excluded —
-	// they never fire, and the blank scaffolding row shouldn't scold).
+	// Per-rule errors, keyed by row index; only the If/else body can block.
 	const ruleErrors = useMemo(
-		() =>
-			rules.map((r) => {
-				if (kind !== "rules" || r.condition.trim() === "") return null
-				const parsed = parseExpression(r.condition)
-				return parsed.ok ? null : parsed.error
-			}),
-		[rules, kind]
+		() => compiledRules.map((c) => (kind === "rules" ? c.error : null)),
+		[compiledRules, kind]
 	)
 	const anyRuleError = ruleErrors.some((e) => e !== null)
 
@@ -278,20 +395,79 @@ const DerivedVariableEditor = ({
 		upstream,
 	])
 
-	const insertToken = (
-		ref: React.RefObject<HTMLInputElement>,
-		value: string,
-		setValue: (next: string) => void,
-		fieldName: string
-	) => {
+	const updateRule = (i: number, patch: (r: RuleDraft) => RuleDraft) =>
+		setRules((prev) => prev.map((r, j) => (j === i ? patch(r) : r)))
+
+	/** Read / write a text box by its token key. */
+	const valueOf = (key: TokenKey): string | null => {
+		if (key === "formula") return formula
+		if (key === "template") return template
+		if (key === "fallback") return fallback
+		const m = RULE_KEY_RE.exec(key)
+		const rule = m ? rules[Number(m[1])] : undefined
+		if (!m || !rule) return null
+		const part = m[2]
+		if (part === "output") return rule.output
+		if (rule.form === "text") return part === "condition" ? rule.condition : null
+		return part === "left" ? rule.left : part === "right" ? rule.right : null
+	}
+	const setValueOf = (key: TokenKey, next: string) => {
+		if (key === "formula") setFormula(next)
+		else if (key === "template") setTemplate(next)
+		else if (key === "fallback") setFallback(next)
+		else {
+			const m = RULE_KEY_RE.exec(key)
+			if (!m) return
+			const part = m[2]
+			updateRule(Number(m[1]), (r) =>
+				part === "output"
+					? { ...r, output: next }
+					: r.form === "text"
+						? part === "condition"
+							? { ...r, condition: next }
+							: r
+						: part === "left"
+							? { ...r, left: next }
+							: part === "right"
+								? { ...r, right: next }
+								: r
+			)
+		}
+	}
+	// The right side of a rule may be a <select> of levels; a chip click on
+	// it swaps in a text box holding the token (see `rightSideLevels`).
+	const findInput = (key: TokenKey): HTMLInputElement | HTMLSelectElement | null =>
+		fieldsRef.current?.querySelector<HTMLInputElement | HTMLSelectElement>(
+			`[data-token-key="${key}"]`
+		) ?? null
+	const defaultKey = (): TokenKey => {
+		if (kind === "math") return "formula"
+		if (kind === "concat") return "template"
+		const first = rules[0]
+		if (!first) return "fallback"
+		return ruleKey(0, first.form === "compare" ? "left" : "condition")
+	}
+
+	/** Drop a `{Field}` token at the cursor of the active box (or the
+	 * function's first box), then put the caret after it. */
+	const insertVariable = (fieldName: string) => {
 		const token = `{${fieldName}}`
-		const el = ref.current
-		const start = el?.selectionStart ?? value.length
-		const end = el?.selectionEnd ?? start
-		setValue(value.slice(0, start) + token + value.slice(end))
+		const key =
+			activeKey !== null && valueOf(activeKey) !== null ? activeKey : defaultKey()
+		const value = valueOf(key) ?? ""
+		const el = findInput(key)
+		// A text box takes the token at its caret; the level dropdown has no
+		// caret and its chosen level is what the token REPLACES.
+		const isInput = el instanceof HTMLInputElement
+		const start = isInput ? (el.selectionStart ?? value.length) : el ? 0 : value.length
+		const end = isInput ? (el.selectionEnd ?? start) : el ? value.length : start
+		setValueOf(key, value.slice(0, start) + token + value.slice(end))
+		setActiveKey(key)
 		window.requestAnimationFrame(() => {
-			el?.focus()
-			el?.setSelectionRange(start + token.length, start + token.length)
+			const target = findInput(key)
+			target?.focus()
+			if (target instanceof HTMLInputElement)
+				target.setSelectionRange(start + token.length, start + token.length)
 		})
 	}
 
@@ -350,14 +526,20 @@ const DerivedVariableEditor = ({
 		<Modal
 			open
 			onClose={onClose}
-			widthClass="max-w-lg"
+			// Wider than the default so an If/else row (two value boxes, the
+			// comparator, the output) fits on one line; the same width for every
+			// function so the popup never jumps as you flip.
+			widthClass="max-w-2xl"
 			title={existing ? "Edit derived variable" : "New derived variable"}
 			// Fixed height on purpose: the popup must not resize as you flip
 			// Function or pile on rules — the fields region scrolls instead.
 			panelClassName="flex h-[580px] max-h-[85vh] flex-col"
 			bodyClassName="flex min-h-0 flex-1 flex-col"
 		>
-			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+			<div
+				ref={fieldsRef}
+				className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1"
+			>
 				<div className="flex items-center gap-3 text-sm">
 					<label
 						htmlFor={nameId}
@@ -378,99 +560,188 @@ const DerivedVariableEditor = ({
 					legend="Function"
 					value={kind}
 					options={KIND_OPTIONS}
-					onChange={setKind}
+					onChange={(next) => {
+						setKind(next)
+						setActiveKey(null)
+					}}
 				/>
+
+				<div className="flex flex-col gap-1">
+					<span className="text-sm vc-muted">Variables</span>
+					<div
+						role="group"
+						aria-label="Insert variable"
+						className="flex flex-wrap gap-1"
+					>
+						{insertableFields.map((f) => (
+							<button
+								key={f}
+								type="button"
+								title={`Insert {${f}}`}
+								// Keep focus (and the caret) in the box being edited.
+								onMouseDown={(e) => e.preventDefault()}
+								onClick={() => insertVariable(f)}
+								className="vc-toggle-off rounded-control border px-2 py-0.5 font-mono text-xs"
+							>
+								{f}
+							</button>
+						))}
+					</div>
+					<p className="vc-help">
+						Click a variable to add it to the box you&apos;re typing in.
+					</p>
+				</div>
 
 				{kind === "math" && (
 					<div className="flex flex-col gap-2">
-						<div className="flex items-center gap-2">
-							<Input
-								ref={formulaRef}
-								value={formula}
-								onChange={(e) => setFormula(e.target.value)}
-								placeholder="{Sales} / {Count}"
-								className="flex-1 font-mono"
-							/>
-							<InsertVariableSelect
-								fields={insertableFields}
-								onInsert={(f) => insertToken(formulaRef, formula, setFormula, f)}
-							/>
-						</div>
+						<TokenInput
+							tokenKey="formula"
+							onActivate={setActiveKey}
+							value={formula}
+							onChange={(e) => setFormula(e.target.value)}
+							placeholder="{Sales} / {Count}"
+							aria-label="Formula"
+							className="font-mono"
+						/>
 						<p className="vc-help">
-							Reference variables in braces and combine with add (+), subtract (-), multiply (*), divide (/) and
-							parentheses, e.g.{" "}
+							Combine variables with add (+), subtract (-), multiply (*),
+							divide (/) and parentheses, e.g.{" "}
 							<code className="font-mono">{"({A} - {B}) * 100"}</code>. Every
-							variable you reference has to be a number — text values are an
-							error, and blank cells come out blank.
+							variable you use has to be a number — text values are an error,
+							and blank cells come out blank.
 						</p>
 					</div>
 				)}
 
 				{kind === "concat" && (
 					<div className="flex flex-col gap-2">
-						<div className="flex items-center gap-2">
-							<Input
-								ref={templateRef}
-								value={template}
-								onChange={(e) => setTemplate(e.target.value)}
-								placeholder="Some text: {Region}"
-								className="flex-1"
-							/>
-							<InsertVariableSelect
-								fields={insertableFields}
-								onInsert={(f) =>
-									insertToken(templateRef, template, setTemplate, f)
-								}
-							/>
-						</div>
+						<TokenInput
+							tokenKey="template"
+							onActivate={setActiveKey}
+							value={template}
+							onChange={(e) => setTemplate(e.target.value)}
+							placeholder="Some text: {Region}"
+							aria-label="Template"
+						/>
 						<p className="vc-help">
-							Reference variables in braces, e.g.{" "}
+							Mix variables with any text, e.g.{" "}
 							<code className="font-mono">{"{Region} / {Year}"}</code>. Text
-							outside braces is kept as typed.
+							outside the variables is kept as typed.
 						</p>
 					</div>
 				)}
 
 				{kind === "rules" && (
 					<div className="flex flex-col gap-2">
-						{rules.map((rule, i) => (
+						{shownRules.map((rule, i) => (
 							<div
 								// eslint-disable-next-line react/no-array-index-key -- rows are positional edit slots, like the color-rule editors
 								key={i}
 								className="flex flex-col gap-1"
 							>
 								<div className="flex items-center gap-2">
-									<Input
-										value={rule.condition}
-										onChange={(e) =>
-											setRules((prev) =>
-												prev.map((r, j) =>
-													j === i ? { ...r, condition: e.target.value } : r
+									{rule.form === "compare" ? (
+										<>
+											<TokenInput
+												tokenKey={ruleKey(i, "left")}
+												onActivate={setActiveKey}
+												value={rule.left}
+												onChange={(e) =>
+													updateRule(i, (r) =>
+														r.form === "compare"
+															? { ...r, left: e.target.value }
+															: r
+													)
+												}
+												placeholder="{Sales}"
+												aria-label={`Rule ${i + 1} left side`}
+												className="min-w-0 flex-1 font-mono"
+											/>
+											<Select
+												value={rule.op}
+												aria-label={`Rule ${i + 1} comparison`}
+												onChange={(e) => {
+													const op = e.target.value as ComparisonOp
+													updateRule(i, (r) =>
+														r.form === "compare" ? { ...r, op } : r
+													)
+												}}
+												className="flex-shrink-0"
+											>
+												{comparatorsFor(rule.left).map((o) => (
+													<option key={o.value} value={o.value} title={o.title}>
+														{o.label}
+													</option>
+												))}
+											</Select>
+											{(() => {
+												const levels = rightSideLevels(rule.left, rule.right)
+												const setRight = (next: string) =>
+													updateRule(i, (r) =>
+														r.form === "compare" ? { ...r, right: next } : r
+													)
+												return levels ? (
+													<Select
+														data-token-key={ruleKey(i, "right")}
+														onFocus={() => setActiveKey(ruleKey(i, "right"))}
+														value={rule.right}
+														onChange={(e) => setRight(e.target.value)}
+														aria-label={`Rule ${i + 1} right side`}
+														className="min-w-0 flex-1"
+													>
+														<option value="">Choose a value…</option>
+														{levels.map((level) => (
+															<option key={level} value={level}>
+																{level}
+															</option>
+														))}
+													</Select>
+												) : (
+													<TokenInput
+														tokenKey={ruleKey(i, "right")}
+														onActivate={setActiveKey}
+														value={rule.right}
+														onChange={(e) => setRight(e.target.value)}
+														placeholder="100"
+														aria-label={`Rule ${i + 1} right side`}
+														className="min-w-0 flex-1 font-mono"
+													/>
 												)
-											)
-										}
-										placeholder={'{B} == 1 AND {C} > 3'}
-										aria-label={`Rule ${i + 1} condition`}
-										className="min-w-0 flex-1 font-mono"
-									/>
+											})()}
+										</>
+									) : (
+										<TokenInput
+											tokenKey={ruleKey(i, "condition")}
+											onActivate={setActiveKey}
+											value={rule.condition}
+											onChange={(e) =>
+												updateRule(i, (r) =>
+													r.form === "text"
+														? { ...r, condition: e.target.value }
+														: r
+												)
+											}
+											placeholder={"{B} == 1 AND {C} > 3"}
+											aria-label={`Rule ${i + 1} condition`}
+											className="min-w-0 flex-1 font-mono"
+										/>
+									)}
 									<span
 										aria-hidden="true"
 										className="flex-shrink-0 text-stone-400"
 									>
 										→
 									</span>
-									<Input
+									<TokenInput
+										tokenKey={ruleKey(i, "output")}
+										onActivate={setActiveKey}
 										value={rule.output}
 										onChange={(e) =>
-											setRules((prev) =>
-												prev.map((r, j) =>
-													j === i ? { ...r, output: e.target.value } : r
-												)
-											)
+											updateRule(i, (r) => ({ ...r, output: e.target.value }))
 										}
 										placeholder="value"
 										aria-label={`Rule ${i + 1} output`}
-										className="w-28 flex-shrink-0"
+										className="w-32 flex-shrink-0"
 									/>
 									<button
 										type="button"
@@ -478,7 +749,7 @@ const DerivedVariableEditor = ({
 										onClick={() =>
 											setRules((prev) => prev.filter((_, j) => j !== i))
 										}
-										className="flex-shrink-0 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+										className="w-4 flex-shrink-0 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
 									>
 										×
 									</button>
@@ -488,41 +759,50 @@ const DerivedVariableEditor = ({
 										{ruleErrors[i]}
 									</p>
 								)}
+								{rule.form === "text" && (
+									<p className="vc-help">
+										This rule was written as a formula (it combines
+										comparisons with AND / OR), so it stays a single box.
+									</p>
+								)}
 							</div>
 						))}
 						<div className="flex items-center gap-2">
-							<span className="text-sm vc-muted">
+							<span className="flex-1 text-right text-sm vc-muted">
 								Otherwise
 							</span>
 							<span aria-hidden="true" className="text-stone-400">
 								→
 							</span>
-							<Input
+							<TokenInput
+								tokenKey="fallback"
+								onActivate={setActiveKey}
 								value={fallback}
 								onChange={(e) => setFallback(e.target.value)}
 								placeholder=""
 								aria-label="Otherwise output"
-								className="w-28"
+								className="w-32 flex-shrink-0"
 							/>
+							<span aria-hidden="true" className="w-4 flex-shrink-0" />
 						</div>
 						<button
 							type="button"
-							onClick={() =>
-								setRules((prev) => [...prev, { condition: "", output: "" }])
-							}
+							onClick={() => setRules((prev) => [...prev, blankRule()])}
 							className="self-start text-xs text-brand-500 hover:underline dark:text-indigo-400"
 						>
 							+ Add rule
 						</button>
 						<p className="vc-help">
-							Rules run top to bottom; the first match wins. Compare with{" "}
-							<code className="font-mono">{"> < >= <= == !="}</code>. Combine
-							with AND / OR, and reference variables in braces, e.g.{" "}
-							<code className="font-mono">{'{Region} == "West"'}</code> or{" "}
-							<code className="font-mono">{"1 < {B} OR {B} < 2"}</code>.
-							Outputs are text and may reference variables in braces too —
-							an output of <code className="font-mono">{"{B}"}</code> keeps
-							that row&apos;s value of B.
+							Rules run top to bottom; the first match wins. Each side of a
+							comparison can be a variable, a number, plain text, or a
+							formula like <code className="font-mono">{"{A} / {B}"}</code>.
+							When the left side is a single text variable, only = and ≠
+							apply and the right side lists its values — to compare it
+							with another variable instead, click that variable&apos;s
+							button while the list is selected.
+							Outputs are text and may include variables — an output of{" "}
+							<code className="font-mono">{"{B}"}</code> keeps that
+							row&apos;s value of B.
 						</p>
 					</div>
 				)}
