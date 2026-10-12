@@ -305,9 +305,65 @@ describe("Connection — line hover tooltip", () => {
 		}
 	})
 
-	it("hovering a line shows the connection value but not per-point fields", () => {
+	/** happy-dom has no `getScreenCTM`; stub an identity transform so client
+	 *  coords ARE the hit stroke's local coords and the snap can be driven by
+	 *  the polyline's own `points`. */
+	const withIdentityCtm = (el: Element) => {
+		;(el as unknown as { getScreenCTM: () => unknown }).getScreenCTM = () => ({
+			inverse: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
+		})
+	}
+	const hitPoints = (hit: Element): Array<[number, number]> =>
+		(hit.getAttribute("points") ?? "")
+			.split(" ")
+			.map((pair) => pair.split(",").map(Number) as [number, number])
+
+	it("hovering a line snaps the tooltip to the nearest point ON that line", () => {
 		const c = mount()
 		expect(document.querySelector(".vc-tooltip")).toBeNull()
+		const hits = [...c.querySelectorAll("polyline.vc-line-hit")]
+		const north = hits[0]!
+		withIdentityCtm(north)
+		const pts = hitPoints(north)
+		expect(pts.length).toBe(5)
+		// Aim between the 3rd and 4th points, nearer the 3rd (x=3, y=30), and
+		// a few px off the stroke — nowhere near the marker itself.
+		const [x3, y3] = pts[2]!
+		const [x4, y4] = pts[3]!
+		fireEvent.mouseMove(north, {
+			clientX: x3 + (x4 - x3) * 0.3,
+			clientY: y3 + (y4 - y3) * 0.3 + 3,
+		})
+		const tip = document.querySelector(".vc-tooltip")
+		expect(tip).toBeTruthy()
+		// Full-row tooltip for the snapped point: its own x / y, not just the
+		// series value.
+		expect(tip!.textContent).toContain("north")
+		expect(tip!.textContent).toMatch(/x:\s*3(?!\d)/)
+		expect(tip!.textContent).toMatch(/y:\s*30(?!\d)/)
+	})
+
+	it("the hovered line's own points win over a closer point on another line", () => {
+		const c = mount()
+		const hits = [...c.querySelectorAll("polyline.vc-line-hit")]
+		const north = hits[0]!
+		const south = hits[1]!
+		withIdentityCtm(north)
+		// Park the pointer ON the south line's 2nd point (x=2, y=15) but
+		// deliver the event to the north hit stroke — as happens when the
+		// north stroke is the one under the pointer. The snap must stay on
+		// north (x=2, y=20), never jump to the geometrically closer south point.
+		const [sx, sy] = hitPoints(south)[1]!
+		fireEvent.mouseMove(north, { clientX: sx, clientY: sy })
+		const tip = document.querySelector(".vc-tooltip")
+		expect(tip).toBeTruthy()
+		expect(tip!.textContent).toContain("north")
+		expect(tip!.textContent).not.toContain("south")
+		expect(tip!.textContent).toMatch(/y:\s*20(?!\d)/)
+	})
+
+	it("without pointer geometry (no CTM) falls back to the series-constant fields", () => {
+		const c = mount()
 		const hit = c.querySelector("polyline.vc-line-hit")
 		expect(hit).toBeTruthy()
 		fireEvent.mouseMove(hit!, { clientX: 100, clientY: 100 })
@@ -316,8 +372,8 @@ describe("Connection — line hover tooltip", () => {
 		// The connection variable identifies the line…
 		expect(tip!.textContent).toContain("g:")
 		expect(tip!.textContent).toContain("north")
-		// …but fields that vary along the line (x, y) stay out: a line spans
-		// many rows, so no single point's values apply.
+		// …but fields that vary along the line (x, y) stay out: with no
+		// point to snap to, no single row's values apply.
 		expect(tip!.textContent).not.toContain("x:")
 		expect(tip!.textContent).not.toContain("y:")
 	})

@@ -6,6 +6,7 @@ import {
 	zoomViewport,
 } from "../../lib/geo/viewportMath"
 import type { GeoViewport } from "../../lib/mapConfig"
+import { clientToSvgLocal } from "./svgLocalPoint"
 
 /** Wheel notch / pinch → zoom factor. Negative deltaY (scroll up / pinch out)
  *  zooms IN (factor < 1). The 0.0015 constant makes a normal wheel notch a
@@ -57,21 +58,6 @@ type UseMapPanZoomResult = {
 	viewport: GeoViewport | null
 	/** Props to spread on the map's root `<g>` (only meaningful when active). */
 	rootProps: RootProps
-}
-
-// Convert a client (screen) point to the projection's own pixel space using the
-// element's screen CTM, so `scales.invert` (which works in projection space)
-// gets the right input regardless of panel offset / facet transforms. Returns
-// null in environments without getScreenCTM (e.g. jsdom).
-const toLocal = (
-	el: SVGGraphicsElement,
-	clientX: number,
-	clientY: number
-): [number, number] | null => {
-	const ctm = el.getScreenCTM?.()
-	if (!ctm) return null
-	const p = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse())
-	return [p.x, p.y]
 }
 
 /**
@@ -156,8 +142,8 @@ export const useMapPanZoom = ({
 			const vp = effectiveRef.current
 			if (!scales || !vp) return
 			const el = e.currentTarget as unknown as SVGGraphicsElement
-			const prev = toLocal(el, lastClient.current.x, lastClient.current.y)
-			const curr = toLocal(el, e.clientX, e.clientY)
+			const prev = clientToSvgLocal(el, lastClient.current.x, lastClient.current.y)
+			const curr = clientToSvgLocal(el, e.clientX, e.clientY)
 			if (!prev || !curr) return
 			const prevLL = scales.invert(prev)
 			const currLL = scales.invert(curr)
@@ -196,7 +182,7 @@ export const useMapPanZoom = ({
 			// Capture the scroll as a zoom (don't also scroll the page).
 			e.preventDefault()
 			setInteracting(true)
-			const local = toLocal(el, e.clientX, e.clientY)
+			const local = clientToSvgLocal(el, e.clientX, e.clientY)
 			const anchorLL = local ? scales.invert(local) : null
 			const anchor = anchorLL
 				? { lon: anchorLL[0], lat: anchorLL[1] }

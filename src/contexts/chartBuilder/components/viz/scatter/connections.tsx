@@ -26,6 +26,7 @@ import {
 	rowHighlight,
 	type LegendHighlight,
 } from "../../../store/useLegendHighlight"
+import { clientToSvgLocal } from "../svgLocalPoint"
 import type { HoverState, Mark } from "./types"
 
 /** Group marks by connection-field value and draw one polyline per group.
@@ -56,9 +57,32 @@ type LineVisualProps = {
 	/** Set on the invisible hover-hit overlay so its (transparent) stroke
 	 *  still captures pointer events; visible lines never set this. */
 	pointerEvents?: "stroke"
-	onMouseMove?: (e: React.MouseEvent<SVGElement>) => void
+	onMouseMove?: (e: React.MouseEvent<SVGGraphicsElement>) => void
 	onMouseEnter?: () => void
 	onMouseLeave?: () => void
+}
+
+/** The mark closest (straight-line pixel distance) to a pointer position in
+ *  the marks' own coordinate space; `null` when the position is unknown or
+ *  the list is empty. Linear scan — a line's point count is small next to
+ *  mousemove's cost, and nearest-by-distance isn't monotone in `cx`, so a
+ *  binary search over the cx-sorted list wouldn't be exact anyway. */
+export const nearestMark = (
+	marks: readonly Mark[],
+	local: [number, number] | null
+): Mark | null => {
+	if (!local) return null
+	const [px, py] = local
+	let best: Mark | null = null
+	let bestD = Infinity
+	for (const m of marks) {
+		const d = (m.cx - px) ** 2 + (m.cy - py) ** 2
+		if (d < bestD) {
+			bestD = d
+			best = m
+		}
+	}
+	return best
 }
 
 export const renderConnectionLines = (
@@ -92,9 +116,12 @@ export const renderConnectionLines = (
 	 *  their paired dash-gap ink. */
 	themeInkFallback?: ThemeInkFallback,
 	/** Tooltip hook: when provided, each line group gets an invisible wide
-	 *  hit stroke that publishes a HoverTooltip showing the connection value
-	 *  plus every field constant across the series. Omitted = lines stay
-	 *  non-interactive (export/thumbnail captures). */
+	 *  hit stroke. Pointing anywhere along it snaps the tooltip to the
+	 *  NEAREST point of that same line (full-row tooltip, exactly as if the
+	 *  marker itself were hovered), so the user doesn't have to land on a
+	 *  marker — and a closer point on a different line never steals the
+	 *  hover. Omitted = lines stay non-interactive (export/thumbnail
+	 *  captures). */
 	setHovered?: (h: HoverState | null) => void,
 	/** Legend / mark-hover highlight. A line recedes with its series when
 	 *  another one is hovered — fade only, since a line's color comes from
@@ -244,7 +271,7 @@ export const renderConnectionLines = (
 	// them (in the same paint order), so at a crossing the hover goes to the
 	// line drawn on top — and the visible strokes never sit above a hit line
 	// to swallow its events. Points render in a later <g>, so hovering a
-	// marker still wins with its richer per-row tooltip.
+	// marker directly still wins.
 	const hitLines: React.ReactElement[] = []
 	const lines = orderedEntries
 		.filter(([, groupMarks]) => groupMarks.length >= 2)
@@ -257,12 +284,12 @@ export const renderConnectionLines = (
 				byValue: thicknessByValue,
 			})
 			if (setHovered) {
-				// Tooltip fields: the connection value plus every dataset field
-				// whose value is constant across the series (hue, series-level
-				// attributes, …). Per-point fields (x/y) vary, so they drop out —
-				// a line spans many rows and showing one arbitrary row would
-				// mislead. Computed lazily on first hover and cached: groups can
-				// be large and mousemove fires continuously.
+				// Fallback tooltip fields, used only when the pointer can't be
+				// mapped into the line's coordinate space (no screen CTM — test
+				// DOMs): the connection value plus every dataset field whose
+				// value is constant across the series. Per-point fields (x/y)
+				// vary, so they drop out — a line spans many rows and showing one
+				// arbitrary row would mislead. Computed lazily and cached.
 				let cachedFields: HoverState["fields"] = undefined
 				const tooltipFields = (): NonNullable<HoverState["fields"]> => {
 					if (cachedFields) return cachedFields
@@ -294,16 +321,34 @@ export const renderConnectionLines = (
 						// The highlight publishes ONCE on enter; the tooltip
 						// tracks the pointer on move (below).
 						onMouseEnter: () => publishHover?.(sorted[0]?.row ?? {}),
-						// mousemove (not enter) so the tooltip follows the pointer
-						// along the line instead of sticking at the entry point.
-						onMouseMove: (e) =>
-							setHovered({
-								i: null,
-								row: sorted[0]?.row ?? {},
-								clientX: e.clientX,
-								clientY: e.clientY,
-								fields: tooltipFields(),
-							}),
+						// mousemove (not enter) so the snap re-evaluates as the
+						// pointer travels along the line instead of sticking at
+						// the entry point. The search is restricted to THIS line's
+						// points: the line under the pointer is the series the user
+						// is reading, so its nearest point wins even when a point
+						// on a neighboring line is geometrically closer.
+						onMouseMove: (e) => {
+							const nearest = nearestMark(
+								sorted,
+								clientToSvgLocal(e.currentTarget, e.clientX, e.clientY)
+							)
+							setHovered(
+								nearest
+									? {
+											i: nearest.i,
+											row: nearest.row,
+											clientX: e.clientX,
+											clientY: e.clientY,
+										}
+									: {
+											i: null,
+											row: sorted[0]?.row ?? {},
+											clientX: e.clientX,
+											clientY: e.clientY,
+											fields: tooltipFields(),
+										}
+							)
+						},
 						onMouseLeave: () => setHovered(null),
 					})
 				)

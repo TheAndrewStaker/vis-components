@@ -2742,6 +2742,15 @@ starting point (boxes with existing content are left alone); a
 "reset" link below each box — shown only when its content differs
 from the default — restores that default.
 
+**Line charts snap to the nearest point.** On a connection (line)
+chart the user doesn't have to land on a marker: pointing anywhere
+along a line shows the full-row tooltip for the point of THAT line
+nearest the pointer, re-evaluated as the pointer travels. The search
+is restricted to the hovered line's own points, so a point on a
+neighboring line that happens to be geometrically closer never steals
+the hover — the line under the pointer is the series the user is
+reading. Hovering a marker directly still reports that marker.
+
 ---
 
 ## 11. Annotations

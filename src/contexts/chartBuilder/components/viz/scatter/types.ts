@@ -2,11 +2,13 @@ import type { ResolvedGlyph } from "../../../lib/customGlyphs"
 
 /** Hover state carries the mark index (for dimming siblings) plus the
  * hovered row and the pointer's viewport coordinates so the shared
- * `HoverTooltip` can portal-render itself anywhere on screen. Connection
- * lines hover too: they set `i: null` (a line isn't one mark, so no
- * sibling dimming) and supply explicit `fields` — the connection value
- * plus whatever else is constant across the series — since the full-row
- * field dump would show one arbitrary point's x/y for the whole line. */
+ * `HoverTooltip` can portal-render itself anywhere on screen. Hovering a
+ * connection line snaps to the nearest point on that line and publishes it
+ * exactly like a marker hover (`i` = that mark). Only when the pointer
+ * can't be mapped into the line's coordinate space does a line fall back to
+ * `i: null` (no sibling dimming) with explicit `fields` — the connection
+ * value plus whatever else is constant across the series — since the
+ * full-row dump would then show one arbitrary point's x/y. */
 export type HoverState = {
 	i: number | null
 	row: Record<string, unknown>
