@@ -57,14 +57,20 @@ describe("DateInput", () => {
 		expect(screen.getByRole("dialog")).toBeTruthy()
 	})
 
-	it("with the field blank, the selects only turn the page", () => {
+	it("with the field blank, the picker opens on January and a Year choice sets Jan 1", () => {
+		// The user-reported case: a blank bound, calendar icon, choose a
+		// year — nothing was set until a day was clicked.
 		const onChange = vi.fn()
 		render(<DateInput value={null} onChange={onChange} aria-label="min" />)
 		fireEvent.click(screen.getByRole("button", { name: "Pick a date" }))
+		expect((screen.getByLabelText("Month") as HTMLSelectElement).value).toBe("0")
 		fireEvent.change(screen.getByLabelText("Year"), { target: { value: "1949" } })
-		expect(onChange).not.toHaveBeenCalled()
-		fireEvent.click(screen.getByRole("button", { name: /^1949-\d{2}-01$/ }))
-		expect(onChange).toHaveBeenCalledTimes(1)
+		expect(onChange).toHaveBeenLastCalledWith(local(1949, 0, 1))
+		fireEvent.change(screen.getByLabelText("Month"), { target: { value: "6" } })
+		expect(onChange).toHaveBeenLastCalledWith(local(1949, 6, 1))
+		fireEvent.click(screen.getByRole("button", { name: "1949-07-15" }))
+		expect(onChange).toHaveBeenLastCalledWith(local(1949, 6, 15))
+		expect(screen.queryByRole("dialog")).toBeNull()
 	})
 
 	it("year options are one entry per year, not Month + Year pairs", () => {

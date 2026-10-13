@@ -11,11 +11,13 @@ import { Select } from "./Select"
 /**
  * A date field: a text box taking "YYYY-MM-DD" plus a calendar button that
  * opens a small picker with SEPARATE Month and Year selects over a day
- * grid, so picking a day is one click in each. With a date set, the
- * selects move it straight to the chosen month / year (same day). (The browser's native date
- * picker folds month and year into one long "Month YYYY" list, which is a
- * slog across decades.) The value is epoch ms at LOCAL midnight — the same
- * clock the chart's time scale lays its ticks on — or null for "blank".
+ * grid, so picking a day is one click in each. The selects set the date
+ * straight away — the same day in the chosen month / year, or its 1st
+ * when the field was blank — and a day click refines it. (The browser's
+ * native picker folds month and year into one long "Month YYYY" list,
+ * which is a slog across decades.) The value is epoch ms at LOCAL
+ * midnight — the same clock the chart's time scale lays its ticks on —
+ * or null for "blank".
  */
 export type DateInputProps = {
 	value: number | null
@@ -69,9 +71,16 @@ export const DateInput = ({
 	const [viewMonth, setViewMonth] = useState(anchor.getMonth())
 
 	const openPicker = () => {
-		const d = value === null ? new Date() : new Date(value)
-		setViewYear(d.getFullYear())
-		setViewMonth(d.getMonth())
+		if (value === null) {
+			// Blank field: open on January of this year, so choosing a year
+			// alone lands on Jan 1 of it — the natural bound for an axis.
+			setViewYear(new Date().getFullYear())
+			setViewMonth(0)
+		} else {
+			const d = new Date(value)
+			setViewYear(d.getFullYear())
+			setViewMonth(d.getMonth())
+		}
 		setOpen(true)
 	}
 	const close = () => setOpen(false)
@@ -99,16 +108,17 @@ export const DateInput = ({
 		commit(localMidnight(viewYear, viewMonth, day).getTime())
 		close()
 	}
-	// The Month / Year dropdowns act on the value directly: with a date
-	// already set, choosing another month or year moves that date to the
-	// same day of the new month (clamped to its length) — so a user who
-	// only wants to change the year never has to find the day again. With
-	// the field blank they just turn the calendar page; a day click sets it.
+	// The Month / Year dropdowns act on the value directly, blank or not:
+	// with a date already set, choosing another month or year moves that
+	// date to the same day of the new month (clamped to its length) — so a
+	// user who only wants to change the year never has to find the day
+	// again; with the field blank they set the 1st of the chosen month. A
+	// day click then refines the day. (Turning the page without setting
+	// anything read as "the picker doesn't work" on a blank field.)
 	const retarget = (year: number, monthIndex: number) => {
 		setViewYear(year)
 		setViewMonth(monthIndex)
-		if (value === null) return
-		const day = new Date(value).getDate()
+		const day = value === null ? 1 : new Date(value).getDate()
 		const lastDay = localMidnight(year, monthIndex + 1, 0).getDate()
 		commit(localMidnight(year, monthIndex, Math.min(day, lastDay)).getTime())
 	}

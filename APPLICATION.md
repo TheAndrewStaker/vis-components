@@ -1576,13 +1576,6 @@ The X-axis and Y-axis panels (under Encodings) configure:
   axis lays out exactly Count evenly spaced ticks from min to max
   inclusive — 0.04–0.24 with Count 6 gives 0.04, 0.08, 0.12, 0.16,
   0.20, 0.24 — and "Match tick count" gridlines follow the same
-  layout. Date bounds are entered as YYYY-MM-DD or picked from a small
-  calendar whose Month and Year are SEPARATE dropdowns over a day grid
-  (never the browser's one long "Month YYYY" list). With a date set, the
-  dropdowns move it straight to the chosen month / year on the same day
-  (clamped to the month's length), and a day click sets the day; with
-  the field blank the dropdowns only turn the page. A blank clears the
-  bound.
   layout. On a DATE axis the even ticks snap to the calendar unit the
   step reads as (year starts for a ten-year step, month starts for a
   six-week one, midnight for a daily one), so 1949–2019 with Count 8
@@ -1592,9 +1585,16 @@ The X-axis and Y-axis panels (under Encodings) configure:
   2019, never 1980, 1989, 1999 from rounding each tick), so a date axis
   may draw one more or one fewer tick than Count; an END within a hair
   of a boundary snaps onto it, a deliberate mid-year end keeps its own
-  value. Typed and picked dates (min, max,
-  Custom breaks) are local-calendar days, the same clock the axis
-  ticks on. Pinned bounds are also respected exactly on bar / area
+  value. Typed and picked dates (min, max, Custom breaks) are
+  local-calendar days, the same clock the axis ticks on. Date bounds
+  are entered as YYYY-MM-DD or picked from a small calendar whose
+  Month and Year are SEPARATE dropdowns over a day grid (never the
+  browser's one long "Month YYYY" list). The dropdowns set the bound
+  straight away: with a date set they move it to the same day of the
+  chosen month / year (clamped to the month's length); on a blank
+  field the picker opens on January of this year and a choice sets
+  the 1st of that month. A day click refines the day. A blank clears
+  the bound. Pinned bounds are also respected exactly on bar / area
   measure axes (the auto-fit rounding-outward applies only to blank
   ends).
 - **Use a mirrored axis** (Ticks section, its own ruled mini-section
