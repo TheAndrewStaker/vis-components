@@ -131,7 +131,17 @@ export const renderConnectionLines = (
 	 *  at a line highlights it exactly like pointing at one of its points.
 	 *  On a line chart the line IS the mark the user aims for — the points
 	 *  are often small or sampled away entirely. */
-	publishHover?: (row: Record<string, unknown>) => void
+	publishHover?: (row: Record<string, unknown>) => void,
+	/** Which marks actually DRAW a point (by mark `i`), from the "Show
+	 *  points" sampling — `null` = every point draws. Only consulted when
+	 *  `pointsOnly` is on. */
+	markedIndices?: ReadonlySet<number> | null,
+	/** Tooltips → "Show tooltips only at points". When on, the full-row
+	 *  tooltip is reserved for the stretches of line where a point is
+	 *  actually drawn; everywhere else the hover reports the line's
+	 *  connection value alone (and nothing at all when that variable isn't
+	 *  among the Fields shown). */
+	pointsOnly = false
 ) => {
 	const connectionField = encodings.connection?.field ?? null
 	if (!connectionField) return null
@@ -291,6 +301,20 @@ export const renderConnectionLines = (
 				// vary, so they drop out — a line spans many rows and showing one
 				// arbitrary row would mislead. Computed lazily and cached.
 				let cachedFields: HoverState["fields"] = undefined
+				/** The line's identity alone — what a bare stretch of line
+				 * reports under "Show tooltips only at points". Paired with
+				 * `seriesOnly` so the tooltip renders NOTHING when this one
+				 * field isn't among the Fields shown. */
+				const seriesHover = (
+					e: React.MouseEvent<SVGGraphicsElement>
+				): HoverState => ({
+					i: null,
+					row: sorted[0]?.row ?? {},
+					clientX: e.clientX,
+					clientY: e.clientY,
+					fields: [{ name: connectionField, value: groupValue }],
+					seriesOnly: true,
+				})
 				const tooltipFields = (): NonNullable<HoverState["fields"]> => {
 					if (cachedFields) return cachedFields
 					const rows = sorted.map((m) => m.row)
@@ -332,6 +356,19 @@ export const renderConnectionLines = (
 								sorted,
 								clientToSvgLocal(e.currentTarget, e.clientX, e.clientY)
 							)
+							// "Only at points": the snap target has to be a point
+							// the user can SEE. The nearest point of this line is
+							// where the pointer is reading from, so when that point
+							// was sampled away the pointer is over bare line.
+							if (
+								pointsOnly &&
+								nearest &&
+								markedIndices &&
+								!markedIndices.has(nearest.i)
+							) {
+								setHovered(seriesHover(e))
+								return
+							}
 							setHovered(
 								nearest
 									? {
@@ -340,13 +377,18 @@ export const renderConnectionLines = (
 											clientX: e.clientX,
 											clientY: e.clientY,
 										}
-									: {
-											i: null,
-											row: sorted[0]?.row ?? {},
-											clientX: e.clientX,
-											clientY: e.clientY,
-											fields: tooltipFields(),
-										}
+									: // No screen CTM (test DOMs): the pointer can't be
+										// placed along the line, so this is a line-level
+										// hover either way.
+										pointsOnly
+										? seriesHover(e)
+										: {
+												i: null,
+												row: sorted[0]?.row ?? {},
+												clientX: e.clientX,
+												clientY: e.clientY,
+												fields: tooltipFields(),
+											}
 							)
 						},
 						onMouseLeave: () => setHovered(null),

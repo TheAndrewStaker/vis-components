@@ -15,6 +15,7 @@ import {
 	currentEncodingsAtom,
 	currentTooltipConfigAtom,
 } from "../../store/atoms"
+import { useChartModeDef } from "../../store/useChartModeDef"
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
 import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
 import { ColorInput } from "../../../../components/ui/ColorInput"
@@ -32,6 +33,12 @@ export const TooltipPanel = () => {
 	const dataset = useCurrentDatasetView()
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const merged: TooltipConfig = { ...DEFAULT_TOOLTIP_CONFIG, ...cfg }
+	// "Only at points" is a LINE-chart question: it exists because a line is
+	// hoverable between its points. That's the scatter renderer with a
+	// connection field mapped — the mode that snaps the hover to the nearest
+	// point. Nothing else draws a line the pointer can wander along.
+	const isLineChart =
+		useChartModeDef().id === "scatter" && !!encodings.connection?.field
 
 	const update = (next: Partial<TooltipConfig>) =>
 		setCfg({ ...merged, ...next })
@@ -108,7 +115,9 @@ export const TooltipPanel = () => {
 	const tooltipsChanged =
 		merged.enabled !== DEFAULT_TOOLTIP_CONFIG.enabled ||
 		(merged.enabled &&
-			(merged.visibleFields.length > 0 || !!merged.useCustomHtml))
+			(merged.visibleFields.length > 0 ||
+				!!merged.useCustomHtml ||
+				!!merged.pointsOnly))
 	const hoverChanged =
 		!hoverEnabled ||
 		!legendHighlight ||
@@ -134,6 +143,24 @@ export const TooltipPanel = () => {
 					Show tooltips
 				</span>
 			</label>
+			{merged.enabled && isLineChart && (
+				<>
+					<label className="flex items-start gap-2 text-sm">
+						<input
+							type="checkbox"
+							checked={!!merged.pointsOnly}
+							onChange={(e) => update({ pointsOnly: e.target.checked })}
+							className="mt-0.5 h-3 w-3 flex-shrink-0"
+						/>
+						<span className="vc-text">Show tooltips only at points</span>
+					</label>
+					<p className="vc-help">
+						Between the points a line draws, the tooltip shows only that
+						line&apos;s {encodings.connection?.field} &mdash; and nothing
+						at all unless it&apos;s checked below.
+					</p>
+				</>
+			)}
 			{merged.enabled && mappedFieldNames.length > 0 && (
 				<>
 					<hr className="border-stone-200 dark:border-stone-700" />

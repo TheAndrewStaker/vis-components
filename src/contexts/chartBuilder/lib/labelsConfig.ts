@@ -772,6 +772,17 @@ export type TooltipConfig = {
 	 * Optional for back-compat with visuals saved before this
 	 * field existed — `undefined` is treated as `false`. */
 	useCustomHtml?: boolean
+	/** LINE CHARTS only (a connection field mapped on a scatter): restrict
+	 * the full tooltip to the points that are actually DRAWN. "Show points"
+	 * can thin a line's markers down to the first, the last, both ends, or
+	 * every Nth — but the hover snaps to the nearest point anywhere along
+	 * the line, so the tooltip was reporting values at places with no point
+	 * to read them off. With this on, a stretch of bare line reports only
+	 * the line's own identity: its connection variable, and only when that
+	 * variable is one of the Fields shown (otherwise the hover shows
+	 * nothing at all). Points still report the full row. Optional — absent
+	 * / `false` is the old behavior, so saved visuals load unchanged. */
+	pointsOnly?: boolean
 	/** Master toggle for pointer-hover interactions (the "Show hover"
 	 * checkbox under the Hover subsection). When off, the legend-highlight
 	 * behavior below is disabled regardless of its own flag. Independent of
@@ -822,6 +833,7 @@ export const DEFAULT_TOOLTIP_CONFIG: TooltipConfig = {
 	customCss: "",
 	customHtml: "",
 	useCustomHtml: false,
+	pointsOnly: false,
 	hoverEnabled: true,
 	legendHighlight: true,
 	hoverHighlightColor: DEFAULT_HOVER_HIGHLIGHT_COLOR,

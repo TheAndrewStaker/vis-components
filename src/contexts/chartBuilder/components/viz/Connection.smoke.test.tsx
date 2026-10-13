@@ -8,7 +8,11 @@ import {
 	EMPTY_CHANNEL_CONFIGS,
 	type ConnectionConfig,
 } from "../../lib/channelConfig"
-import { DEFAULT_LABELS_CONFIG } from "../../lib/labelsConfig"
+import {
+	DEFAULT_LABELS_CONFIG,
+	DEFAULT_TOOLTIP_CONFIG,
+	type TooltipConfig,
+} from "../../lib/labelsConfig"
 import {
 	emptyDataLabelsEncodings,
 	emptyEncodings,
@@ -23,6 +27,7 @@ import {
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
 	currentLabelsAtom,
+	currentTooltipConfigAtom,
 	loadedDatasetsAtom,
 	previewVersionIdAtom,
 } from "../../store/atoms"
@@ -96,7 +101,10 @@ const seedState = (connectionCfg: Partial<ConnectionConfig> = {}) => {
 }
 
 const initState =
-	(connectionCfg: Partial<ConnectionConfig> = {}) =>
+	(
+		connectionCfg: Partial<ConnectionConfig> = {},
+		tooltipCfg?: Partial<TooltipConfig>
+	) =>
 	(snap: TestStore) => {
 		snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildLineDataset() })
 		snap.set(currentDatasetIdAtom, DATASET_ID)
@@ -116,12 +124,20 @@ const initState =
 		snap.set(currentDataLabelsEncodingsAtom, emptyDataLabelsEncodings())
 		snap.set(currentFieldOverridesAtom, {})
 		snap.set(currentFieldLevelOrdersAtom, {})
+		if (tooltipCfg)
+			snap.set(currentTooltipConfigAtom, {
+				...DEFAULT_TOOLTIP_CONFIG,
+				...tooltipCfg,
+			})
 	}
 
-const mount = (cfg: Partial<ConnectionConfig> = {}) => {
+const mount = (
+	cfg: Partial<ConnectionConfig> = {},
+	tooltipCfg?: Partial<TooltipConfig>
+) => {
 	seedState(cfg)
 	const { container } = render(
-		<TestProvider initializeState={initState(cfg)}>
+		<TestProvider initializeState={initState(cfg, tooltipCfg)}>
 			<div style={{ width: 600, height: 400 }}>
 				<ScatterPlot />
 			</div>
@@ -385,5 +401,97 @@ describe("Connection — line hover tooltip", () => {
 		expect(document.querySelector(".vc-tooltip")).toBeTruthy()
 		fireEvent.mouseLeave(hit)
 		expect(document.querySelector(".vc-tooltip")).toBeNull()
+	})
+})
+
+describe("Connection — tooltips only at points", () => {
+	// The tooltip portals to document.body; unmount between tests so a
+	// previous tooltip can't answer the next document-level query.
+	afterEach(cleanup)
+
+	/** happy-dom has no `getScreenCTM`; stub an identity transform so client
+	 *  coords ARE the hit stroke's local coords. */
+	const withIdentityCtm = (el: Element) => {
+		;(el as unknown as { getScreenCTM: () => unknown }).getScreenCTM = () => ({
+			inverse: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
+		})
+	}
+	const hitPoints = (hit: Element): Array<[number, number]> =>
+		(hit.getAttribute("points") ?? "")
+			.split(" ")
+			.map((pair) => pair.split(",").map(Number) as [number, number])
+
+	/** Hover the north line midway between its 3rd and 4th points — a
+	 *  stretch of bare line while only the ends draw markers. */
+	const hoverBareLine = (c: HTMLElement) => {
+		const north = [...c.querySelectorAll("polyline.vc-line-hit")][0]!
+		withIdentityCtm(north)
+		const pts = hitPoints(north)
+		const [x3, y3] = pts[2]!
+		const [x4, y4] = pts[3]!
+		fireEvent.mouseMove(north, {
+			clientX: x3 + (x4 - x3) * 0.3,
+			clientY: y3 + (y4 - y3) * 0.3 + 3,
+		})
+		return document.querySelector(".vc-tooltip")
+	}
+
+	it("reports only the line's connection value where no point is drawn", () => {
+		const tip = hoverBareLine(
+			mount({ pointSampling: "first-and-last" }, { pointsOnly: true })
+		)
+		expect(tip).toBeTruthy()
+		// The line's identity — and nothing read off a point that isn't there.
+		expect(tip!.textContent).toContain("g:")
+		expect(tip!.textContent).toContain("north")
+		expect(tip!.textContent).not.toContain("x:")
+		expect(tip!.textContent).not.toContain("y:")
+	})
+
+	it("still reports the full row at a point that IS drawn", () => {
+		const c = mount({ pointSampling: "first-and-last" }, { pointsOnly: true })
+		const north = [...c.querySelectorAll("polyline.vc-line-hit")][0]!
+		withIdentityCtm(north)
+		// The last point (x=5, y=50) draws a marker under "first and last".
+		const [lx, ly] = hitPoints(north)[4]!
+		fireEvent.mouseMove(north, { clientX: lx, clientY: ly })
+		const tip = document.querySelector(".vc-tooltip")
+		expect(tip).toBeTruthy()
+		expect(tip!.textContent).toMatch(/x:\s*5(?!\d)/)
+		expect(tip!.textContent).toMatch(/y:\s*50(?!\d)/)
+	})
+
+	it("shows nothing at all when the connection variable isn't among the Fields shown", () => {
+		const tip = hoverBareLine(
+			mount(
+				{ pointSampling: "first-and-last" },
+				{ pointsOnly: true, visibleFields: ["x", "y"] }
+			)
+		)
+		expect(tip).toBeNull()
+	})
+
+	it("shows nothing anywhere along a line drawn with no points at all", () => {
+		const tip = hoverBareLine(
+			mount(
+				{ pointSampling: "none" },
+				{ pointsOnly: true, visibleFields: ["x", "y"] }
+			)
+		)
+		expect(tip).toBeNull()
+	})
+
+	it("is off by default: a bare stretch still snaps to the nearest point", () => {
+		const tip = hoverBareLine(mount({ pointSampling: "first-and-last" }))
+		expect(tip).toBeTruthy()
+		expect(tip!.textContent).toMatch(/x:\s*3(?!\d)/)
+		expect(tip!.textContent).toMatch(/y:\s*30(?!\d)/)
+	})
+
+	it("changes nothing while every point is drawn", () => {
+		const tip = hoverBareLine(mount({}, { pointsOnly: true }))
+		expect(tip).toBeTruthy()
+		expect(tip!.textContent).toMatch(/x:\s*3(?!\d)/)
+		expect(tip!.textContent).toMatch(/y:\s*30(?!\d)/)
 	})
 })

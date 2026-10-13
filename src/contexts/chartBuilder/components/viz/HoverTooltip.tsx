@@ -27,6 +27,11 @@ export type TooltipState = {
 	 * carries elsewhere on the chart (`lib/tooltipFormats.ts`), so a
 	 * renderer must never pre-format them. */
 	fields: Array<{ name: string; value: unknown }>
+	/** A LINE-level hover under "Show tooltips only at points": `fields`
+	 * carries the line's connection value alone. Nothing is shown when that
+	 * variable isn't among the Fields shown — not even a custom template,
+	 * which would otherwise render with every placeholder empty. */
+	seriesOnly?: boolean
 }
 
 /** HTML-escape a value to safely interpolate raw data into a user-supplied
@@ -96,7 +101,10 @@ export const HoverTooltip = ({ state }: { state: TooltipState }) => {
 		visible.length === 0
 			? fields
 			: fields.filter((f) => visible.includes(f.name))
-	if (filtered.length === 0 && !(cfg.useCustomHtml && cfg.customHtml.trim()))
+	if (
+		filtered.length === 0 &&
+		(state.seriesOnly || !(cfg.useCustomHtml && cfg.customHtml.trim()))
+	)
 		return null
 
 	const style: CSSProperties = {

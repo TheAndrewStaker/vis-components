@@ -2779,6 +2779,23 @@ neighboring line that happens to be geometrically closer never steals
 the hover — the line under the pointer is the series the user is
 reading. Hovering a marker directly still reports that marker.
 
+**"Show tooltips only at points"** (a checkbox right under Show
+tooltips, offered on line charts only — a scatter with a connection
+field mapped) reins that snapping in. Connection → "Show points" can
+thin a line's markers down to the first, the last, both ends, every
+Nth, or none at all; without this option the hover still reports a
+full row at places along the line where there is no point to read it
+off. With it on, the full row is reserved for the stretches where a
+point is actually DRAWN. Everywhere else the hover reports the line's
+identity alone — its connection variable — and only if that variable
+is one of the Fields shown; when it isn't, hovering bare line shows
+nothing at all (not even a custom HTML template, which would
+otherwise render with every placeholder empty). So on a line chart
+drawn with first-and-last points: at either end the tooltip is the
+full row, anywhere between them it's just the line's category. A line
+chart with every point drawn is unaffected, and the option is off by
+default, so saved visuals keep the old behavior.
+
 ---
 
 ## 11. Annotations

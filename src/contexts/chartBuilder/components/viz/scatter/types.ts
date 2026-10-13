@@ -15,6 +15,10 @@ export type HoverState = {
 	clientX: number
 	clientY: number
 	fields?: Array<{ name: string; value: unknown }>
+	/** Set on a LINE-level hover under "Show tooltips only at points":
+	 * `fields` is the line's connection value alone, and the tooltip shows
+	 * nothing at all when that variable isn't among the Fields shown. */
+	seriesOnly?: boolean
 }
 
 export type Mark = {

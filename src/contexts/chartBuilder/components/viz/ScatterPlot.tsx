@@ -32,6 +32,7 @@ import {
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
 	currentLabelsAtom,
+	currentTooltipConfigAtom,
 } from "../../store/atoms"
 import {
 	renderChannelConfigsAtom,
@@ -87,6 +88,9 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 		? levelOrders[channelConfigs.drawOrder.field]
 		: undefined
 	const labels = useAtomValue(currentLabelsAtom)
+	// "Show tooltips only at points": a bare stretch of line reports the
+	// line's connection value alone instead of the nearest point's row.
+	const tooltipPointsOnly = !!useAtomValue(currentTooltipConfigAtom).pointsOnly
 	// Data labels atoms are read up-front (before any early-return path) so
 	// hook order stays stable across the dataset / missing-field guards
 	// below — react-hooks/rules-of-hooks won't accept them inline beside
@@ -290,6 +294,7 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 							name: f.name,
 							value: hovered.row[f.name],
 						})),
+					seriesOnly: hovered.seriesOnly,
 				}}
 			/>
 		)
@@ -728,7 +733,9 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 					aestheticScales.themeInkFallback,
 					setHovered,
 					legendHighlight,
-					publishHover
+					publishHover,
+					markedIndices,
+					tooltipPointsOnly
 				)}
 				{renderMarkPaths({
 					marks: sortByDrawOrder(
