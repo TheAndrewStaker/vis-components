@@ -8,6 +8,7 @@ import {
 	DEFAULT_SPINE_CONFIG,
 	type AngleConfig,
 } from "../../../lib/channelConfig"
+import { isBarModeId, isPieModeId } from "../../../lib/chartModes/families"
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { angleConfigFromTheme, valueChanged } from "../../../lib/themeConfig"
 import {
@@ -52,8 +53,7 @@ export const AngleOptionsPanel = () => {
 	// state is derived from that value rather than a separate boolean, so
 	// there's a single source of truth (matches the Line/Area toggle's
 	// non-redundant design).
-	const isPieMode =
-		modeId === "pies" || modeId === "pies-x" || modeId === "pies-y"
+	const isPieMode = isPieModeId(modeId)
 	const holeRadius = cfg.donutHoleRadius ?? 0
 	const isDonut = holeRadius > 0
 
@@ -500,22 +500,32 @@ export const LengthOptionsPanel = () => {
 	const currentLength = configs.defaultLength ?? null
 	const cfg = configs.length ?? DEFAULT_LENGTH_CONFIG
 
-	// In bar-family (and geo) modes the mapped variable IS the mark length —
-	// it goes through the position scale, not the px min/max range — so the
-	// range inputs are inert. Same per-mode flag the legend uses to suppress
-	// the length ramp.
+	// What length MEANS here is a declared mode trait (`canvas.lengthRole`),
+	// branched on BEFORE the field check: a histogram is a bar mode with no
+	// length field mapped, and used to fall through to the scatter-style
+	// "default length" control — inert there (only scatter marks read it)
+	// and captioned for line segments.
 	const modeDef = useChartModeDef()
-	const rangeInert = modeDef.legend.hideLengthInThisMode
-	// Bar charts get the band-gap knob instead: percent of each category slot
-	// left as gap between bars (bar width is the remainder, so one value
-	// controls both). Bars only — the other range-inert modes (areas, geo)
-	// have no band scale to pad.
-	const isBarMode = modeDef.id === "bars-x" || modeDef.id === "bars-y"
+	const { lengthRole } = modeDef.canvas
+	// Bar charts get the band-gap knob: pixels of each category slot left as
+	// gap between bars (bar width is the remainder, so one value controls
+	// both). Bars only — areas have no band scale to pad — and only with a
+	// length field: a bar mode WITHOUT one is a histogram, whose bins abut
+	// by design (BarPlot forces zero padding), so the knob would be inert.
+	const showBarGap = isBarModeId(modeDef.id) && fieldMapped
 
-	if (fieldMapped && rangeInert) {
+	if (lengthRole === "none") {
 		return (
 			<div className="vc-option-panel">
-				{isBarMode && (
+				<div className="vc-help">This chart type doesn&apos;t draw length.</div>
+			</div>
+		)
+	}
+
+	if (lengthRole === "measure") {
+		return (
+			<div className="vc-option-panel">
+				{showBarGap && (
 					<BarGapControl
 						barGapPx={configs.length?.barGapPx ?? null}
 						onChange={(barGapPx) =>
@@ -530,8 +540,9 @@ export const LengthOptionsPanel = () => {
 					/>
 				)}
 				<div className="vc-help">
-					In this chart type, length comes straight from the mapped variable
-					via the axis scale — there is no separate length range to set.
+					{fieldMapped
+						? "In this chart type, length comes straight from the mapped variable via the axis scale — there is no separate length range to set."
+						: "In this chart type, bar length is the count per bin, drawn on the axis scale — histogram bars abut, so there is no gap or length range to set."}
 				</div>
 			</div>
 		)

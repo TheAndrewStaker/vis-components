@@ -45,6 +45,8 @@ export const AreasXMode: ChartModeDef = {
 	},
 	canvas: {
 		coordFamily: "cartesian",
+		cartesianAxes: { x: true, y: true },
+		lengthRole: "measure",
 		measureAxis: "y",
 		// Areas read `length` first, then fall back to `y` (the length-less
 		// areas-x form binds the measure to y directly).

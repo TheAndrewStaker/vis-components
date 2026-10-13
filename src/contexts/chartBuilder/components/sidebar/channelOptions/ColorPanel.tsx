@@ -11,7 +11,9 @@ import {
 	colorSlotEdited,
 	legacySlotColor,
 	type ColorSlotDef,
+	filledRadarOn,
 } from "../../../lib/colorSlots"
+import { isAreaModeId } from "../../../lib/chartModes/families"
 import { effectiveType } from "../../../lib/fieldType"
 import { buildQuantHueConfigFromTheme } from "../../../lib/hueDefaults"
 import { CATEGORICAL_HUE_PALETTE, parseValue } from "../../../lib/scales"
@@ -72,13 +74,13 @@ export const ColorPanel = () => {
 	// the fill (linked), via `connection`-based palettes — so they get the
 	// dedicated `AreaRadarOutlinePanel` instead of the independent-field
 	// `OutlineColorRow`. Radar only shows it when the polygon is filled.
-	const isAreaMode = mode === "areas-x" || mode === "areas-y"
-	const isRadarFilled = mode === "radar" && configs.connection?.fillPolygon === true
+	const isAreaMode = isAreaModeId(mode)
+	const isRadarFilled = filledRadarOn(mode, configs)
 	const useLinkedOutline = isAreaMode || isRadarFilled
 	// Scatter-style independent outline (own field) for every other mode —
 	// except the pure density curve, whose marks (the styling target) are gone.
 	const showIndependentOutline =
-		mode !== "areas-x" && mode !== "areas-y" && mode !== "radar" && !pureDensityCurve
+		!isAreaMode && mode !== "radar" && !pureDensityCurve
 
 	// Subsection dots — reuse the SAME change data the top-level Color dot uses
 	// (so they can't disagree). The hue registry labels map to the subheaders.

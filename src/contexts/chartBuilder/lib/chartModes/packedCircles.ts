@@ -36,8 +36,11 @@ export const PackedCirclesMode: ChartModeDef = {
 		supportsSharedMeasureMax: false,
 	},
 	annotations: {
-		xValueChannel: "x",
-		yValueChannel: "y",
+		// No value axes: detection requires x and y UNMAPPED, so there is no
+		// field a "data units" coordinate could scale against. Value mode is
+		// disabled; annotations place in percent / pixel terms.
+		xValueChannel: null,
+		yValueChannel: null,
 		polarValueCoords: false,
 	},
 	canvas: {
@@ -46,6 +49,8 @@ export const PackedCirclesMode: ChartModeDef = {
 		// rect. Not "polar" — that would demand a polarUnit for the
 		// size-panels-by-unit machinery this mode doesn't participate in.
 		coordFamily: "cartesian",
+		cartesianAxes: { x: false, y: false },
+		lengthRole: "none",
 		measureAxis: null,
 	},
 }

@@ -35,6 +35,8 @@ export const AreasYMode: ChartModeDef = {
 	},
 	canvas: {
 		coordFamily: "cartesian",
+		cartesianAxes: { x: true, y: true },
+		lengthRole: "measure",
 		measureAxis: "x",
 		// Horizontal areas bind the measure via `length` only (no x fallback
 		// -- x is the measure PIXEL axis, not a measure field source).

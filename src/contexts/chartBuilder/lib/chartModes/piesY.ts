@@ -29,6 +29,8 @@ export const PiesYMode: ChartModeDef = {
 	},
 	canvas: {
 		coordFamily: "polar",
+		cartesianAxes: { x: false, y: true },
+		lengthRole: "none",
 		measureAxis: null,
 		polarUnit: "angleSum",
 	},

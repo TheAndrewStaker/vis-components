@@ -17,6 +17,7 @@ import {
 	currentChannelConfigsAtom,
 	currentEncodingsAtom,
 } from "../../../store/atoms"
+import { isAreaModeId } from "../../../lib/chartModes/families"
 import { useChartModeDef } from "../../../store/useChartModeDef"
 
 /** A stack channel hosts its own Stack/Group/Overlay toggle whenever it's
@@ -58,8 +59,7 @@ export const StackModeRow = ({
 	// the Chart-type Line/Area toggle) so the user can flip stacking
 	// without bouncing to a different panel. Bars and other stacking
 	// modes keep the toggle in their primary channel panel (Hue, Pattern).
-	const isAreaMode = modeDef.id === "areas-x" || modeDef.id === "areas-y"
-	if (isAreaMode) return null
+	if (isAreaModeId(modeDef.id)) return null
 
 	const cfg = configs[channel] as { stackMode?: StackMode } | undefined
 	const value: StackMode = cfg?.stackMode ?? "stack"

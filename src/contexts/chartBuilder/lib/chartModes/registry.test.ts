@@ -9,6 +9,7 @@ import { AreasXMode } from "./areasX"
 import { AreasYMode } from "./areasY"
 import { BarsXMode } from "./barsX"
 import { BarsYMode } from "./barsY"
+import { FAMILY_MODE_IDS } from "./families"
 import { MODE_REGISTRY } from "./index"
 import { PiesMode } from "./pies"
 import { PiesXMode } from "./piesX"
@@ -396,5 +397,69 @@ describe("canvas traits", () => {
 				mode.id === "radar",
 			)
 		}
+	})
+})
+
+describe("axis + length traits", () => {
+	it("every mode declares which cartesian axes it draws and what length means", () => {
+		for (const mode of MODE_REGISTRY) {
+			expect(typeof mode.canvas.cartesianAxes.x, mode.id).toBe("boolean")
+			expect(typeof mode.canvas.cartesianAxes.y, mode.id).toBe("boolean")
+			expect(["mark", "measure", "none"], mode.id).toContain(
+				mode.canvas.lengthRole,
+			)
+		}
+	})
+
+	it("geo and polar panels draw no cartesian axes (except the pie bands' category axis)", () => {
+		for (const mode of MODE_REGISTRY) {
+			const { coordFamily, cartesianAxes } = mode.canvas
+			if (coordFamily === "geo") {
+				expect(cartesianAxes, mode.id).toEqual({ x: false, y: false })
+			}
+			if (coordFamily === "polar") {
+				// At most one: the pies-x / pies-y band axis.
+				expect(Number(cartesianAxes.x) + Number(cartesianAxes.y), mode.id)
+					.toBeLessThanOrEqual(1)
+			}
+		}
+		expect(PiesXMode.canvas.cartesianAxes).toEqual({ x: true, y: false })
+		expect(PiesYMode.canvas.cartesianAxes).toEqual({ x: false, y: true })
+	})
+
+	it("a measure axis is always a drawn axis", () => {
+		for (const mode of MODE_REGISTRY) {
+			const { measureAxis, cartesianAxes } = mode.canvas
+			if (measureAxis) expect(cartesianAxes[measureAxis], mode.id).toBe(true)
+		}
+	})
+
+	it("lengthRole 'measure' exactly matches the measure-axis modes", () => {
+		for (const mode of MODE_REGISTRY) {
+			expect(mode.canvas.lengthRole === "measure", mode.id).toBe(
+				mode.canvas.measureAxis !== null,
+			)
+		}
+	})
+
+	it("value-mode annotation channels exist only where a value axis is drawn", () => {
+		// A declared value channel must be backed by something the renderer
+		// scales against: a drawn cartesian axis, or radar's polar axes. The
+		// axis-less structure layouts and the geo modes declare none, which
+		// is what disables "data units" mode in the Annotations panel.
+		for (const mode of MODE_REGISTRY) {
+			const { xValueChannel, yValueChannel, polarValueCoords } = mode.annotations
+			if (polarValueCoords) continue
+			const { cartesianAxes } = mode.canvas
+			expect(xValueChannel !== null, `${mode.id} x`).toBe(cartesianAxes.x)
+			expect(yValueChannel !== null, `${mode.id} y`).toBe(cartesianAxes.y)
+		}
+	})
+})
+
+describe("mode families", () => {
+	it("every family id is a registered mode", () => {
+		const ids = new Set(MODE_REGISTRY.map((m) => m.id))
+		for (const id of FAMILY_MODE_IDS) expect(ids.has(id), id).toBe(true)
 	})
 })

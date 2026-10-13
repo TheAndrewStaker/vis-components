@@ -314,7 +314,7 @@ export const PlotCanvas = () => {
 		xType: FieldType | null
 		yType: FieldType | null
 	} = useMemo(() => {
-		const { xField, yField } = axisFieldsFor(modeId, encodings)
+		const { xField, yField } = axisFieldsFor(mode, encodings)
 		const xType: FieldType | null =
 			xField && dataset ? effectiveType(dataset, xField, overrides) : null
 		const yType: FieldType | null =
@@ -334,13 +334,13 @@ export const PlotCanvas = () => {
 	// `""` = user cleared it → draw no title (so the `!== undefined` check,
 	// not a truthiness check, gates the custom/blank branch).
 	const sharedXAxisTitle = (() => {
-		if (!hasXAxis(modeId)) return ""
+		if (!hasXAxis(mode)) return ""
 		if (labels.xAxisTitle !== undefined) return labels.xAxisTitle
 		if (!isFaceted) return ""
 		return axisFields.xField ?? ""
 	})()
 	const sharedYAxisTitle = (() => {
-		if (!hasYAxis(modeId)) return ""
+		if (!hasYAxis(mode)) return ""
 		if (labels.yAxisTitle !== undefined) return labels.yAxisTitle
 		if (!isFaceted) return ""
 		return axisFields.yField ?? ""

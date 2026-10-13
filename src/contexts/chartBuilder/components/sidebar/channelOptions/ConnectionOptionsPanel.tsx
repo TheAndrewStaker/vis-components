@@ -24,10 +24,11 @@ import {
 	inferHierarchyIdField,
 } from "../../../lib/buildHierarchy"
 import {
+	isAreaModeId,
 	isFlowModeId,
 	isHierarchyModeId,
 	isStructureModeId,
-} from "../../../lib/packedMeasure"
+} from "../../../lib/chartModes/families"
 import {
 	explicitFlowTargetField,
 	resolveFlowTargetField,
@@ -107,7 +108,7 @@ export const ConnectionOptionsPanel = () => {
 
 	const connectionFieldName = encodings.connection?.field ?? null
 	const modeId = useChartModeDef().id
-	const isAreaMode = modeId === "areas-x" || modeId === "areas-y"
+	const isAreaMode = isAreaModeId(modeId)
 	const isRadarMode = modeId === "radar"
 	const isScatterMode = modeId === "scatter"
 	// Hierarchy layouts (packed circles / treemap / sunburst): connection is

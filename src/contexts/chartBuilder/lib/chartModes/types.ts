@@ -45,8 +45,10 @@ export type ChartModeAnnotationTraits = {
 	 * renderer scales against: `"x"` for cartesian modes, `"length"` when
 	 * the measure runs horizontally (bars-y / areas-y), `"angle"` on radar
 	 * (value-mode x IS the angle position). `null` = no field drives the
-	 * horizontal value axis in this mode (pies / pies-y — the slice angle
-	 * consumed it), so the panel falls back to a bare number input. */
+	 * horizontal value axis in this mode — the slice angle consumed it
+	 * (pies / pies-y), or the panel has no position scale at all (geo, the
+	 * axis-less structure layouts). Both null = the panel disables value
+	 * mode. Must agree with `canvas.cartesianAxes` (a registry test checks). */
 	xValueChannel: "x" | "length" | "angle" | null
 	/** Vertical counterpart: `"y"` for cartesian modes, `"length"` when the
 	 * measure runs vertically (bars-x / areas-x), `"r"` on radar. `null` =
@@ -58,7 +60,8 @@ export type ChartModeAnnotationTraits = {
 	 * always measure the radius on the r axis, and hide the x/y radius-axis
 	 * toggle. Polar modes WITHOUT value axes (the pie variants) leave this
 	 * false — they disable value mode entirely instead (the panel derives
-	 * that from `canvas.coordFamily === "polar"`). */
+	 * that from `canvas.coordFamily === "polar"` or both value channels
+	 * being null). */
 	polarValueCoords: boolean
 }
 
@@ -119,6 +122,25 @@ export type ChartModeCanvasTraits = {
 	 * x/y share-mode migration; `"geo"` panels own their projection and
 	 * ignore cartesian share plumbing. */
 	coordFamily: "cartesian" | "polar" | "geo"
+	/** Which CARTESIAN axes the panel actually draws. `coordFamily` alone
+	 * can't say: the axis-less layouts (packed circles / treemap / sunburst /
+	 * chord / sankey) are "cartesian" panels that draw no axis, the pie
+	 * bands draw ONE (pies-x draws x, pies-y draws y), and geo panels draw
+	 * none. Everything that asks "is there an x axis here?" — shared axis
+	 * titles, the facet panel's Share-axis rows and range editors, the
+	 * annotation value-mode gate — reads this, never the mode id. */
+	cartesianAxes: { x: boolean; y: boolean }
+	/** What the `length` channel (and the Length options panel) means here:
+	 *  - `"mark"`: a per-mark pixel length through the Length min/max px
+	 *    range (or the single default length when unmapped) — scatter-style
+	 *    segments.
+	 *  - `"measure"`: the mapped variable IS the mark extent, scaled by the
+	 *    measure axis (bars / areas) — the px range is inert.
+	 *  - `"none"`: the renderer never reads length (pies, tile, geo, the
+	 *    structure layouts) — every Length control is inert.
+	 * Distinct from `legend.hideLengthInThisMode` (a legend-display choice)
+	 * so the two can't be conflated. */
+	lengthRole: "mark" | "measure" | "none"
 	/** Which ENCODING axis carries the continuous measure for bar/area-
 	 * style charts: the axis whose bounds PlotCanvas translates into
 	 * `measureMinOverride`/`measureMaxOverride` and whose share mode

@@ -1,5 +1,6 @@
 import type { ChannelConfigs } from "./channelConfig"
-import { getChartMode } from "./chartMode"
+import { getChartModeDef } from "./chartMode"
+import { isBarModeId } from "./chartModes/families"
 import type { Encodings, FieldType } from "./types"
 
 /** The active-histogram facts the Fill color / opacity panels (and the legend)
@@ -39,9 +40,10 @@ export const resolveHistogramMeasure = (
 	getType: (name: string) => FieldType,
 	channelConfigs: ChannelConfigs
 ): HistogramMeasure | null => {
-	const mode = getChartMode(encodings, getType, channelConfigs)
-	if (mode !== "bars-x" && mode !== "bars-y") return null
-	const categoryChannel = mode === "bars-x" ? "x" : "y"
+	const mode = getChartModeDef(encodings, getType, channelConfigs)
+	if (!isBarModeId(mode.id)) return null
+	// The category axis is the one that ISN'T the measure.
+	const categoryChannel = mode.canvas.measureAxis === "y" ? "x" : "y"
 	const categoryField = encodings[categoryChannel].field
 	if (!categoryField) return null
 	if (getType(categoryField) !== "quantitative") return null

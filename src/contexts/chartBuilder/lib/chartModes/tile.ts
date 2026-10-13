@@ -63,6 +63,8 @@ export const TileMode: ChartModeDef = {
 	},
 	canvas: {
 		coordFamily: "cartesian",
+		cartesianAxes: { x: true, y: true },
+		lengthRole: "none",
 		measureAxis: null,
 	},
 }

@@ -29,10 +29,15 @@ import {
 	PACKED_DERIVED_LABELS,
 	PACKED_MEASURE_OPTION_VALUE,
 	hierarchyDepthLevels,
-	isHierarchyModeId,
 	packedSourceForOptionValue,
 	topLevelGroupNames,
 } from "../../lib/packedMeasure"
+import {
+	isAreaModeId,
+	isBarModeId,
+	isHierarchyModeId,
+	isPieModeId,
+} from "../../lib/chartModes/families"
 import {
 	emptyDataLabelsEncodings,
 	type DataLabelsEncodings,
@@ -219,18 +224,17 @@ export const DataLabelsPanel = () => {
 	// Pie family — labels are placed in polar terms (distance from center +
 	// angular nudge) rather than the cartesian X/Y pixel offsets that make
 	// no sense around a wedge.
-	const isPolarMode =
-		chartMode === "pies" || chartMode === "pies-x" || chartMode === "pies-y"
+	const isPolarMode = isPieModeId(chartMode)
 	// No per-series endpoints: regions on a map, nodes in a sunburst. The
 	// "Which labels" selection is hidden AND skipped by the renderer there.
 	const noSeriesEndpoints = isGeoMode || isSunburstMode
 	// Bar charts (incl. histograms, which are bars over binned categories) are
 	// the only mode where "Bar position" (label placement along the measure
 	// axis) applies — gate the control on it.
-	const isBarMode = chartMode === "bars-x" || chartMode === "bars-y"
+	const isBarMode = isBarModeId(chartMode)
 	// Area charts get the same placements along each layer's measure extent
 	// ("Layer position"), plus the layer's top edge as the default.
-	const isAreaMode = chartMode === "areas-x" || chartMode === "areas-y"
+	const isAreaMode = isAreaModeId(chartMode)
 	// "Of each" scope for the series ends. Shown only where it can change
 	// anything: bars grouped (a group-mode channel) or layered (stack /
 	// overlay), stacked areas, or several pies with a wedge channel — AND

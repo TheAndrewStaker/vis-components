@@ -21,13 +21,17 @@ import { resolveHierarchyIdField } from "../../../lib/buildHierarchy"
 import {
 	PACKED_MEASURE_OPTION_VALUE,
 	hierarchyDepthLevels,
-	isFlowModeId,
-	isHierarchyModeId,
 	packedDerivedOptions,
 	packedSourceForOptionValue,
 	packedSourceOf,
 	topLevelGroupNames,
 } from "../../../lib/packedMeasure"
+import {
+	isAreaModeId,
+	isFlowModeId,
+	isHierarchyModeId,
+} from "../../../lib/chartModes/families"
+import { filledRadarOn } from "../../../lib/colorSlots"
 import { valueChanged } from "../../../lib/themeConfig"
 import { makeOpacityScale, parseValue } from "../../../lib/scales"
 import { preserveStackMode } from "../../../lib/stackMode"
@@ -72,8 +76,8 @@ export const OpacityOptionsPanel = () => {
 	// one value), mirroring the Color menu: the in-panel "Vary by" duplicates
 	// the shelf's Opacity row, and the outline (Border) opacity is per-layer
 	// aggregated so a per-row field mapping is a no-op — drop both selectors.
-	const isAreaMode = mode === "areas-x" || mode === "areas-y"
-	const isRadarFilled = mode === "radar" && configs.connection?.fillPolygon === true
+	const isAreaMode = isAreaModeId(mode)
+	const isRadarFilled = filledRadarOn(mode, configs)
 	const linkedOutline = isAreaMode || isRadarFilled
 
 	const theme = useCurrentTheme()

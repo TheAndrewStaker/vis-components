@@ -30,12 +30,17 @@ export const SankeyMode: ChartModeDef = {
 		supportsSharedMeasureMax: false,
 	},
 	annotations: {
-		xValueChannel: "x",
-		yValueChannel: "y",
+		// No value axes: detection requires x and y UNMAPPED, so there is no
+		// field a "data units" coordinate could scale against. Value mode is
+		// disabled; annotations place in percent / pixel terms.
+		xValueChannel: null,
+		yValueChannel: null,
 		polarValueCoords: false,
 	},
 	canvas: {
 		coordFamily: "cartesian",
+		cartesianAxes: { x: false, y: false },
+		lengthRole: "none",
 		measureAxis: null,
 	},
 }

@@ -82,6 +82,13 @@ export const densityCurveFillOn = (configs: ChannelConfigs): boolean => {
 	return on(configs.x) || on(configs.y)
 }
 
+/** True when the chart is a radar whose series polygons are FILLED — the
+ * Color and Opacity panels then link the outline to the series (one layer =
+ * one value) exactly as the area modes do. Shared so the two panels can't
+ * drift. */
+export const filledRadarOn = (mode: ChartMode, configs: ChannelConfigs): boolean =>
+	mode === "radar" && configs.connection?.fillPolygon === true
+
 /** True when the scatter regression-line overlay is on. Exported so the
  * opacity-slot registry and the renderer reuse the same gate. */
 export const regressionOn = (configs: ChannelConfigs): boolean =>

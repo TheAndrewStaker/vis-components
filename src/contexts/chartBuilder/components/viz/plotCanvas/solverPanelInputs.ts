@@ -7,7 +7,6 @@ import {
 	type ChannelConfigs,
 	type FacetConfig,
 } from "../../../lib/channelConfig"
-import type { ChartMode } from "../../../lib/chartMode"
 import type { ChartModeDef } from "../../../lib/chartModes/types"
 import { evenlySpacedTicks, evenlySpacedTimeTicks } from "../../../lib/evenTicks"
 import type { SolverPanelInput } from "../../../lib/facetLayoutSolver"
@@ -86,7 +85,7 @@ export const buildSolverPanelInputs = ({
 	// chart family, so the measured width came back 0 and the y-title gap
 	// collapsed onto its floor, overlapping the tick labels.
 	const axisFields = mode
-		? axisFieldsFor(mode.id as ChartMode, encodings)
+		? axisFieldsFor(mode, encodings)
 		: {
 				xField: encodings.x?.field ?? null,
 				yField: encodings.y?.field ?? null,

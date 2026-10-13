@@ -164,7 +164,7 @@ export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
 	}
 
 	const mode = useChartModeDef()
-	const axisMap = facetAxisMapping(mode.id)
+	const axisMap = facetAxisMapping(mode)
 	// Polar charts (radar / pie): the cartesian "Size … by …" toggle
 	// writes proportionalSizingX/Y but the polar runtime reads the
 	// dedicated proportionalPanelSizing flag — so the cartesian toggle
@@ -172,11 +172,7 @@ export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
 	// "Size panels by unit" toggle instead. Mirrors what the wrap panel
 	// does for polar charts (only one of the two toggles ever surfaces
 	// at a time, gated by mode).
-	const isPolar =
-		mode.id === "radar" ||
-		mode.id === "pies" ||
-		mode.id === "pies-x" ||
-		mode.id === "pies-y"
+	const isPolar = mode.canvas.coordFamily === "polar"
 
 	const ownField = encodings[spec.facetChannel]?.field ?? null
 	const perpField = encodings[spec.perpFacetChannel]?.field ?? null

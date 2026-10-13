@@ -90,10 +90,15 @@ export const AnnotationsPanel = () => {
 	// declares which encoding channel backs each value axis and whether value
 	// coords are polar. Radar maps onto the same x→angle, y→r convention the
 	// renderer uses, so value-mode circle centers read x=angle, y=r. Pies have
-	// no value axes; polar modes gray out value mode entirely.
+	// no value axes; polar modes gray out value mode entirely — as does any
+	// mode that declares NO value channel on either axis (geo, the axis-less
+	// structure layouts): there is no scale a "data units" coordinate could
+	// resolve against, so offering the mode would only fall back to percent.
 	const { xValueChannel, yValueChannel, polarValueCoords } = modeDef.annotations
 	const isRadar = polarValueCoords
 	const isPolar = modeDef.canvas.coordFamily === "polar"
+	const noValueAxes = xValueChannel === null && yValueChannel === null
+	const disableValues = isPolar || noValueAxes
 
 	const resolveAxis = (axis: "x" | "y"): AxisInfo => {
 		const channel = axis === "x" ? xValueChannel : yValueChannel
@@ -298,7 +303,7 @@ export const AnnotationsPanel = () => {
 					onToggle={() => setExpanded(rect.id, !expandedIds.has(rect.id))}
 					xAxis={xAxis}
 					yAxis={yAxis}
-					disableValues={isPolar}
+					disableValues={disableValues}
 					namePlaceholder={nameSuggestion("Rectangle", i)}
 					facetScope={
 						isFaceted ? (
@@ -325,7 +330,7 @@ export const AnnotationsPanel = () => {
 					xAxis={xAxis}
 					yAxis={yAxis}
 					isRadar={isRadar}
-					disableValues={isPolar && !isRadar}
+					disableValues={disableValues && !isRadar}
 					namePlaceholder={nameSuggestion("Circle", i)}
 					facetScope={
 						isFaceted ? (
@@ -351,7 +356,7 @@ export const AnnotationsPanel = () => {
 					onToggle={() => setExpanded(line.id, !expandedIds.has(line.id))}
 					xAxis={xAxis}
 					yAxis={yAxis}
-					disableValues={isPolar}
+					disableValues={disableValues}
 					namePlaceholder={nameSuggestion("Line", i)}
 					facetScope={
 						isFaceted ? (
@@ -377,7 +382,7 @@ export const AnnotationsPanel = () => {
 					onToggle={() => setExpanded(t.id, !expandedIds.has(t.id))}
 					xAxis={xAxis}
 					yAxis={yAxis}
-					disableValues={isPolar}
+					disableValues={disableValues}
 					namePlaceholder={nameSuggestion("Text", i)}
 					facetScope={
 						isFaceted ? (

@@ -4,6 +4,7 @@ import { installInMemoryLocalStorage } from "../../../../../testSupport/localSto
 import { buildDataset as buildDatasetFixture } from "../../../../../testSupport/fixtures"
 import { afterEach, describe, expect, it } from "vitest"
 import {
+	DEFAULT_CONNECTION_CONFIG,
 	DEFAULT_FACET_CONFIG,
 	EMPTY_CHANNEL_CONFIGS,
 	type ChannelConfigs,
@@ -135,5 +136,33 @@ describe("FacetOptionsPanel — Y range editors on a length-encoded bar chart", 
 		expect(utils.getByText("Y axis range per row")).toBeTruthy()
 		expect(utils.getByText("Home")).toBeTruthy()
 		expect(utils.getByText("Everything else")).toBeTruthy()
+	})
+})
+
+describe("FacetOptionsPanel — axis-less modes", () => {
+	it("a faceted treemap offers no Share X / Share Y axis rows (nothing to share) but keeps panel size", () => {
+		// `area` + facet, no positions, Layout = treemap: an axis-less panel.
+		const utils = mount(
+			{ ...emptyEncodings(), area: { field: "value" }, facet: { field: "panel" } },
+			{
+				...facetConfigs({ shareY: "none" }),
+				connection: { ...DEFAULT_CONNECTION_CONFIG, hierarchyLayout: "treemap" },
+			},
+			<FacetOptionsPanel />,
+		)
+		expect(utils.queryByRole("button", { name: /^rows$/i })).toBeNull()
+		expect(utils.queryByRole("button", { name: /^columns$/i })).toBeNull()
+		expect(utils.queryByLabelText(/share y axis/i)).toBeNull()
+		expect(utils.queryByLabelText(/share x axis/i)).toBeNull()
+	})
+
+	it("a faceted scatter still offers both Share rows", () => {
+		const utils = mount(
+			{ ...emptyEncodings(), x: { field: "value" }, y: { field: "value" }, facet: { field: "panel" } },
+			facetConfigs({ shareY: "none" }),
+			<FacetOptionsPanel />,
+		)
+		expand(utils, /rows/i)
+		expect(utils.getByLabelText(/share y axis/i)).toBeTruthy()
 	})
 })

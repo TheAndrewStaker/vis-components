@@ -22,6 +22,8 @@ export const ScatterMode: ChartModeDef = {
 	},
 	canvas: {
 		coordFamily: "cartesian",
+		cartesianAxes: { x: true, y: true },
+		lengthRole: "mark",
 		measureAxis: null,
 	},
 }

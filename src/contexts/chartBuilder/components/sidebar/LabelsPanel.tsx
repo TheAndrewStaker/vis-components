@@ -21,7 +21,8 @@ import {
 	type TitlesFontConfig,
 	type VerticalAlignment,
 } from "../../lib/labelsConfig"
-import { isFlowModeId } from "../../lib/packedMeasure"
+import { axisFieldsFor } from "../../lib/axisFields"
+import { isFlowModeId } from "../../lib/chartModes/families"
 import { resolveFacetPanels } from "../../lib/resolveFacetPanels"
 import { resolveTextPickerPalette } from "../../lib/themeConfig"
 import {
@@ -242,18 +243,13 @@ export const LabelsPanel = () => {
 	}
 	// Mirror what the chart renderers actually show as the axis title default
 	// (each renderer resolves it inline as `labels.<axis>Title ?? field`).
-	// For bars/areas the measure field
-	// is on the `length` channel and lands on whichever axis the orientation
-	// puts it on, so we can't just read `encodings.x.field` blindly.
-	const chartMode = modeDef.id
-	const xTitleFallback =
-		chartMode === "bars-y" || chartMode === "areas-y"
-			? (encodings.length?.field ?? "")
-			: (encodings.x?.field ?? "")
-	const yTitleFallback =
-		chartMode === "bars-x" || chartMode === "areas-x"
-			? (encodings.length?.field ?? "")
-			: (encodings.y?.field ?? "")
+	// `axisFieldsFor` reads the mode's traits: for bars/areas the measure
+	// field is on the `length` channel and lands on whichever axis the
+	// orientation puts it on, so we can't just read `encodings.x.field`
+	// blindly; an axis the mode doesn't draw resolves to no field.
+	const axisFields = axisFieldsFor(modeDef, encodings)
+	const xTitleFallback = axisFields.xField ?? ""
+	const yTitleFallback = axisFields.yField ?? ""
 	// NOTE: we intentionally do NOT auto-populate the axis-title inputs with
 	// the mapped field name. The field name is surfaced as a grayed
 	// placeholder (`placeholder={xTitleFallback}` below) so the user can still
@@ -363,7 +359,7 @@ export const LabelsPanel = () => {
 		!!labels.yAxisTitleHorizontal
 	// Flow layouts (chord / sankey) draw node names instead of x/y axes —
 	// their styling gets its own "Node titles" section below the axis one.
-	const isFlowChart = isFlowModeId(chartMode)
+	const isFlowChart = isFlowModeId(modeDef.id)
 	const nodeTitlesChanged = keyChanged("nodeTitle")
 	// The color the node labels render with when nothing is overridden: the
 	// legacy Text-channel fallback color (per-value Text overrides can still

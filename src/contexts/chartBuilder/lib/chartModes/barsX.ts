@@ -45,6 +45,8 @@ export const BarsXMode: ChartModeDef = {
 	},
 	canvas: {
 		coordFamily: "cartesian",
+		cartesianAxes: { x: true, y: true },
+		lengthRole: "measure",
 		// Vertical bars: categories on x, continuous measure on y. The measure
 		// lives on the length channel — bars-x detection requires y unmapped.
 		measureAxis: "y",

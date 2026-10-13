@@ -1,6 +1,6 @@
 import { axisFieldsFor } from "../../../lib/axisFields"
 import type { ChannelConfigs, DataLabelsConfig } from "../../../lib/channelConfig"
-import { getChartModeDef, type ChartMode } from "../../../lib/chartMode"
+import { getChartModeDef } from "../../../lib/chartMode"
 import {
 	populationOverrides,
 	populationTemplate,
@@ -133,7 +133,7 @@ export const computeDataLabelOverflow = ({
 	// opened a label-wide gutter on the left for a label that only ever
 	// renders on the right. A series with a single anchor is first AND last
 	// at once, so a lone x value keeps both edges.
-	const { xField, yField } = axisFieldsFor(memoMode.id as ChartMode, encodings)
+	const { xField, yField } = axisFieldsFor(memoMode, encodings)
 	const yType = yField ? effectiveType(dataset, yField, overrides) : null
 	const endpointAxisIsX = !(yType === "categorical" || yType === "ordinal")
 	// Counted PER FACET PANEL: a faceted chart with one bar per panel has a

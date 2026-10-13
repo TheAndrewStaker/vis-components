@@ -13,11 +13,11 @@ import {
 import {
 	PACKED_DERIVED_LABELS,
 	PACKED_MEASURE_OPTION_VALUE,
-	isHierarchyModeId,
 	packedDerivedOptions,
 	packedSourceForOptionValue,
 	packedSourceOf,
 } from "../../lib/packedMeasure"
+import { isBarModeId, isHierarchyModeId } from "../../lib/chartModes/families"
 import { useChartModeDef } from "../../store/useChartModeDef"
 import {
 	channelHasCustomization,
@@ -377,8 +377,7 @@ export const EncodingShelf = ({ channel }: Props) => {
 	// despite the length↔shape conflict the shape row and its options stay
 	// live there — the conflict dialog still guards mapping a field.
 	const shapeAppliesDespiteConflict =
-		channel === "shape" &&
-		(modeDef.id === "bars-x" || modeDef.id === "bars-y")
+		channel === "shape" && isBarModeId(modeDef.id)
 	const blockedByConflict =
 		hasConflictBlock && !value && !shapeAppliesDespiteConflict
 	const rowOpacity = blockedByConflict ? "opacity-50" : ""

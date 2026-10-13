@@ -30,12 +30,18 @@ export const GeoChoroplethMode: ChartModeDef = {
 		supportsSharedMeasureMax: false,
 	},
 	annotations: {
-		xValueChannel: "x",
-		yValueChannel: "y",
+		// No value axes: the panel is a projection, not a pair of position
+		// scales, so a "data units" coordinate has nothing to scale against
+		// (a linear lon/lat scale over the panel rect would NOT match the
+		// projected marks). Value mode is disabled.
+		xValueChannel: null,
+		yValueChannel: null,
 		polarValueCoords: false,
 	},
 	canvas: {
 		coordFamily: "geo",
+		cartesianAxes: { x: false, y: false },
+		lengthRole: "none",
 		measureAxis: null,
 	},
 }

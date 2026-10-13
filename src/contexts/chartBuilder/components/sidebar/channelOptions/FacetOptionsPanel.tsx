@@ -14,6 +14,7 @@ import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { axisRangeIsContinuous } from "../../../lib/axisFields"
+import { isPieModeId } from "../../../lib/chartModes/families"
 import { facetAxisMapping } from "../../../lib/facetAxisMapping"
 import { effectiveType } from "../../../lib/fieldType"
 import { resolveFacetGrid } from "../../../lib/resolveFacetGrid"
@@ -36,16 +37,6 @@ import {
 	withBound,
 	withBoundInMap,
 } from "./facetSharedControls"
-
-type OverridableAxis = "x" | "y"
-
-const getOverridableAxes = (modeId: string): OverridableAxis[] => {
-	if (modeId === "scatter") return ["x", "y"]
-	if (modeId === "bars-x" || modeId === "areas-x") return ["y"]
-	if (modeId === "bars-y" || modeId === "areas-y") return ["x"]
-	return []
-}
-
 
 export const FacetOptionsPanel = () => {
 	const [configs, setConfigs] = useAtom(currentChannelConfigsAtom)
@@ -124,8 +115,7 @@ export const FacetOptionsPanel = () => {
 	const perGroupAvailable = effectiveRows >= 2 && effectiveCols >= 2
 
 	const mode = useChartModeDef()
-	const overridableAxes = getOverridableAxes(mode.id)
-	const axisMap = facetAxisMapping(mode.id)
+	const axisMap = facetAxisMapping(mode)
 	// Polar charts (radar / pie) have a different geometry: R + angle
 	// instead of x / y. The wrap panel restructures to show R-axis and
 	// angle-axis share pickers as flat top-level controls (no Rows /
@@ -133,13 +123,8 @@ export const FacetOptionsPanel = () => {
 	// each panel's radius rather than its row/col extent, and no
 	// panel-width / panel-height inputs (polar plots fill a square
 	// per cell).
-	const isPolar =
-		mode.id === "radar" ||
-		mode.id === "pies" ||
-		mode.id === "pies-x" ||
-		mode.id === "pies-y"
-	const isPie =
-		mode.id === "pies" || mode.id === "pies-x" || mode.id === "pies-y"
+	const isPolar = mode.canvas.coordFamily === "polar"
+	const isPie = isPieModeId(mode.id)
 
 	// Resolved axis types drive the "size by …" copy: continuous axis →
 	// "unit range"; categorical / ordinal → "category count". Unmapped or
@@ -234,18 +219,19 @@ export const FacetOptionsPanel = () => {
 	// the raw position encoding `rowAxisIsContinuous` reads above — that
 	// one still governs the sizing toggles, whose unit-range weights read
 	// the position field in the solver and would be inert on a measure axis.
+	// `axisRangeIsContinuous` is trait-driven (an axis the mode doesn't draw
+	// is never continuous), so a mode-id allowlist in front of it would only
+	// subtract — it did, silently dropping hexbin's editors.
 	const getType = dataset
 		? (field: string) => effectiveType(dataset, field, overrides)
 		: null
 	const yRangeApplicable =
 		fieldName != null &&
 		values.length > 0 &&
-		overridableAxes.includes("y") &&
 		axisRangeIsContinuous(mode, "y", encodings, getType)
 	const xRangeApplicable =
 		fieldName != null &&
 		values.length > 0 &&
-		overridableAxes.includes("x") &&
 		axisRangeIsContinuous(mode, "x", encodings, getType)
 	// What range-editor kind to show on each axis based on share mode:
 	//   shareY = none      → per-panel ranges (one min/max per facet value)

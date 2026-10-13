@@ -33,7 +33,7 @@ const buildDataset = (): Dataset =>
 		})),
 	})
 
-const seed = (encodings: Encodings) => {
+const seed = (encodings: Encodings, configs: Record<string, unknown> = {}) => {
 	const store = installInMemoryLocalStorage()
 	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v))
@@ -41,6 +41,7 @@ const seed = (encodings: Encodings) => {
 	set("vis-components:currentDatasetId", DATASET_ID)
 	set("vis-components:previewVersionId", null)
 	set("vis-components:currentEncodings", encodings)
+	set("vis-components:currentChannelConfigs", configs)
 	set("vis-components:currentLabels", { _v: 1, data: DEFAULT_LABELS_CONFIG })
 	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
 	return store
@@ -89,5 +90,44 @@ describe("Length panel — length variable mapped", () => {
 		const q = await mount()
 		expect(q.queryByLabelText("Min")).not.toBeNull()
 		expect(q.queryByLabelText("Max")).not.toBeNull()
+	})
+})
+
+/** Quantitative `x` alone with the histogram toggle → bars-x with NO length
+ *  field: bar length is the per-bin count. */
+const HISTOGRAM: Encodings = {
+	...emptyEncodings(),
+	x: { field: "sales" },
+}
+
+/** `angle` alone → a single pie: nothing draws length. */
+const PIE: Encodings = {
+	...emptyEncodings(),
+	angle: { field: "sales" },
+}
+
+describe("Length panel — mode trait decides, not the mapped field", () => {
+	it("histogram (bars, no length field): explains the count axis — no scatter default length, and no bar gap (bins abut)", async () => {
+		seed(HISTOGRAM, { x: { histogram: { enabled: true } } })
+		const q = await mount()
+		expect(q.queryByLabelText("Length")).toBeNull()
+		expect(q.queryByText(/line segments/)).toBeNull()
+		expect(q.queryByLabelText("Bar gap")).toBeNull()
+		expect(q.getByText(/bars abut/)).not.toBeNull()
+	})
+
+	it("categorical bars with a length field: bar gap, no px range", async () => {
+		seed(BARS)
+		const q = await mount()
+		expect(q.queryByLabelText("Bar gap")).not.toBeNull()
+		expect(q.queryByLabelText("Min")).toBeNull()
+	})
+
+	it("pie: says length isn't drawn instead of showing inert controls", async () => {
+		seed(PIE)
+		const q = await mount()
+		expect(q.queryByLabelText("Length")).toBeNull()
+		expect(q.queryByLabelText("Min")).toBeNull()
+		expect(q.getByText(/doesn.t draw length/)).not.toBeNull()
 	})
 })

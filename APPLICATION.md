@@ -1316,7 +1316,15 @@ to d3's band-padding fraction per panel (p = g·n / (range − g), with
 inner and outer padding alike), which keeps the gap uniform across
 facet panels of different widths. Auto (stored as null, cleared via
 the empty input or reset) is the proportional 15%-of-slot gap.
-Histograms ignore it — their bars always abut.
+Histograms ignore it — their bars always abut — so the Length panel
+shows no gap control there, only a note that bar length is the count
+per bin. What the Length panel offers is a declared mode trait
+(`canvas.lengthRole`): `"mark"` (scatter — px min/max range when a
+variable is mapped, the single default length when not),
+`"measure"` (bars / areas — the variable IS the mark extent via the
+axis scale), or `"none"` (pies, tile, hexbin, maps, the structure
+layouts — the panel says the chart type doesn't draw length, instead
+of showing scatter's inert default-length control).
 
 **Angle** on the polar modes (radar, pies) groups its controls under
 collapsible subsections (all start collapsed), so the panel opens as a
@@ -1418,7 +1426,10 @@ Visible when `facet` is mapped. Controls:
 - **Share axes** — separate toggles for sharing the x-axis or y-axis
   across panels in the same row or column. When shared, all axes have
   the same extent; tick labels render only on one row / column edge.
-  Default is shared.
+  Default is shared. Only for axes the mode draws (`canvas.cartesianAxes`
+  — radar / pies swap in R / angle pickers; maps and the structure
+  layouts draw no axis, so their facet panel has no share rows or range
+  editors, only the panel size inputs).
 - **Size panels by category count** — when checked, panels with more
   categories on the relevant axis get proportionally more width / height
   so categories stay evenly spaced across panels. Requires the axis
@@ -2816,7 +2827,11 @@ rectangle has:
     with 0,0 at the bottom-left spine corner).
   - **Values**: same fields are interpreted as data values along
     whichever encoding drives each axis (`x`/`y` for scatter,
-    `length` for the measure axis in bars/areas, etc.). Numeric axes
+    `length` for the measure axis in bars/areas, etc. — the mode's
+    `annotations.xValueChannel` / `yValueChannel`). Modes with no
+    value axis on either side — the pie variants, maps, and the
+    structure layouts — disable Values mode (there is no scale a data
+    coordinate could resolve against). Numeric axes
     use the linear/time scale; categorical/string-ordinal axes
     present a category dropdown and the rectangle spans between the
     selected categories' centers — the same positions line-segment

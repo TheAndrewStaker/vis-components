@@ -11,32 +11,14 @@ import type { Encoding, EncodingChannel } from "./types"
 
 export type PackedDerivedSource = "rootGroup" | "depth"
 
-/** The chart modes that render the shared hierarchy encoding signature
- * (see chartModes/hierarchySignature.ts). Everything mode-gated for
- * packed circles — the Hierarchy section, derived channel options, the
- * proportional size legend — applies to all three. */
-const HIERARCHY_MODE_IDS = [
-	"packed-circles",
-	"treemap",
-	"sunburst",
-] as const
-
-export const isHierarchyModeId = (id: string): boolean =>
-	(HIERARCHY_MODE_IDS as readonly string[]).includes(id)
-
-/** The chart modes that render the flow reading of the same signature —
- * directed edges (connection = source, `flowTargetField` = target) instead
- * of a tree. Derived channel sources (rootGroup / depth) stay tree-only. */
-const FLOW_MODE_IDS = ["chord", "sankey"] as const
-
-export const isFlowModeId = (id: string): boolean =>
-	(FLOW_MODE_IDS as readonly string[]).includes(id)
-
-/** Trees + flows: every mode where `connection` is a structural KEY (which
- * node a row attaches to) rather than a drawn line — the gate the
- * Connection panel uses to swap line styling for the Structure section. */
-export const isStructureModeId = (id: string): boolean =>
-	isHierarchyModeId(id) || isFlowModeId(id)
+// The hierarchy / flow / structure family predicates moved to
+// `chartModes/families.ts` alongside the bar / area / pie ones; re-exported
+// here so the existing import sites keep working.
+export {
+	isFlowModeId,
+	isHierarchyModeId,
+	isStructureModeId,
+} from "./chartModes/families"
 
 /** Reserved `<select>` option values for the packed-circles derived
  * choices. Prefixed so they can't collide with a dataset column name —
