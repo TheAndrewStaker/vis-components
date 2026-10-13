@@ -130,6 +130,11 @@ describe("channelsConflict", () => {
 		expect(channelsConflict("y", "r")).toBe(true)
 	})
 
+	it("r conflicts with length (radar draws no segment length)", () => {
+		expect(channelsConflict("r", "length")).toBe(true)
+		expect(channelsConflict("length", "r")).toBe(true)
+	})
+
 	it("x and y do NOT conflict with each other (they're the cartesian pair)", () => {
 		expect(channelsConflict("x", "y")).toBe(false)
 	})

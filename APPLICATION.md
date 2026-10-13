@@ -475,7 +475,11 @@ example, a quantitative variable cannot be assigned to pattern.
 - **pattern** — SVG fill pattern on shapes OR line-dash style on lines
 
 Some channels conflict: length, angle, and shape are mutually
-exclusive because a single mark can't be all three. (The `text`
+exclusive because a single mark can't be all three; `r` conflicts
+with `x` / `y` (polar vs cartesian position) and with `length` (a
+radar places marks by r and draws no segment length, so Length is
+de-emphasized while R is mapped and mapping it pops the override
+dialog). (The `text`
 channel was retired from the UI when the Data Labels section was
 introduced, but is retained as a legacy channel for back-compat: the
 renderer still honors `encodings.text.field`, and tile-heatmap

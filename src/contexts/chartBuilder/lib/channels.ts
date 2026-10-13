@@ -49,7 +49,11 @@ export const CHANNELS: Record<EncodingChannel, ChannelDef> = {
 		id: "r",
 		label: "R position",
 		accepts: ALL,
-		conflictsWith: ["x", "y"],
+		// Length: a radar (r + angle) places each mark BY its r value, and the
+		// radar renderer draws no segment length — so the shelf de-emphasizes
+		// Length while R is mapped and mapping it pops the override dialog
+		// (clearing R), rather than letting an inert Length ride along.
+		conflictsWith: ["x", "y", "length"],
 		legendCandidate: false,
 		shelfOrder: 1.5,
 	},
