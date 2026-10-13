@@ -11,7 +11,8 @@ import { Select } from "./Select"
 /**
  * A date field: a text box taking "YYYY-MM-DD" plus a calendar button that
  * opens a small picker with SEPARATE Month and Year selects over a day
- * grid, so picking a day is one click in each. (The browser's native date
+ * grid, so picking a day is one click in each. With a date set, the
+ * selects move it straight to the chosen month / year (same day). (The browser's native date
  * picker folds month and year into one long "Month YYYY" list, which is a
  * slog across decades.) The value is epoch ms at LOCAL midnight — the same
  * clock the chart's time scale lays its ticks on — or null for "blank".
@@ -90,11 +91,26 @@ export const DateInput = ({
 		setText(formatLocalDate(ms))
 	}
 
-	const pickDay = (day: number) => {
-		const ms = localMidnight(viewYear, viewMonth, day).getTime()
+	const commit = (ms: number) => {
 		setText(formatLocalDate(ms))
 		if (ms !== value) onChange(ms)
+	}
+	const pickDay = (day: number) => {
+		commit(localMidnight(viewYear, viewMonth, day).getTime())
 		close()
+	}
+	// The Month / Year dropdowns act on the value directly: with a date
+	// already set, choosing another month or year moves that date to the
+	// same day of the new month (clamped to its length) — so a user who
+	// only wants to change the year never has to find the day again. With
+	// the field blank they just turn the calendar page; a day click sets it.
+	const retarget = (year: number, monthIndex: number) => {
+		setViewYear(year)
+		setViewMonth(monthIndex)
+		if (value === null) return
+		const day = new Date(value).getDate()
+		const lastDay = localMidnight(year, monthIndex + 1, 0).getDate()
+		commit(localMidnight(year, monthIndex, Math.min(day, lastDay)).getTime())
 	}
 
 	// Close when focus leaves the field + popover entirely; moving focus
@@ -177,7 +193,7 @@ export const DateInput = ({
 						<Select
 							aria-label="Month"
 							value={viewMonth}
-							onChange={(e) => setViewMonth(Number(e.target.value))}
+							onChange={(e) => retarget(viewYear, Number(e.target.value))}
 							onBlur={onBlur}
 							onKeyDown={onKeyDown}
 							className="flex-1"
@@ -191,7 +207,7 @@ export const DateInput = ({
 						<Select
 							aria-label="Year"
 							value={viewYear}
-							onChange={(e) => setViewYear(Number(e.target.value))}
+							onChange={(e) => retarget(Number(e.target.value), viewMonth)}
 							onBlur={onBlur}
 							onKeyDown={onKeyDown}
 							className="w-24"

@@ -44,6 +44,29 @@ describe("DateInput", () => {
 		expect(screen.queryByRole("dialog")).toBeNull()
 	})
 
+	it("with a date set, the Year and Month selects move it directly (same day, clamped)", () => {
+		const onChange = vi.fn()
+		render(<DateInput value={local(1948, 11, 31)} onChange={onChange} aria-label="min" />)
+		fireEvent.click(screen.getByRole("button", { name: "Pick a date" }))
+		fireEvent.change(screen.getByLabelText("Year"), { target: { value: "1949" } })
+		expect(onChange).toHaveBeenLastCalledWith(local(1949, 11, 31))
+		// Then Feb, in the year the picker now shows: Dec 31 clamps to Feb 28.
+		fireEvent.change(screen.getByLabelText("Month"), { target: { value: "1" } })
+		expect(onChange).toHaveBeenLastCalledWith(local(1949, 1, 28))
+		// The picker stays open for a day click.
+		expect(screen.getByRole("dialog")).toBeTruthy()
+	})
+
+	it("with the field blank, the selects only turn the page", () => {
+		const onChange = vi.fn()
+		render(<DateInput value={null} onChange={onChange} aria-label="min" />)
+		fireEvent.click(screen.getByRole("button", { name: "Pick a date" }))
+		fireEvent.change(screen.getByLabelText("Year"), { target: { value: "1949" } })
+		expect(onChange).not.toHaveBeenCalled()
+		fireEvent.click(screen.getByRole("button", { name: /^1949-\d{2}-01$/ }))
+		expect(onChange).toHaveBeenCalledTimes(1)
+	})
+
 	it("year options are one entry per year, not Month + Year pairs", () => {
 		render(<DateInput value={null} onChange={() => {}} aria-label="max" />)
 		fireEvent.click(screen.getByRole("button", { name: "Pick a date" }))

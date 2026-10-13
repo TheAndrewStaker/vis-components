@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useAtom, useAtomValue } from "jotai"
 import { useChartModeDef } from "../../store/useChartModeDef"
-import { formatPresetSelection } from "../../lib/formatPresets"
+import { formatPresetSelection, formatPresetValueFor } from "../../lib/formatPresets"
 import { FormatPresetOptions } from "./FormatPresetOptions"
 import { FORMAT_BOX_HELP } from "./channelOptions/AxisOptionsPanel"
 import {
@@ -200,14 +200,14 @@ const QuantLegendChannelControls = ({
 						Text format
 					</span>
 					<Select
-						value=""
+						value={formatPresetValueFor(cfg.format)}
 						onChange={(e) => {
 							const spec = formatPresetSelection(e.target.value)
 							if (spec !== null) onChange({ ...cfg, format: spec })
 						}}
 						className="flex-1"
 					>
-						<FormatPresetOptions />
+						<FormatPresetOptions selected={formatPresetValueFor(cfg.format)} />
 					</Select>
 				</label>
 				<div className="flex items-center gap-2">

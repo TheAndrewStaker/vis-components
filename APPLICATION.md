@@ -1578,7 +1578,10 @@ The X-axis and Y-axis panels (under Encodings) configure:
   0.20, 0.24 — and "Match tick count" gridlines follow the same
   layout. Date bounds are entered as YYYY-MM-DD or picked from a small
   calendar whose Month and Year are SEPARATE dropdowns over a day grid
-  (never the browser's one long "Month YYYY" list); a blank clears the
+  (never the browser's one long "Month YYYY" list). With a date set, the
+  dropdowns move it straight to the chosen month / year on the same day
+  (clamped to the month's length), and a day click sets the day; with
+  the field blank the dropdowns only turn the page. A blank clears the
   bound.
   layout. On a DATE axis the even ticks snap to the calendar unit the
   step reads as (year starts for a ten-year step, month starts for a
@@ -1696,11 +1699,19 @@ The X-axis and Y-axis panels (under Encodings) configure:
   comma-separated thousands, whole numbers, percent, scientific,
   currency, SI prefix, plus temporal presets and a Literal "as-is"
   option) that populates an editable text box. The user can pick a
-  preset and then refine it as raw d3-format syntax. Every format
+  preset and then refine it as raw d3-format syntax. The dropdown keeps
+  SHOWING the preset the box's text came from, so the pair reads as
+  "the preset I picked" over "my edit of it": an exact match wins,
+  otherwise the spec is split off the literal text around it (`,.0f kg`
+  → Whole numbers, `€literal` → Literal) and matched, and an empty box
+  reads as Auto. Box text no preset accounts for — a hand-written spec,
+  or a preset this chart doesn't offer — shows a display-only **Custom
+  (edited below)** entry; picking it changes nothing. Every format
   dropdown in the sidebar — x / y / r tick labels, the chord ring
   axis's Tick labels, radar Spoke labels, per-field data labels, legend
-  measure labels — offers this ONE preset list (`FormatPresetOptions`);
-  only the countries-level Geography group (§ maps) is conditional.
+  measure labels — offers this ONE preset list (`formatPresetGroups`,
+  rendered by `FormatPresetOptions`); only the countries-level
+  Geography group (§ maps) is conditional.
   The box also takes literal text around the value, so whole-number
   percents (3 meaning 3%) need no derived variable: `literal%` prints
   "3%" (also a preset, "Literal + %"), `literal units` prints "3 units",
@@ -2741,6 +2752,23 @@ default template and default CSS so the user edits from a working
 starting point (boxes with existing content are left alone); a
 "reset" link below each box — shown only when its content differs
 from the default — restores that default.
+
+**Values inherit each variable's format.** The tooltip has no Format
+controls of its own: every value prints with the format that variable
+already carries elsewhere on the chart, so a tooltip never contradicts
+the axis beside it. A variable can be formatted in more than one place
+(a share at `.0%` on its axis and `.2%` in its data labels), so the
+sources are ranked and the first one with a format wins: **an axis**
+(x / y / r, the radar / pie angle axis, the chord ring axis), then a
+**quantitative legend's** break-label format, then a **data label's**
+per-variable format. Axes lead because they're the chart's own printed
+reference for that variable. A variable formatted nowhere prints its
+raw cell, as before. The whole format grammar applies — number and
+time specs, `literal`, and the Before / After text around them (§5.1)
+— including inside a custom HTML template, so `{{Sales}}` reads
+"$1,235" too. The dollar / percent cell hints reach the tooltip on the
+same read-time terms they reach the axis; nothing is written back to
+any Format box.
 
 **Line charts snap to the nearest point.** On a connection (line)
 chart the user doesn't have to land on a marker: pointing anywhere

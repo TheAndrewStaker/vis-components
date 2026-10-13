@@ -158,6 +158,11 @@ export const TooltipPanel = () => {
 							</label>
 						))}
 					</div>
+					<p className="vc-help">
+						Values print with the format each variable already has
+						elsewhere &mdash; its axis first, then a legend, then its
+						data labels.
+					</p>
 					{missingFromDataset.length > 0 && (
 						<p className="text-xs text-amber-600 dark:text-amber-400">
 							Not in the current dataset (won&apos;t appear in tooltip):{" "}

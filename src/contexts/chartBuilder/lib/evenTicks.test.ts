@@ -94,6 +94,14 @@ describe("evenlySpacedTimeTicks", () => {
 		expect(years(out)).toEqual([1950, 1960, 1970, 1980, 1990, 2000, 2010, 2019])
 	})
 
+	it("drops an interior tick that would crowd the end tick", () => {
+		// 1950 → 2019 asked for 5: 17-year steps land on 2018, a year short
+		// of the end — the end tick alone marks that stretch.
+		expect(years(evenlySpacedTimeTicks(local(1950), local(2019), 5))).toEqual([
+			1950, 1967, 1984, 2001, 2019,
+		])
+	})
+
 	it("degenerate counts pass through", () => {
 		expect(evenlySpacedTimeTicks(local(2000), local(2010), 0)).toEqual([])
 		expect(evenlySpacedTimeTicks(local(2000), local(2010), 1)).toEqual([local(2000)])

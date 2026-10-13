@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import { COUNTRY_NAME_FORMAT } from "../../lib/geo/countryNames"
 import { LITERAL_FORMAT } from "../../lib/formatTick"
-import { FORMAT_PRESET_AUTO, formatPresetSelection } from "../../lib/formatPresets"
+import {
+	FORMAT_PRESET_AUTO,
+	FORMAT_PRESET_CUSTOM,
+	formatPresetSelection,
+	formatPresetValueFor,
+} from "../../lib/formatPresets"
 import { FormatPresetOptions } from "./FormatPresetOptions"
 
 /** One preset list feeds every format dropdown (axis ticks, chord ring axis,
@@ -12,10 +17,10 @@ import { FormatPresetOptions } from "./FormatPresetOptions"
 
 afterEach(cleanup)
 
-const optionValues = (countryNames?: boolean) => {
+const optionValues = (countryNames?: boolean, selected?: string) => {
 	const { container } = render(
 		<select>
-			<FormatPresetOptions countryNames={countryNames} />
+			<FormatPresetOptions countryNames={countryNames} selected={selected} />
 		</select>
 	)
 	return Array.from(container.querySelectorAll("option")).map((o) => ({
@@ -45,13 +50,46 @@ describe("FormatPresetOptions", () => {
 		expect(optionValues().map((o) => o.value)).not.toContain(COUNTRY_NAME_FORMAT)
 		expect(optionValues(true).map((o) => o.value)).toContain(COUNTRY_NAME_FORMAT)
 	})
+
+	it("carries the display-only Custom entry only when it is the selection", () => {
+		expect(optionValues().map((o) => o.value)).not.toContain(FORMAT_PRESET_CUSTOM)
+		expect(
+			optionValues(false, FORMAT_PRESET_CUSTOM).map((o) => o.value)
+		).toContain(FORMAT_PRESET_CUSTOM)
+	})
 })
 
 describe("formatPresetSelection", () => {
-	it("maps Auto to the empty spec, the placeholder to a no-op, and presets verbatim", () => {
+	it("maps Auto to the empty spec, Custom to a no-op, and presets verbatim", () => {
 		expect(formatPresetSelection(FORMAT_PRESET_AUTO)).toBe("")
 		expect(formatPresetSelection("")).toBeNull()
+		expect(formatPresetSelection(FORMAT_PRESET_CUSTOM)).toBeNull()
 		expect(formatPresetSelection(",.0f")).toBe(",.0f")
 		expect(formatPresetSelection(LITERAL_FORMAT)).toBe(LITERAL_FORMAT)
+	})
+})
+
+describe("formatPresetValueFor", () => {
+	it("shows the preset the stored spec came from", () => {
+		expect(formatPresetValueFor("")).toBe(FORMAT_PRESET_AUTO)
+		expect(formatPresetValueFor(",.0f")).toBe(",.0f")
+		expect(formatPresetValueFor(`${LITERAL_FORMAT}%`)).toBe(`${LITERAL_FORMAT}%`)
+		expect(formatPresetValueFor("%b %Y")).toBe("%b %Y")
+	})
+
+	it("keeps showing the preset when the box adds text around the value", () => {
+		expect(formatPresetValueFor(",.0f kg")).toBe(",.0f")
+		expect(formatPresetValueFor(`€${LITERAL_FORMAT}`)).toBe(LITERAL_FORMAT)
+		expect(formatPresetValueFor(`${LITERAL_FORMAT} units`)).toBe(LITERAL_FORMAT)
+		// Auto labels with text wrapped around them stay on Auto.
+		expect(formatPresetValueFor("{}%")).toBe(FORMAT_PRESET_AUTO)
+	})
+
+	it("reads hand-written specs — and presets this chart doesn't offer — as Custom", () => {
+		expect(formatPresetValueFor(".4f")).toBe(FORMAT_PRESET_CUSTOM)
+		expect(formatPresetValueFor(COUNTRY_NAME_FORMAT)).toBe(FORMAT_PRESET_CUSTOM)
+		expect(formatPresetValueFor(COUNTRY_NAME_FORMAT, true)).toBe(
+			COUNTRY_NAME_FORMAT
+		)
 	})
 })

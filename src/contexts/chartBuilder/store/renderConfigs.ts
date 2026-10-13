@@ -9,6 +9,10 @@ import {
 	type HintedFormats,
 } from "../lib/formatHintDefaults"
 import type { LegendConfig } from "../lib/labelsConfig"
+import {
+	tooltipFieldFormats,
+	type TooltipFormats,
+} from "../lib/tooltipFormats"
 
 import {
 	currentChannelConfigsAtom,
@@ -64,4 +68,19 @@ export const renderDataLabelsConfigAtom = atom(
 			get(currentDataLabelsConfigAtom),
 			get(hintedFormatsAtom),
 		),
+)
+
+/** Field name → the format the TOOLTIP should print that field with,
+ * inherited from wherever the user already set one (axis beats legend
+ * beats data label — see `lib/tooltipFormats.ts`). Built from the
+ * render-side configs, so the dollar / percent hints reach the tooltip on
+ * the same terms they reach the axis. */
+export const tooltipFieldFormatsAtom = atom(
+	(get): TooltipFormats =>
+		tooltipFieldFormats({
+			encodings: get(currentEncodingsAtom),
+			channelConfigs: get(renderChannelConfigsAtom),
+			legendConfig: get(renderLegendConfigAtom),
+			dataLabels: get(renderDataLabelsConfigAtom),
+		}),
 )

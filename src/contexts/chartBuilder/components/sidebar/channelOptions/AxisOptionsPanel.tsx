@@ -38,7 +38,10 @@ import { useCurrentTheme } from "../../../store/useCurrentTheme"
 import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
-import { formatPresetSelection } from "../../../lib/formatPresets"
+import {
+	formatPresetSelection,
+	formatPresetValueFor,
+} from "../../../lib/formatPresets"
 import { FormatPresetOptions } from "../FormatPresetOptions"
 import { ColorInput } from "../../../../../components/ui/ColorInput"
 import { LABEL_COL, LabelSpacer } from "../../../../../components/ui/LabeledField"
@@ -736,7 +739,9 @@ export const FORMAT_BOX_HELP =
  *  the chord ring axis's Tick Labels section, the radar Spoke Labels AND
  *  the per-field data-label formatting, so the format mental model matches
  *  x / y exactly. The box takes a spec OR a spec with text around it
- *  (`literal%`, `,.0f kg` — see `parseFormatSpec`). `label` overrides the
+ *  (`literal%`, `,.0f kg` — see `parseFormatSpec`), and the dropdown keeps
+ *  showing the preset that spec came from (`formatPresetValueFor`), so the
+ *  pair reads as "the preset I picked" over "my edit of it". `label` overrides the
  *  row label (defaults to "Format") — data labels pass the field name.
  *  `countryNames` adds the Geography preset group; the data-label panels
  *  pass it on countries-level geo charts only, so the option never pollutes
@@ -766,14 +771,17 @@ export const TickFormatControl = ({
 				{label}
 			</span>
 			<Select
-				value=""
+				value={formatPresetValueFor(value, countryNames)}
 				onChange={(e) => {
 					const spec = formatPresetSelection(e.target.value)
 					if (spec !== null) onChange(spec)
 				}}
 				className="flex-1"
 			>
-				<FormatPresetOptions countryNames={countryNames} />
+				<FormatPresetOptions
+					countryNames={countryNames}
+					selected={formatPresetValueFor(value, countryNames)}
+				/>
 			</Select>
 		</label>
 		<div className="flex items-center gap-2">

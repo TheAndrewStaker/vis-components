@@ -5,7 +5,9 @@ import {
 	DEFAULT_TOOLTIP_CONFIG,
 	type TooltipConfig,
 } from "../../lib/labelsConfig"
+import { applyTooltipFormats } from "../../lib/tooltipFormats"
 import { currentTooltipConfigAtom } from "../../store/atoms"
+import { tooltipFieldFormatsAtom } from "../../store/renderConfigs"
 
 const TOOLTIP_MAX_WIDTH = 240
 const TOOLTIP_OFFSET = 12
@@ -20,7 +22,10 @@ export type TooltipState = {
 	clientY: number
 	/** Field-name → display value, in the order the user wants to see them.
 	 * Charts compose this object in their own way (per-row for scatter, per
-	 * cell aggregate for tiles, per slice for bars/pies). */
+	 * cell aggregate for tiles, per slice for bars/pies). Values are RAW
+	 * cells — the tooltip prints each one through the format its variable
+	 * carries elsewhere on the chart (`lib/tooltipFormats.ts`), so a
+	 * renderer must never pre-format them. */
 	fields: Array<{ name: string; value: unknown }>
 }
 
@@ -40,7 +45,7 @@ const htmlEscape = (raw: unknown): string =>
  * empty string so a typo doesn't blow up the tooltip. */
 const renderTemplate = (
 	template: string,
-	fields: TooltipState["fields"]
+	fields: ReadonlyArray<TooltipState["fields"][number]>
 ): string => {
 	const map = new Map(fields.map((f) => [f.name, f.value]))
 	return template.replaceAll(/\{\{\s*([^}]+?)\s*\}\}/g, (_, name) => {
@@ -78,13 +83,19 @@ export const HoverTooltip = ({ state }: { state: TooltipState }) => {
 		...DEFAULT_TOOLTIP_CONFIG,
 		...useAtomValue(currentTooltipConfigAtom),
 	}
+	// Each variable prints with the format the user set for it elsewhere —
+	// its axis first, then a quantitative legend, then its data labels.
+	// Applied before BOTH render paths so a custom HTML template's
+	// `{{Sales}}` reads "$1,235" like the axis does.
+	const formats = useAtomValue(tooltipFieldFormatsAtom)
 	if (!cfg.enabled) return null
 
+	const fields = applyTooltipFormats(state.fields, formats)
 	const visible = cfg.visibleFields
 	const filtered =
 		visible.length === 0
-			? state.fields
-			: state.fields.filter((f) => visible.includes(f.name))
+			? fields
+			: fields.filter((f) => visible.includes(f.name))
 	if (filtered.length === 0 && !(cfg.useCustomHtml && cfg.customHtml.trim()))
 		return null
 
@@ -103,9 +114,7 @@ export const HoverTooltip = ({ state }: { state: TooltipState }) => {
 	const customHtmlActive = !!cfg.useCustomHtml && cfg.customHtml.trim() !== ""
 	const customCssActive = !!cfg.useCustomHtml && cfg.customCss.trim() !== ""
 	const customHtml = customHtmlActive ? cfg.customHtml.trim() : ""
-	const interpolated = customHtml
-		? renderTemplate(customHtml, state.fields)
-		: ""
+	const interpolated = customHtml ? renderTemplate(customHtml, fields) : ""
 
 	const tooltip = (
 		<>

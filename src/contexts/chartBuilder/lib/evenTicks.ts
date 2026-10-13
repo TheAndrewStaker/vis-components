@@ -198,10 +198,13 @@ export const evenlySpacedTimeTicks = (
 	const span = unitsBetween(start, max, unit)
 	const step = Math.max(1, Math.round(span / (even.length - 1)))
 	const out: number[] = [first]
-	const push = (v: number) => {
-		if (v > min && v < max && !out.includes(v)) out.push(v)
+	for (let v = start, i = 0; v < max && i < 100_000; v = addUnits(v, unit, step), i++) {
+		// The last interior tick crowds the end tick when it falls within
+		// half a step of it (1950→2019 by 17 years: 2018 next to 2019) —
+		// leave that one out, the end carries the position.
+		const crowdsEnd = max - v < (addUnits(v, unit, step) - v) / 2
+		if (v > min && v < max && !crowdsEnd && !out.includes(v)) out.push(v)
 	}
-	for (let v = start, i = 0; v < max && i < 100_000; v = addUnits(v, unit, step), i++) push(v)
 	if (!out.includes(last)) out.push(last)
 	return out.sort((a, b) => a - b)
 }
