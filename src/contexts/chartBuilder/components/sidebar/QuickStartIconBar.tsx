@@ -282,6 +282,30 @@ const SunburstIcon = ({ className }: IconProps) => (
 	</svg>
 )
 
+const HexbinIcon = ({ className }: IconProps) => (
+	<svg viewBox="0 0 16 16" className={className} aria-hidden="true">
+		{/* Hexbin: a small honeycomb of flat-topped hexagons at three
+		 * densities, so the "binned, shaded by count" idea reads at 16px. */}
+		<path d="M 4 2.5 L 6.6 4 L 6.6 7 L 4 8.5 L 1.4 7 L 1.4 4 Z" fillOpacity={0.35} />
+		<path d="M 9.2 2.5 L 11.8 4 L 11.8 7 L 9.2 8.5 L 6.6 7 L 6.6 4 Z" fillOpacity={0.7} />
+		<path d="M 6.6 7 L 9.2 8.5 L 9.2 11.5 L 6.6 13 L 4 11.5 L 4 8.5 Z" />
+		<path d="M 11.8 7 L 14.4 8.5 L 14.4 11.5 L 11.8 13 L 9.2 11.5 L 9.2 8.5 Z" fillOpacity={0.5} />
+	</svg>
+)
+
+const ChordIcon = ({ className }: IconProps) => (
+	<svg viewBox="0 0 16 16" className={className} aria-hidden="true">
+		{/* Chord: node arcs around a ring, joined by two crossing ribbons. */}
+		<g fill="none" stroke="currentColor" strokeWidth={2}>
+			<path d="M 2.5 5.5 A 6 6 0 0 1 8 2" />
+			<path d="M 10.5 2.55 A 6 6 0 0 1 13.9 9.5" />
+			<path d="M 12.2 12.5 A 6 6 0 0 1 3.8 12.5" />
+		</g>
+		<path d="M 4 4 C 8 7, 9 7, 11.5 3.5 L 13 6 C 9 9, 7 9, 3 7 Z" fillOpacity={0.4} />
+		<path d="M 5.5 12.5 C 8 8, 9 8, 13 8.5 L 13.5 10.5 C 10 10, 9 11, 9.5 13 Z" fillOpacity={0.3} />
+	</svg>
+)
+
 const SankeyIcon = ({ className }: IconProps) => (
 	<svg viewBox="0 0 16 16" className={className} aria-hidden="true">
 		{/* Sankey: left/right node bars joined by crossing tapered flows. */}
@@ -299,6 +323,7 @@ const SankeyIcon = ({ className }: IconProps) => (
 const ICONS: Record<QuickStartChartType, (p: IconProps) => JSX.Element> = {
 	bar: BarIcon,
 	scatter: ScatterIcon,
+	hexbin: HexbinIcon,
 	dumbbell: DumbbellIcon,
 	line: LineIcon,
 	area: AreaIcon,
@@ -312,11 +337,13 @@ const ICONS: Record<QuickStartChartType, (p: IconProps) => JSX.Element> = {
 	treemap: TreemapIcon,
 	sunburst: SunburstIcon,
 	sankey: SankeyIcon,
+	chord: ChordIcon,
 }
 
 const LABELS: Record<QuickStartChartType, string> = {
 	bar: "Bar chart",
 	scatter: "Scatter plot",
+	hexbin: "Hexbin",
 	dumbbell: "Dumbbell chart",
 	line: "Line chart",
 	area: "Area chart",
@@ -330,6 +357,7 @@ const LABELS: Record<QuickStartChartType, string> = {
 	treemap: "Treemap",
 	sunburst: "Sunburst",
 	sankey: "Sankey diagram",
+	chord: "Chord diagram",
 }
 
 // Used only for the disabled-tooltip message. Derived from the channels the
@@ -338,6 +366,7 @@ const LABELS: Record<QuickStartChartType, string> = {
 const MISSING_TYPE_HINT: Record<QuickStartChartType, string> = {
 	bar: "Needs at least one categorical field.",
 	scatter: "Needs at least two quantitative fields.",
+	hexbin: "Needs quantitative x and y fields.",
 	dumbbell: "Needs a categorical field and a quantitative field.",
 	line: "Needs a quantitative/temporal field plus a categorical connection field.",
 	area: "Needs a quantitative/temporal field plus a categorical connection field.",
@@ -351,6 +380,8 @@ const MISSING_TYPE_HINT: Record<QuickStartChartType, string> = {
 	treemap: "Needs a quantitative field and a categorical grouping field.",
 	sunburst: "Needs a quantitative field and a categorical grouping field.",
 	sankey:
+		"Needs a quantitative field and two categorical fields (flow source and target).",
+	chord:
 		"Needs a quantitative field and two categorical fields (flow source and target).",
 }
 
@@ -437,11 +468,14 @@ export const QuickStartIconBar = () => {
 		// override that with a quant config seeded from the user's theme
 		// gradient — otherwise `makeHueScale` falls back to viridis until the
 		// user expands the Hue panel and triggers its lazy init.
+		// The hexbin scaffold's derived "Point count" hue is quantitative too
+		// (the shelf seeds the same theme gradient when the user picks it).
 		const hueAssign = assignments.find((a) => a.channel === "hue")
 		if (
-			hueAssign &&
-			(hueAssign.field.inferredType === "quantitative" ||
-				hueAssign.field.inferredType === "temporal")
+			(hueAssign &&
+				(hueAssign.field.inferredType === "quantitative" ||
+					hueAssign.field.inferredType === "temporal")) ||
+			variation.hueMeasureSource === "hexCount"
 		) {
 			nextConfigs.hue = buildQuantHueConfigFromTheme(theme)
 		}

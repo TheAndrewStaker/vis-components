@@ -6,6 +6,7 @@ import type { EncodingChannel, FieldType } from "./types"
 export type QuickStartChartType =
 	| "bar"
 	| "scatter"
+	| "hexbin"
 	| "dumbbell"
 	| "line"
 	| "area"
@@ -19,10 +20,12 @@ export type QuickStartChartType =
 	| "treemap"
 	| "sunburst"
 	| "sankey"
+	| "chord"
 
 export const QUICK_START_CHART_TYPES: readonly QuickStartChartType[] = [
 	"bar",
 	"scatter",
+	"hexbin",
 	"dumbbell",
 	"line",
 	"area",
@@ -36,6 +39,7 @@ export const QUICK_START_CHART_TYPES: readonly QuickStartChartType[] = [
 	"treemap",
 	"sunburst",
 	"sankey",
+	"chord",
 ] as const
 
 /** One step in a chart family's cycle. The scaffold picks random fields of the
@@ -119,10 +123,13 @@ export type QuickStartVariation = {
 	 * `assignFields` never sees this channel (it reuses an already-assigned
 	 * field), so it can't affect satisfiability. */
 	connectionFrom?: EncodingChannel
-	/** Map `hue` to a hierarchy-DERIVED source instead of a field. Tree
-	 * scaffolds use `"rootGroup"` so every node takes its outermost group's
-	 * color — the canonical hierarchy look, with no extra column needed. */
-	hueMeasureSource?: "rootGroup"
+	/** Map `hue` to a DERIVED source instead of a field. Tree scaffolds use
+	 * `"rootGroup"` so every node takes its outermost group's color — the
+	 * canonical hierarchy look, with no extra column needed. The hexbin
+	 * scaffold uses `"hexCount"` (the "Point count" option the shelf offers
+	 * over a quantitative x×y pair) — that mapping IS what switches the
+	 * chart into hexbin mode. */
+	hueMeasureSource?: "rootGroup" | "hexCount"
 	/** Flow variations (sankey/chord) need a SECOND categorical column for
 	 * the auto-detected flow target (`resolveFlowTargetField` never picks the
 	 * source column itself). When true, the variation is unsatisfiable unless
@@ -444,6 +451,20 @@ export const QUICK_START_VARIATIONS: Record<
 			allowOpportunisticHue: false,
 		},
 	],
+	// Hexbin: a strictly quantitative x × y pair (the same gate the shelf's
+	// "Point count" option uses) with hue derived from the per-cell point
+	// count. Hue is the mode trigger, so nothing opportunistic may replace it.
+	hexbin: [
+		{
+			name: "Hexbin",
+			channels: {
+				x: ["quantitative"],
+				y: ["quantitative"],
+			},
+			hueMeasureSource: "hexCount",
+			allowOpportunisticHue: false,
+		},
+	],
 	// Density curve: a lone quantitative field on one position axis, rendered
 	// as a standalone KDE curve (the manual Distribution → "Density" segment).
 	// Only "quantitative" qualifies — the density display shares the
@@ -592,6 +613,22 @@ export const QUICK_START_VARIATIONS: Record<
 				connection: CATEGORICAL_LIKE,
 			},
 			hierarchyLayout: "sankey",
+			requiresFlowTarget: true,
+			hueFrom: "connection",
+			allowOpportunisticHue: false,
+		},
+	],
+	chord: [
+		{
+			// Same flow reading as sankey — sources on `connection`, weights on
+			// `area`, target auto-detected — laid out as a ring of node arcs
+			// joined by ribbons.
+			name: "Chord diagram",
+			channels: {
+				area: QUANTITATIVE_LIKE,
+				connection: CATEGORICAL_LIKE,
+			},
+			hierarchyLayout: "chord",
 			requiresFlowTarget: true,
 			hueFrom: "connection",
 			allowOpportunisticHue: false,

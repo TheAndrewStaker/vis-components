@@ -148,6 +148,10 @@ const AESTHETIC_FILL: Record<
 	treemap: { alwaysQuant: [], decorativeCat: [], colorModQuant: [] },
 	sunburst: { alwaysQuant: [], decorativeCat: [], colorModQuant: [] },
 	sankey: { alwaysQuant: [], decorativeCat: [], colorModQuant: [] },
+	chord: { alwaysQuant: [], decorativeCat: [], colorModQuant: [] },
+	// Hexbin: cells are fills on a lattice — no point glyphs (shape / area /
+	// pattern are inert) and hue is the derived count, so nothing to layer.
+	hexbin: { alwaysQuant: [], decorativeCat: [], colorModQuant: [] },
 }
 
 /** Resolve a field's effective type (user override if set, else the inferred

@@ -1086,6 +1086,17 @@ describe("hierarchy / flow variations (circles / treemap / sunburst / sankey)", 
 		expect(configs.connection?.hierarchyLayout).toBe("sankey")
 	})
 
+	it("chord scaffolds exactly like sankey, selecting the chord layout", () => {
+		expect(satisfiableVariationIndices("chord", [group, value], {})).toEqual([])
+		const variation = QUICK_START_VARIATIONS.chord[0]!
+		const assignments = assignFields(variation, [group, target, value], {})
+		expect(assignments).not.toBeNull()
+		const { encodings, configs } = applyVariation(variation, assignments!, {})
+		expect(encodings.area.field).toBe("value")
+		expect(encodings.connection.field).toBe(encodings.hue.field)
+		expect(configs.connection?.hierarchyLayout).toBe("chord")
+	})
+
 	it("field-type overrides count toward the sankey second-categorical check", () => {
 		const numericTarget = field("code", "quantitative")
 		expect(
@@ -1096,5 +1107,29 @@ describe("hierarchy / flow variations (circles / treemap / sunburst / sankey)", 
 				code: "categorical",
 			})
 		).toEqual([0])
+	})
+})
+
+describe("hexbin variation", () => {
+	const a = field("a", "quantitative")
+	const b = field("b", "quantitative")
+	const cat = field("cat", "categorical")
+
+	it("needs a quantitative field (a lone one reuses for x and y, like the other scaffolds)", () => {
+		expect(satisfiableVariationIndices("hexbin", [cat], {})).toEqual([])
+		expect(satisfiableVariationIndices("hexbin", [a, cat], {})).toEqual([0])
+		expect(satisfiableVariationIndices("hexbin", [a, b], {})).toEqual([0])
+	})
+
+	it("maps x + y and seeds hue with the hexCount derived source — the hexbin mode trigger", () => {
+		const variation = QUICK_START_VARIATIONS.hexbin[0]!
+		const assignments = assignFields(variation, [a, b, cat], {})
+		expect(assignments).not.toBeNull()
+		const { encodings } = applyVariation(variation, assignments!, {})
+		expect(encodings.x.field).toBeTruthy()
+		expect(encodings.y.field).toBeTruthy()
+		expect(encodings.x.field).not.toBe(encodings.y.field)
+		expect(encodings.hue.field).toBeNull()
+		expect(encodings.hue.measureSource).toBe("hexCount")
 	})
 })

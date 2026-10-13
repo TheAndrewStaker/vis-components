@@ -897,8 +897,9 @@ brightness, or pattern.
 
 ### 3.4 Quickstart bar
 The icon bar above the encoding shelves gives one-click scaffolds for
-each chart family (bar, scatter, dumbbell, line, area, pie, violin,
-density curve, tile, map, packed circles, treemap, sunburst, sankey).
+each chart family (bar, scatter, hexbin, dumbbell, line, area, pie,
+radar, violin, density curve, tile, map, packed circles, treemap,
+sunburst, sankey, chord) — every registered chart mode has a button.
 Each icon cycles through random *variations* (e.g., bars → vertical →
 grouped → patterned stacked → horizontal). The scaffold assigns
 eligible fields automatically and optionally drops in a hue encoding
