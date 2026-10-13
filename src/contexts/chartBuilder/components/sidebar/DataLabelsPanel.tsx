@@ -1301,21 +1301,6 @@ export const DataLabelsPanel = () => {
 							</CollapsibleSubsection>
 						)
 					})}
-				{ownLabelKeys.length > 0 && (
-					<p className="vc-help">
-						{primaryLabel
-							? "Each combination is its own label, so its settings are its own; the controls below apply to the combined label. "
-							: "Each variable or combination is its own label, so these settings are per label. "}
-						Labels with Avoid overlapping on move out of each other&apos;s way;
-						one with it off stays put.
-						{isBarMode
-							? " Beside the bar, Adjust position measures from the bar's edge, so the label keeps its distance when the figure resizes."
-							: ""}
-						{isBarMode && isVerticalBars
-							? " Labels beside a vertical bar hang away from it, so Alignment is set for you."
-							: ""}
-					</p>
-				)}
 				{!primaryLabel ? null : sideLocksAlignment ? null : splitEndpoints ? (
 					<div className="flex flex-col gap-2">
 						{/* One alignment per population — effective value shown; the

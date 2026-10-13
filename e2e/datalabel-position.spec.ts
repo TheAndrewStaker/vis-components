@@ -30,7 +30,7 @@ const openPositionSubsection = async (
 	await page.waitForTimeout(150)
 }
 
-test("Bar position lives in the Position subsection, only for bar charts", async ({
+test("Bar placement lives in the Position subsection, only for bar charts", async ({
 	page,
 }) => {
 	// Bars-x: x (categorical) + length (quantitative).
@@ -44,14 +44,20 @@ test("Bar position lives in the Position subsection, only for bar charts", async
 	await openPositionSubsection(page)
 	await page.screenshot({ path: "/tmp/dlp-bars.png", fullPage: true })
 
-	// Inside the subsection: Alignment + Bar position both visible.
+	// Inside the subsection: Alignment + the bar "Placement" group both
+	// visible. Vertical bars name the measure-axis select "Vertical" and the
+	// side select "Horizontal" (the screen direction each moves labels in).
 	expect(await page.getByText("Alignment", { exact: true }).isVisible()).toBe(true)
-	expect(await page.getByText("Bar position", { exact: true }).isVisible()).toBe(
+	expect(await page.getByText("Placement", { exact: true }).isVisible()).toBe(
+		true
+	)
+	expect(await page.getByText("Vertical", { exact: true }).isVisible()).toBe(true)
+	expect(await page.getByText("Horizontal", { exact: true }).isVisible()).toBe(
 		true
 	)
 })
 
-test("Bar position is hidden on a non-bar (scatter) chart", async ({ page }) => {
+test("Bar placement is hidden on a non-bar (scatter) chart", async ({ page }) => {
 	const scatter = fx("dlp-scatter", {
 		x: { field: "num" },
 		y: { field: "num2" },
@@ -62,5 +68,5 @@ test("Bar position is hidden on a non-bar (scatter) chart", async ({ page }) => 
 	await openPositionSubsection(page)
 
 	expect(await page.getByText("Alignment", { exact: true }).isVisible()).toBe(true)
-	expect(await page.getByText("Bar position", { exact: true }).count()).toBe(0)
+	expect(await page.getByText("Placement", { exact: true }).count()).toBe(0)
 })
