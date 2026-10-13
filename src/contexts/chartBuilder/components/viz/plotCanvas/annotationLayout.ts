@@ -5,6 +5,11 @@ import {
 	type RectangleAnnotation,
 	type TextAnnotation,
 } from "../../../lib/annotationsConfig"
+import {
+	pixelToCanvasX,
+	pixelToCanvasY,
+	type AnnotationCoordSystem,
+} from "../../../lib/annotationPixels"
 import { computeCirclePixels } from "../../../lib/circleAnnotationGeometry"
 import { computeLineSegmentPixels } from "../../../lib/lineSegmentAnnotationGeometry"
 import {
@@ -131,11 +136,12 @@ const overrideLinearDomain = (
  *  annotation in its own coordinates, and one whose data range falls outside
  *  a panel's (independent-axis) domain draws nothing there rather than
  *  spilling into a neighbor. Everything else may go anywhere on the canvas —
- *  percent coordinates past 0–100 or a single panel's out-of-domain value
+ *  percent coordinates past 0–100, pixel coordinates outside the plot, or a
+ *  single panel's out-of-domain value
  *  deliberately place the annotation beside / above the plot, and the layout
  *  grows the canvas margins so it stays in view. */
 export const annotationClipsToPanel = (
-	coordSystem: "percent" | "values",
+	coordSystem: AnnotationCoordSystem,
 	multiPanel: boolean
 ): boolean => multiPanel && coordSystem === "values"
 
@@ -333,9 +339,17 @@ export const layoutPanelAnnotations = ({
 	const placed: PlacedAnnotation[] = []
 	for (const r of rectangles) {
 		const useValues = r.coordSystem === "values"
+		const usePixels = r.coordSystem === "pixels"
 		let left: number, width: number
 		let top: number, height: number
-		if (useValues && xScale && axisFields.xType) {
+		if (usePixels) {
+			// Whole px from the plot's top-left corner, +x right; min/max name
+			// the exact edges, as in the other systems.
+			const a = pixelToCanvasX(inner, toNumber(r.xMin))
+			const b = pixelToCanvasX(inner, toNumber(r.xMax))
+			left = Math.min(a, b)
+			width = Math.max(a, b) - left
+		} else if (useValues && xScale && axisFields.xType) {
 			const a = applyPositionScale(xScale, r.xMin, axisFields.xType)
 			const b = applyPositionScale(xScale, r.xMax, axisFields.xType)
 			if (a === null || b === null) continue
@@ -352,7 +366,13 @@ export const layoutPanelAnnotations = ({
 			left = inner.x + inner.width * x0
 			width = inner.width * (x1 - x0)
 		}
-		if (useValues && yScale && axisFields.yType) {
+		if (usePixels) {
+			// +y is up from the top edge; the helper flips to SVG top-down.
+			const a = pixelToCanvasY(inner, toNumber(r.yMin))
+			const b = pixelToCanvasY(inner, toNumber(r.yMax))
+			top = Math.min(a, b)
+			height = Math.max(a, b) - top
+		} else if (useValues && yScale && axisFields.yType) {
 			const a = applyPositionScale(yScale, r.yMin, axisFields.yType)
 			const b = applyPositionScale(yScale, r.yMax, axisFields.yType)
 			if (a === null || b === null) continue

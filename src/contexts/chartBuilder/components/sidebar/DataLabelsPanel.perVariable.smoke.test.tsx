@@ -29,6 +29,7 @@ import {
 	previewVersionIdAtom,
 } from "../../store/atoms"
 
+import { defaultComposedLabels } from "../../lib/dataLabelsSelection"
 import { DataLabelsPanel } from "./DataLabelsPanel"
 
 /** With two or more label variables, Size / Text properties / Text
@@ -74,6 +75,8 @@ const mountPanel = (opts: {
 	}
 	const cfg: DataLabelsConfig = {
 		...DEFAULT_DATA_LABELS_CONFIG,
+		// The new-mapping default: one label per checked variable.
+		...(opts.fields ? { composedLabels: defaultComposedLabels(opts.fields) } : {}),
 		...(opts.cfg ?? {}),
 	}
 	let snapRef: TestStore | null = null
@@ -146,9 +149,24 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 		expect(sectionHeader(container, "y")).toBeNull()
 	})
 
-	it("two variables get a Size block each that stores a per-variable size", () => {
+	it("single-variable labels show the Default size input", () => {
+		const { container } = mountPanel({ fields: null })
+		openChannel(container, "Size")
+		expect(
+			[...container.querySelectorAll("label")].some(
+				(l) => l.textContent?.trim() === "Default size"
+			)
+		).toBe(true)
+	})
+
+	it("two variables hide the Default size input and get a Size block each that stores a per-variable size", () => {
 		const { container, readCfg } = mountPanel({ fields: ["y", "g"] })
 		openChannel(container, "Size")
+		expect(
+			[...container.querySelectorAll("label")].some(
+				(l) => l.textContent?.trim() === "Default size"
+			)
+		).toBe(false)
 		expect(sectionHeader(container, "y")).not.toBeNull()
 		expect(sectionHeader(container, "g")).not.toBeNull()
 		expand(container, "y")
@@ -207,7 +225,7 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 		expect(readCfg().fieldBackgrounds).toEqual({ g: { textBackground: false } })
 	})
 
-	it("separate labels get Alignment and X / Y rows per variable under Adjust position", () => {
+	it("separate labels get one Adjust-position subsection per variable holding alignment, angle, wrap, overlap, and X / Y", () => {
 		const { container, readCfg } = mountPanel({
 			fields: ["y", "g"],
 			cfg: { combineVariables: false },
@@ -215,54 +233,108 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 		expand(container, "Adjust position and alignment")
 		const text = container.textContent ?? ""
 		expect(text).not.toContain("All labels")
+		// The layer-wide controls hide; each variable is a collapsed block.
+		const labelsNamed = (name: string) =>
+			[...container.querySelectorAll("label")].filter(
+				(l) => l.textContent?.trim() === name
+			)
+		expect(labelsNamed("Angle")).toHaveLength(0)
+		expect(labelsNamed("X")).toHaveLength(0)
+		expect(container.querySelectorAll('button[aria-label="Align left"]')).toHaveLength(0)
+		expand(container, "y")
+		expand(container, "g")
 		const alignButtons = container.querySelectorAll('button[aria-label="Align left"]')
 		expect(alignButtons.length).toBe(2)
 		fireEvent.click(alignButtons[1]!)
 		expect(readCfg().fieldAlignments).toEqual({ g: "left" })
 		expect(readCfg().alignment).toBe("center")
-		// Two X inputs (one per variable); the second writes g's offset.
-		const xInputs = [...container.querySelectorAll("label")]
-			.filter((l) => l.textContent?.trim() === "X")
-			.map((l) => container.querySelector<HTMLInputElement>(`#${CSS.escape(l.htmlFor)}`))
+		// One of each per variable; the second writes g's entry.
+		const inputsNamed = (name: string) =>
+			labelsNamed(name).map((l) =>
+				container.querySelector<HTMLInputElement>(`#${CSS.escape(l.htmlFor)}`)
+			)
+		expect(inputsNamed("Angle")).toHaveLength(2)
+		fireEvent.change(inputsNamed("Angle")[1]!, { target: { value: "45" } })
+		expect(readCfg().fieldLayouts).toEqual({ g: { textAngle: 45 } })
+		expect(readCfg().textAngle ?? 0).toBe(0)
+		const wrapToggles = [...container.querySelectorAll("label")].filter(
+			(l) => l.textContent?.trim() === "Wrap text"
+		)
+		const avoidToggles = [...container.querySelectorAll("label")].filter(
+			(l) => l.textContent?.trim() === "Avoid overlapping labels"
+		)
+		expect(wrapToggles).toHaveLength(2)
+		expect(avoidToggles).toHaveLength(2)
+		fireEvent.click(avoidToggles[0]!.querySelector("input") ?? avoidToggles[0]!)
+		expect(readCfg().fieldLayouts?.y?.avoidOverlaps).toBe(true)
+		expect(readCfg().avoidOverlaps).toBe(false)
+		const xInputs = inputsNamed("X")
 		expect(xInputs.length).toBe(2)
 		fireEvent.change(xInputs[1]!, { target: { value: "12" } })
 		expect(readCfg().fieldOffsets).toEqual({ g: { xOffset: 12 } })
 		expect(readCfg().xOffset).toBe(0)
 	})
 
-	it("combined labels keep the shared Alignment row", () => {
-		const { container } = mountPanel({ fields: ["y", "g"] })
+	it("a lone label keeps the shared Alignment row", () => {
+		const { container } = mountPanel({ fields: ["y"] })
 		expand(container, "Adjust position and alignment")
 		expect(container.querySelectorAll('button[aria-label="Align left"]').length).toBe(1)
 	})
 
-	it("Value offers 'Combine variables into single label' (checked) and hides Label text when unchecked", () => {
+	it("Value composes the labels: one box per variable, '+ Add another label' adds an empty one, × removes", () => {
 		const { container, readCfg } = mountPanel({ fields: ["y", "g"] })
 		openChannel(container, "Value")
-		const toggle = [...container.querySelectorAll("label")].find(
-			(l) => l.textContent?.trim() === "Combine variables into single label"
+		expect(container.textContent).toContain("Compose labels")
+		expect(container.textContent).not.toContain("Combine variables")
+		const boxes = () =>
+			[...container.querySelectorAll<HTMLInputElement>('input[aria-label$=" text"]')]
+		expect(boxes().map((b) => b.value)).toEqual(["{y}", "{g}"])
+		const add = [...container.querySelectorAll("button")].find(
+			(b) => b.textContent?.trim() === "+ Add another label"
 		)
-		expect(toggle).toBeDefined()
-		const input = container.querySelector<HTMLInputElement>(
-			`#${CSS.escape(toggle!.htmlFor)}`
+		expect(add).toBeDefined()
+		fireEvent.click(add!)
+		expect(boxes().map((b) => b.value)).toEqual(["{y}", "{g}", ""])
+		fireEvent.change(boxes()[2]!, { target: { value: "{y} ({g})" } })
+		expect(readCfg().composedLabels?.[2]?.template).toBe("{y} ({g})")
+		const remove = container.querySelector<HTMLButtonElement>(
+			'button[aria-label="Remove label g"]'
 		)
-		expect(input?.checked).toBe(true)
-		expect(container.textContent).toContain("Label text")
-		fireEvent.click(input!)
-		expect(readCfg().combineVariables).toBe(false)
-		expect(container.textContent).not.toContain("Label text")
-		// Text format stays — it formats each variable's own label too.
+		expect(remove).not.toBeNull()
+		fireEvent.click(remove!)
+		expect(readCfg().composedLabels?.map((l) => l.template)).toEqual([
+			"{y}",
+			"{y} ({g})",
+		])
+		// Text format stays — it formats each variable wherever it appears.
 		expect(container.textContent).toContain("Text format")
-		fireEvent.click(input!)
-		expect(readCfg().combineVariables).toBe(true)
-		expect(container.textContent).toContain("Label text")
+	})
+
+	it("checking a field adds its label; unchecking removes the labels composing just it", () => {
+		const { container, readCfg } = mountPanel({ fields: ["y"] })
+		openChannel(container, "Value")
+		const checkbox = (name: string) =>
+			[...container.querySelectorAll("label")]
+				.find((l) => l.textContent?.trim() === name)
+				?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+		fireEvent.click(checkbox("g")!)
+		expect(readCfg().composedLabels?.map((l) => l.template)).toEqual(["{y}", "{g}"])
 	})
 
 	it("each variable's Color block carries its own text color rules", () => {
 		const { container, readCfg } = mountPanel({ fields: ["y", "g"] })
 		openChannel(container, "Color")
 		expand(container, "y")
-		expand(container, "Text color rules")
+		// The rules show only their add link until one exists — no condition
+		// box until the user asks for a rule.
+		expect(
+			container.querySelector('input[aria-label="Condition for y rule 1"]')
+		).toBeNull()
+		const add = [
+			...container.querySelectorAll<HTMLButtonElement>("button"),
+		].find((b) => b.textContent?.trim() === "+ Add text color rule")
+		expect(add, '"+ Add text color rule"').not.toBeNull()
+		fireEvent.click(add!)
 		const condition = container.querySelector<HTMLInputElement>(
 			'input[aria-label="Condition for y rule 1"]'
 		)

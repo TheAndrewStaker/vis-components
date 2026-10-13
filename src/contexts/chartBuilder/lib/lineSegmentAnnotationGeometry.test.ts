@@ -24,6 +24,23 @@ describe("computeLineSegmentPixels — percent mode", () => {
 		expect(geo?.y2).toBe(110)
 	})
 
+	it("reads pixel endpoints from the top-left corner", () => {
+		// A 40px rule 10px above the top-left corner.
+		const line = {
+			...newLineSegment("l1"),
+			coordSystem: "pixels" as const,
+			xMin: 0,
+			yMin: 10,
+			xMax: 40,
+			yMax: 10,
+		}
+		const geo = computeLineSegmentPixels(line, inner, noScales)
+		expect(geo?.x1).toBe(100)
+		expect(geo?.x2).toBe(140)
+		expect(geo?.y1).toBe(40) // top 50, 10px up
+		expect(geo?.y2).toBe(40)
+	})
+
 	it("supports a horizontal reference line (yMin == yMax)", () => {
 		const line = {
 			...newLineSegment("l1"),

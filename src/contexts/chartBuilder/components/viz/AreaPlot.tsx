@@ -53,7 +53,7 @@ import {
 import { dateColumnText } from "../../lib/rawTextByTime"
 import {
 	labelSeriesChannelsFromEncodings,
-	labelSeriesResolver,
+	labelSeriesResolverAll,
 } from "../../lib/labelSeries"
 import { resolveStackMode } from "../../lib/stackMode"
 import { formatSingleLabel } from "../../lib/dataLabelsStyle"
@@ -1459,14 +1459,17 @@ export const buildAreaAnchors = ({
 	 *  each anchor's `series` + `rank`; defaults to "series". */
 	labelPointsScope?: LabelPointsScope
 }): DataLabelAnchor[] => {
-	const seriesOf = labelSeriesResolver(
-		labelPointsScope ?? "series",
+	// Every scope's series + rank per anchor: the layer-wide one fills the
+	// anchor's `series` / `rank`, and the whole map rides along so each
+	// composed label can be ranked by its OWN "Of each" choice.
+	const seriesAllOf = labelSeriesResolverAll(
 		encodings
 			? labelSeriesChannelsFromEncodings(encodings)
 			: { group: [], layer: ["hue"] },
 		aggregation.categoryField,
 		encodings
 	)
+	const layerScope = labelPointsScope ?? "series"
 	// Areas reduce "group" → "overlay" (no meaningful side-by-side); mirrors
 	// the same coercion used in `buildAreas` so the anchor positions match
 	// the rendered polygon edges exactly.
@@ -1608,19 +1611,21 @@ export const buildAreaAnchors = ({
 				}
 				sizeValue = foundNumeric ? sum : firstNonNumeric
 			}
-			const { series, rank } = seriesOf({
+			const seriesByScope = seriesAllOf({
 				category: sv.stack.category,
 				groupValues: meta?.groupValues ?? {},
 				categoryRank: px,
 				leafIndex: 0,
 				layerIndex,
 			})
+			const { series, rank } = seriesByScope[layerScope]
 			anchors.push({
 				cx: aggregation.isVertical ? px : measurePoint,
 				cy: aggregation.isVertical ? measurePoint : px,
 				key: `${sv.stack.category}|${layerKey}`,
 				series,
 				rank,
+				seriesByScope,
 				label: formatted,
 				// Raw value feeds the conditional text-color / position rules.
 				labelValue,

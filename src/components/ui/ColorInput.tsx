@@ -73,7 +73,7 @@ export const ColorInput = ({
 	showHexInput?: boolean
 	/** Shows the per-line "changed" dot in front of the label. */
 	changed?: boolean
-	/** Colors the circular-arrow picker offers beside the swatch. Defaults to
+	/** Colors the palette-icon picker offers beside the swatch. Defaults to
 	 *  the theme's default categorical palette; pass a scheme when the row has
 	 *  its own (a per-value swatch's palette, an outline palette). */
 	palette?: readonly string[]

@@ -2,11 +2,14 @@ import { axisFieldsFor } from "../../../lib/axisFields"
 import type { ChannelConfigs, DataLabelsConfig } from "../../../lib/channelConfig"
 import { getChartModeDef } from "../../../lib/chartMode"
 import {
+	labelKeysFor,
+	normalizeComposedLabels,
 	populationOverrides,
-	populationTemplate,
 	presentPopulations,
 	resolveLabelSelection,
+	sectionKeysFor,
 } from "../../../lib/dataLabelsSelection"
+import { BAR_LABEL_EDGE_PAD_PX } from "../../../lib/dataLabelsLayout"
 import { buildLabelText } from "../../../lib/dataLabelsStyle"
 import { effectiveType } from "../../../lib/fieldType"
 import { ptToPx } from "../../../lib/fontUnit"
@@ -54,7 +57,7 @@ export const computeDataLabelOverflow = ({
 	overrides,
 	channelConfigs,
 	mapConfig,
-	dataLabels,
+	dataLabels: dataLabelsRaw,
 	dataLabelsEncodings,
 }: {
 	dataset: DatasetView | undefined
@@ -89,6 +92,8 @@ export const computeDataLabelOverflow = ({
 		multiField: dataLabelsEncodings.value?.multiField,
 		fields: dataLabelsEncodings.value?.fields,
 	}
+	// Normalized like the layer: a pre-composed-labels save derives its list.
+	const dataLabels = normalizeComposedLabels(dataLabelsRaw, value.fields ?? [])
 	const fallbackField =
 		encodings.length?.field ?? encodings.y?.field ?? null
 	const isMulti =
@@ -101,14 +106,7 @@ export const computeDataLabelOverflow = ({
 	// reserve must cover whichever labels actually render: a last label is
 	// exactly the one that clips off the right edge, so its (often wider)
 	// template drives the right-side reserve.
-	const selection = resolveLabelSelection(
-		{
-			labelPoints: dataLabels.labelPoints,
-			onlyLastLabel: dataLabels.onlyLastLabel,
-			fieldLabelPoints: dataLabels.fieldLabelPoints,
-		},
-		value
-	)
+	const selection = resolveLabelSelection(dataLabels, value)
 	/** Which canvas edge(s) a population's labels can sit against. */
 	type ReserveEdges = "left" | "right" | "both"
 	type ReserveProfile = {
@@ -116,6 +114,9 @@ export const computeDataLabelOverflow = ({
 		xOffset: number
 		alignment: "left" | "center" | "right"
 		edges: ReserveEdges
+		/** A separate variable's own bar side (`fieldBarPlacements`), when
+		 *  it has one; the layer-wide side otherwise. */
+		side?: DataLabelsConfig["barLabelSide"]
 	}
 	const baseProfile: ReserveProfile = {
 		template: dataLabels.labelTemplate,
@@ -172,36 +173,36 @@ export const computeDataLabelOverflow = ({
 		firstLabel: dataLabels.firstLabel,
 		lastLabel: dataLabels.lastLabel,
 	}
-	// Separate variables (multi-field, "Combine variables" unchecked): each
-	// variable is its own label, so a population reserves for its widest
-	// single variable rather than the arranged template.
-	const separate = isMulti && dataLabels.combineVariables === false
+	// One profile per label the layer draws in each population: single-field,
+	// the one label with that population's endpoint overrides; multi-field,
+	// every composed label in the population (`labelKeysFor`) with its own
+	// alignment / offset / side, composing its own template — never the
+	// endpoint overrides.
+	const labelKeys = labelKeysFor(dataLabels, value)
+	const labelTemplates = new Map(
+		labelKeys.labels.map((l) => [l.id, l.template] as const)
+	)
+	const ownProfile = (key: string, pop: "all" | "first" | "last"): ReserveProfile => ({
+		edges: edgesFor(pop),
+		xOffset: dataLabels.fieldOffsets?.[key]?.xOffset ?? baseProfile.xOffset,
+		alignment: dataLabels.fieldAlignments?.[key] ?? baseProfile.alignment,
+		side: dataLabels.fieldBarPlacements?.[key]?.side,
+		template: labelTemplates.get(key) ?? "",
+	})
 	const profiles: ReserveProfile[] = presentPopulations(selection).flatMap(
 		(pop) => {
+			if (isMulti) {
+				return selection.labels[pop]
+					.filter((key) => (labelTemplates.get(key) ?? "").trim() !== "")
+					.map((key) => ownProfile(key, pop))
+			}
 			const ov = populationOverrides(templateCfg, selection, pop)
-			const shape = {
-				xOffset: ov.xOffset ?? baseProfile.xOffset,
-				alignment: ov.alignment ?? baseProfile.alignment,
-				edges: edgesFor(pop),
-			}
-			if (separate) {
-				// Each variable's own alignment / offset (its base), else the
-				// layer's. Endpoint overrides don't apply to separate labels.
-				return selection.fields[pop].map((f) => ({
-					edges: shape.edges,
-					xOffset: dataLabels.fieldOffsets?.[f]?.xOffset ?? baseProfile.xOffset,
-					alignment: dataLabels.fieldAlignments?.[f] ?? baseProfile.alignment,
-					template: `{${f}}`,
-				}))
-			}
 			return [
 				{
-					...shape,
-					// Templates only matter in multi-field mode (one field needs no
-					// arrangement); each population composes with its own.
-					template: isMulti
-						? populationTemplate(templateCfg, selection, pop)
-						: baseProfile.template,
+					xOffset: ov.xOffset ?? baseProfile.xOffset,
+					alignment: ov.alignment ?? baseProfile.alignment,
+					edges: edgesFor(pop),
+					template: baseProfile.template,
 				},
 			]
 		}
@@ -209,9 +210,44 @@ export const computeDataLabelOverflow = ({
 	// Position rules can push a matching subset of labels past either edge
 	// with their own X offset — reserve for each rule's offset too. Assuming
 	// the longest label could take any rule's offset over-reserves slightly,
-	// the same conservatism the sizeMax path applies.
+	// the same conservatism the sizeMax path applies. The arranged label's
+	// rules ride on the base profile; an own label's (a separate variable's
+	// or a combination's) on its own, so its template and side still drive
+	// the width.
 	for (const rule of dataLabels.positionRules ?? []) {
 		profiles.push({ ...baseProfile, xOffset: rule.xOffset, edges: "both" })
+	}
+	if (isMulti) {
+		for (const key of labelKeys.keys) {
+			for (const rule of dataLabels.fieldPositionRules?.[key] ?? []) {
+				profiles.push({
+					...ownProfile(key, "all"),
+					xOffset: rule.xOffset,
+					edges: "both",
+				})
+			}
+		}
+	}
+	// Beside a VERTICAL bar (`barLabelSide`): the anchor is the bar's edge
+	// plus the pad and the text is forced to hang away from the bar, whatever
+	// alignment the profile carried — mirror both so the reserve covers the
+	// label where it draws. The edge itself sits no further out than the
+	// outermost category center the formula below already treats as the
+	// plot edge, so only the pad moves. Horizontal bars shift labels
+	// vertically, which this (left / right) reserve never models.
+	const barSide = dataLabels.barLabelSide ?? "center"
+	if (memoMode.id === "bars-x") {
+		for (let i = 0; i < profiles.length; i++) {
+			const p = profiles[i]
+			const side = p.side ?? barSide
+			if (side === "center") continue
+			const after = side === "after"
+			profiles[i] = {
+				...p,
+				alignment: after ? "left" : "right",
+				xOffset: p.xOffset + (after ? BAR_LABEL_EDGE_PAD_PX : -BAR_LABEL_EDGE_PAD_PX),
+			}
+		}
 	}
 	// Candidate RENDERED labels per distinct template, composed identically
 	// to the layer via `buildLabelText`. In multi-field mode that's the full
@@ -249,16 +285,20 @@ export const computeDataLabelOverflow = ({
 	// The label width estimate has to use the LARGEST possible size
 	// (sizeMax) so the canvas reserves enough room for the biggest
 	// label, not just the default font-size case.
-	// Per-variable sizes (multi-field mode) can likewise enlarge a piece of
-	// the label, so the largest configured one joins the estimate — the
-	// same conservatism as sizeMax.
+	// Per-label sizes (multi-field mode) can likewise enlarge a label, so the
+	// largest configured one joins the estimate — the same conservatism as
+	// sizeMax. A label with a SPLIT Size section sizes each variable
+	// separately, so its piece entries count too.
 	const sizeMapped = !!dataLabelsEncodings.size?.field
-	const perVariableMax = isMulti
-		? Math.max(
-				0,
-				...(value.fields ?? []).map((f) => dataLabels.fieldSizes?.[f] ?? 0)
+	const sizeKeys = isMulti
+		? labelKeys.keys.flatMap((k) =>
+				sectionKeysFor(dataLabels, k, labelKeys.pieces[k] ?? [], "size")
 			)
-		: 0
+		: []
+	const perVariableMax = Math.max(
+		0,
+		...sizeKeys.map((k) => dataLabels.fieldSizes?.[k] ?? 0)
+	)
 	const fontSizeForEstimate = ptToPx(
 		Math.max(
 			sizeMapped

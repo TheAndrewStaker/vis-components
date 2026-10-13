@@ -1,4 +1,5 @@
 import type { AnnotationsConfig } from "../../../lib/annotationsConfig"
+import type { AnnotationCoordSystem } from "../../../lib/annotationPixels"
 import type { FacetLayoutSpec } from "../../../lib/facetLayoutSolver"
 import {
 	annotationClipsToPanel,
@@ -71,7 +72,7 @@ export const measureAnnotationSpill = ({
 	for (const p of spec.panels) {
 		const scaleInputs = scaleInputsByPanel.get(p.key)
 		if (!scaleInputs) continue
-		const unclipped = <T extends { coordSystem: "percent" | "values" }>(
+		const unclipped = <T extends { coordSystem: AnnotationCoordSystem }>(
 			list: readonly T[] | undefined
 		): T[] =>
 			(list ?? []).filter(

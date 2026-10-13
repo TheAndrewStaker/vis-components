@@ -1004,7 +1004,7 @@ palette section branches on field type:
 
 - **Categorical** — palette dropdown sourced live from the active
   theme's Categorical Palettes. Per-value color override grid (click
-  swatch → pick color). Each row also carries a circular-arrow button
+  swatch → pick color). Each row also carries a palette-icon button
   that opens a popover of the current palette's swatches (wrapping at
   6 per row, current color highlighted) — pick one to commit it and
   close. A down-chevron at the popover's bottom expands it with the
@@ -1027,7 +1027,7 @@ palette section branches on field type:
   computed auto value as its greyed placeholder (data min / mid / data
   max) rather than the word "auto"; typing a value pins that stop.
   Every stop row (preset steps, Low/Mid/High, and manual steps) also
-  carries the circular-arrow palette-popover button beside its swatch,
+  carries the palette-icon palette-popover button beside its swatch,
   offering the theme's default categorical palette (expandable to the
   theme's other palettes) so a gradient stop can borrow a theme color;
   picking one commits through the row's normal edit path (so editing a
@@ -1079,7 +1079,7 @@ histogram or density display to be on). Resolution is
 visuals keep their colors unchanged until the user touches the slot.
 Every single-color swatch shown when "Vary by" is set to Single color
 (the Fill panel's default fill, each color slot, and the Shape panel's
-outline color) carries the same circular-arrow palette-popover button
+outline color) carries the same palette-icon palette-popover button
 as the per-value override rows, offering the active categorical
 palette's colors (the chart's picked palette when one is stored, else
 the theme default) as one-click alternatives to the open-ended picker.
@@ -1093,6 +1093,18 @@ Theme → Palettes → "Text palette"), which is typically darker shades
 that stay legible at text sizes. Themes with no text palette fall back
 to the default categorical palette, and the popover's chevron still
 reaches every other theme palette either way.
+
+The text palette is also the DEFAULT scheme when label color varies by
+a CATEGORICAL variable, not just the popover's lead: mapping a
+categorical field to the Data Labels Color channel — or picking one in
+a per-variable color slot's "Vary by" — seeds that slot's palette from
+it, since the mark palette's lighter slots rarely survive at text size.
+It is a seeded default, so the Palette dropdown below re-picks freely
+("Match chart colors" included), a palette already chosen is never
+overwritten by a later re-mapping, and ordinal fields keep their
+ordered ramp (the order carries meaning the text palette doesn't
+encode).
+
 Aggregate shapes (violin / box) resolve a mapped slot field against a
 representative row — the first data row of the shape's category (or of
 the panel, for the single-variable violin) — so "Vary by" works for
@@ -2119,16 +2131,19 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   annotations, so a blank means "no label here". The measure
   fallback applies only when no Value field is mapped (or it equals
   the measure field), where labels show the slice's aggregated value.
-- **Size** — the Default size input always shows; the Min / Max
-  pixel-range inputs appear only when a size source is mapped (a field,
-  or the tree layouts' derived "Nesting depth"), since the range only
-  takes effect then. Default size still applies to values the mapped
-  source can't size (non-numeric). With **two or more label variables**
-  the panel adds one block per variable (named by field, like the Color
+- **Size** — the Default size input shows for a single label variable;
+  the Min / Max pixel-range inputs appear only when a size source is
+  mapped (a field, or the tree layouts' derived "Nesting depth"), since
+  the range only takes effect then. Default size still applies to
+  values the mapped source can't size (non-numeric). With **two or
+  more label variables** the Default size input HIDES and the panel
+  instead shows one block per variable (named by field, like the Color
   panel's slots) holding a single **Size** input: blank (the default)
-  means the label's size — the Default size, or the mapped size — and a
-  value sets that variable's text to that many points regardless of
-  either (`DataLabelsConfig.fieldSizes`). The solver's margin reserve
+  means the theme's default size — or the mapped size — and a value
+  sets that variable's text to that many points regardless of either
+  (`DataLabelsConfig.fieldSizes`). The stored layer-wide `fontSize` is
+  untouched by the per-variable inputs and still backs blanks; it just
+  isn't editable while several variables show. The solver's margin reserve
   measures with the largest configured per-variable size, the same
   conservatism it applies to a mapped size's Max.
 - **Which labels** — All labels / First per series / Last per series /
@@ -2141,14 +2156,13 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   toggle read as "Last per series".
   **Bars, stacked areas and multiple pies** hand the layer an explicit
   series and rank instead (`lib/labelSeries.ts`), chosen by an **Of
-  each** select (`DataLabelsConfig.labelPointsScope`, layer-wide, shared
-  by every variable's choice) that appears under "Which labels" only when
-  the marks are grouped or layered by a channel other than the x field
-  (bars: a group / stack / overlay channel; areas and several pies: a
-  stack channel; a single pie never shows it), and only while some
-  choice is not "All labels" (the "Which labels" options then read
-  "First" / "Last" / "First and last" so the two selects form one
-  sentence):
+  each** select that sits under its label's "Which labels" and appears
+  only when the marks are grouped or layered by a channel other than the
+  x field (bars: a group / stack / overlay channel; areas and several
+  pies: a stack channel; a single pie never shows it), and only while
+  that label's choice is not "All labels" (its "Which labels" options
+  then read "First" / "Last" / "First and last" so the two selects form
+  one sentence):
   - **Series** (default) — the first / last category along the axis, per
     series. A series is the bar's stack + group channel values EXCLUDING
     any channel mapped to the category (x) field: hue on the x field
@@ -2168,11 +2182,19 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   "First" labels every wedge of the first pie.
   A stored scope whose channel is no longer mapped reads as Series (the
   select shows Series; the stored value is left alone).
-  With a single mapped Value there is one select. With **Multiple
-  variables…** there is one select PER checked variable (listed by field
-  name under a "Which labels" header), stored in
-  `DataLabelsConfig.fieldLabelPoints`; a variable with no entry follows
-  the layer-wide choice, so multi-field visuals saved before per-variable
+  With a single mapped Value there is one select, writing the layer-wide
+  `DataLabelsConfig.labelPointsScope`. With **Multiple variables…** the
+  scope is PER LABEL (`DataLabelsConfig.fieldLabelPointsScope`, keyed by
+  the composed label's id), so one label can sit on the last bar of each
+  STACK while another sits on the last bar of each SERIES; a label with
+  no entry follows the layer-wide value. The anchors carry a series and
+  rank per scope (`DataLabelAnchor.seriesByScope`), and each label's
+  endpoints are classified under its own.
+  With a single mapped Value there is one "Which labels" select. With
+  **Multiple variables…** there is one select PER composed label (listed
+  by its title under Label selection), stored in
+  `DataLabelsConfig.fieldLabelPoints`; a label with no entry follows
+  the layer-wide choice, so multi-field visuals saved before per-label
   selection keep their look.
   Each variable's choice places it in one or more label POPULATIONS —
   **all labels** (every anchor), **first** and **last** (the series ends;
@@ -2184,16 +2206,56 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   series name as a separate label — the direct-labeling recipe. (A
   one-point series takes the last label, plus the first label only when
   that population shows a variable the last one doesn't.)
-  **Combine variables into single label** (under Value → Fields to
-  include, after the field checkboxes; checked by default) decides what
-  a variable's membership means. Checked: the variables of a population
-  ARRANGE into one label per anchor through the Label text box(es)
-  below the checkbox. Unchecked: every checked variable is its OWN
-  label at each anchor it applies to — one text per variable, composed
-  from just that variable (its Text format still applies) — so the
-  Label text boxes are hidden and the templates are ignored
-  (`DataLabelsConfig.combineVariables`, unset = combined). Separate
-  labels position PER VARIABLE: under Adjust position and alignment the
+  **Compose labels** (under Value, a group header after Text format)
+  holds THE labels of a multi-variable mapping: one text box per label
+  (`DataLabelsConfig.composedLabels` `[{id, template}]`). Checking a
+  variable under Fields to include adds a box composing just it
+  (`{A}`, keyed by the variable's name); unchecking removes the boxes
+  composing just that variable. "+ Add another label" adds an empty
+  box to type any arrangement of the checked variables into — `{A}
+  ({B})` with literal text — and the × at a box's right removes it.
+  The field checklist only decides which variables the boxes may
+  name; the boxes decide what the labels are. Every box is one label
+  at every anchor its own "Which labels" names, and every box gets
+  its own sections — under Color, Size, Text properties, Text
+  background, Label selection (its Which labels) and Adjust position
+  (alignment, angle, wrapping, overlap avoidance, bar placement, X /
+  Y) — titled by its variables (`A`, `A + B`; "Label N" while it
+  names none), all keyed by the label's id. A label styles AS ONE by
+  default: its own color / size / font / background covers every piece;
+  the rules under its Color compare against its variable's value (a
+  single-variable label) or the chart's backing value (a combination).
+  A lone single-variable label uses the layer-wide controls (its own
+  entries, if any, win).
+  **Split into individual variables** — a checkbox above the controls
+  of any label naming TWO or more variables, in each of Color, Size
+  and Text properties (`DataLabelsConfig.pieceSplits[id]`, one flag per
+  section). Checked, that section expands into one block per variable
+  in the label and writes the variable's own entry
+  (`pieceKey(id, field)` in the same `fieldColors` / `fieldColorRules`
+  / `fieldSizes` / `fieldFonts` maps) laid over the LABEL's — so a
+  piece that only sets a weight keeps the label's family. That is the
+  recipe for a bold series name beside an unbolded value, or an
+  all-black label whose value alone turns green when positive and red
+  when negative (the variable's own color rules, compared against ITS
+  value). The label still POSITIONS as one — placement, alignment and
+  Which labels stay per label — and the other sections (Text
+  background, Adjust position) stay per label too. Unchecking restores
+  the uniform look without discarding the per-variable entries; a
+  section that isn't split ignores them entirely. A lone combined label
+  gets the same per-label block so its checkbox has somewhere to sit.
+  An empty box draws nothing; an empty list draws no labels. So
+  "A + B, and C by itself" is the boxes `{A} ({B})` and `{C}`, and
+  "the value on the first point, the value and category on the last"
+  is `{value}` (Which labels: First) and `{value} {category}` (Last).
+  Visuals saved before composed labels derive their list from the
+  legacy state (`normalizeComposedLabels`): variables separate
+  (`combineVariables === false`) → one label per field keyed by its
+  name; combined → one label per legacy population (ids `arranged` /
+  `arranged-first` / `arranged-last`) with its Label text and
+  series-end overrides, so the chart looks the same until the list is
+  edited, which persists it. Several
+  labels position PER LABEL: under Adjust position and alignment the
   Alignment control and the X / Y nudges become one row per variable
   (each showing its effective value — its own, else the layer's — and
   writing `DataLabelsConfig.fieldAlignments` / `fieldOffsets`), so a
@@ -2257,18 +2319,70 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   to reach water. Non-colliding labels never move; a label with no
   free spot within ~12 rings stays put (best-effort, as elsewhere).
 - **Label all facets** (faceted charts only; under Label selection,
-  after Which labels) — checked by default: every panel draws its
-  labels. Unchecking lists the chart's facet panels as checkboxes (all
-  ticked at first) so the user keeps labels on just the panels they
-  tick; an unticked panel renders no labels at all. The list uses the
+  after Which labels and Of each) — checked by default: every panel
+  draws its labels. Unchecking lists the chart's facet panels as
+  checkboxes (all ticked at first) so the user keeps labels on just the
+  panels they tick; an unticked panel renders no labels at all. It is
+  PER LABEL in the same way: a single mapped Value writes the layer-wide
+  `DataLabelsConfig.facetKeys`, while each composed label gets its own
+  checkbox list (`DataLabelsConfig.fieldFacetKeys`, keyed by the label's
+  id) so the value can label every panel while the category labels one.
+  A label with no entry inherits `facetKeys` — so a visual that scoped
+  the whole layer before composed labels keeps its scope — and an entry
+  of "all facets" overrides a layer-wide list rather than falling back
+  to it. It is also the one Label-selection control a map or a sunburst
+  keeps (they have no series ends to select or scope). The list uses the
   same panel keys the annotations' "Apply to all facets" picker uses
   (facet value in wrap mode, row · column in grid mode, the compact
   panel title when empty panels are hidden). The selection is ignored
   — every label draws — when the chart stops being faceted, so a stored
   selection never blanks an unfaceted chart.
-- **Bar position** (bars only) — center (default) / inside, near base /
-  inside, near end / outside the end of the bar, along each slice's
-  measure extent.
+- Bar charts get a **Placement** group (a hairline-topped group header,
+  styled like Adjust position) holding two dropdowns, **Vertical** and
+  **Horizontal**, named by the screen direction they move labels in —
+  so which one is the measure-axis placement swaps with orientation:
+  on vertical bars Vertical is the measure-axis placement and
+  Horizontal the category-axis side; on horizontal bars the reverse.
+- **Measure-axis placement** (bars only; "Vertical" on vertical bars)
+  — center (default) / inside, near base / inside, near end / outside
+  the end of the bar, along each slice's measure extent.
+- With separate variables (Combine variables unchecked) the whole
+  Adjust position and alignment section becomes one collapsible
+  subsection PER VARIABLE (titled by field, like the Color / Size /
+  Text properties blocks), each holding that variable's Alignment,
+  Angle, Wrap text (+ Characters), Avoid overlapping labels, the bar
+  Placement pair, and the Adjust position X / Y — effective values
+  shown (the variable's own entry, else the layer's), writes to the
+  variable's entry (`fieldAlignments`, `fieldLayouts` for angle / wrap
+  / overlap, `fieldBarPlacements`, `fieldOffsets`). The layer-wide
+  versions of those controls hide in this mode (they still back any
+  blank). Position rules go in the subsection too — they position ONE
+  label, so each variable's block ends with its own "+ Add rule"
+  (`fieldPositionRules`), and there are as many links as there are
+  label variables. The pie / sunburst nudges and the area Layer
+  position stay layer-wide. Overlap avoidance is then per variable: the
+  labels of variables with it on move out of EACH OTHER's way, and a
+  variable with it off never moves. So e.g. the category name sits
+  beside the bar while the value stays centered inside it. A variable
+  beside a vertical bar loses only its own Alignment row.
+- **Side placement** (bars only; "Horizontal" on vertical bars) —
+  which side of the bar labels sit on,
+  across the category axis: centered on the bar (default), or beside
+  it — left / right of a vertical bar, above / below a horizontal one.
+  Beside the bar, the anchor is the bar's EDGE plus a 4px pad, not its
+  center, so the Adjust-position nudges measure from the edge and a
+  label placed beside a bar keeps that distance however wide the bar
+  renders (nudging from the center, a label set beside a wide bar slid
+  back over it when the figure narrowed and the bar thinned). On a
+  vertical bar the side also fixes the text alignment — the label
+  hangs away from the bar (left of the bar ends at the anchor, right
+  of it starts there) — and the Alignment controls hide while a side
+  is set, series-end and per-variable alignments included. On a
+  horizontal bar the side picks which edge of the label block meets
+  the anchor (above → block bottom, below → block top) and Alignment
+  stays the user's. The layout reserve for vertical bars follows the
+  forced alignment and the pad so a label beside the last bar stays
+  in the viewport.
 - **Layer position** (areas only) — the same four placements along each
   layer's measure extent (its base — the zero baseline, or the layer
   below in a stacked area — to its top edge), plus **On the top edge**
@@ -2293,8 +2407,26 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   current base offsets (a no-op until edited). In first-and-last mode
   an endpoint's own explicit X/Y override wins over a matching rule;
   an unset endpoint offset inherits the rule-applied one.
+  Rules belong to a LABEL, not to the layer: the link sits inside the
+  subsection of the label it rules. With the variables combined that's
+  the one arranged label and the rules are layer-wide
+  (`positionRules`); with them separate each variable — and each
+  combination — carries its own list (`fieldPositionRules[key]`) in
+  its own subsection, replacing that variable's own base offsets
+  (`fieldOffsets[key]`, else the layer's), which is also what a fresh
+  rule seeds from. A variable's rules compare against ITS value in the
+  row, the same convention the per-variable text color rules follow;
+  a combination arranges several variables, so it has no single value
+  and falls back to the layer's backing value.
 - **Text color rules** — conditional overrides (e.g., white text on
-  dark heatmap cells, black on light).
+  dark heatmap cells, black on light). They sit below the color
+  swatches, separated by a hairline, with no header of their own: until
+  a rule exists the whole feature is the right-aligned "+ Add text
+  color rule" link, which names what it adds. The swatches above are
+  the primary control, the rules the exception path. The link stays
+  below the rows, so each click adds another rule, and every row can be
+  removed; the condition grammar note appears once a rule does. Same
+  shape as the position rules above.
 - **Per-variable colors** (multi-field labels with 2+ variables) — the
   Color panel replaces the single base color stack with one color slot
   per label variable. Each variable's block also carries its own **Text
@@ -2356,7 +2488,9 @@ profile (its template / offset / alignment) and the sides take the max
 — so a wide `{value} {series}` last-label template gets the right-edge
 room it actually needs. Position rules contribute one extra profile per
 rule (its X offset over the base template / alignment), so a rule that
-pushes matching labels past an edge still gets margin.
+pushes matching labels past an edge still gets margin — a per-variable
+rule over that variable's own profile, so its template and bar side
+still drive the width.
 
 ---
 
@@ -2827,9 +2961,25 @@ panel mounts; a freshly added annotation starts expanded. Each
 rectangle has:
 
 - A name (free text, shown in the panel list).
-- **Adjust by** dropdown — Percent (0–100) or Values (data units).
+- **Adjust by** dropdown — Percent (0–100), Values (data units), or
+  Pixels (from top-left). One set of coordinate inputs; the dropdown
+  sets their unit, and switching converts the stored numbers (through
+  the axis span, or the rendered plot's size) so the annotation stays
+  where it is.
   - **Percent**: xMin/xMax/yMin/yMax are plot-area-normalized (0–1,
     with 0,0 at the bottom-left spine corner).
+  - **Pixels**: whole px from the plot's **top-left corner**, +x right
+    and +y up (so a negative y is inside the plot). This is the unit for
+    anything placed **outside** the plot. A percent coordinate is a fraction of the plot, so one past
+    0 or 100 sits a distance beyond the edge that grows and shrinks with
+    the plot — while the chrome out there (panel titles, the chart-title
+    band, cell margins) is a fixed pixel height. The annotation drifts
+    across its neighbors as the viewport changes: a label 12% above the
+    plot clears the panel title on a tall chart and lands on top of it on
+    a short one. "14px above the top-left corner" is 14px on every
+    viewport. It also makes the edge reserve (below) converge in a single
+    extra solve, since a pixel-anchored annotation's spill no longer
+    depends on the plot's size.
   - **Values**: same fields are interpreted as data values along
     whichever encoding drives each axis (`x`/`y` for scatter,
     `length` for the measure axis in bars/areas, etc. — the mode's
@@ -2889,7 +3039,8 @@ font with the rectangle's inner label.
 All four kinds render per-panel in PlotCanvas, using each panel's own
 position scales in Values mode. An annotation may sit **anywhere on the
 canvas**, not just inside the plot: Percent coordinates past 0–100 (or
-below 0) and, on a single-panel chart, Values outside the axis domain
+below 0), Pixels outside the plot, and, on a single-panel
+chart, Values outside the axis domain
 place it beside the y-axis, above the title, below the x-axis, or past
 the right edge, and nothing clips it. Like a wide legend, an
 end-of-line data label, or the caption band, an annotation that would

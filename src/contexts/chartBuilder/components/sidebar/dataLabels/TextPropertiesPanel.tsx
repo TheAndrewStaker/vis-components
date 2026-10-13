@@ -107,6 +107,9 @@ export const TextPropertiesPanel = ({
 	onChange,
 	themeDefaults,
 	multiFields = [],
+	titles,
+	splitToggle,
+	keysFor,
 }: {
 	cfg: DataLabelsConfig
 	onChange: (patch: Partial<DataLabelsConfig>) => void
@@ -117,6 +120,14 @@ export const TextPropertiesPanel = ({
 	 *  Family / Weight / Style block in place of the layer-wide one; empty
 	 *  in single-field mode. */
 	multiFields?: string[]
+	/** Section titles by key (see `SizePanel`). */
+	titles?: Record<string, string>
+	/** The "Split into individual variables" toggle for one label (see
+	 *  `SizePanel`). */
+	splitToggle?: (key: string) => React.ReactNode
+	/** The keys one label's blocks write to: just the label, or one per
+	 *  variable when its Text properties are split. */
+	keysFor?: (key: string) => string[]
 }) => {
 	if (multiFields.length === 0) {
 		const styleChanged =
@@ -153,43 +164,78 @@ export const TextPropertiesPanel = ({
 			</div>
 		)
 	}
+	// One key's Family / Weight / Style block. `base` is what its unset keys
+	// inherit — the layer for a whole label, the LABEL's own font for a
+	// piece, so a piece that only bolds keeps the label's family.
+	const blockFor = (key: string, base: LabelFontOverrides) => {
+		const own: LabelFontOverrides = cfg.fieldFonts?.[key] ?? {}
+		const write = (next: LabelFontOverrides) => {
+			const map = { ...(cfg.fieldFonts ?? {}) }
+			if (Object.keys(next).length === 0) delete map[key]
+			else map[key] = next
+			onChange({ fieldFonts: map })
+		}
+		const unset = (...ks: (keyof LabelFontOverrides)[]) => {
+			const next = { ...own }
+			for (const k of ks) delete next[k]
+			write(next)
+		}
+		return (
+			<FontControls
+				fontFamily={own.fontFamily ?? base.fontFamily ?? cfg.fontFamily}
+				fontWeight={own.fontWeight ?? base.fontWeight ?? cfg.fontWeight}
+				italic={own.italic ?? base.italic ?? cfg.italic ?? false}
+				underline={own.underline ?? base.underline ?? cfg.underline ?? false}
+				onChange={(p) => write({ ...own, ...p })}
+				resetFamily={
+					own.fontFamily !== undefined ? () => unset("fontFamily") : null
+				}
+				resetWeight={
+					own.fontWeight !== undefined ? () => unset("fontWeight") : null
+				}
+				resetStyle={
+					own.italic !== undefined || own.underline !== undefined
+						? () => unset("italic", "underline")
+						: null
+				}
+				nameSuffix={` (${titles?.[key] ?? key})`}
+			/>
+		)
+	}
 	return (
 		<div className="flex flex-col gap-2">
 			{multiFields.map((name) => {
-				const own: LabelFontOverrides = cfg.fieldFonts?.[name] ?? {}
-				const configured = Object.keys(own).length > 0
-				const write = (next: LabelFontOverrides) => {
-					const map = { ...(cfg.fieldFonts ?? {}) }
-					if (Object.keys(next).length === 0) delete map[name]
-					else map[name] = next
-					onChange({ fieldFonts: map })
-				}
-				const unset = (...keys: (keyof LabelFontOverrides)[]) => {
-					const next = { ...own }
-					for (const k of keys) delete next[k]
-					write(next)
-				}
+				const keys = keysFor?.(name) ?? [name]
+				const split = keys.length > 1 || keys[0] !== name
+				// A split label's pieces lay over the LABEL's own font, so the
+				// pieces show what they'd actually render with.
+				const labelFont: LabelFontOverrides = split
+					? (cfg.fieldFonts?.[name] ?? {})
+					: {}
 				return (
-					<CollapsibleSubsection key={name} title={name} changed={configured}>
-						<FontControls
-							fontFamily={own.fontFamily ?? cfg.fontFamily}
-							fontWeight={own.fontWeight ?? cfg.fontWeight}
-							italic={own.italic ?? cfg.italic ?? false}
-							underline={own.underline ?? cfg.underline ?? false}
-							onChange={(p) => write({ ...own, ...p })}
-							resetFamily={
-								own.fontFamily !== undefined ? () => unset("fontFamily") : null
-							}
-							resetWeight={
-								own.fontWeight !== undefined ? () => unset("fontWeight") : null
-							}
-							resetStyle={
-								own.italic !== undefined || own.underline !== undefined
-									? () => unset("italic", "underline")
-									: null
-							}
-							nameSuffix={` (${name})`}
-						/>
+					<CollapsibleSubsection
+						key={name}
+						title={titles?.[name] ?? name}
+						changed={keys.some(
+							(k) => Object.keys(cfg.fieldFonts?.[k] ?? {}).length > 0
+						)}
+					>
+						{splitToggle?.(name)}
+						{split
+							? keys.map((key) => (
+									<CollapsibleSubsection
+										key={key}
+										title={titles?.[key] ?? key}
+										boxed={false}
+										defaultOpen
+										changed={
+											Object.keys(cfg.fieldFonts?.[key] ?? {}).length > 0
+										}
+									>
+										{blockFor(key, labelFont)}
+									</CollapsibleSubsection>
+								))
+							: blockFor(name, {})}
 					</CollapsibleSubsection>
 				)
 			})}

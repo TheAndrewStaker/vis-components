@@ -10,7 +10,7 @@ import { FontEditor } from "./LabelsPanel"
 
 /** Every swatch that colors TEXT — the FontEditor's Color row (chart title,
  *  subtitle, axis titles, tick labels), captions, annotation text, data
- *  labels — carries the circular-arrow palette picker, and the picker leads
+ *  labels — carries the palette-icon palette picker, and the picker leads
  *  with the theme's designated TEXT palette rather than the mark palette. */
 
 const MARK_COLORS = ["#111111", "#222222"]

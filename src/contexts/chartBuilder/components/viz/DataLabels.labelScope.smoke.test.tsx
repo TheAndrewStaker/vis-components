@@ -49,7 +49,10 @@ const buildDataset = (): Dataset =>
 
 const seed = (
 	layout: "grouped" | "stacked" | "pies",
-	labelsCfg: Partial<DataLabelsConfig>
+	labelsCfg: Partial<DataLabelsConfig>,
+	/** Multi-field Value (composed labels); single-field `{level}` when
+	 *  omitted. */
+	valueFields?: string[]
 ) => {
 	const store = installInMemoryLocalStorage()
 	const encodings: Encodings =
@@ -103,7 +106,9 @@ const seed = (
 			...emptyDataLabelsEncodings(),
 			x: { field: "Setting" },
 			y: { field: "value" },
-			value: { field: "level", multiField: false, fields: [] },
+			value: valueFields
+				? { field: null, multiField: true, fields: valueFields }
+				: { field: "level", multiField: false, fields: [] },
 		})
 	)
 	store.set(
@@ -188,6 +193,46 @@ describe("Data labels — 'Which labels' scope on bars", () => {
 		seed("pies", { labelPoints: "first", labelPointsScope: "stack" })
 		const { container } = mount()
 		expect(texts(container)).toEqual(["a", "a"])
+	})
+
+	it("each composed label uses its OWN 'Of each' scope", () => {
+		// Stacked bars, two labels, both "First": the value label runs over
+		// SERIES (the first Setting's bar in every layer — 10 / 11 / 12),
+		// the level label over each STACK (the baseline layer of both bars —
+		// "a" twice). One layer-wide scope could not produce both.
+		seed(
+			"stacked",
+			{
+				composedLabels: [
+					{ id: "value", template: "{value}" },
+					{ id: "level", template: "{level}" },
+				],
+				fieldLabelPoints: { value: "first", level: "first" },
+				fieldLabelPointsScope: { value: "series", level: "stack" },
+			},
+			["value", "level"]
+		)
+		const { container } = mount()
+		expect(texts(container)).toEqual(["10", "11", "12", "a", "a"])
+	})
+
+	it("a label with no scope entry falls back to the layer-wide one", () => {
+		seed(
+			"stacked",
+			{
+				composedLabels: [
+					{ id: "value", template: "{value}" },
+					{ id: "level", template: "{level}" },
+				],
+				fieldLabelPoints: { value: "first", level: "first" },
+				labelPointsScope: "stack",
+				fieldLabelPointsScope: { value: "series" },
+			},
+			["value", "level"]
+		)
+		const { container } = mount()
+		// Only `value` opted out of the layer's "stack".
+		expect(texts(container)).toEqual(["10", "11", "12", "a", "a"])
 	})
 
 	it("stacked: 'stack' scope stored on an unstacked chart reads as series", () => {

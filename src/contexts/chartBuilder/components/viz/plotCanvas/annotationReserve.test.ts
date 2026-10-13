@@ -147,6 +147,29 @@ describe("measureAnnotationSpill", () => {
 		expect(thick.right - thin.right).toBeCloseTo(4)
 	})
 
+	it("measures a pixel-mode rectangle from its corner", () => {
+		const { solve } = makeSolver()
+		const spec = solve({ left: 0, right: 0, top: 0, bottom: 0 })
+		const inner = spec.panels[0]!.inner
+		// A 20px-tall box whose top sits 30px above the plot's top-left corner.
+		const annotations: AnnotationsConfig = {
+			...emptyAnnotations(),
+			rectangles: [
+				rect({
+					coordSystem: "pixels",
+					xMin: 0,
+					xMax: 200,
+					yMin: 10,
+					yMax: 30,
+				}),
+			],
+		}
+		const spill = spillOf(spec, annotations)
+		expect(spill.top).toBeCloseTo(
+			ANNOTATION_RESERVE_PAD_PX - (inner.y - 30)
+		)
+	})
+
 	it("ignores value-mode annotations on a multi-panel chart (they clip)", () => {
 		const { solve } = makeSolver(2)
 		const spec = solve({ left: 0, right: 0, top: 0, bottom: 0 })
@@ -251,6 +274,30 @@ describe("solveWithAnnotationReserves", () => {
 		expect(inner.x + 1.2 * inner.width).toBeLessThanOrEqual(CANVAS.width - pad + 0.5)
 		expect(inner.y - 0.1 * inner.height).toBeGreaterThanOrEqual(pad - 0.5)
 		expect(inner.y + 1.4 * inner.height).toBeLessThanOrEqual(CANVAS.height - pad + 0.5)
+	})
+
+	it("reserves a pixel-mode annotation in one extra solve", () => {
+		// The payoff of Pixels mode: a corner-anchored annotation translates
+		// RIGIDLY with the plot, so the spill doesn't depend on the plot's
+		// size — the first plain correction is exact, where a percent past the
+		// edge needs the secant iteration.
+		const { solve, calls } = makeSolver()
+		const annotations: AnnotationsConfig = {
+			...emptyAnnotations(),
+			rectangles: [
+				rect({
+					coordSystem: "pixels",
+					xMin: 0,
+					xMax: 200,
+					yMin: 10,
+					yMax: 30,
+				}),
+			],
+		}
+		const spec = solveWithAnnotationReserves(solve, (s) => spillOf(s, annotations))
+		const inner = spec.panels[0]!.inner
+		expect(inner.y - 30).toBeCloseTo(ANNOTATION_RESERVE_PAD_PX)
+		expect(calls).toHaveLength(2)
 	})
 
 	it("reserves a fixed-size text box in one extra solve", () => {

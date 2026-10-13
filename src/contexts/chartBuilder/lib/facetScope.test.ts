@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { dataLabelsOnPanel, onFacetPanel } from "./facetScope"
+import {
+	composedLabelOnPanel,
+	dataLabelsOnPanel,
+	onFacetPanel,
+} from "./facetScope"
 
 describe("onFacetPanel", () => {
 	it("null / undefined keys apply to every panel", () => {
@@ -28,5 +32,28 @@ describe("dataLabelsOnPanel", () => {
 		expect(dataLabelsOnPanel({ facetKeys: null }, "A")).toBe(true)
 		expect(dataLabelsOnPanel({ facetKeys: ["B"] }, "A")).toBe(false)
 		expect(dataLabelsOnPanel({ facetKeys: ["B"] }, "B")).toBe(true)
+	})
+})
+
+describe("composedLabelOnPanel", () => {
+	it("uses the label's own entry when it has one", () => {
+		const cfg = { facetKeys: ["A"], fieldFacetKeys: { g: ["B"] } }
+		expect(composedLabelOnPanel(cfg, "g", "B")).toBe(true)
+		expect(composedLabelOnPanel(cfg, "g", "A")).toBe(false)
+	})
+
+	it("falls back to the layer-wide keys without one", () => {
+		const cfg = { facetKeys: ["A"], fieldFacetKeys: { g: ["B"] } }
+		expect(composedLabelOnPanel(cfg, "y", "A")).toBe(true)
+		expect(composedLabelOnPanel(cfg, "y", "B")).toBe(false)
+		// The single-field label always reads the layer-wide keys.
+		expect(composedLabelOnPanel(cfg, null, "A")).toBe(true)
+		expect(composedLabelOnPanel(cfg, null, "B")).toBe(false)
+	})
+
+	it("an explicit null entry means every panel, overriding the layer's", () => {
+		const cfg = { facetKeys: ["A"], fieldFacetKeys: { g: null } }
+		expect(composedLabelOnPanel(cfg, "g", "B")).toBe(true)
+		expect(composedLabelOnPanel(cfg, "g", "A")).toBe(true)
 	})
 })

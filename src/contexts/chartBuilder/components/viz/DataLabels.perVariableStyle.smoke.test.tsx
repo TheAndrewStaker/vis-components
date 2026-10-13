@@ -8,6 +8,7 @@ import {
 	EMPTY_CHANNEL_CONFIGS,
 	type DataLabelsConfig,
 } from "../../lib/channelConfig"
+import { pieceKey } from "../../lib/dataLabelsSelection"
 import { ptToPx } from "../../lib/fontUnit"
 import { DEFAULT_LABELS_CONFIG } from "../../lib/labelsConfig"
 import {
@@ -93,31 +94,41 @@ const mount = (cfg: DataLabelsConfig) => {
 	return { texts, rects }
 }
 
+// Two composed labels at every point: the value and the region, each its
+// own label keyed by its variable's name.
 const base: DataLabelsConfig = {
 	...DEFAULT_DATA_LABELS_CONFIG,
-	labelTemplate: "{sales} {region}",
+	composedLabels: [
+		{ id: "sales", template: "{sales}" },
+		{ id: "region", template: "{region}" },
+	],
 }
+const isSales = (t: Element) => /^-?\d+$/.test(t.textContent ?? "")
+const isRegion = (t: Element) => t.textContent === "north"
 
-describe("Data labels — per-variable size / font / background / rules", () => {
-	it("gives the sized variable its own font-size and the bold one its own weight", () => {
+describe("Data labels — per-label size / font / background / rules", () => {
+	it("gives the sized label its own font-size and the bold one its own weight", () => {
 		const { texts } = mount({
 			...base,
 			fieldSizes: { sales: 20 },
 			fieldFonts: { region: { fontWeight: 700, italic: true } },
 		})
-		expect(texts.length).toBe(2)
+		expect(texts.length).toBe(4)
 		for (const text of texts) {
-			// The <text> keeps the label's own size; only the overridden
-			// pieces carry attributes.
+			// The <text> keeps the layer's size; a label whose own style
+			// differs carries it on its piece tspan.
 			expect(text.getAttribute("font-size")).toBe(String(ptToPx(base.fontSize)))
-			const tspans = [...text.querySelectorAll("tspan")]
-			const sales = tspans.find((t) => /^-?\d+$/.test(t.textContent ?? ""))
-			const region = tspans.find((t) => t.textContent === "north")
-			expect(sales?.getAttribute("font-size")).toBe(String(ptToPx(20)))
-			expect(sales?.getAttribute("font-weight")).toBeNull()
-			expect(region?.getAttribute("font-size")).toBeNull()
-			expect(region?.getAttribute("font-weight")).toBe("700")
-			expect(region?.getAttribute("font-style")).toBe("italic")
+			const piece = text.querySelector("tspan")
+			expect(piece).not.toBeNull()
+			if (isSales(text)) {
+				expect(piece?.getAttribute("font-size")).toBe(String(ptToPx(20)))
+				expect(piece?.getAttribute("font-weight")).toBeNull()
+			} else {
+				expect(isRegion(text)).toBe(true)
+				expect(piece?.getAttribute("font-size")).toBeNull()
+				expect(piece?.getAttribute("font-weight")).toBe("700")
+				expect(piece?.getAttribute("font-style")).toBe("italic")
+			}
 		}
 	})
 
@@ -127,14 +138,14 @@ describe("Data labels — per-variable size / font / background / rules", () => 
 			// Configured but equal to the layer values → nothing differs.
 			fieldFonts: { region: { fontWeight: base.fontWeight } },
 		})
-		expect(texts.length).toBe(2)
+		expect(texts.length).toBe(4)
 		for (const text of texts) {
 			expect(text.querySelectorAll("tspan").length).toBe(0)
-			expect(text.textContent).toMatch(/^-?\d+ north$/)
+			expect(text.textContent).toMatch(/^(-?\d+|north)$/)
 		}
 	})
 
-	it("draws a background run behind only the variable that shows one", () => {
+	it("draws a background behind only the label that shows one", () => {
 		const { texts, rects } = mount({
 			...base,
 			textBackground: false,
@@ -142,42 +153,163 @@ describe("Data labels — per-variable size / font / background / rules", () => 
 				region: { textBackground: true, textBackgroundColor: "#ABCDEF" },
 			},
 		})
-		expect(texts.length).toBe(2)
-		// One rect per label — the region run only; the value and the
-		// separating space have no background.
+		expect(texts.length).toBe(4)
+		// One rect per region label; the value labels have none.
 		expect(rects.length).toBe(2)
 		for (const r of rects) expect(r.getAttribute("fill")).toBe("#ABCDEF")
 	})
 
-	it("hides one variable's background while the layer shows it, keeping one rect per label", () => {
+	it("hides one label's background while the layer shows it", () => {
 		const { rects } = mount({
 			...base,
 			textBackground: true,
 			textBackgroundColor: "#112233",
 			fieldBackgrounds: { sales: { textBackground: false } },
 		})
-		// The literal space and the region piece share the layer background
-		// (one contiguous run); the value piece has none.
 		expect(rects.length).toBe(2)
 		for (const r of rects) expect(r.getAttribute("fill")).toBe("#112233")
 	})
 
-	it("applies a variable's own color rule against that variable's value", () => {
+	it("applies a label's own color rule against its variable's value", () => {
 		const { texts } = mount({
 			...base,
 			fieldColorRules: { sales: [{ condition: "< 0", color: "#FF0000" }] },
 		})
 		const fillsByValue = new Map<string, string | null>()
-		for (const text of texts) {
-			for (const t of text.querySelectorAll("tspan")) {
-				if (/^-?\d+$/.test(t.textContent ?? "")) {
-					fillsByValue.set(t.textContent ?? "", t.getAttribute("fill"))
-				}
-			}
+		for (const text of texts.filter(isSales)) {
+			const piece = text.querySelector("tspan")
+			fillsByValue.set(text.textContent ?? "", piece?.getAttribute("fill") ?? null)
 		}
 		// -5 matches the rule; 10 doesn't and keeps the base fill — so that
-		// label has no segments at all (nothing differs) and never records.
+		// label has no piece at all (nothing differs).
 		expect(fillsByValue.get("-5")).toBe("#FF0000")
-		expect(fillsByValue.has("10")).toBe(false)
+		expect(fillsByValue.get("10")).toBeNull()
+	})
+
+	it("a split label styles each variable on its own", () => {
+		// "Split into individual variables" under Text properties: the
+		// region piece bolds while the value beside it stays regular.
+		const { texts } = mount({
+			...base,
+			composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
+			pieceSplits: { "lbl-both": { text: true } },
+			fieldFonts: {
+				[pieceKey("lbl-both", "region")]: { fontWeight: 700 },
+			},
+		})
+		expect(texts.length).toBe(2)
+		for (const text of texts) {
+			const bold = [...text.querySelectorAll("tspan")].filter(
+				(t) => t.getAttribute("font-weight") === "700"
+			)
+			expect(bold.map((t) => t.textContent)).toEqual(["north"])
+		}
+	})
+
+	it("ignores piece entries while the section is unsplit", () => {
+		const { texts } = mount({
+			...base,
+			composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
+			// No pieceSplits entry → the label styles as one.
+			fieldFonts: {
+				[pieceKey("lbl-both", "region")]: { fontWeight: 700 },
+			},
+		})
+		expect(texts.length).toBe(2)
+		for (const text of texts) {
+			expect(text.querySelectorAll("tspan").length).toBe(0)
+		}
+	})
+
+	it("splits one section at a time", () => {
+		// Color split, Text properties NOT: the piece's colour lands, its
+		// weight doesn't.
+		const { texts } = mount({
+			...base,
+			composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
+			pieceSplits: { "lbl-both": { color: true } },
+			fieldColors: {
+				[pieceKey("lbl-both", "region")]: {
+					field: null,
+					singleColor: "#00FF00",
+				},
+			},
+			fieldFonts: {
+				[pieceKey("lbl-both", "region")]: { fontWeight: 700 },
+			},
+		})
+		expect(texts.length).toBe(2)
+		for (const text of texts) {
+			const green = [...text.querySelectorAll("tspan")].filter(
+				(t) => t.getAttribute("fill") === "#00FF00"
+			)
+			expect(green.map((t) => t.textContent)).toEqual(["north"])
+			expect(text.querySelector('tspan[font-weight="700"]')).toBeNull()
+		}
+	})
+
+	it("colours a split piece by its own rule, against its own value", () => {
+		const { texts } = mount({
+			...base,
+			composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
+			pieceSplits: { "lbl-both": { color: true } },
+			fieldColorRules: {
+				[pieceKey("lbl-both", "sales")]: [
+					{ condition: "< 0", color: "#FF0000" },
+				],
+			},
+		})
+		const reds = texts.map((t) =>
+			[...t.querySelectorAll("tspan")]
+				.filter((p) => p.getAttribute("fill") === "#FF0000")
+				.map((p) => p.textContent)
+		)
+		// Only the negative row's value piece turns red.
+		expect(reds.flat()).toEqual(["-5"])
+	})
+
+	it("a split piece inherits what it doesn't set from the LABEL", () => {
+		const { texts } = mount({
+			...base,
+			composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
+			pieceSplits: { "lbl-both": { text: true } },
+			// The label picks the family; only the region piece bolds.
+			fieldFonts: {
+				"lbl-both": { fontFamily: "Georgia" },
+				[pieceKey("lbl-both", "region")]: { fontWeight: 700 },
+			},
+		})
+		expect(texts.length).toBe(2)
+		for (const text of texts) {
+			const pieces = [...text.querySelectorAll("tspan")]
+			// Every piece keeps the label's family; only region is bold.
+			for (const p of pieces) {
+				expect(p.getAttribute("font-family")).toBe("Georgia")
+			}
+			expect(
+				pieces
+					.filter((p) => p.getAttribute("font-weight") === "700")
+					.map((p) => p.textContent)
+			).toEqual(["north"])
+		}
+	})
+
+	it("a combination label styles as one: its own color covers every piece", () => {
+		const { texts } = mount({
+			...base,
+			composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
+			fieldColors: { "lbl-both": { field: null, singleColor: "#00FF00" } },
+			// A per-variable entry no longer reaches a piece inside another label.
+			fieldSizes: { sales: 20 },
+		})
+		expect(texts.length).toBe(2)
+		for (const text of texts) {
+			const tspans = [...text.querySelectorAll("tspan")]
+			expect(tspans.length).toBeGreaterThan(0)
+			for (const t of tspans) {
+				expect(t.getAttribute("fill")).toBe("#00FF00")
+				expect(t.getAttribute("font-size")).toBeNull()
+			}
+		}
 	})
 })

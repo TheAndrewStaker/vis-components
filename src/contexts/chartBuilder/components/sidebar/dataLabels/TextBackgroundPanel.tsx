@@ -129,6 +129,7 @@ export const TextBackgroundPanel = ({
 	onChange,
 	vizBackground,
 	multiFields = [],
+	titles,
 }: {
 	cfg: DataLabelsConfig
 	onChange: (patch: Partial<DataLabelsConfig>) => void
@@ -137,6 +138,8 @@ export const TextBackgroundPanel = ({
 	 *  background block in place of the layer-wide one; empty in
 	 *  single-field mode. */
 	multiFields?: string[]
+	/** Section titles by key (see `SizePanel`). */
+	titles?: Record<string, string>
 }) => {
 	const D = DEFAULT_DATA_LABELS_CONFIG
 	// `null` background color means "inherit the viz background" — resolve it
@@ -194,7 +197,7 @@ export const TextBackgroundPanel = ({
 				return (
 					<CollapsibleSubsection
 						key={name}
-						title={name}
+						title={titles?.[name] ?? name}
 						changed={own.textBackground != null}
 					>
 						<BackgroundControls

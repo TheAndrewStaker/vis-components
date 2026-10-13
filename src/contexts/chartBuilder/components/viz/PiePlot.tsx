@@ -32,7 +32,7 @@ import {
 import { parseNumericCell, type PositionScale } from "../../lib/scales"
 import {
 	labelSeriesChannelsFromEncodings,
-	labelSeriesResolver,
+	labelSeriesResolverAll,
 } from "../../lib/labelSeries"
 import type { FieldType } from "../../lib/types"
 import { formatSingleLabel } from "../../lib/dataLabelsStyle"
@@ -808,14 +808,17 @@ export const buildPieAnchors = ({
 	labelPointsScope?: LabelPointsScope
 }): DataLabelAnchor[] => {
 	const anchors: DataLabelAnchor[] = []
-	const seriesOf = labelSeriesResolver(
-		labelPointsScope ?? "series",
+	// Every scope's series + rank per anchor: the layer-wide one fills the
+	// anchor's `series` / `rank`, and the whole map rides along so each
+	// composed label can be ranked by its OWN "Of each" choice.
+	const seriesAllOf = labelSeriesResolverAll(
 		encodings
 			? labelSeriesChannelsFromEncodings(encodings)
 			: { group: [], layer: ["hue"] },
 		categoryField,
 		encodings
 	)
+	const layerScope = labelPointsScope ?? "series"
 	const midRadius = pieRadius * ((labelRadiusPct ?? 100) / 100)
 	const angleOffset = ((labelAngleDeg ?? 0) * Math.PI) / 180
 	const arcStart = arc?.start ?? 0
@@ -886,19 +889,21 @@ export const buildPieAnchors = ({
 				sizeValue = foundNumeric ? sum : firstNonNumeric
 			}
 			void measureField // measureField currently unused — slice.value already carries the aggregated measure
-			const { series, rank } = seriesOf({
+			const seriesByScope = seriesAllOf({
 				category: stack.category,
 				groupValues: slice.groupValues,
 				categoryRank: stackIdx,
 				leafIndex: 0,
 				layerIndex: wedgeIndex,
 			})
+			const { series, rank } = seriesByScope[layerScope]
 			anchors.push({
 				cx,
 				cy,
 				key: `${stack.category}|${slice.key}`,
 				series,
 				rank,
+				seriesByScope,
 				label: formatted,
 				// Raw value feeds the conditional text-color / position rules.
 				labelValue,

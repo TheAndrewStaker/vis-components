@@ -7,19 +7,32 @@ import {
 	type DataLabelsConfig,
 	type EndpointLabelOverrides,
 	type FacetConfig,
+	type FieldBarPlacement,
+	type FieldLabelLayout,
+	type LabelPieceSection,
 	type LabelPointsMode,
 	type LabelPointsScope,
+	type LabelPositionRule,
 } from "../../lib/channelConfig"
 import { resolveHierarchyIdField } from "../../lib/buildHierarchy"
 import {
 	POPULATION_LABEL,
-	defaultSharedTemplate,
+	composedLabelForField,
 	fieldLabelPointsMode,
+	labelPieceSplit,
+	labelFacetKeysFor,
+	labelKeysFor,
+	labelScopeFor,
+	normalizeComposedLabels,
+	sectionKeysFor,
 	presentPopulations,
 	resolveLabelSelection,
 } from "../../lib/dataLabelsSelection"
 import { resolveStackModes } from "../../lib/stackMode"
-import { dataLabelsConfigFromTheme } from "../../lib/themeConfig"
+import {
+	dataLabelsConfigFromTheme,
+	resolveTextPalettePick,
+} from "../../lib/themeConfig"
 import { effectiveType } from "../../lib/fieldType"
 import {
 	facetPanelOptions,
@@ -146,6 +159,27 @@ const CHANNEL_LABEL: Record<DataLabelsChannel, string> = {
  * on top of the main visualization. The layer's encodings are stored in
  * `currentDataLabelsEncodingsAtom`; appearance + offsets + scale knobs
  * live in `currentDataLabelsConfigAtom`. */
+/** Measure-axis placement options ("Vertical" on vertical bars). */
+const BAR_POSITION_OPTIONS: {
+	value: NonNullable<DataLabelsConfig["barLabelPosition"]>
+	label: string
+}[] = [
+	{ value: "center", label: "Center of bar (default)" },
+	{ value: "inside-base", label: "Inside, near base" },
+	{ value: "inside-end", label: "Inside, near end" },
+	{ value: "outside-end", label: "Outside the end of the bar" },
+]
+
+/** Side options, named by orientation: left / right of a vertical bar,
+ *  above / below a horizontal one. */
+const barSideOptions = (
+	isVerticalBars: boolean
+): { value: NonNullable<DataLabelsConfig["barLabelSide"]>; label: string }[] => [
+	{ value: "center", label: "Centered on the bar (default)" },
+	{ value: "before", label: isVerticalBars ? "Left of the bar" : "Above the bar" },
+	{ value: "after", label: isVerticalBars ? "Right of the bar" : "Below the bar" },
+]
+
 export const DataLabelsPanel = () => {
 	const [storedEncodings, setEncodings] = useAtom(
 		currentDataLabelsEncodingsAtom
@@ -159,7 +193,13 @@ export const DataLabelsPanel = () => {
 		...storedEncodings,
 	}
 	const [cfg, setCfg] = useAtom(currentDataLabelsConfigAtom)
-	const merged: DataLabelsConfig = { ...DEFAULT_DATA_LABELS_CONFIG, ...cfg }
+	// Normalized like the layer: a visual saved before composed labels gets
+	// its label list derived from the legacy state, so the panel shows the
+	// same labels the chart draws; the first edit persists it.
+	const merged: DataLabelsConfig = normalizeComposedLabels(
+		{ ...DEFAULT_DATA_LABELS_CONFIG, ...cfg },
+		encodings.value.fields ?? []
+	)
 	// Resolve the LIVE theme (same fallback chain as LabelColorPanel) so the
 	// font-size / weight / style reset links compare against — and reset to —
 	// the theme's data-label defaults rather than the hardcoded constants.
@@ -232,6 +272,24 @@ export const DataLabelsPanel = () => {
 	// the only mode where "Bar position" (label placement along the measure
 	// axis) applies — gate the control on it.
 	const isBarMode = isBarModeId(chartMode)
+	// The two bar placements sit under a "Placement" group header, named by
+	// the screen direction they move labels in, so they swap with
+	// orientation: on vertical bars the measure-axis placement is
+	// "Vertical" and the category-axis side is "Horizontal"; on horizontal
+	// bars the reverse. The side's options follow suit (left / right of a
+	// vertical bar, above / below a horizontal one). On vertical bars a side
+	// also fixes the text alignment (the label hangs away from the bar), so
+	// the Alignment controls would be inert — they hide while a side is set.
+	const isVerticalBars = chartMode === "bars-x"
+	// Separate variables each resolve their own side (their entry, else the
+	// layer's) — the lock is per variable there, layer-wide otherwise.
+	const sideFor = (field: string | null) =>
+		(field === null ? undefined : merged.fieldBarPlacements?.[field]?.side) ??
+		merged.barLabelSide ??
+		"center"
+	const sideLocksAlignmentFor = (field: string | null) =>
+		isBarMode && isVerticalBars && sideFor(field) !== "center"
+	const sideLocksAlignment = sideLocksAlignmentFor(null)
 	// Area charts get the same placements along each layer's measure extent
 	// ("Layer position"), plus the layer's top edge as the default.
 	const isAreaMode = isAreaModeId(chartMode)
@@ -258,13 +316,11 @@ export const DataLabelsPanel = () => {
 		scopeFamily === "bars"
 			? stackModes.some((m) => m.mode !== "group")
 			: stackModes.length > 0
-	const anyEndpointChoice = encodings.value.multiField
-		? (encodings.value.fields ?? []).some(
-				(f) => fieldLabelPointsMode(merged, f) !== "all"
-			)
-		: effectiveLabelPoints(merged) !== "all"
-	const showScope =
-		scopeFamily !== null && (scopeGrouped || scopeLayered) && anyEndpointChoice
+	// The chart can express a scope at all (something to group or layer by);
+	// whether the select SHOWS is then per label — a label on "All labels"
+	// has no series ends to scope.
+	const scopeApplies =
+		scopeFamily !== null && (scopeGrouped || scopeLayered)
 	const scopeWording = SCOPE_OPTION[scopeFamily ?? "bars"]
 	const scopeOptions = (
 		["series", "group", "stack"] as const satisfies readonly LabelPointsScope[]
@@ -273,15 +329,23 @@ export const DataLabelsPanel = () => {
 			sc === "group" ? scopeGrouped : sc === "stack" ? scopeLayered : true
 		)
 		.map((sc) => ({ value: sc, label: scopeWording[sc] }))
+	/** Does this label's "Of each" select show? `null` = the single-field
+	 *  label (and the layer-wide fallback). */
+	const showScopeFor = (key: string | null): boolean =>
+		scopeApplies &&
+		(key === null
+			? effectiveLabelPoints(merged)
+			: fieldLabelPointsMode(merged, key)) !== "all"
 	// A stored scope whose channel is gone reads as "series" (the renderer
 	// falls back the same way); the stored value is left alone.
-	const storedScope = merged.labelPointsScope ?? "series"
-	const effectiveScope: LabelPointsScope = scopeOptions.some(
-		(o) => o.value === storedScope
-	)
-		? storedScope
-		: "series"
-	const whichLabelsOptions = labelPointsOptions(showScope)
+	const effectiveScopeFor = (key: string | null): LabelPointsScope => {
+		const stored = labelScopeFor(merged, key)
+		return scopeOptions.some((o) => o.value === stored) ? stored : "series"
+	}
+	// "First / last" drop their "per series" tail where the scope select
+	// spells the unit out beneath them, so the two read as one sentence.
+	const whichLabelsOptionsFor = (key: string | null) =>
+		labelPointsOptions(showScopeFor(key))
 	const chartXField = chartEncodings.x?.field ?? null
 	const chartYField = chartEncodings.y?.field ?? null
 
@@ -343,51 +407,158 @@ export const DataLabelsPanel = () => {
 		key: "firstLabel" | "lastLabel",
 		p: Partial<EndpointLabelOverrides>
 	) => updateCfg({ [key]: { ...(merged[key] ?? {}), ...p } })
-	// The shared "Label text" box pre-fills with the checked fields and
-	// follows the checklist / per-field selection WHILE it's still that auto
-	// default (or empty) — never once the user has hand-edited it. Returns
-	// the patch to apply alongside a selection change.
-	const syncedTemplate = (
-		nextCfg: DataLabelsConfig,
-		nextFields: string[]
-	): Partial<DataLabelsConfig> => {
-		const prevFields = encodings.value.fields ?? []
-		const current = merged.labelTemplate ?? ""
-		const prevAuto = defaultSharedTemplate(selection, prevFields)
-		if (current !== "" && current !== prevAuto) return {}
-		const nextSelection = resolveLabelSelection(
-			nextCfg,
-			{ multiField: true, fields: nextFields },
-			{ seriesless: noSeriesEndpoints }
-		)
-		return { labelTemplate: defaultSharedTemplate(nextSelection, nextFields) }
-	}
-	// Per-field "Which labels" (multi-field mode). Writes the field's mode
-	// and re-syncs the shared label text with the populations that result.
-	const setFieldLabelPoints = (field: string, mode: LabelPointsMode) => {
-		const nextCfg: DataLabelsConfig = {
-			...merged,
-			fieldLabelPoints: { ...(merged.fieldLabelPoints ?? {}), [field]: mode },
-		}
+	// Per-label "Which labels" (multi-field mode), keyed by the composed
+	// label's id.
+	const setFieldLabelPoints = (key: string, mode: LabelPointsMode) =>
 		updateCfg({
-			fieldLabelPoints: nextCfg.fieldLabelPoints,
-			...syncedTemplate(nextCfg, encodings.value.fields ?? []),
+			fieldLabelPoints: { ...(merged.fieldLabelPoints ?? {}), [key]: mode },
 		})
-	}
+	// Per-label "Of each" and "Label all facets", same keying: each composed
+	// label's series ends can run over a different unit and it can be kept
+	// to its own facet panels. The single-field label writes the layer-wide
+	// fields instead (there's one label to place).
+	const setLabelScope = (key: string, scope: LabelPointsScope) =>
+		updateCfg({
+			fieldLabelPointsScope: {
+				...(merged.fieldLabelPointsScope ?? {}),
+				[key]: scope,
+			},
+		})
+	const setLabelFacetKeys = (key: string, next: string[] | null) =>
+		updateCfg({
+			fieldFacetKeys: { ...(merged.fieldFacetKeys ?? {}), [key]: next },
+		})
+
+	// One composed label's selection block. `null` = the single-field label,
+	// which writes the layer-wide fields (and is what the per-label entries
+	// fall back to). Nothing here applies without series ends AND without
+	// facets, which is when `selectionControlsApply` is false.
+	const selectionControlsApply = !noSeriesEndpoints || isFaceted
+	const labelSelectionChanged = (key: string): boolean =>
+		merged.fieldLabelPoints?.[key] != null ||
+		merged.fieldLabelPointsScope?.[key] != null ||
+		merged.fieldFacetKeys?.[key] != null
+	const labelSelectionControls = (key: string | null) => (
+		<>
+			{!noSeriesEndpoints && (
+				<>
+					<SelectInput
+						label="Which labels"
+						labelClassName={LABEL_COL}
+						value={
+							key === null
+								? effectiveLabelPoints(merged)
+								: fieldLabelPointsMode(merged, key)
+						}
+						options={whichLabelsOptionsFor(key)}
+						onChange={(mode: LabelPointsMode) =>
+							key === null
+								? updateCfg({ labelPoints: mode })
+								: setFieldLabelPoints(key, mode)
+						}
+					/>
+					{showScopeFor(key) && (
+						<>
+							<SelectInput
+								label="Of each"
+								labelClassName={LABEL_COL}
+								value={effectiveScopeFor(key)}
+								options={scopeOptions}
+								onChange={(scope: LabelPointsScope) =>
+									key === null
+										? updateCfg({ labelPointsScope: scope })
+										: setLabelScope(key, scope)
+								}
+							/>
+							<p className="vc-help">
+								{SCOPE_HELP[scopeFamily ?? "bars"][effectiveScopeFor(key)]}
+							</p>
+						</>
+					)}
+				</>
+			)}
+			{/* Faceted charts only: which panels draw this label. Checked (the
+			 *  default, stored as null) = every panel; unchecking lists the
+			 *  facets so the user ticks the ones that keep it. Hidden — and
+			 *  ignored by the renderer — when not faceted. */}
+			{isFaceted && (
+				<FacetScopeControl
+					label="Label all facets"
+					facetKeys={
+						key === null ? merged.facetKeys : labelFacetKeysFor(merged, key)
+					}
+					facetOptions={facetOptions}
+					onChange={(next) =>
+						key === null
+							? updateCfg({ facetKeys: next })
+							: setLabelFacetKeys(key, next)
+					}
+				/>
+			)}
+		</>
+	)
 
 	// Multi-field label variables: the Size / Text properties / Text
 	// background panels add one block per variable when there are two or
 	// more (one variable has nothing to differ from). Same gate as the Color
 	// panel's per-variable slots.
-	const multiFields = encodings.value.multiField
-		? (encodings.value.fields ?? [])
-		: []
+	// The label KEYS the per-label sections iterate (`labelKeysFor`): one
+	// per composed label (the text boxes under Value → Compose labels),
+	// titled by its variables ("A", "A + B"). Two or more labels → every
+	// section splits per label; a lone label uses the layer-wide controls
+	// (the layer reads its own entries first, then the layer's).
+	const labelKeys = labelKeysFor(merged, encodings.value)
+	const multiFields = labelKeys.keys
+	const labelTitles = labelKeys.titles
 	const perVariable = multiFields.length > 1
-	const anyPerVariable = (map: Record<string, unknown> | undefined) =>
-		perVariable && multiFields.some((f) => map?.[f] != null)
-	// Separate labels (Combine variables unchecked) position per variable:
-	// Alignment and the X / Y nudges become one row per variable.
-	const perVariablePosition = perVariable && merged.combineVariables === false
+	// "Split into individual variables": a label naming two or more
+	// variables can style each one separately under Color / Size / Text
+	// properties — a bold series name beside an unbolded value, a value
+	// coloured by sign inside an otherwise black label. The label still
+	// POSITIONS as one; only these three sections expand.
+	const labelPieces = labelKeys.pieces
+	const splittable = (key: string) => (labelPieces[key]?.length ?? 0) > 1
+	// A LONE combined label takes the per-label block too (Color always
+	// showed one) — otherwise its split toggle would have nowhere to live.
+	const styleFields =
+		perVariable || (multiFields.length === 1 && splittable(multiFields[0]))
+			? multiFields
+			: []
+	/** The keys one label's controls write to in a section: its pieces when
+	 *  that section is split, else the label itself. */
+	const sectionKeys = (section: LabelPieceSection) => (key: string) =>
+		sectionKeysFor(merged, key, labelPieces[key] ?? [], section)
+	const setPieceSplit = (
+		key: string,
+		section: LabelPieceSection,
+		next: boolean
+	) =>
+		updateCfg({
+			pieceSplits: {
+				...(merged.pieceSplits ?? {}),
+				[key]: { ...(merged.pieceSplits?.[key] ?? {}), [section]: next },
+			},
+		})
+	/** The toggle a section renders above one label's controls — nothing for
+	 *  a label with a single variable (it IS the whole label). */
+	const splitToggleFor = (section: LabelPieceSection) => (key: string) =>
+		splittable(key) ? (
+			<Toggle
+				label="Split into individual variables"
+				checked={labelPieceSplit(merged, key, section)}
+				onChange={(next) => setPieceSplit(key, section, next)}
+			/>
+		) : null
+	// Per-label Adjust-position subsections, or the layer-wide controls.
+	const ownLabelKeys = perVariable ? multiFields : []
+	const primaryLabel = !perVariable
+	// A label keyed by a variable's name (the default `{A}` label) has that
+	// variable's value to compare rules against; a hand-added label (a
+	// combination) has no single value — its rules compare against the
+	// layer's backing value.
+	const comboIds = new Set(
+		multiFields.filter((k) => !(encodings.value.fields ?? []).includes(k))
+	)
 	// "Changed" dot for the Position Adjustment and Alignment subsection —
 	// lights when ANY control inside deviates from its default. Mode-gated
 	// values (polar nudges, bar position, endpoint overrides) only count when
@@ -395,18 +566,29 @@ export const DataLabelsPanel = () => {
 	// clear must not light the dot.
 	const endpointPositionEdited = (o: EndpointLabelOverrides | undefined) =>
 		o?.alignment != null || o?.xOffset != null || o?.yOffset != null
+	// Separate variables: the layer-wide alignment / angle / wrap / overlap /
+	// nudge / bar-placement controls hide (each variable has its own), so
+	// only the per-variable entries count there.
+	const anyOwn = (map: Record<string, unknown> | undefined) =>
+		ownLabelKeys.some((k) => map?.[k] != null)
 	const positionChanged =
-		(merged.alignment ?? "center") !== "center" ||
-		(merged.textAngle ?? 0) !== 0 ||
-		merged.wrapText === true ||
-		merged.avoidOverlaps === true ||
-		merged.xOffset !== 0 ||
-		merged.yOffset !== 0 ||
-		(perVariablePosition &&
-			(anyPerVariable(merged.fieldAlignments) ||
-				anyPerVariable(merged.fieldOffsets))) ||
-		(merged.positionRules ?? []).length > 0 ||
-		(isBarMode && (merged.barLabelPosition ?? "center") !== "center") ||
+		anyOwn(merged.fieldAlignments) ||
+		anyOwn(merged.fieldLayouts) ||
+		anyOwn(merged.fieldOffsets) ||
+		(isBarMode && anyOwn(merged.fieldBarPlacements)) ||
+		(primaryLabel &&
+			((!sideLocksAlignment && (merged.alignment ?? "center") !== "center") ||
+				(merged.textAngle ?? 0) !== 0 ||
+				merged.wrapText === true ||
+				merged.avoidOverlaps === true ||
+				merged.xOffset !== 0 ||
+				merged.yOffset !== 0 ||
+				(isBarMode && (merged.barLabelPosition ?? "center") !== "center") ||
+				(isBarMode && (merged.barLabelSide ?? "center") !== "center"))) ||
+		ownLabelKeys.some(
+			(k) => (merged.fieldPositionRules?.[k]?.length ?? 0) > 0
+		) ||
+		(primaryLabel && (merged.positionRules ?? []).length > 0) ||
 		(isAreaMode && (merged.areaLabelPosition ?? "edge") !== "edge") ||
 		(isPolarMode &&
 			((merged.polarLabelAngle ?? 0) !== 0 ||
@@ -426,15 +608,21 @@ export const DataLabelsPanel = () => {
 	const selectionChanged =
 		selection.present.first ||
 		selection.present.last ||
-		(isFaceted && merged.facetKeys != null) ||
+		(isFaceted &&
+			(merged.facetKeys != null ||
+				multiFields.some((k) => merged.fieldFacetKeys?.[k] != null))) ||
 		(isGeoMode && merged.leaderLines === true)
 	const textPositionChanged = (merged.arcWrapLevels ?? []).length > 0
 	// Text Properties compares against the THEME's data-label defaults — the
 	// same baseline the panel's reset links restore. With per-variable
 	// blocks (which replace the layer-wide controls) any variable's own
 	// entry lights it.
-	const textPropertiesChanged = perVariable
-		? anyPerVariable(merged.fieldFonts)
+	const textPropertiesChanged = styleFields.length > 0
+		? styleFields.some((k) =>
+				sectionKeys("text")(k).some(
+					(kk) => Object.keys(merged.fieldFonts?.[kk] ?? {}).length > 0
+				)
+			)
 		: merged.fontFamily !== themeDefaults.fontFamily ||
 			merged.fontWeight !== themeDefaults.fontWeight ||
 			(merged.italic ?? false) !== (themeDefaults.italic ?? false) ||
@@ -450,6 +638,20 @@ export const DataLabelsPanel = () => {
 			)
 		: merged.textBackground === true
 
+	// Coloring labels BY a categorical variable starts from the theme's
+	// designated TEXT palette rather than the chart's mark palette: these are
+	// words on the canvas, and the mark palette's lighter slots don't survive
+	// at text size. Only seeds when no palette has been picked for this
+	// layer — a palette already chosen (including "Match chart colors") is
+	// the user's, and re-mapping Color never overwrites it. The dropdown
+	// below re-picks, "Match chart colors" included.
+	const seedTextPalette = () => {
+		if (merged.paletteId !== null) return
+		const pick = resolveTextPalettePick(theme)
+		if (pick.id === null) return
+		updateCfg({ paletteId: pick.id, palette: pick.colors, colorOverrides: {} })
+	}
+
 	const setField = (channel: DataLabelsChannel, fieldName: string) => {
 		// Reserved option values = the hierarchy-derived sources. Writing
 		// the slot fresh clears the other member (field ↔ measureSource
@@ -460,9 +662,20 @@ export const DataLabelsPanel = () => {
 				...prev,
 				[channel]: { field: null, measureSource: derived },
 			}))
+			// "Top-level group" names are categorical; "Nesting depth" is
+			// ordinal and keeps its ordered ramp.
+			if (channel === "hue" && derived === "rootGroup") seedTextPalette()
 			return
 		}
 		const newField = fieldName === "" ? null : fieldName
+		if (
+			channel === "hue" &&
+			newField !== null &&
+			dataset &&
+			effectiveType(dataset, newField, overrides) === "categorical"
+		) {
+			seedTextPalette()
+		}
 		setEncodings((prev) => {
 			const next = { ...prev, [channel]: { field: newField } }
 			if (isTileMode && newField !== null) {
@@ -481,16 +694,10 @@ export const DataLabelsPanel = () => {
 	// `value.field` null and drives the label off `value.fields` + template.
 	const setValueField = (v: string) => {
 		if (v === DATA_LABELS_MULTI_VALUE) {
-			const fields = encodings.value.fields ?? []
-			const current = merged.labelTemplate ?? ""
 			setEncodings((prev) => ({
 				...prev,
 				value: { field: null, multiField: true, fields: prev.value?.fields ?? [] },
 			}))
-			// Pre-fill the template so the box opens on a working arrangement.
-			if (current === "" && fields.length > 0) {
-				updateCfg(syncedTemplate(merged, fields))
-			}
 			return
 		}
 		setEncodings((prev) => ({
@@ -503,15 +710,29 @@ export const DataLabelsPanel = () => {
 		}))
 	}
 	const setValueFields = (fields: string[]) => {
-		// Keep the template in sync with the checklist WHILE it's still the
-		// auto default (or empty) — so checking/unchecking updates the
-		// pre-filled arrangement — but never once the user has hand-edited it.
-		setEncodings((prev) => ({
-			...prev,
+		const prev = encodings.value.fields ?? []
+		setEncodings((p) => ({
+			...p,
 			value: { field: null, multiField: true, fields },
 		}))
-		const patch = syncedTemplate(merged, fields)
-		if (Object.keys(patch).length > 0) updateCfg(patch)
+		// The labels follow the checklist: checking a variable adds its own
+		// `{Field}` label; unchecking removes the labels composing just it
+		// (a combination that names it keeps its text — the token reads as
+		// literal until the variable is checked again). This persists the
+		// list on the first change, legacy-derived or not.
+		const current = merged.composedLabels ?? []
+		const added = fields.filter((f) => !prev.includes(f))
+		const removed = prev.filter((f) => !fields.includes(f))
+		updateCfg({
+			composedLabels: [
+				...current.filter(
+					(l) => !removed.some((f) => l.template.trim() === `{${f}}`)
+				),
+				...added
+					.filter((f) => !current.some((l) => l.id === f))
+					.map(composedLabelForField),
+			],
+		})
 	}
 
 	const allEligible = dataset?.fields ?? []
@@ -693,7 +914,6 @@ export const DataLabelsPanel = () => {
 						fields={encodings.value.fields ?? []}
 						allFields={allEligible.map((f) => f.name)}
 						onFieldsChange={setValueFields}
-						selection={selection}
 						countryNames={countryNameFormats}
 					/>
 				) : encodings.value.field ? (
@@ -726,9 +946,10 @@ export const DataLabelsPanel = () => {
 					dataset={dataset}
 					chartConfigs={chartConfigs}
 					valuesOverride={derivedHueValues}
-					multiFields={
-						encodings.value.multiField ? (encodings.value.fields ?? []) : []
-					}
+					multiFields={multiFields}
+					titles={labelTitles}
+					splitToggle={splitToggleFor("color")}
+					keysFor={sectionKeys("color")}
 				/>
 			</DataLabelChannelRow>
 
@@ -750,7 +971,10 @@ export const DataLabelsPanel = () => {
 					themeDefaults={themeDefaults}
 					sizeMapped={sizeByDepth || Boolean(encodings.size.field)}
 					depthNote={sizeByDepth}
-					multiFields={perVariable ? multiFields : []}
+					multiFields={styleFields}
+					titles={labelTitles}
+					splitToggle={splitToggleFor("size")}
+					keysFor={sectionKeys("size")}
 				/>
 			</DataLabelChannelRow>
 
@@ -774,75 +998,39 @@ export const DataLabelsPanel = () => {
 				changed={selectionChanged}
 			>
 				<div className="flex flex-col gap-2">
-				{/* Per-series endpoint selection is meaningless on a map or a
-				 *  sunburst (no series) — the renderer skips it there, so the
-				 *  control hides. Multi-field labels get one select PER
-				 *  selected variable: each variable joins the label populations
-				 *  its choice names (a value on every label, the series name on
-				 *  the last, …), and the Value / position controls split per
-				 *  population when more than one results. */}
-				{!noSeriesEndpoints &&
-					(encodings.value.multiField ? (
-						(encodings.value.fields ?? []).length === 0 ? (
-							<p className="vc-help">
-								Check fields under Value to choose which labels each one
-								appears on.
-							</p>
-						) : (
-							<>
-								<span className="vc-group-header">Which labels</span>
-								{(encodings.value.fields ?? []).map((field) => (
-									<SelectInput
-										key={field}
-										label={field}
-										labelClassName={LABEL_COL}
-										value={fieldLabelPointsMode(merged, field)}
-										options={whichLabelsOptions}
-										onChange={(mode: LabelPointsMode) =>
-											setFieldLabelPoints(field, mode)
-										}
-									/>
-								))}
-							</>
-						)
-					) : (
-						<SelectInput
-							label="Which labels"
-							labelClassName={LABEL_COL}
-							value={effectiveLabelPoints(merged)}
-							options={whichLabelsOptions}
-							onChange={(labelPoints: LabelPointsMode) =>
-								updateCfg({ labelPoints })
-							}
-						/>
-					))}
-				{showScope && (
-					<>
-						<SelectInput
-							label="Of each"
-							labelClassName={LABEL_COL}
-							value={effectiveScope}
-							options={scopeOptions}
-							onChange={(labelPointsScope: LabelPointsScope) =>
-								updateCfg({ labelPointsScope })
-							}
-						/>
+				{/* One block per composed label: which anchors it draws at
+				 *  ("Which labels" + the "Of each" unit its series ends run
+				 *  over) and which facet panels it draws on. Each label keeps
+				 *  its own — the `{value}` label can sit on the last bar of
+				 *  every STACK across all panels while a `{series}` label sits
+				 *  on the last bar of each SERIES in one panel only. A lone
+				 *  composed label skips the subheader (nothing to tell apart);
+				 *  a single-field mapping writes the layer-wide fields.
+				 *  Per-series endpoints are meaningless on a map or a sunburst
+				 *  (no series) — the renderer skips them there, so only the
+				 *  facet scope shows. */}
+				{!selectionControlsApply ? null : encodings.value.multiField ? (
+					multiFields.length === 0 ? (
 						<p className="vc-help">
-							{SCOPE_HELP[scopeFamily ?? "bars"][effectiveScope]}
+							Check fields under Value to choose which labels each one
+							appears on.
 						</p>
-					</>
-				)}
-				{/* Faceted charts only: which panels draw labels. Checked (the
-				 *  default, stored as null) = every panel; unchecking lists the
-				 *  facets so the user ticks the ones that keep their labels.
-				 *  Hidden — and ignored by the renderer — when not faceted. */}
-				{isFaceted && (
-					<FacetScopeControl
-						label="Label all facets"
-						facetKeys={merged.facetKeys}
-						facetOptions={facetOptions}
-						onChange={(facetKeys) => updateCfg({ facetKeys })}
-					/>
+					) : perVariable ? (
+						multiFields.map((key) => (
+							<CollapsibleSubsection
+								key={key}
+								title={labelTitles[key] ?? key}
+								changed={labelSelectionChanged(key)}
+							>
+								{labelSelectionControls(key)}
+							</CollapsibleSubsection>
+						))
+					) : (
+						// A lone composed label: the controls bound to its key.
+						labelSelectionControls(multiFields[0])
+					)
+				) : (
+					labelSelectionControls(null)
 				)}
 				{/* Maps only: leader lines connect a displaced label (offset or
 				 *  overlap-nudged) back to its region's centroid. Defaults come
@@ -924,31 +1112,211 @@ export const DataLabelsPanel = () => {
 				changed={positionChanged}
 			>
 				<div className="flex flex-col gap-2">
-				{perVariablePosition ? (
-					<div className="flex flex-col gap-2">
-						{/* Separate labels: one alignment per VARIABLE — effective
-						 *  value shown (its own, else the layer's); writes the
-						 *  variable's entry. */}
-						{multiFields.map((name) => (
-							<div key={name} className="flex items-center gap-2 text-sm">
-								<span className={`${LABEL_COL} truncate`}>{name}</span>
-								<AlignmentControl
-									value={
-										merged.fieldAlignments?.[name] ?? merged.alignment ?? "center"
-									}
-									onChange={(alignment) =>
-										updateCfg({
-											fieldAlignments: {
-												...(merged.fieldAlignments ?? {}),
-												[name]: alignment,
-											},
-										})
-									}
+				{/* Separate labels (Combine variables unchecked): every variable is
+				 *  its own label, so each gets its OWN subsection holding the
+				 *  whole set — alignment, angle, wrapping, overlap avoidance, bar
+				 *  placement, and the X / Y nudge. Effective values shown (the
+				 *  variable's entry, else the layer's); writes go to the
+				 *  variable's entry. The layer-wide controls below hide in this
+				 *  mode; position rules stay layer-wide (they key on values). */}
+				{ownLabelKeys.map((name) => {
+						const ownLayout = merged.fieldLayouts?.[name] ?? {}
+						const ownOffsets = merged.fieldOffsets?.[name] ?? {}
+						const ownPlacement = merged.fieldBarPlacements?.[name] ?? {}
+						const ownAlignment = merged.fieldAlignments?.[name]
+						const patchLayout = (p: FieldLabelLayout) =>
+							updateCfg({
+								fieldLayouts: {
+									...(merged.fieldLayouts ?? {}),
+									[name]: { ...ownLayout, ...p },
+								},
+							})
+						const patchOffsets = (p: { xOffset?: number; yOffset?: number }) =>
+							updateCfg({
+								fieldOffsets: {
+									...(merged.fieldOffsets ?? {}),
+									[name]: { ...ownOffsets, ...p },
+								},
+							})
+						const patchPlacement = (p: FieldBarPlacement) =>
+							updateCfg({
+								fieldBarPlacements: {
+									...(merged.fieldBarPlacements ?? {}),
+									[name]: { ...ownPlacement, ...p },
+								},
+							})
+						const angle = ownLayout.textAngle ?? merged.textAngle ?? 0
+						const wrap = ownLayout.wrapText ?? merged.wrapText === true
+						const avoid =
+							ownLayout.avoidOverlaps ?? merged.avoidOverlaps === true
+						const ownRules = merged.fieldPositionRules?.[name] ?? []
+						const setRules = (next: LabelPositionRule[]) => {
+							const all = { ...(merged.fieldPositionRules ?? {}) }
+							if (next.length === 0) delete all[name]
+							else all[name] = next
+							updateCfg({ fieldPositionRules: all })
+						}
+						const changed =
+							ownAlignment != null ||
+							Object.keys(ownLayout).length > 0 ||
+							ownOffsets.xOffset != null ||
+							ownOffsets.yOffset != null ||
+							ownRules.length > 0 ||
+							(isBarMode && Object.keys(ownPlacement).length > 0)
+						const measureSelect = (
+							<SelectInput
+								label={isVerticalBars ? "Vertical" : "Horizontal"}
+								labelClassName={LABEL_COL}
+								value={
+									ownPlacement.position ?? merged.barLabelPosition ?? "center"
+								}
+								options={BAR_POSITION_OPTIONS}
+								onChange={(position) => patchPlacement({ position })}
+							/>
+						)
+						const sideSelect = (
+							<SelectInput
+								label={isVerticalBars ? "Horizontal" : "Vertical"}
+								labelClassName={LABEL_COL}
+								value={ownPlacement.side ?? merged.barLabelSide ?? "center"}
+								options={barSideOptions(isVerticalBars)}
+								onChange={(side) => patchPlacement({ side })}
+							/>
+						)
+						return (
+							<CollapsibleSubsection
+								key={name}
+								title={labelTitles[name] ?? name}
+								changed={changed}
+							>
+								{/* Beside a vertical bar the side sets the alignment. */}
+								{!sideLocksAlignmentFor(name) && (
+									<div className="flex items-center gap-2 text-sm">
+										<span className={LABEL_COL}>Alignment</span>
+										<AlignmentControl
+											value={ownAlignment ?? merged.alignment ?? "center"}
+											onChange={(alignment) =>
+												updateCfg({
+													fieldAlignments: {
+														...(merged.fieldAlignments ?? {}),
+														[name]: alignment,
+													},
+												})
+											}
+										/>
+									</div>
+								)}
+								<div className="flex items-center gap-2">
+									<NumberInput
+										label="Angle"
+										labelClassName={LABEL_COL}
+										value={angle}
+										min={-90}
+										max={90}
+										step={1}
+										clamp
+										onChange={(textAngle) => patchLayout({ textAngle })}
+										inputClassName="w-16"
+										suffix="°"
+									/>
+									{angle !== 0 && (
+										<ResetLink onClick={() => patchLayout({ textAngle: 0 })} />
+									)}
+								</div>
+								<Toggle
+									label="Wrap text"
+									checked={wrap}
+									onChange={(wrapText) => patchLayout({ wrapText })}
 								/>
-							</div>
-						))}
-					</div>
-				) : splitEndpoints ? (
+								{wrap && (
+									<div className="ml-6 flex items-center gap-2 text-sm">
+										<NumberInput
+											label="Characters"
+											labelClassName={LABEL_COL_NESTED}
+											value={ownLayout.wrapMaxChars ?? merged.wrapMaxChars ?? 20}
+											min={1}
+											step={1}
+											onChange={(wrapMaxChars) => patchLayout({ wrapMaxChars })}
+											inputClassName="w-16"
+										/>
+									</div>
+								)}
+								<Toggle
+									label="Avoid overlapping labels"
+									checked={avoid}
+									onChange={(avoidOverlaps) => patchLayout({ avoidOverlaps })}
+								/>
+								{isBarMode && (
+									<div className="vc-divider-group">
+										<span className="vc-group-header">Placement</span>
+										{isVerticalBars ? measureSelect : sideSelect}
+										{isVerticalBars ? sideSelect : measureSelect}
+									</div>
+								)}
+								<div className="vc-divider-group">
+									<span className="vc-group-header">Adjust position</span>
+									<NumberInput
+										label="X"
+										labelClassName={LABEL_COL}
+										value={ownOffsets.xOffset ?? merged.xOffset}
+										step={1}
+										onChange={(xOffset) => patchOffsets({ xOffset })}
+										inputClassName="w-16"
+										suffix="px"
+									/>
+									<NumberInput
+										label="Y"
+										labelClassName={LABEL_COL}
+										value={-(ownOffsets.yOffset ?? merged.yOffset)}
+										step={1}
+										onChange={(n) => patchOffsets({ yOffset: -n })}
+										inputClassName="w-16"
+										suffix="px"
+									/>
+									{/* This label's own rules, under its own header —
+									 *  each label positions on its own, so each gets its
+									 *  own "+ Add rule". */}
+									<PositionRulesEditor
+										rules={ownRules}
+										onChange={setRules}
+										baseXOffset={ownOffsets.xOffset ?? merged.xOffset}
+										baseYOffset={ownOffsets.yOffset ?? merged.yOffset}
+										ruleLabel={labelTitles[name] ?? name}
+										help={
+											comboIds.has(name) ? (
+												<>
+													Compared against the same value the chart&apos;s other
+													label rules use — a combination arranges several
+													variables, so it has no single value of its own.
+												</>
+											) : (
+												<>
+													Compared against each label&apos;s{" "}
+													<strong>{name}</strong> value.
+												</>
+											)
+										}
+									/>
+								</div>
+							</CollapsibleSubsection>
+						)
+					})}
+				{ownLabelKeys.length > 0 && (
+					<p className="vc-help">
+						{primaryLabel
+							? "Each combination is its own label, so its settings are its own; the controls below apply to the combined label. "
+							: "Each variable or combination is its own label, so these settings are per label. "}
+						Labels with Avoid overlapping on move out of each other&apos;s way;
+						one with it off stays put.
+						{isBarMode
+							? " Beside the bar, Adjust position measures from the bar's edge, so the label keeps its distance when the figure resizes."
+							: ""}
+						{isBarMode && isVerticalBars
+							? " Labels beside a vertical bar hang away from it, so Alignment is set for you."
+							: ""}
+					</p>
+				)}
+				{!primaryLabel ? null : sideLocksAlignment ? null : splitEndpoints ? (
 					<div className="flex flex-col gap-2">
 						{/* One alignment per population — effective value shown; the
 						 *  all-labels row writes the base, the series ends write their
@@ -985,6 +1353,8 @@ export const DataLabelsPanel = () => {
 				)}
 				{/* Same convention as the axes' tick-label Angle: positive =
 				 *  clockwise, ±90°. Rotates each label around its anchor point. */}
+				{primaryLabel && (
+				<>
 				<div className="flex items-center gap-2">
 					<NumberInput
 						label="Angle"
@@ -1029,26 +1399,44 @@ export const DataLabelsPanel = () => {
 					checked={merged.avoidOverlaps === true}
 					onChange={(avoidOverlaps) => updateCfg({ avoidOverlaps })}
 				/>
-				{isBarMode && (
+				</>
+				)}
+				{isBarMode && primaryLabel && (
 					<>
+						<hr className="border-stone-200 dark:border-stone-700" />
+						<span className="vc-group-header">Placement</span>
 						<SelectInput
-							label="Bar position"
+							label={isVerticalBars ? "Vertical" : "Horizontal"}
 							labelClassName={LABEL_COL}
 							value={
 								(merged.barLabelPosition ?? "center") as NonNullable<
 									DataLabelsConfig["barLabelPosition"]
 								>
 							}
-							options={[
-								{ value: "center", label: "Center of bar (default)" },
-								{ value: "inside-base", label: "Inside, near base" },
-								{ value: "inside-end", label: "Inside, near end" },
-								{ value: "outside-end", label: "Outside the end of the bar" },
-							]}
+							options={BAR_POSITION_OPTIONS}
 							onChange={(barLabelPosition) => updateCfg({ barLabelPosition })}
 						/>
 						<p className="vc-help">
 							Where labels sit along the bar&apos;s measure axis.
+						</p>
+						<SelectInput
+							label={isVerticalBars ? "Horizontal" : "Vertical"}
+							labelClassName={LABEL_COL}
+							value={
+								(merged.barLabelSide ?? "center") as NonNullable<
+									DataLabelsConfig["barLabelSide"]
+								>
+							}
+							options={barSideOptions(isVerticalBars)}
+							onChange={(barLabelSide) => updateCfg({ barLabelSide })}
+						/>
+						<p className="vc-help">
+							Which side of the bar labels sit on, across its width. Beside
+							the bar, Adjust position measures from the bar&apos;s edge, so
+							the label keeps its distance when the figure resizes.
+							{isVerticalBars
+								? " Labels beside a vertical bar hang away from it, so Alignment is set for you."
+								: ""}
 						</p>
 					</>
 				)}
@@ -1077,8 +1465,12 @@ export const DataLabelsPanel = () => {
 						</p>
 					</>
 				)}
-				<hr className="border-stone-200 dark:border-stone-700" />
-				<span className="vc-group-header">Adjust position</span>
+				{(primaryLabel || isPolarMode || isSunburstMode) && (
+					<>
+						<hr className="border-stone-200 dark:border-stone-700" />
+						<span className="vc-group-header">Adjust position</span>
+					</>
+				)}
 				{/* Angle / R are polar-only — they only make sense around a pie,
 				 *  so they're hidden for cartesian charts. The X/Y pixel nudge
 				 *  below applies to every chart type, pies included. */}
@@ -1149,47 +1541,7 @@ export const DataLabelsPanel = () => {
 						</p>
 					</>
 				)}
-				{perVariablePosition ? (
-					<>
-						{/* Separate labels: one X/Y pair per VARIABLE — effective
-						 *  values shown (its own, else the layer's). */}
-						{multiFields.map((name) => {
-							const own = merged.fieldOffsets?.[name] ?? {}
-							const patch = (p: { xOffset?: number; yOffset?: number }) =>
-								updateCfg({
-									fieldOffsets: {
-										...(merged.fieldOffsets ?? {}),
-										[name]: { ...own, ...p },
-									},
-								})
-							return (
-								<div key={name} className="flex flex-col gap-2">
-									<span className="text-sm vc-muted truncate">{name}</span>
-									<div className="ml-6 flex flex-col gap-2 text-sm">
-										<NumberInput
-											label="X"
-											labelClassName={LABEL_COL_NESTED}
-											value={own.xOffset ?? merged.xOffset}
-											step={1}
-											onChange={(xOffset) => patch({ xOffset })}
-											inputClassName="w-16"
-											suffix="px"
-										/>
-										<NumberInput
-											label="Y"
-											labelClassName={LABEL_COL_NESTED}
-											value={-(own.yOffset ?? merged.yOffset)}
-											step={1}
-											onChange={(n) => patch({ yOffset: -n })}
-											inputClassName="w-16"
-											suffix="px"
-										/>
-									</div>
-								</div>
-							)
-						})}
-					</>
-				) : splitEndpoints ? (
+				{!primaryLabel ? null : splitEndpoints ? (
 					<>
 						{/* One X/Y pair per population — effective values shown; the
 						 *  all-labels pair writes the base offsets, the series ends
@@ -1258,7 +1610,17 @@ export const DataLabelsPanel = () => {
 						/>
 					</div>
 				)}
-				<PositionRulesEditor cfg={merged} onChange={updateCfg} />
+				{/* The ARRANGED label's rules. With the variables separate there is
+				 *  no arranged label, and every own label carries its rules in its
+				 *  own subsection above. */}
+				{primaryLabel && (
+					<PositionRulesEditor
+						rules={merged.positionRules ?? []}
+						onChange={(positionRules) => updateCfg({ positionRules })}
+						baseXOffset={merged.xOffset}
+						baseYOffset={merged.yOffset}
+					/>
+				)}
 				</div>
 			</CollapsibleSubsection>
 			</>
@@ -1282,7 +1644,10 @@ export const DataLabelsPanel = () => {
 					cfg={merged}
 					onChange={updateCfg}
 					themeDefaults={themeDefaults}
-					multiFields={perVariable ? multiFields : []}
+					multiFields={styleFields}
+					titles={labelTitles}
+					splitToggle={splitToggleFor("text")}
+					keysFor={sectionKeys("text")}
 				/>
 			</CollapsibleSubsection>
 
@@ -1293,6 +1658,7 @@ export const DataLabelsPanel = () => {
 					onChange={updateCfg}
 					vizBackground={vizBackground}
 					multiFields={perVariable ? multiFields : []}
+					titles={labelTitles}
 				/>
 			</CollapsibleSubsection>
 			)}

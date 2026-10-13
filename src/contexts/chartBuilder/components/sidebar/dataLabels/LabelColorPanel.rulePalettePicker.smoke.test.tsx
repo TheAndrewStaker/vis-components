@@ -8,7 +8,7 @@ import type { SavedTheme } from "../../../lib/types"
 import { currentThemeIdAtom, themesAtom } from "../../../store/atoms"
 import { LabelColorPanel } from "./LabelColorPanel"
 
-/** Every text-color swatch in Data Labels carries the circular-arrow palette
+/** Every text-color swatch in Data Labels carries the palette-icon palette
  *  picker, the conditional "Text color rules" rows included — those rows set
  *  label TEXT color just like the fallback swatch above them, so they get the
  *  same on-palette shortcut. */
@@ -53,8 +53,8 @@ describe("Data Labels text color rules — palette picker", () => {
 	it("offers the theme palette beside each rule swatch and commits a pick", () => {
 		const onChange = vi.fn()
 		const { getByRole, getByLabelText } = mount(onChange)
-		// Subsections collapse by default — open it to reach the rule rows.
-		fireEvent.click(getByRole("button", { name: /Text color rules/i }))
+		// The rules sit under a plain header, so a stored rule's row is
+		// already on screen — nothing to expand.
 		fireEvent.click(
 			getByRole("button", { name: "Pick palette color for rule 1" }),
 		)

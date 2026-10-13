@@ -1,6 +1,9 @@
 // Series identity + in-series rank for the data-label "Which labels"
 // endpoint selection on aggregated charts (bars, areas, pies), per the
-// layer-wide scope `DataLabelsConfig.labelPointsScope`.
+// "Of each" scope — `DataLabelsConfig.labelPointsScope` layer-wide, or a
+// composed label's own `fieldLabelPointsScope` entry. Renderers resolve
+// EVERY scope per anchor (`labelSeriesResolverAll`) and the layer picks
+// each label's.
 //
 // The label layer tags each series' first / last anchor; what a "series"
 // IS depends on the scope:
@@ -117,4 +120,26 @@ export const labelSeriesResolver = (
 		}
 		return { series: keyOf(groupValues, seriesChannels), rank: categoryRank }
 	}
+}
+
+/** Every scope's identity for one anchor, so each composed label can be
+ *  ranked by its own "Of each" choice (`fieldLabelPointsScope`) without the
+ *  renderer knowing which labels exist. Builds the three resolvers once;
+ *  each still falls back to "series" on its own when its channel isn't
+ *  mapped, so the map's entries can legitimately coincide. */
+export const labelSeriesResolverAll = (
+	channels: LabelSeriesChannels,
+	categoryField: string | null,
+	encodings?: Encodings
+): ((
+	input: LabelSeriesInput
+) => Record<LabelPointsScope, { series: string; rank: number }>) => {
+	const series = labelSeriesResolver("series", channels, categoryField, encodings)
+	const group = labelSeriesResolver("group", channels, categoryField, encodings)
+	const stack = labelSeriesResolver("stack", channels, categoryField, encodings)
+	return (input) => ({
+		series: series(input),
+		group: group(input),
+		stack: stack(input),
+	})
 }

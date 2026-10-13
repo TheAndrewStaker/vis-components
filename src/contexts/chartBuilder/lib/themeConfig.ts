@@ -74,14 +74,33 @@ export const resolveCategoricalPalette = (
 	return { colors, patternInks }
 }
 
+/** The SAVED palette a text-color control should lead with: the theme's
+ * designated text palette when one is set, else its default categorical
+ * palette. Returns the id alongside the colors so a control that stores a
+ * pick (a data-label color slot's `paletteId`) records which palette it
+ * seeded from — `null` only when the theme has no palettes at all, where
+ * the colors fall back to the built-in list. */
+export const resolveTextPalettePick = (
+	t: Theme
+): { id: string | null; colors: string[] } => {
+	const pal =
+		(t.defaultTextPaletteId
+			? t.categoricalPalettes.find((p) => p.id === t.defaultTextPaletteId)
+			: undefined) ??
+		t.categoricalPalettes.find((p) => p.id === t.defaultCategoricalPaletteId) ??
+		t.categoricalPalettes[0]
+	return {
+		id: pal?.id ?? null,
+		colors: pal ? [...pal.colors] : resolveCategoricalPalette(t).colors,
+	}
+}
+
 /** Palette offered by TEXT-color palette pickers (per-facet title colors,
  * text-encoded labels): the theme's designated text palette when one is set,
  * else the default categorical palette. Text palettes are typically darker
  * shades of the mark palette that stay legible at text sizes. */
 export const resolveTextPickerPalette = (t: Theme): string[] =>
-	(t.defaultTextPaletteId
-		? t.categoricalPalettes.find((p) => p.id === t.defaultTextPaletteId)?.colors
-		: undefined) ?? resolveCategoricalPalette(t).colors
+	resolveTextPalettePick(t).colors
 
 /** Same shape as `resolveCategoricalPalette` but targets the theme's
  *  ordinal-palette list. Falls back to a sequential single-hue ramp so

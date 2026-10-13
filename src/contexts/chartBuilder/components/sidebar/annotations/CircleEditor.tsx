@@ -2,22 +2,25 @@ import type { ReactNode } from "react"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
-import { SelectInput } from "../../../../../components/ui/SelectInput"
 import {
 	type BoxAnnotationStyle,
 	type CircleAnnotation,
 } from "../../../lib/annotationsConfig"
 import {
-	percentToValue,
-	radiusToPercent,
-	radiusToValues,
+	convertCoord,
+	convertRadius,
 	toNumber,
-	valueToPercent,
 	cleanNumber,
 	type AxisInfo,
 } from "./axisInfo"
 import { AnnotationCard, AxisValueInput, LayerRow } from "./controls"
-import { BorderSection, FillSection } from "./sections"
+import {
+	BorderSection,
+	CoordSystemSelect,
+	FillSection,
+	PIXELS_HELP,
+	usePlotDims,
+} from "./sections"
 
 /** Sidebar editor for circle annotations. Mirrors RectangleEditor, but a
  *  circle is center + radius rather than four edges. The radius is measured
@@ -65,6 +68,14 @@ export const CircleEditor = ({
 		: circle.radiusAxis === "x"
 			? xAxis
 			: yAxis
+	const dims = usePlotDims()
+	// Pixels-mode radius converts against the radius axis's plot extent.
+	const radiusExtentPx =
+		dims === null
+			? null
+			: circle.radiusAxis === "x"
+				? dims.widthPx
+				: dims.heightPx
 	return (
 		<AnnotationCard
 			kind="circle"
@@ -79,39 +90,39 @@ export const CircleEditor = ({
 
 			<CollapsibleSubsection title="Position">
 				<div className="flex flex-col gap-2">
-					<SelectInput
-						label="Adjust by"
-						labelClassName={LABEL_COL}
+					<CoordSystemSelect
 						value={circle.coordSystem}
-						options={[
-							{ value: "percent", label: "Percent (0–100)" },
-							{
-								value: "values",
-								label: "Values (data units)",
-								disabled: disableValues,
-							},
-						]}
-						onChange={(v) => {
-							const nextSystem = v as "percent" | "values"
-							if (nextSystem === circle.coordSystem) return
-							if (nextSystem === "values" && disableValues) return
+						disableValues={disableValues}
+						onChange={(next) => {
 							// Convert center + radius so the new boxes show the equivalent
 							// position in the target system, same as RectangleEditor.
-							if (nextSystem === "values") {
-								onChange({
-									coordSystem: "values",
-									centerX: percentToValue(toNumber(circle.centerX), xAxis),
-									centerY: percentToValue(toNumber(circle.centerY), yAxis),
-									radius: radiusToValues(circle.radius, radiusAxisInfo),
-								})
-							} else {
-								onChange({
-									coordSystem: "percent",
-									centerX: valueToPercent(circle.centerX, xAxis),
-									centerY: valueToPercent(circle.centerY, yAxis),
-									radius: radiusToPercent(circle.radius, radiusAxisInfo),
-								})
-							}
+							const cur = circle.coordSystem
+							onChange({
+								coordSystem: next,
+								centerX: convertCoord(
+									circle.centerX,
+									cur,
+									next,
+									xAxis,
+									"x",
+									dims
+								),
+								centerY: convertCoord(
+									circle.centerY,
+									cur,
+									next,
+									yAxis,
+									"y",
+									dims
+								),
+								radius: convertRadius(
+									circle.radius,
+									cur,
+									next,
+									radiusAxisInfo,
+									radiusExtentPx
+								),
+							})
 						}}
 					/>
 
@@ -143,7 +154,7 @@ export const CircleEditor = ({
 								suffix="%"
 							/>
 						</div>
-					) : (
+					) : circle.coordSystem === "values" ? (
 						<div className="flex flex-col gap-2">
 							<AxisValueInput
 								label={isRadar ? "center angle" : "center x"}
@@ -167,6 +178,35 @@ export const CircleEditor = ({
 								min={0}
 								onChange={(v) => onChange({ radius: v })}
 							/>
+						</div>
+					) : (
+						<div className="flex flex-col gap-2">
+							<NumberInput
+								label="center x"
+								labelClassName={LABEL_COL}
+								value={cleanNumber(toNumber(circle.centerX))}
+								step={1}
+								onChange={(v) => onChange({ centerX: v })}
+								suffix="px"
+							/>
+							<NumberInput
+								label="center y"
+								labelClassName={LABEL_COL}
+								value={cleanNumber(toNumber(circle.centerY))}
+								step={1}
+								onChange={(v) => onChange({ centerY: v })}
+								suffix="px"
+							/>
+							<NumberInput
+								label="radius"
+								labelClassName={LABEL_COL}
+								value={cleanNumber(toNumber(circle.radius))}
+								step={1}
+								min={0}
+								onChange={(v) => onChange({ radius: v })}
+								suffix="px"
+							/>
+							<p className="vc-help">{PIXELS_HELP}</p>
 						</div>
 					)}
 

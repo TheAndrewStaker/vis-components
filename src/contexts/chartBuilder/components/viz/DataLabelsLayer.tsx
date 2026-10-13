@@ -3,6 +3,7 @@ import {
 	DEFAULT_DATA_LABELS_CONFIG,
 	type DataLabelsConfig,
 	type HueConfig,
+	type LabelPointsScope,
 } from "../../lib/channelConfig"
 import {
 	alignBoxToAnchorEdge,
@@ -17,10 +18,15 @@ import {
 	type LabelVAlign,
 } from "../../lib/dataLabelsLayout"
 import {
+	labelKeysFor,
+	labelPieceSplit,
+	labelScopeFor,
+	normalizeComposedLabels,
+	pieceKey,
 	populationOverrides,
-	populationTemplate,
 	populationsAtTag,
 	resolveLabelSelection,
+	templateFields,
 	type LabelPopulation,
 	type LabelSelection,
 } from "../../lib/dataLabelsSelection"
@@ -29,6 +35,7 @@ import {
 	labelHueScaleParts,
 	resolveFieldBackground,
 	resolveFieldFont,
+	resolveFieldFontOver,
 	resolveFieldSizePx,
 	resolveLabelFill,
 	resolveLabelSize,
@@ -39,7 +46,7 @@ import {
 } from "../../lib/dataLabelsStyle"
 import { ptToPx } from "../../lib/fontUnit"
 import { effectiveType } from "../../lib/fieldType"
-import { dataLabelsOnPanel } from "../../lib/facetScope"
+import { composedLabelOnPanel, dataLabelsOnPanel } from "../../lib/facetScope"
 import {
 	renderMultilineTspans,
 	wrapByCharCount,
@@ -99,6 +106,13 @@ export type DataLabelAnchor = {
 	/** Explicit order within `series` (see `LabelBox.rank`). Set together
 	 *  with `series`; absent → pixel-position ranking. */
 	rank?: number
+	/** The same identity resolved under EVERY scope, so each composed label
+	 *  can be ranked by its own "Of each" choice
+	 *  (`DataLabelsConfig.fieldLabelPointsScope`). `series` / `rank` above
+	 *  stay the layer-wide scope's pair — what single-field labels and
+	 *  renderers that set no map use. Bars / areas / pies set it via
+	 *  `labelSeriesResolverAll`. */
+	seriesByScope?: Record<LabelPointsScope, { series: string; rank: number }>
 	/** Raw numeric value backing the label, when known. Feeds the
 	 * conditional text-color rules — the formatted `label` string isn't
 	 * sufficient because rules compare against the underlying number, not
@@ -134,6 +148,22 @@ export type DataLabelAnchor = {
 	 * before overlap avoidance (`alignBoxToAnchorEdge`). Absent = centered,
 	 * the historical placement. */
 	vAlign?: LabelVAlign
+	/** Forced text alignment: a bar label placed BESIDE a vertical bar
+	 * (`DataLabelsConfig.barLabelSide`) hangs away from the bar — "left"
+	 * starts the text at the anchor (right of the bar), "right" ends it
+	 * there (left of the bar). Wins over the layer / per-variable /
+	 * series-end Alignment settings, which the panel hides while a side is
+	 * set. Absent = the user's alignment. */
+	hAlign?: "left" | "right"
+	/** Separate-variables mode on bars: a variable's OWN resolved point and
+	 * hanging alignment (`DataLabelsConfig.fieldBarPlacements`), keyed by
+	 * field. The layer builds that variable's box from this instead of the
+	 * anchor's `cx` / `cy` / `hAlign` / `vAlign`; fields without an entry use
+	 * the anchor's base point. */
+	fieldPlacements?: Record<
+		string,
+		{ cx: number; cy: number; hAlign?: "left" | "right"; vAlign?: LabelVAlign }
+	>
 }
 
 type Props = {
@@ -178,6 +208,31 @@ type Props = {
 /** A render-ready label box: a positioned, colored, formatted label. Both
  * the anchor-based and row-based paths build this shape so they can share
  * the SVG emission below. */
+/** A variable's effective text layout: its own `fieldLayouts` entry (only
+ *  ever consulted for a separate variable — `own` is null otherwise) over
+ *  the layer-wide values. */
+const resolveFieldLayout = (
+	cfg: DataLabelsConfig,
+	own: string | null
+): {
+	textAngle: number
+	wrapText: boolean
+	wrapMaxChars: number
+	avoidOverlaps: boolean
+} => {
+	const o = own === null ? undefined : cfg.fieldLayouts?.[own]
+	return {
+		textAngle: o?.textAngle ?? cfg.textAngle ?? 0,
+		wrapText: o?.wrapText ?? cfg.wrapText === true,
+		wrapMaxChars:
+			o?.wrapMaxChars ??
+			cfg.wrapMaxChars ??
+			DEFAULT_DATA_LABELS_CONFIG.wrapMaxChars ??
+			20,
+		avoidOverlaps: o?.avoidOverlaps ?? cfg.avoidOverlaps === true,
+	}
+}
+
 type RenderableLabel = {
 	cx: number
 	cy: number
@@ -191,6 +246,9 @@ type RenderableLabel = {
 	 *  size before any per-variable override. Pieces whose size differs
 	 *  carry their own. Unset → `fontSize`. */
 	baseFontSize?: number
+	/** Separate-variables mode: the one variable this label shows — its own
+	 *  angle / wrapping (`DataLabelsConfig.fieldLayouts`) apply at paint. */
+	ownField?: string
 	fill: string
 	label: string
 	key: string
@@ -242,6 +300,8 @@ const expandLabelPopulations = <T extends EndpointAwareBox>(
 	axis: "x" | "y",
 	recompose?: (box: T, pop: LabelPopulation) => T | null
 ): T[] => {
+	// (Everything present — a combination's own series-end selection counts
+	// too, so its empty all-labels boxes still reach the recomposition.)
 	if (sel.present.all && !sel.present.first && !sel.present.last) return boxes
 	const tags = selectEndpointsPerSeries(boxes, axis)
 	const out: T[] = []
@@ -461,16 +521,19 @@ const renderLabels = (
 ): React.ReactElement => {
 	const baseAnchor = alignmentAnchor(cfg.alignment)
 	const baseFont = resolveFieldFont(cfg, null)
-	const wrap = cfg.wrapText === true
-	const wrapMaxChars = cfg.wrapMaxChars ?? DEFAULT_DATA_LABELS_CONFIG.wrapMaxChars ?? 20
-	// Text angle rotates each label (and its background rect) around its own
-	// anchor point — same convention as the axes' tickLabelAngle (positive =
-	// clockwise). Paint-time only: the overlap / reserve passes keep measuring
-	// the unrotated footprint.
-	const textAngle = cfg.textAngle ?? 0
 	return (
 		<g aria-hidden="true" pointerEvents="none">
 			{boxes.map((b) => {
+				// A separate variable's own wrapping / angle, else the layer's.
+				// Text angle rotates each label (and its background rect) around
+				// its own anchor point — same convention as the axes'
+				// tickLabelAngle (positive = clockwise). Paint-time only: the
+				// overlap / reserve passes keep measuring the unrotated footprint.
+				const {
+					wrapText: wrap,
+					wrapMaxChars,
+					textAngle,
+				} = resolveFieldLayout(cfg, b.ownField ?? null)
 				// Endpoint labels can carry their own alignment (first vs last
 				// labels typically hang off opposite sides of their point).
 				const textAnchor = b.alignment
@@ -623,10 +686,16 @@ export const DataLabelsLayer = ({
 		...emptyDataLabelsEncodings(),
 		...useAtomValue(currentDataLabelsEncodingsAtom),
 	}
-	const cfg: DataLabelsConfig = {
-		...DEFAULT_DATA_LABELS_CONFIG,
-		...useAtomValue(renderDataLabelsConfigAtom),
-	}
+	// Normalized: a visual saved before composed labels derives its label
+	// list (and the derived labels' which-labels / overrides) here, so the
+	// layer only ever deals with the list.
+	const cfg: DataLabelsConfig = normalizeComposedLabels(
+		{
+			...DEFAULT_DATA_LABELS_CONFIG,
+			...useAtomValue(renderDataLabelsConfigAtom),
+		},
+		encodings.value.fields ?? []
+	)
 	const overrides = useAtomValue(currentFieldOverridesAtom)
 	const dataset = useCurrentDatasetView()
 	// Legend / mark hover: a label must fade with the mark it annotates. The
@@ -642,14 +711,20 @@ export const DataLabelsLayer = ({
 	// labelHeight treat `\n` as line breaks. `label` stays the raw string —
 	// `renderLabels` re-wraps it for the actual `<tspan>` emission, so the
 	// layout box and the drawn text agree.
-	const layoutWrapMaxChars =
-		cfg.wrapMaxChars ?? DEFAULT_DATA_LABELS_CONFIG.wrapMaxChars ?? 20
-	const wrapBoxForLayout = <T extends { text: string; label: string }>(
+	// A separate variable wraps per its own layout entry.
+	const wrapBoxForLayout = <
+		T extends { text: string; label: string; ownField?: string },
+	>(
 		box: T
-	): T =>
-		cfg.wrapText === true
-			? { ...box, text: wrapByCharCount(box.label, layoutWrapMaxChars).join("\n") }
+	): T => {
+		const { wrapText, wrapMaxChars } = resolveFieldLayout(
+			cfg,
+			box.ownField ?? null
+		)
+		return wrapText
+			? { ...box, text: wrapByCharCount(box.label, wrapMaxChars).join("\n") }
 			: box
+	}
 	// Pull the main chart's connection field so the row-based path (scatter
 	// + connection = line chart) can group rows into "lines" for the
 	// `labelPoints` filter. This atom is independent from the data-labels
@@ -722,8 +797,16 @@ export const DataLabelsLayer = ({
 	if (!positionMapped || !valueMapped) return null
 	// Facet scope: "Label all facets" unchecked ⇒ only the ticked panels
 	// draw labels. Outside PlotCanvas (no panel key) and on an unfaceted
-	// chart's single panel the scope never applies.
-	if (!dataLabelsOnPanel(cfg, facetPanelKey)) return null
+	// chart's single panel the scope never applies. Multi-field labels scope
+	// per composed label (each has its own "Label all facets"), so the gate
+	// moves to `ownKeys` below; the layer-wide value is only a wholesale
+	// skip for the single-field label.
+	if (
+		encodings.value.multiField !== true &&
+		!dataLabelsOnPanel(cfg, facetPanelKey)
+	) {
+		return null
+	}
 	// Anchors without per-series endpoints: maps (regions) and layout-placed
 	// labels (tree nodes). The `labelPoints` selection is skipped for them —
 	// a stored "last per series" from a previous chart must not silently
@@ -780,18 +863,31 @@ export const DataLabelsLayer = ({
 	// by a field) or its single color. The variable's own text-color rules
 	// come first, compared against ITS value in the row — the slot is the
 	// "else".
+	/** A composed label's own fill (by key): its text-color rules — read
+	 *  against the row's value for the key when the key IS a variable (the
+	 *  default `{A}` label), else against the label's first variable — then
+	 *  its color slot, else the label's base fill. */
 	const resolveSegmentFill = (
-		field: string | null,
+		key: string | null,
 		row: Record<string, unknown>,
-		baseFill: string
+		baseFill: string,
+		/** A piece's variable — its rules compare against THAT value. Omitted
+		 *  for a whole label, whose rules read its key (the default `{A}`
+		 *  label) or its first variable. */
+		pieceField?: string
 	): string => {
-		if (!field) return baseFill
-		const ruleColor = resolveRuleColor(cfg.fieldColorRules?.[field], row[field])
+		if (!key) return baseFill
+		const ruleField =
+			pieceField ?? (key in row ? key : firstFieldOfLabel.get(key))
+		const ruleColor = resolveRuleColor(
+			cfg.fieldColorRules?.[key],
+			ruleField === undefined ? undefined : row[ruleField]
+		)
 		if (ruleColor) return ruleColor
-		const slotCfg = cfg.fieldColors?.[field]
+		const slotCfg = cfg.fieldColors?.[key]
 		if (!slotCfg) return baseFill
 		if (slotCfg.field) {
-			const s = fieldColorScales.get(field)
+			const s = fieldColorScales.get(key)
 			const c = s ? applyHueScale(s.scale, row[s.field], s.type) : null
 			return c ?? slotCfg.singleColor ?? baseFill
 		}
@@ -809,7 +905,11 @@ export const DataLabelsLayer = ({
 		row: Record<string, unknown>,
 		template: string,
 		baseFill: string,
-		baseFontSize: number
+		baseFontSize: number,
+		/** The composed label's id (multi-field): its own Color / Size / Text
+		 *  properties / Text background entries style the whole label —
+		 *  every piece alike. */
+		ownKey: string | null = null
 	): { label: string; segments?: LabelPiece[]; fontSize: number } | null => {
 		const segs = buildLabelSegments(
 			row,
@@ -819,14 +919,34 @@ export const DataLabelsLayer = ({
 		)
 		if (!segs) return null
 		const label = segs.map((s) => s.text).join("")
-		const pieces: LabelPiece[] = segs.map((s) => ({
-			text: s.text,
-			field: s.field,
-			fill: resolveSegmentFill(s.field, row, baseFill),
-			fontSize: resolveFieldSizePx(cfg, s.field, baseFontSize),
-			font: resolveFieldFont(cfg, s.field),
-			bg: resolveFieldBackground(cfg, s.field, vizBackground),
-		}))
+		const ownFill = resolveSegmentFill(ownKey, row, baseFill)
+		const ownSize = resolveFieldSizePx(cfg, ownKey, baseFontSize)
+		const ownFont = resolveFieldFont(cfg, ownKey)
+		const ownBg = resolveFieldBackground(cfg, ownKey, vizBackground)
+		// "Split into individual variables": a split section resolves per
+		// PIECE — the variable's own entry (`pieceKey`) laid over the label's
+		// — so a label can bold its series name while its value stays
+		// regular, or colour just the value by sign. Unsplit sections (and
+		// the text background, which draws one rect per label) stay uniform.
+		const splitColor = labelPieceSplit(cfg, ownKey, "color")
+		const splitSize = labelPieceSplit(cfg, ownKey, "size")
+		const splitText = labelPieceSplit(cfg, ownKey, "text")
+		const pieceKeyOf = (field: string | null): string | null =>
+			ownKey !== null && field !== null ? pieceKey(ownKey, field) : null
+		const pieces: LabelPiece[] = segs.map((s) => {
+			const pk = pieceKeyOf(s.field)
+			return {
+				text: s.text,
+				field: s.field,
+				fill:
+					splitColor && pk && s.field
+						? resolveSegmentFill(pk, row, ownFill, s.field)
+						: ownFill,
+				fontSize: splitSize ? resolveFieldSizePx(cfg, pk, ownSize) : ownSize,
+				font: splitText ? resolveFieldFontOver(cfg, pk, ownFont) : ownFont,
+				bg: ownBg,
+			}
+		})
 		const styled = pieces.some(
 			(p) =>
 				p.fill !== baseFill ||
@@ -844,38 +964,74 @@ export const DataLabelsLayer = ({
 			fontSize: Math.max(baseFontSize, ...pieces.map((p) => p.fontSize)),
 		}
 	}
-	// Boxes are built with the all-labels template; the population pass
-	// recomposes series-end labels with theirs.
-	const allTemplate = populationTemplate(cfg, selection, "all")
-	// "Combine variables into single label" unchecked: every checked
-	// variable is its OWN label at each anchor (one box per variable, each
-	// composing just `{Field}`), instead of one arranged label. A variable
-	// outside a population composes nothing there.
-	const separate = multi && cfg.combineVariables === false
-	const separateFields: (string | null)[] = separate
-		? (encodings.value.fields ?? [])
+	// The labels each anchor carries: multi-field, one per composed label
+	// (`labelKeysFor` — its id keys every per-label map, its template is
+	// what it composes); single-field, the one label (`null`, the layer-wide
+	// controls and the series-end override blocks). A label outside a
+	// population composes nothing there; an empty template composes nothing.
+	const labelKeys = labelKeysFor(cfg, encodings.value)
+	// Each composed label draws only on the panels its own "Label all
+	// facets" names (`fieldFacetKeys`, falling back to the layer's
+	// `facetKeys`), so one label can run across every panel while another is
+	// kept to a few. Nothing left to draw here → the layer stands down.
+	const ownKeys: (string | null)[] = multi
+		? labelKeys.keys.filter((k) => composedLabelOnPanel(cfg, k, facetPanelKey))
 		: [null]
-	// Separate labels position per variable: a variable's own alignment /
-	// X / Y (else the layer's), never the endpoint override blocks — so the
-	// expansion below sees no overrides in that mode.
+	if (ownKeys.length === 0) return null
+	const labelTemplates = new Map(
+		labelKeys.labels.map((l) => [l.id, l.template] as const)
+	)
+	// Labels not keyed by a variable's name (hand-added combinations) have no
+	// single value of their own.
+	const comboIds = new Set(
+		labelKeys.keys.filter((k) => !(encodings.value.fields ?? []).includes(k))
+	)
+	const firstFieldOfLabel = new Map(
+		labelKeys.labels.map(
+			(l) =>
+				[l.id, templateFields(l.template, encodings.value.fields ?? [])[0]] as const
+		)
+	)
+	// Composed labels position per key: the key's own alignment / X / Y
+	// (else the layer's), never the endpoint override blocks — those belong
+	// to the single-field label alone, so the expansion sees no overrides
+	// for them.
 	const ownAlignment = (own: string | null) =>
 		own === null ? undefined : cfg.fieldAlignments?.[own]
 	const ownOffset = (own: string | null) => ({
 		x: (own === null ? undefined : cfg.fieldOffsets?.[own]?.xOffset) ?? cfg.xOffset,
 		y: (own === null ? undefined : cfg.fieldOffsets?.[own]?.yOffset) ?? cfg.yOffset,
 	})
-	const expansionCfg: DataLabelsConfig = separate
-		? { ...cfg, firstLabel: {}, lastLabel: {} }
-		: cfg
+	// The position rule that applies to one label: the arranged label walks
+	// the layer's list (`positionRules`), an own label its own
+	// (`fieldPositionRules[key]`). A standalone variable's rules compare
+	// against ITS value in the row — the same convention the per-variable
+	// text-color rules follow; a combination arranges several variables, so
+	// it has no single value and falls back to the layer's backing value. A
+	// match REPLACES that label's base offsets (first match wins).
+	const ownPositionRule = (
+		own: string | null,
+		row: Record<string, unknown> | undefined,
+		labelValue: unknown
+	) =>
+		own === null
+			? firstMatchingRule(cfg.positionRules, labelValue)
+			: firstMatchingRule(
+					cfg.fieldPositionRules?.[own],
+					!comboIds.has(own) && row && own in row ? row[own] : labelValue
+				)
+	const noOverridesCfg: DataLabelsConfig = { ...cfg, firstLabel: {}, lastLabel: {} }
 	const ownTemplate = (
 		own: string | null,
 		pop: LabelPopulation
-	): string | null =>
-		own === null
-			? populationTemplate(cfg, selection, pop)
-			: selection.fields[pop].includes(own)
-				? `{${own}}`
-				: null
+	): string | null => {
+		// Single-field: no arrangement to compose (the one field formats
+		// itself); the populations apply at the expansion.
+		if (own === null) return ""
+		if (!selection.labels[pop].includes(own)) return null
+		const template = labelTemplates.get(own) ?? ""
+		return template.trim() === "" ? null : template
+	}
 
 	type RenderBox = EndpointAwareBox & {
 		fill: string
@@ -892,8 +1048,15 @@ export const DataLabelsLayer = ({
 		row?: Record<string, unknown>
 		/** See `DataLabelAnchor.vAlign`; row-based boxes never carry one. */
 		vAlign?: LabelVAlign
+		/** See `DataLabelAnchor.hAlign`; re-applied after the series-end
+		 *  expansion so an endpoint's own alignment can't undo it. */
+		hAlign?: "left" | "right"
 		/** Separate-variables mode: the one variable this box shows. */
 		ownField?: string
+		/** See `DataLabelAnchor.seriesByScope` — the box's identity under
+		 *  every "Of each" scope, swapped into `series` / `rank` before the
+		 *  expansion ranks this label's endpoints. */
+		seriesByScope?: Record<LabelPointsScope, { series: string; rank: number }>
 	}
 	// Series-end label recomposition (multi-field): rebuild the box's text —
 	// and its per-variable colored segments — from the population's template.
@@ -907,7 +1070,13 @@ export const DataLabelsLayer = ({
 		if (!multi || !box.row) return box
 		const template = ownTemplate(box.ownField ?? null, pop)
 		if (template === null) return null
-		const composed = composeLabel(box.row, template, box.fill, box.baseFontSize)
+		const composed = composeLabel(
+			box.row,
+			template,
+			box.fill,
+			box.baseFontSize,
+			box.ownField ?? null
+		)
 		if (!composed) return null
 		return wrapBoxForLayout({
 			...box,
@@ -930,32 +1099,60 @@ export const DataLabelsLayer = ({
 		// would for a combined label (two boxes on one anchor would tie and
 		// only one could be tagged "last").
 		const wrapped = boxes.map(wrapBoxForLayout)
-		const expand = (bs: RenderBox[]) =>
+		// Expanded per label key, so the endpoint ranking sees one box per
+		// anchor per key (two keys on one anchor would tie and only one could
+		// be tagged "last"). Only the arranged label (`null`) takes the
+		// series-end override blocks.
+		// Each label's series ends are ranked under ITS "Of each" scope
+		// (`fieldLabelPointsScope`): the anchors carry a series + rank per
+		// scope, so the key's pair is swapped in before the endpoints are
+		// classified. Anchors without the map (renderers that rank by hue +
+		// position) keep what they were built with.
+		const atScope = (b: RenderBox, own: string | null): RenderBox => {
+			const pair = b.seriesByScope?.[labelScopeFor(cfg, own)]
+			return pair ? { ...b, series: pair.series, rank: pair.rank } : b
+		}
+		const expand = (bs: RenderBox[], own: string | null) =>
 			expandLabelPopulations(
-				bs,
-				expansionCfg,
+				bs.map((b) => atScope(b, own)),
+				own === null ? cfg : noOverridesCfg,
 				selection,
 				lastAxis,
 				recomposeForPopulation
 			)
-		const filtered = (
-			separate
-				? separateFields.flatMap((f) =>
-						expand(wrapped.filter((b) => b.ownField === f))
-					)
-				: expand(wrapped)
-		)
+		const filtered = ownKeys
+			.flatMap((k) =>
+				expand(
+					wrapped.filter((b) => (b.ownField ?? null) === k),
+					k
+				)
+			)
 			.filter((b) => b.label !== "")
 			.map(alignBoxToAnchorEdge)
+			// A forced side alignment outranks the series-end override the
+			// expansion may have applied: beside a bar, every label hangs
+			// away from it.
+			.map((b) => (b.hAlign ? { ...b, alignment: b.hAlign } : b))
 		// Overlap pass: seriesless anchors (maps, layout-placed labels) spread
 		// colliding labels in ANY direction (a downward-only pile looks
 		// lopsided around a ring or with leader lines); series charts keep the
 		// vertical-only nudge, which preserves the reading order of stacked
 		// end-of-line labels.
-		if (!cfg.avoidOverlaps) return filtered
-		return seriesless
-			? spreadOverlaps2D(filtered, { prefer: preferOpenSpace })
-			: nudgeOverlaps(filtered)
+		const spread = (bs: RenderBox[]) =>
+			seriesless
+				? spreadOverlaps2D(bs, { prefer: preferOpenSpace })
+				: nudgeOverlaps(bs)
+		// Each label key's own toggle (the layer's for the arranged label)
+		// decides whether its labels take part — the participating labels
+		// avoid each other, the rest never move. Keys are unique per box, so
+		// the moved copies slot back into the original order.
+		const movable = filtered.filter(
+			(b) => resolveFieldLayout(cfg, b.ownField ?? null).avoidOverlaps
+		)
+		if (movable.length === 0) return filtered
+		if (movable.length === filtered.length) return spread(filtered)
+		const moved = new Map(spread(movable).map((b) => [b.key, b]))
+		return filtered.map((b) => moved.get(b.key) ?? b)
 	}
 
 	// --- Anchor-based path (bars/areas). --------------------------------
@@ -988,11 +1185,12 @@ export const DataLabelsLayer = ({
 		const renderBoxes: RenderBox[] = anchors.flatMap((a, i) => {
 			// Pre-formatted anchors (single-field, or renderers that don't carry
 			// a row) skip when their renderer produced no text. Multi-field
-			// anchors with a row compose below instead — one box per variable
-			// in separate mode.
+			// anchors with a row compose below instead — one box per label
+			// key (the arranged label, each standalone variable, each
+			// combination).
 			const composes = multi && a.row !== undefined
 			if (!composes && a.label === null) return []
-			return (composes ? separateFields : [null]).flatMap((own) => {
+			return (composes ? ownKeys : [null]).flatMap((own) => {
 			const hueColor =
 				hueScale && a.hueValue !== undefined
 					? (applyHueScale(hueScale, a.hueValue, hueFieldType) ?? null)
@@ -1012,20 +1210,25 @@ export const DataLabelsLayer = ({
 			const template = composes ? ownTemplate(own, "all") : null
 			const composed =
 				composes && a.row && template !== null
-					? composeLabel(a.row, template, fill, fontSize)
+					? composeLabel(a.row, template, fill, fontSize, own)
 					: null
 			const label = composes ? (composed?.label ?? "") : (a.label ?? "")
 			// A matching position rule REPLACES the base offsets for this label
-			// (same first-match-wins walk — and same backing value — as the
-			// text-color rules).
-			const posRule = firstMatchingRule(cfg.positionRules, a.labelValue)
+			// (same first-match-wins walk as the text-color rules, against this
+			// label's own backing value).
+			const posRule = ownPositionRule(own, a.row, a.labelValue)
 			const off = ownOffset(own)
+			// A separate variable with its own bar placement sits on ITS
+			// resolved point (and hangs per its own side); otherwise the
+			// anchor's base point.
+			const place =
+				(own === null ? undefined : a.fieldPlacements?.[own]) ?? a
 			return [
 				{
-					cx: a.cx + (posRule?.xOffset ?? off.x),
-					cy: a.cy + (posRule?.yOffset ?? off.y),
-					anchorX: a.cx,
-					anchorY: a.cy,
+					cx: place.cx + (posRule?.xOffset ?? off.x),
+					cy: place.cy + (posRule?.yOffset ?? off.y),
+					anchorX: place.cx,
+					anchorY: place.cy,
 					text: label,
 					fontSize: composed?.fontSize ?? fontSize,
 					baseFontSize: fontSize,
@@ -1040,6 +1243,7 @@ export const DataLabelsLayer = ({
 						a.series ??
 						(a.hueValue === undefined ? "" : String(a.hueValue ?? "")),
 					rank: a.rank,
+					seriesByScope: a.seriesByScope,
 					index: i,
 					key: own === null ? a.key : `${a.key}#${own}`,
 					fill,
@@ -1047,9 +1251,10 @@ export const DataLabelsLayer = ({
 					segments: composed?.segments,
 					row: composes ? a.row : undefined,
 					opacityMul: a.opacityMul,
-					vAlign: a.vAlign,
+					vAlign: place.vAlign,
+					hAlign: place.hAlign,
 					ownField: own ?? undefined,
-					alignment: ownAlignment(own),
+					alignment: place.hAlign ?? ownAlignment(own),
 				},
 			]
 			})
@@ -1186,17 +1391,18 @@ export const DataLabelsLayer = ({
 		// connection isn't mapped (multi-line scatter could be hue-grouped).
 		const seriesField = connectionField ?? hueField
 		const series = seriesField ? String(row[seriesField] ?? "") : ""
+		return ownKeys.flatMap((own) => {
 		// Position rules evaluate against the same backing value the text-color
-		// rules use; a match replaces the base offsets for this label.
-		const posRule = firstMatchingRule(cfg.positionRules, labelValue)
-		return (multi ? separateFields : [null]).flatMap((own) => {
+		// rules use; a match replaces the base offsets for this label. Resolved
+		// per label key, so a separate variable's own rules see ITS value.
+		const posRule = ownPositionRule(own, row, labelValue)
 		// Text: single-field formats one field's value (nothing to show →
-		// no box); multi-field composes the all-labels arrangement (or, in
-		// separate mode, this one variable), keeping an empty box so a
+		// no box); multi-field composes the all-labels arrangement (or this
+		// one standalone variable / combination), keeping an empty box so a
 		// series-end population can still label the point.
-		const template = multi ? ownTemplate(own, "all") : allTemplate
+		const template = ownTemplate(own, "all")
 		const composed =
-			template !== null ? composeLabel(row, template, fill, fontSize) : null
+			template !== null ? composeLabel(row, template, fill, fontSize, own) : null
 		if (!composed && !multi) return []
 		const label = composed?.label ?? ""
 		const off = ownOffset(own)

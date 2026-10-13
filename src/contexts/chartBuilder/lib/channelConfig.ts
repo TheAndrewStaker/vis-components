@@ -1653,6 +1653,35 @@ export const EMPTY_CHANNEL_CONFIGS: ChannelConfigs = {}
  * main visualization. The layer's encodings (which fields drive x, y,
  * hue, size, text) live in their own `DataLabelsEncodings`; this object
  * holds appearance + offsets + per-channel scale knobs. */
+/** One label of a multi-variable Data Labels mapping
+ *  (`DataLabelsConfig.composedLabels`): `template` arranges `{Field}`
+ *  tokens of the checked variables with literal text — `{A}` for one
+ *  variable on its own, `{A} ({B})` for a combination. The `id` keys the
+ *  label in every per-label map (`fieldColors`, `fieldColorRules`,
+ *  `fieldSizes`, `fieldFonts`, `fieldBackgrounds`, `fieldAlignments`,
+ *  `fieldOffsets`, `fieldBarPlacements`, `fieldLayouts`,
+ *  `fieldLabelPoints`), which is where its own sections in the sidebar
+ *  read and write. The default labels use the variable's NAME as the id,
+ *  so a per-variable entry saved before composed labels keys its label. */
+export type ComposedLabel = { id: string; template: string }
+
+/** One variable's own text layout (`DataLabelsConfig.fieldLayouts`): a
+ *  sparse set of the layer-wide `textAngle` / `wrapText` / `wrapMaxChars` /
+ *  `avoidOverlaps`. */
+export type FieldLabelLayout = {
+	textAngle?: number
+	wrapText?: boolean
+	wrapMaxChars?: number
+	avoidOverlaps?: boolean
+}
+
+/** One variable's own bar placement (`DataLabelsConfig.fieldBarPlacements`):
+ *  a sparse pair of the layer-wide `barLabelPosition` / `barLabelSide`. */
+export type FieldBarPlacement = {
+	position?: NonNullable<DataLabelsConfig["barLabelPosition"]>
+	side?: NonNullable<DataLabelsConfig["barLabelSide"]>
+}
+
 export type DataLabelsConfig = {
 	/** Fallback color used when no `hue` field is mapped (or no palette
 	 * resolves). */
@@ -1725,17 +1754,31 @@ export type DataLabelsConfig = {
 	 * is one variable's text alone, so the templates don't apply and the
 	 * panel hides the Label text boxes. Unset = combined. */
 	combineVariables?: boolean
+	/** Multi-field mode: THE labels — one entry per text box under Value →
+	 * Compose labels, each its own label at every anchor its "Which labels"
+	 * names, composed with its template and keyed by its id in every
+	 * per-label map (see `ComposedLabel`). The field checklist only decides
+	 * which variables the templates may name. Absent (a visual saved before
+	 * composed labels) the list derives from the legacy `combineVariables` /
+	 * `labelTemplate` / per-field "Which labels" state
+	 * (`normalizeComposedLabels`); the panel persists it on the first edit.
+	 * An empty list renders no labels. */
+	composedLabels?: ComposedLabel[]
 	/** Multi-field mode only: per-field number format, keyed by field name.
 	 * Each value is a d3-format spec (the same specs the axes use, via
 	 * `buildTickFormatter`) — e.g. `".1%"` → `32.0%`, `"$,.0f"` → `$1,200`.
 	 * A field with no entry falls back to `decimals`. */
 	fieldFormats?: Record<string, string>
-	/** Multi-field mode only: per-field TEXT COLOR, keyed by field name — one
-	 * color slot per variable shown in the label, mirroring the mark color
-	 * slots (fill / outline / line). Each is a `ColorSlotConfig`: single color
+	/** Multi-field mode only: TEXT COLOR per composed label, keyed by the
+	 * label's id — one color slot per label, mirroring the mark color slots
+	 * (fill / outline / line). Each is a `ColorSlotConfig`: single color
 	 * (`field: null`), or vary-by a field via palette / gradient — so a
 	 * category can be tinted to match its line while a delta varies by value.
-	 * No entry → that variable uses the label's normal color chain. */
+	 * No entry → that label uses the layer's normal color chain.
+	 *
+	 * A label whose Color section is SPLIT (`pieceSplits[id].color`) also
+	 * keys entries by `pieceKey(id, field)` — one per variable inside the
+	 * label, laid over the label's own slot. */
 	fieldColors?: Record<string, ColorSlotConfig>
 	/** Multi-field mode only: per-field TEXT COLOR RULES, keyed by field
 	 * name — the same conditional rules as `textColorRules`, but evaluated
@@ -1743,15 +1786,29 @@ export type DataLabelsConfig = {
 	 * label's primary value). A matching rule wins over the variable's color
 	 * slot; the slot's color is the "else". No entry → no per-variable rules. */
 	fieldColorRules?: Record<string, TextColorRule[]>
-	/** Multi-field mode only: per-field font SIZE in POINTS, keyed by field
-	 * name — so a value can render larger than the category beside it. A
-	 * field with no entry takes the label's size (`fontSize`, or the mapped
-	 * Size scale when a size source is mapped). */
+	/** Multi-field mode only: which sections of a composed label are styled
+	 * PER VARIABLE ("Split into individual variables"), keyed by the label's
+	 * id. Unset / false = the label styles as one — every piece takes the
+	 * label's own color / size / text properties. True for a section = that
+	 * section's controls expand to one block per variable in the label, and
+	 * the renderer resolves that section per piece through
+	 * `pieceKey(id, field)`. Only labels naming two or more variables offer
+	 * it (one variable is already the whole label). */
+	pieceSplits?: Record<string, LabelPieceSplits>
+	/** Multi-field mode only: font SIZE in POINTS per composed label, keyed
+	 * by the label's id — so one label can render larger than another. A
+	 * label with no entry takes `fontSize` (or the mapped Size scale when a
+	 * size source is mapped). A SPLIT Size section
+	 * (`pieceSplits[id].size`) also keys entries by `pieceKey(id, field)`,
+	 * so a value can outsize the category beside it inside one label. */
 	fieldSizes?: Record<string, number>
-	/** Multi-field mode only: per-field text properties (family / weight /
-	 * italic / underline), keyed by field name. Every key left unset inherits
-	 * the layer-wide value, so a sparse `{ fontWeight: 700 }` bolds one
-	 * variable and changes nothing else. */
+	/** Multi-field mode only: text properties (family / weight / italic /
+	 * underline) per composed label, keyed by the label's id. Every key left
+	 * unset inherits the layer-wide value, so a sparse `{ fontWeight: 700 }`
+	 * bolds one label and changes nothing else. A SPLIT Text properties
+	 * section (`pieceSplits[id].text`) also keys entries by
+	 * `pieceKey(id, field)`, laid over the label's own — the recipe for a
+	 * bold series name beside an unbolded value. */
 	fieldFonts?: Record<string, LabelFontOverrides>
 	/** Multi-field mode only: per-field text background, keyed by field
 	 * name. `textBackground` null / unset follows the layer-wide toggle;
@@ -1769,6 +1826,15 @@ export type DataLabelsConfig = {
 	 * by field name — the variable's own base offsets (a matching position
 	 * rule still replaces them). Unset keys → the layer-wide offsets. */
 	fieldOffsets?: Record<string, { xOffset?: number; yOffset?: number }>
+	/** Labels of their own (separate variables, combinations): each key's
+	 * OWN conditional position rules — the per-label sibling of
+	 * `positionRules`, which stays with the arranged label. A standalone
+	 * variable's rules compare against ITS value in the row (the same
+	 * convention `fieldColorRules` follows); a combination's compare
+	 * against the layer's backing value, since a combination arranges
+	 * several. A match replaces that label's effective offsets
+	 * (`fieldOffsets[key]`, else the layer's). */
+	fieldPositionRules?: Record<string, LabelPositionRule[]>
 	/** Where labels sit along a bar's measure axis, when the chart is a bar
 	 * chart and Data Labels' position-axis isn't mapped to a field.
 	 *  - `"center"` (default): slice midpoint — current behavior.
@@ -1780,6 +1846,36 @@ export type DataLabelsConfig = {
 	 * "measure axis end" to refer to); areas have their own
 	 * `areaLabelPosition` because their default differs. */
 	barLabelPosition?: "center" | "inside-base" | "inside-end" | "outside-end"
+	/** Which side of the bar labels sit on, ACROSS the category axis (bars
+	 * only). Sparse — absent = `"center"`.
+	 *  - `"center"` (default): on the bar's category center.
+	 *  - `"before"`: just past the bar's leading edge — LEFT of a vertical
+	 *     bar, ABOVE a horizontal one.
+	 *  - `"after"`: just past its trailing edge — RIGHT of a vertical bar,
+	 *     BELOW a horizontal one.
+	 * Beside a bar the anchor is the bar's EDGE (plus the
+	 * `BAR_LABEL_EDGE_PAD_PX` pad), not its center, so the Adjust-position
+	 * nudges measure from the edge: a label set beside a bar keeps its
+	 * distance when the figure narrows and the bar with it (nudging from the
+	 * center, the label slid back over the bar as the bar thinned). On
+	 * vertical bars the side also fixes the text alignment — the block hangs
+	 * away from the bar — so the Alignment control hides; on horizontal bars
+	 * it fixes the block's vertical edge (`vAlign`) and Alignment stays the
+	 * user's. */
+	barLabelSide?: "center" | "before" | "after"
+	/** Separate-variables mode only (`combineVariables === false`, where
+	 * each variable is its own label on a bar): per-variable bar placement,
+	 * keyed by field name — each variable's own measure-axis position and /
+	 * or side, so e.g. the category name sits beside the bar while the value
+	 * stays centered inside it. Unset keys inherit the layer-wide
+	 * `barLabelPosition` / `barLabelSide`. */
+	fieldBarPlacements?: Record<string, FieldBarPlacement>
+	/** Separate-variables mode only: per-variable text layout, keyed by
+	 * field name — the variable's own angle, wrapping, and overlap
+	 * avoidance. Unset keys inherit the layer-wide values. Overlap
+	 * avoidance is per variable in that mode: the labels of variables with
+	 * it on avoid EACH OTHER; a variable with it off never moves. */
+	fieldLayouts?: Record<string, FieldLabelLayout>
 	/** Where labels sit along an area layer's measure axis, when the chart is
 	 * an area chart. The layer runs from its base (the zero baseline, or the
 	 * cumulative bottom of a stacked layer) to its top edge (the line).
@@ -1826,7 +1922,8 @@ export type DataLabelsConfig = {
 	 * `lib/dataLabelsSelection.ts`. */
 	fieldLabelPoints?: Record<string, LabelPointsMode>
 	/** What the series ends ("first" / "last") run over on BAR charts.
-	 *  Layer-wide (shared by every variable's "Which labels" choice):
+	 *  Layer-wide (the single-field label's scope, and the fallback for a
+	 *  composed label with no `fieldLabelPointsScope` entry):
 	 *   - "series" (default): the first / last category along the axis,
 	 *     per series — a series being the bar's stack + group channel
 	 *     values, excluding any channel mapped to the category (x) field.
@@ -1834,8 +1931,19 @@ export type DataLabelsConfig = {
 	 *   - "stack": the base-most / outermost layer of each stack.
 	 *  Other chart families ignore it (their anchors carry no explicit
 	 *  series / rank, so the layer ranks by hue series and position as
-	 *  before). A scope whose channel isn't mapped falls back to "series". */
+	 *  before). A scope whose channel isn't mapped falls back to "series".
+	 *
+	 *  Multi-field mode: the fallback for labels with no entry in
+	 *  `fieldLabelPointsScope`. */
 	labelPointsScope?: LabelPointsScope
+	/** Multi-field mode only: per-composed-label "Of each" scope, keyed by
+	 * the label's id — each label's series ends can run over a different
+	 * unit (the `{value}` label on the last bar of each STACK, the
+	 * `{series}` label on the last bar of each SERIES). A label with no
+	 * entry falls back to `labelPointsScope` (via `labelScopeFor`). The
+	 * anchors carry a series + rank per scope (`DataLabelAnchor.seriesByScope`)
+	 * so each label is ranked by its own. */
+	fieldLabelPointsScope?: Record<string, LabelPointsScope>
 	/** Per-endpoint overrides, consulted ONLY when two or more label
 	 * populations coexist (`LabelSelection.split`): single-field
 	 * `"first-last"`, or multi-field selections whose per-field modes name
@@ -1856,8 +1964,18 @@ export type DataLabelsConfig = {
 	 * hands PlotCanvas (facet value in wrap mode, `row|col` in grid mode) —
 	 * so panels not listed render no labels. Mirrors the annotations'
 	 * per-annotation `facetKeys`; resolve via `dataLabelsOnPanel`. Ignored
-	 * (every label draws) when the chart isn't faceted. */
+	 * (every label draws) when the chart isn't faceted.
+	 *
+	 * Multi-field mode: the fallback for labels with no entry in
+	 * `fieldFacetKeys`. */
 	facetKeys?: string[] | null
+	/** Multi-field mode only: per-composed-label facet scope, keyed by the
+	 * label's id — one label can draw on every panel while another is kept
+	 * to a few. The entry's value reads exactly like `facetKeys` (`null` =
+	 * every panel, an array = those panel keys); an ABSENT entry inherits
+	 * `facetKeys`, so a visual that scoped the whole layer before composed
+	 * labels keeps its scope. Resolve via `labelFacetKeysFor`. */
+	fieldFacetKeys?: Record<string, string[] | null>
 	/** Conditional overrides for the label's text color, evaluated against
 	 * the label's numeric value when it can be parsed as a number. The
 	 * first matching rule's color wins; non-matching rules fall through
@@ -1871,7 +1989,9 @@ export type DataLabelsConfig = {
 	 * rule's offsets REPLACE `xOffset`/`yOffset` for that label; non-matching
 	 * labels keep the base offsets. Designed for diverging bar charts, where
 	 * labels outside the bar ends need opposite nudges for positive and
-	 * negative bars. */
+	 * negative bars. These are the ARRANGED label's rules; labels of their
+	 * own (separate variables, combinations) carry theirs in
+	 * `fieldPositionRules`. */
 	positionRules?: LabelPositionRule[]
 	/** Horizontal text alignment for the label. Maps to SVG `text-anchor`:
 	 *  - `center` (default) → `middle` (label centered on anchor point)
@@ -1955,6 +2075,17 @@ export type DataLabelsConfig = {
 }
 
 export type LabelPointsMode = "all" | "first" | "last" | "first-last"
+
+/** The sections of a composed label that can be styled per VARIABLE rather
+ *  than per label ("Split into individual variables" —
+ *  `DataLabelsConfig.pieceSplits`). Each is independent: a label can colour
+ *  its value green and its category red while both stay one size. */
+export type LabelPieceSplits = {
+	color?: boolean
+	size?: boolean
+	text?: boolean
+}
+export type LabelPieceSection = keyof LabelPieceSplits
 
 /** One variable's text-property overrides (`DataLabelsConfig.fieldFonts`).
  *  Sparse: an unset key inherits the layer-wide value. */
@@ -2057,6 +2188,8 @@ export const DEFAULT_DATA_LABELS_CONFIG: DataLabelsConfig = {
 	decimals: null,
 	labelTemplate: "",
 	combineVariables: true,
+	// composedLabels deliberately ABSENT: absent means "derive from the
+	// legacy state" (`normalizeComposedLabels`); an explicit [] is "no labels".
 	fieldFormats: {},
 	fieldColors: {},
 	fieldColorRules: {},
@@ -2065,7 +2198,11 @@ export const DEFAULT_DATA_LABELS_CONFIG: DataLabelsConfig = {
 	fieldBackgrounds: {},
 	fieldAlignments: {},
 	fieldOffsets: {},
+	fieldPositionRules: {},
 	barLabelPosition: "center",
+	barLabelSide: "center",
+	fieldBarPlacements: {},
+	fieldLayouts: {},
 	areaLabelPosition: "edge",
 	onlyLastLabel: false,
 	// labelPoints deliberately ABSENT from the defaults: merged configs are
@@ -2074,6 +2211,11 @@ export const DEFAULT_DATA_LABELS_CONFIG: DataLabelsConfig = {
 	// `effectiveLabelPoints` owns the fallback chain instead.
 	fieldLabelPoints: {},
 	labelPointsScope: "series",
+	fieldLabelPointsScope: {},
+	pieceSplits: {},
+	// facetKeys deliberately ABSENT (unset = every panel); fieldFacetKeys
+	// starts empty so every composed label inherits it.
+	fieldFacetKeys: {},
 	firstLabel: {},
 	lastLabel: {},
 	avoidOverlaps: false,

@@ -39,6 +39,20 @@ describe("computeCirclePixels — percent mode", () => {
 		expect(geo?.r).toBe(50)
 	})
 
+	it("reads pixel coords from the top-left corner, radius in on-screen px", () => {
+		const circle = {
+			...newCircle("c1"),
+			coordSystem: "pixels" as const,
+			centerX: 30,
+			centerY: -20,
+			radius: 12,
+		}
+		const geo = computeCirclePixels(circle, inner, noScales)
+		expect(geo?.cx).toBe(130) // left edge 100, 30px in
+		expect(geo?.cy).toBe(70) // top 50, 20px down (+y is up)
+		expect(geo?.r).toBe(12) // no axis involved
+	})
+
 	it("respects a non-centered center with the bottom-up y convention", () => {
 		const circle = {
 			...newCircle("c1"),

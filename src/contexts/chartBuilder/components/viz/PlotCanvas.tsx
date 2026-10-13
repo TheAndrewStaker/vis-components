@@ -174,8 +174,9 @@ export const PlotCanvas = () => {
 			dataLabels.fieldLabelPoints,
 			dataLabels.firstLabel,
 			dataLabels.lastLabel,
-			// Stored array — stable reference unless the rules are edited.
+			// Stored array / map — stable references unless the rules are edited.
 			dataLabels.positionRules,
+			dataLabels.fieldPositionRules,
 			dataLabelsEncodings.value?.field,
 			dataLabelsEncodings.value?.multiField,
 			dataLabelsEncodings.value?.fields,

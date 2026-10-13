@@ -80,8 +80,19 @@ const dataLabelsEncodings: DataLabelsEncodings = {
 	value: { field: "y" },
 }
 
-const mount = (cfgOverrides: Partial<DataLabelsConfig>) => {
+const mount = (
+	cfgOverrides: Partial<DataLabelsConfig>,
+	/** Multi-field Value (composed labels); the single `y` field when
+	 *  omitted. */
+	valueFields?: string[]
+) => {
 	const cfg: DataLabelsConfig = { ...DEFAULT_DATA_LABELS_CONFIG, ...cfgOverrides }
+	const labelEncodings: DataLabelsEncodings = valueFields
+		? {
+				...dataLabelsEncodings,
+				value: { field: null, multiField: true, fields: valueFields },
+			}
+		: dataLabelsEncodings
 	const store = installInMemoryLocalStorage()
 	/* eslint-disable @th/use-wrapped-json-functions */
 	store.set(
@@ -97,7 +108,7 @@ const mount = (cfgOverrides: Partial<DataLabelsConfig>) => {
 	)
 	store.set(
 		"vis-components:currentDataLabelsEncodings",
-		JSON.stringify(dataLabelsEncodings)
+		JSON.stringify(labelEncodings)
 	)
 	store.set("vis-components:currentDataLabelsConfig", JSON.stringify(cfg))
 	/* eslint-enable @th/use-wrapped-json-functions */
@@ -109,7 +120,7 @@ const mount = (cfgOverrides: Partial<DataLabelsConfig>) => {
 		snap.set(currentChannelConfigsAtom, channelConfigs)
 		snap.set(currentLabelsAtom, DEFAULT_LABELS_CONFIG)
 		snap.set(currentDataLabelsConfigAtom, cfg)
-		snap.set(currentDataLabelsEncodingsAtom, dataLabelsEncodings)
+		snap.set(currentDataLabelsEncodingsAtom, labelEncodings)
 		snap.set(currentFieldOverridesAtom, {})
 		snap.set(currentFieldLevelOrdersAtom, {})
 	}
@@ -161,5 +172,44 @@ describe("Data labels — Label all facets scope", () => {
 	it("an empty selection labels no panel", () => {
 		const { container } = mount({ facetKeys: [] })
 		expect(labelsByPanel(container)).toEqual({ A: [], B: [], C: [] })
+	})
+
+	it("each composed label picks its own panels", () => {
+		const { container } = mount(
+			{
+				composedLabels: [
+					{ id: "y", template: "{y}" },
+					{ id: "g", template: "{g}" },
+				],
+				fieldFacetKeys: { g: ["A"] },
+			},
+			["y", "g"]
+		)
+		// The `{g}` label is kept to panel A; `{y}` still labels every panel.
+		expect(labelsByPanel(container)).toEqual({
+			A: ["10", "20", "A", "A"],
+			B: ["30", "40"],
+			C: ["50", "60"],
+		})
+	})
+
+	it("a label with no entry inherits the layer-wide panels", () => {
+		const { container } = mount(
+			{
+				composedLabels: [
+					{ id: "y", template: "{y}" },
+					{ id: "g", template: "{g}" },
+				],
+				facetKeys: ["B"],
+				// An explicit null OVERRIDES the layer's list with "all panels".
+				fieldFacetKeys: { g: null },
+			},
+			["y", "g"]
+		)
+		expect(labelsByPanel(container)).toEqual({
+			A: ["A", "A"],
+			B: ["30", "40", "B", "B"],
+			C: ["C", "C"],
+		})
 	})
 })

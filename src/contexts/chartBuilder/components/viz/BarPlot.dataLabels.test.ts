@@ -427,3 +427,143 @@ describe("buildBarAnchors — label series + rank per scope", () => {
 		expect(find(anchors, "Home|neg")?.rank).toBe(0)
 	})
 })
+
+describe("buildBarAnchors — bar side (beside the bar)", () => {
+	// Category band A spans x 0..100 (two bands over 0..200, no padding).
+	// "Beside the bar" anchors on the band's EDGE plus the 4px pad — never
+	// the center — so an Adjust-position nudge measures from the edge and a
+	// label set beside a bar stays beside it however wide the bar renders.
+	const stackArgs = {
+		 
+		aggregation: aggregation as any,
+		categoryScale,
+		measureScale,
+		modes: [{ channel: "hue" as const, mode: "stack" as const }],
+		decimals: null,
+	}
+
+	it("center (default) keeps the band center and forces no alignment", () => {
+		const a = buildBarAnchors({ ...stackArgs, side: "center" }).find(
+			(x) => x.key === "A|north"
+		)
+		expect(a?.cx).toBeCloseTo(50, 5)
+		expect(a?.hAlign).toBeUndefined()
+		expect(a?.vAlign).toBeUndefined()
+	})
+
+	it("vertical bars: 'after' anchors on the right edge + pad and hangs the text rightward", () => {
+		const a = buildBarAnchors({ ...stackArgs, side: "after" }).find(
+			(x) => x.key === "A|north"
+		)
+		expect(a?.cx).toBeCloseTo(100 + 4, 5)
+		expect(a?.hAlign).toBe("left")
+		expect(a?.vAlign).toBeUndefined()
+		// The measure-axis placement is untouched: still the slice midpoint.
+		expect(a?.cy).toBeCloseTo(380, 0)
+	})
+
+	it("vertical bars: 'before' anchors on the left edge − pad and hangs the text leftward", () => {
+		const a = buildBarAnchors({ ...stackArgs, side: "before" }).find(
+			(x) => x.key === "A|north"
+		)
+		expect(a?.cx).toBeCloseTo(0 - 4, 5)
+		expect(a?.hAlign).toBe("right")
+	})
+
+	it("the side holds its distance from the edge as the band narrows (the resize case)", () => {
+		// Same chart in a narrower plot: bands shrink from 100 to 40 px. A
+		// center-anchored label with a +40 nudge would now sit INSIDE the
+		// bar; the edge-anchored one keeps exactly the pad past the edge.
+		const narrow = scaleBand<string>().domain(cats).range([0, 80]).padding(0)
+		const wide = buildBarAnchors({ ...stackArgs, side: "after" }).find(
+			(x) => x.key === "A|north"
+		)
+		const thin = buildBarAnchors({
+			...stackArgs,
+			categoryScale: narrow,
+			side: "after",
+		}).find((x) => x.key === "A|north")
+		expect((wide?.cx ?? 0) - categoryScale.bandwidth()).toBeCloseTo(4, 5)
+		expect((thin?.cx ?? 0) - narrow.bandwidth()).toBeCloseTo(4, 5)
+	})
+
+	it("horizontal bars: 'before' / 'after' move along y and set the block's vertical edge", () => {
+		// Categories on y (band 0..200 top-down), measure on x.
+		const horizontal = {
+			...stackArgs,
+			 
+			aggregation: { ...aggregation, mode: "bars-y", isVertical: false } as any,
+			measureScale: scaleLinear().domain([0, 100]).range([0, 400]),
+		}
+		const above = buildBarAnchors({ ...horizontal, side: "before" }).find(
+			(x) => x.key === "A|north"
+		)
+		const below = buildBarAnchors({ ...horizontal, side: "after" }).find(
+			(x) => x.key === "A|north"
+		)
+		// Above the bar: anchor on the band's top edge, block bottom on it.
+		expect(above?.cy).toBeCloseTo(0 - 4, 5)
+		expect(above?.vAlign).toBe("bottom")
+		expect(above?.hAlign).toBeUndefined()
+		// Below the bar: band's bottom edge, block top on it.
+		expect(below?.cy).toBeCloseTo(100 + 4, 5)
+		expect(below?.vAlign).toBe("top")
+		// The measure-axis point is unchanged: midpoint 5 → x 20.
+		expect(above?.cx).toBeCloseTo(20, 5)
+	})
+})
+
+describe("buildBarAnchors — per-variable bar placements (separate variables)", () => {
+	const stackArgs = {
+		 
+		aggregation: aggregation as any,
+		categoryScale,
+		measureScale,
+		modes: [{ channel: "hue" as const, mode: "stack" as const }],
+		decimals: null,
+	}
+
+	it("a field with its own side / position gets a resolved point on the anchor; others inherit", () => {
+		const a = buildBarAnchors({
+			...stackArgs,
+			position: "center",
+			side: "center",
+			fieldPlacements: {
+				cat: { side: "after" },
+				val: { position: "outside-end" },
+			},
+		}).find((x) => x.key === "A|north")
+		// Base point unchanged.
+		expect(a?.cx).toBeCloseTo(50, 5)
+		expect(a?.cy).toBeCloseTo(380, 0)
+		expect(a?.hAlign).toBeUndefined()
+		// "cat" sits beside the bar (edge + pad) and hangs rightward; its
+		// measure point inherits the layer's center.
+		expect(a?.fieldPlacements?.cat.cx).toBeCloseTo(104, 5)
+		expect(a?.fieldPlacements?.cat.cy).toBeCloseTo(380, 0)
+		expect(a?.fieldPlacements?.cat.hAlign).toBe("left")
+		// "val" keeps the band center and moves past the slice end: north's
+		// end is 10 → y 360, outside-end → 360 - 4.
+		expect(a?.fieldPlacements?.val.cx).toBeCloseTo(50, 5)
+		expect(a?.fieldPlacements?.val.cy).toBeCloseTo(356, 0)
+		expect(a?.fieldPlacements?.val.hAlign).toBeUndefined()
+	})
+
+	it("a field entry of center overrides a layer-wide side back to the center", () => {
+		const a = buildBarAnchors({
+			...stackArgs,
+			side: "after",
+			fieldPlacements: { cat: { side: "center" } },
+		}).find((x) => x.key === "A|north")
+		expect(a?.hAlign).toBe("left")
+		expect(a?.fieldPlacements?.cat.cx).toBeCloseTo(50, 5)
+		expect(a?.fieldPlacements?.cat.hAlign).toBeUndefined()
+	})
+
+	it("no entries → no fieldPlacements on the anchor", () => {
+		const a = buildBarAnchors({ ...stackArgs, fieldPlacements: {} }).find(
+			(x) => x.key === "A|north"
+		)
+		expect(a?.fieldPlacements).toBeUndefined()
+	})
+})

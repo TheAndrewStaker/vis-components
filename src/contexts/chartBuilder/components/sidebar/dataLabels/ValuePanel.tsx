@@ -1,21 +1,21 @@
 import type { DataLabelsConfig } from "../../../lib/channelConfig"
 import {
-	POPULATION_TEMPLATE_LABEL,
-	defaultSharedTemplate,
-	populationTemplateFallback,
-	presentPopulations,
-	type LabelSelection,
+	composedLabelTitle,
+	newComposedLabelId,
 } from "../../../lib/dataLabelsSelection"
 
 import { TickFormatControl } from "../channelOptions/AxisOptionsPanel"
 import { Input } from "../../../../../components/ui/Input"
-import { Toggle } from "../../../../../components/ui/Toggle"
 
 // ---------------------------------------------------------------------------
 // Value panel — multi-field mode only ("Multiple variables…"): pick which
-// fields to combine, arrange them in the editable label text, and give each a
-// d3 number format (so e.g. a category can sit next to "32%"). Per-variable
-// COLOR lives under the Color dropdown (one slot per variable), not here.
+// fields the labels may use, give each a d3 number format (so e.g. a
+// category can sit next to "32%"), and compose the labels themselves — one
+// text box per label, each arranging `{Field}` tokens with literal text.
+// The boxes ARE the labels: every one gets its own sections under Color,
+// Size, Text properties, Text background, Label selection and Adjust
+// position, titled by its variables. Per-label COLOR lives under the Color
+// dropdown, not here.
 // ---------------------------------------------------------------------------
 export const ValuePanel = ({
 	cfg,
@@ -23,31 +23,29 @@ export const ValuePanel = ({
 	fields,
 	allFields,
 	onFieldsChange,
-	selection,
 	countryNames = false,
 }: {
+	/** Normalized config (`normalizeComposedLabels`): `composedLabels` is
+	 *  always present here. */
 	cfg: DataLabelsConfig
 	onChange: (patch: Partial<DataLabelsConfig>) => void
 	fields: string[]
 	allFields: string[]
 	onFieldsChange: (fields: string[]) => void
-	/** The resolved label populations (from the per-field "Which labels"
-	 *  selects). Decides whether the single "Label text" box splits into one
-	 *  box per population. */
-	selection: LabelSelection
 	/** Offer the Geography "Full country name" preset in the per-field
 	 *  format dropdowns — countries-level geo charts only. */
 	countryNames?: boolean
 }) => {
 	const toggleField = (name: string, on: boolean) =>
 		onFieldsChange(on ? [...fields, name] : fields.filter((f) => f !== name))
-	const emptyHint = fields.length > 0 ? null : "Check some fields above"
-	// Unset = combined (the historical behavior).
-	const combine = cfg.combineVariables !== false
+	const labels = cfg.composedLabels ?? []
+	const writeLabels = (next: typeof labels) => onChange({ composedLabels: next })
 
 	return (
 		<div className="flex flex-col gap-3">
-			{/* Which fields to include — check order sets the pre-filled order. */}
+			{/* Which fields the labels may name — checking one adds its own
+			 *  `{Field}` label below; unchecking removes the labels that
+			 *  compose just it. */}
 			<div className="flex flex-col gap-1">
 				<span className="vc-group-header">
 					Fields to include
@@ -68,90 +66,7 @@ export const ValuePanel = ({
 						</label>
 					))
 				)}
-				{/* Checked (default): the variables arrange into ONE label per
-				 *  anchor via the Label text box(es) below. Unchecked: each
-				 *  variable is its own label and the boxes stand down. */}
-				{allFields.length > 0 && (
-					<Toggle
-						label="Combine variables into single label"
-						checked={combine}
-						onChange={(combineVariables) => onChange({ combineVariables })}
-						className="mt-1"
-					/>
-				)}
-				{!combine && (
-					<p className="vc-help">
-						Each variable is its own label on the same anchor. Use Avoid
-						overlapping labels or a position rule to space them.
-					</p>
-				)}
 			</div>
-
-			{/* Editable label text — pre-filled with the checked fields (kept in
-			 *  sync until hand-edited). Each field name in braces is replaced by
-			 *  that row's value; edit the surrounding text freely. When the
-			 *  per-field "Which labels" selects name more than one population
-			 *  (e.g. a value on every label, the series name on the last), the
-			 *  single box splits into one per population: "Label text" for the
-			 *  all-labels text, "First label text" / "Last label text" for the
-			 *  series ends. The end boxes write their endpoint's template
-			 *  override; an empty one uses the placeholder's arrangement.
-			 *  Hidden entirely when the variables aren't combined. */}
-			{!combine ? null : selection.split ? (
-				presentPopulations(selection).map((pop) =>
-					pop === "all" ? (
-						<label key={pop} className="flex flex-col gap-1 text-sm">
-							<span className="vc-muted">
-								{POPULATION_TEMPLATE_LABEL.all}
-							</span>
-							<Input
-								type="text"
-								value={cfg.labelTemplate ?? ""}
-								placeholder={
-									emptyHint ?? defaultSharedTemplate(selection, fields)
-								}
-								onChange={(e) => onChange({ labelTemplate: e.target.value })}
-								className="w-full"
-							/>
-						</label>
-					) : (
-						<label key={pop} className="flex flex-col gap-1 text-sm">
-							<span className="vc-muted">
-								{POPULATION_TEMPLATE_LABEL[pop]}
-							</span>
-							<Input
-								type="text"
-								value={cfg[`${pop}Label`]?.labelTemplate ?? ""}
-								placeholder={
-									emptyHint ??
-									populationTemplateFallback(cfg, selection, pop)
-								}
-								onChange={(e) => {
-									const key = `${pop}Label` as const
-									const next = { ...(cfg[key] ?? {}) }
-									if (e.target.value === "") delete next.labelTemplate
-									else next.labelTemplate = e.target.value
-									onChange({ [key]: next })
-								}}
-								className="w-full"
-							/>
-						</label>
-					)
-				)
-			) : (
-				<label className="flex flex-col gap-1 text-sm">
-					<span className="vc-muted">
-						{POPULATION_TEMPLATE_LABEL.all}
-					</span>
-					<Input
-						type="text"
-						value={cfg.labelTemplate ?? ""}
-						placeholder={emptyHint ?? defaultSharedTemplate(selection, fields)}
-						onChange={(e) => onChange({ labelTemplate: e.target.value })}
-						className="w-full"
-					/>
-				</label>
-			)}
 
 			{/* Per-field format — the same preset dropdown (+ custom spec) the
 			 *  x / y axes use, one per selected field. */}
@@ -175,6 +90,57 @@ export const ValuePanel = ({
 							}}
 						/>
 					))}
+				</div>
+			)}
+
+			{/* The labels. Each box starts as one variable (`{A}`); type any
+			 *  arrangement of the checked variables in braces with literal
+			 *  text. The × removes a label; the link adds an empty one. */}
+			{fields.length > 0 && (
+				<div className="flex flex-col gap-2">
+					<span className="vc-group-header">Compose labels</span>
+					{labels.map((l, i) => (
+						<div key={l.id} className="flex items-center gap-1">
+							<Input
+								type="text"
+								value={l.template}
+								placeholder={fields.map((f) => `{${f}}`).join(", ")}
+								aria-label={`Label ${i + 1} text`}
+								onChange={(e) =>
+									writeLabels(
+										labels.map((x) =>
+											x.id === l.id ? { ...x, template: e.target.value } : x
+										)
+									)
+								}
+								className="flex-1"
+							/>
+							<button
+								type="button"
+								onClick={() => writeLabels(labels.filter((x) => x.id !== l.id))}
+								className="rounded px-1 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
+								aria-label={`Remove label ${composedLabelTitle(l, fields, i)}`}
+							>
+								×
+							</button>
+						</div>
+					))}
+					<button
+						type="button"
+						onClick={() =>
+							writeLabels([...labels, { id: newComposedLabelId(), template: "" }])
+						}
+						className="self-end text-xs text-blue-600 hover:underline dark:text-blue-400"
+					>
+						+ Add another label
+					</button>
+					<p className="vc-help">
+						Each box is one label at every point it applies to. Put a
+						variable in braces — <code>{"{A}"}</code> on its own, or a
+						combination like <code>{"{A} ({B})"}</code>. Every label gets its
+						own sections under Color, Size and the options below, titled by
+						its variables. An empty box draws nothing.
+					</p>
 				</div>
 			)}
 		</div>

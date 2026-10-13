@@ -1184,7 +1184,7 @@ export const QuantitativePanel = ({
 			? fmtStopValue(autoDivergingMid(effLo, effHi))
 			: undefined
 
-	// Colors the circular-arrow popover beside each stop swatch offers —
+	// Colors the palette-icon popover beside each stop swatch offers —
 	// the theme's default categorical palette (its chevron expands the
 	// theme's other palettes), so gradient stops can borrow theme colors
 	// without the open-ended picker. Mirrors the single-color swatches.
@@ -1639,7 +1639,7 @@ type StopRowProps = {
 	/** Shown greyed in the value box while it's empty ("auto"). Callers
 	 * pass the computed auto value (data min/mid/max) when they know it. */
 	placeholder?: string
-	/** Colors offered by the circular-arrow palette popover beside the
+	/** Colors offered by the palette-icon popover beside the
 	 * swatch (the theme's default categorical palette; the popover's
 	 * chevron expands the theme's other palettes). Omit to hide it. */
 	palette?: readonly string[]

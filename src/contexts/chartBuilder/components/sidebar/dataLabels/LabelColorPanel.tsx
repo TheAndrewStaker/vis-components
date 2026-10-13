@@ -1,3 +1,5 @@
+import { Fragment } from "react"
+
 import {
 	DATA_LABELS_SINGLE_COLOR_ID,
 	type ColorSlotConfig,
@@ -57,6 +59,9 @@ export const LabelColorPanel = ({
 	chartConfigs,
 	valuesOverride,
 	multiFields = [],
+	titles,
+	splitToggle,
+	keysFor,
 }: {
 	cfg: DataLabelsConfig
 	onChange: (patch: Partial<DataLabelsConfig>) => void
@@ -72,6 +77,14 @@ export const LabelColorPanel = ({
 	 *  color target per shown variable, mirroring the mark fill/outline/line
 	 *  slots. */
 	multiFields?: string[]
+	/** Section titles by key (see `SizePanel`). */
+	titles?: Record<string, string>
+	/** The "Split into individual variables" toggle for one label (see
+	 *  `SizePanel`). */
+	splitToggle?: (key: string) => React.ReactNode
+	/** The keys one label's slots write to: just the label, or one per
+	 *  variable when its Color is split. */
+	keysFor?: (key: string) => string[]
 }) => {
 	// Prefer the LIVE theme from `themesAtom` (which the settings editor
 	// writes to) so palettes added / edited in Settings appear here with
@@ -101,25 +114,25 @@ export const LabelColorPanel = ({
 		<div className="flex flex-col gap-2">
 			{!perVariableColor && (
 				<>
-					{!hueFieldMapped && (
-						<p className="vc-help">
-							Map a field to <strong>Color</strong> above to drive label colors
-							by that field&apos;s values. The fallback color below is used
-							until then.
-						</p>
-					)}
-					{hueFieldMapped && !isQuantitative && (
-						<>
-							<CategoricalPaletteRow cfg={cfg} onChange={onChange} theme={theme} />
-							<LabelSwatchList
-								cfg={cfg}
-								onChange={onChange}
-								hueField={hueField}
-								hueFieldType={hueFieldType}
-								dataset={dataset}
-								chartConfigs={chartConfigs}
-								valuesOverride={valuesOverride}
-							/>
+						{!hueFieldMapped && (
+							<p className="vc-help">
+								Map a field to <strong>Color</strong> above to drive label colors
+								by that field&apos;s values. The fallback color below is used
+								until then.
+							</p>
+						)}
+						{hueFieldMapped && !isQuantitative && (
+							<>
+								<CategoricalPaletteRow cfg={cfg} onChange={onChange} theme={theme} />
+								<LabelSwatchList
+									cfg={cfg}
+									onChange={onChange}
+									hueField={hueField}
+									hueFieldType={hueFieldType}
+									dataset={dataset}
+									chartConfigs={chartConfigs}
+									valuesOverride={valuesOverride}
+								/>
 						</>
 					)}
 					{hueFieldMapped && isQuantitative && (
@@ -128,7 +141,7 @@ export const LabelColorPanel = ({
 					{/* The single color swatch sits directly under the palette/gradient
 					 *  dropdown so it's immediately reachable when "None (single
 					 *  color)" is selected (no scale → this IS the label color). The
-					 *  advanced text-color rules drop below it. The circular-arrow
+					 *  advanced text-color rules drop below it. The palette-icon
 					 *  palette picker rides along like every other single-color
 					 *  swatch (theme's default categorical palette). */}
 					<ColorInput
@@ -161,74 +174,104 @@ export const LabelColorPanel = ({
 							: "vc-divider-group"
 					}
 				>
-					{multiFields.map((name) => (
-						<CollapsibleSubsection
-							key={name}
-							title={name}
-							changed={
-								cfg.fieldColors?.[name] != null ||
-								(cfg.fieldColorRules?.[name]?.length ?? 0) > 0
-							}
-						>
-							<ColorSlotControls
-								labelPrefix={name}
-								paletteKind="text"
-								slotCfg={cfg.fieldColors?.[name]}
-								defaultColor={cfg.color}
-								// With a field mapped on the Color channel above, an
-								// unconfigured variable's segments follow that mapping
-								// (the renderer falls through to the label's base fill)
-								// — surface that as the explicit default option so the
-								// dropdown matches what actually renders. Without a
-								// mapping, base fill IS the single color, so the plain
-								// "Single color" default already tells the truth.
-								inheritLabel={
-									hueFieldMapped
-										? `Main Color mapping${hueField ? ` (${hueField})` : ""}`
-										: undefined
-								}
-								clearSlot={() => {
-									const next = { ...(cfg.fieldColors ?? {}) }
-									delete next[name]
-									onChange({ fieldColors: next })
-								}}
-								updateSlot={(partial) => {
-									const existing = cfg.fieldColors?.[name]
-									const base: ColorSlotConfig = {
-										field: existing?.field ?? null,
-										singleColor: existing?.singleColor ?? cfg.color,
-										...existing,
-									}
-									onChange({
-										fieldColors: {
-											...(cfg.fieldColors ?? {}),
-											[name]: { ...base, ...partial },
-										},
-									})
-								}}
-							/>
-							{/* The variable's own conditional rules, compared against
-							 *  ITS value; the slot above is the "else". */}
-							<TextColorRulesRow
-								rules={cfg.fieldColorRules?.[name] ?? []}
-								onChange={(rules) => {
-									const next = { ...(cfg.fieldColorRules ?? {}) }
-									if (rules.length === 0) delete next[name]
-									else next[name] = rules
-									onChange({ fieldColorRules: next })
-								}}
-								defaultColor={cfg.fieldColors?.[name]?.singleColor ?? cfg.color}
-								theme={theme}
-								ruleLabel={name}
-								help={
-									<>
-										Compared against each label&apos;s <strong>{name}</strong>{" "}
-										value; the color above applies when no rule matches.
-									</>
-								}
-							/>
+					{multiFields.map((name) => {
+						const keys = keysFor?.(name) ?? [name]
+						const split = keys.length > 1 || keys[0] !== name
+						return (
+							<CollapsibleSubsection
+								key={name}
+								title={titles?.[name] ?? name}
+								changed={keys.some(
+									(k) =>
+										cfg.fieldColors?.[k] != null ||
+										(cfg.fieldColorRules?.[k]?.length ?? 0) > 0
+								)}
+							>
+								{splitToggle?.(name)}
+								{keys.map((key) => {
+									const slotBlock = (
+										<>
+											<ColorSlotControls
+												labelPrefix={titles?.[key] ?? key}
+												paletteKind="text"
+												slotCfg={cfg.fieldColors?.[key]}
+												defaultColor={cfg.color}
+												// With a field mapped on the Color channel above, an
+												// unconfigured variable's segments follow that mapping
+												// (the renderer falls through to the label's base fill)
+												// — surface that as the explicit default option so the
+												// dropdown matches what actually renders. Without a
+												// mapping, base fill IS the single color, so the plain
+												// "Single color" default already tells the truth.
+												inheritLabel={
+													hueFieldMapped
+														? `Main Color mapping${hueField ? ` (${hueField})` : ""}`
+														: undefined
+												}
+												clearSlot={() => {
+													const next = { ...(cfg.fieldColors ?? {}) }
+													delete next[key]
+													onChange({ fieldColors: next })
+												}}
+												updateSlot={(partial) => {
+													const existing = cfg.fieldColors?.[key]
+													const base: ColorSlotConfig = {
+														field: existing?.field ?? null,
+														singleColor: existing?.singleColor ?? cfg.color,
+														...existing,
+													}
+													onChange({
+														fieldColors: {
+															...(cfg.fieldColors ?? {}),
+															[key]: { ...base, ...partial },
+														},
+													})
+												}}
+											/>
+											{/* The label's (or variable's) own conditional rules,
+											 *  compared against ITS value; the slot above is the
+											 *  "else". */}
+											<TextColorRulesRow
+												rules={cfg.fieldColorRules?.[key] ?? []}
+												onChange={(rules) => {
+													const next = { ...(cfg.fieldColorRules ?? {}) }
+													if (rules.length === 0) delete next[key]
+													else next[key] = rules
+													onChange({ fieldColorRules: next })
+												}}
+												defaultColor={cfg.fieldColors?.[key]?.singleColor ?? cfg.color}
+												theme={theme}
+												ruleLabel={titles?.[key] ?? key}
+												help={
+													<>
+														Compared against each label&apos;s{" "}
+														<strong>{titles?.[key] ?? key}</strong> value; the
+														color above applies when no rule matches.
+													</>
+												}
+											/>
+										</>
+									)
+									return split ? (
+										<CollapsibleSubsection
+											key={key}
+											title={titles?.[key] ?? key}
+											boxed={false}
+											defaultOpen
+											changed={
+												cfg.fieldColors?.[key] != null ||
+												(cfg.fieldColorRules?.[key]?.length ?? 0) > 0
+											}
+										>
+											{slotBlock}
+										</CollapsibleSubsection>
+									) : (
+										<Fragment key={key}>{slotBlock}</Fragment>
+									)
+							})}
 						</CollapsibleSubsection>
-					))}
+						)
+					})}
 				</div>
 			)}
 		</div>
@@ -310,11 +353,18 @@ const LabelSwatchList = ({
 /** Conditional text-color rules — primarily for heatmaps, where a single
  *  fallback color can't read against every cell in the gradient. The user
  *  types a comparison expression (`> 0`, `< 50`) and picks a color; the
- *  first matching rule wins. Always renders at least one slot so the
- *  feature is discoverable; an empty condition is a no-op. Shared by the
- *  layer-wide rules (`textColorRules`) and each variable's own rules
+ *  first matching rule wins. Shared by the layer-wide rules
+ *  (`textColorRules`) and each variable's own rules
  *  (`fieldColorRules[field]`), which differ only in which value they
- *  compare against. */
+ *  compare against.
+ *
+ *  Sits under its own hairline below the color swatches, showing just the
+ *  right-aligned "+ Add text color rule" link until a rule exists — the
+ *  swatches above are the primary control, the rules the exception path,
+ *  and both a collapsed subsection and a standing header gave them more
+ *  room than that earns (the link names itself instead). Same shape as
+ *  `PositionRulesEditor`, their positional sibling: the link stays under
+ *  the rows, so adding keeps adding. */
 const TextColorRulesRow = ({
 	rules: stored,
 	onChange: update,
@@ -334,28 +384,19 @@ const TextColorRulesRow = ({
 	/** Extra help prose below the grammar note. */
 	help?: React.ReactNode
 }) => {
-	const display: TextColorRule[] =
-		stored.length === 0 ? [{ condition: "", color: defaultColor }] : stored
 	const ruleName = (i: number) =>
 		ruleLabel ? `${ruleLabel} rule ${i + 1}` : `rule ${i + 1}`
-	const setRule = (i: number, patch: Partial<TextColorRule>) => {
-		const merged = display.map((r, idx) => (idx === i ? { ...r, ...patch } : r))
-		update(merged)
-	}
-	const removeRule = (i: number) =>
-		update(display.filter((_, idx) => idx !== i))
-	const addRule = () =>
-		update([...display, { condition: "", color: defaultColor }])
+	const setRule = (i: number, patch: Partial<TextColorRule>) =>
+		update(stored.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+	const removeRule = (i: number) => update(stored.filter((_, idx) => idx !== i))
+	const addRule = () => update([...stored, { condition: "", color: defaultColor }])
 	// Same palette the base label-color swatch offers — the theme's TEXT
 	// palette, since a rule colors label TEXT; the popover's chevron reaches
 	// the other palettes.
 	const palette = resolveTextPickerPalette(theme)
 	return (
-		<CollapsibleSubsection
-			title="Text color rules"
-			changed={stored.length > 0}
-		>
-			{display.map((rule, i) => (
+		<div className="vc-divider-group">
+			{stored.map((rule, i) => (
 				<div
 					// Index key is stable here: rules are ordered, identity == position
 					// eslint-disable-next-line react/no-array-index-key
@@ -384,32 +425,34 @@ const TextColorRulesRow = ({
 						palette={palette}
 						pickerLabel={`Pick palette color for ${ruleName(i)}`}
 					/>
-					{stored.length > 0 && (
-						<button
-							type="button"
-							onClick={() => removeRule(i)}
-							className="rounded px-1 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
-							aria-label={`Remove ${ruleName(i)}`}
-						>
-							×
-						</button>
-					)}
+					<button
+						type="button"
+						onClick={() => removeRule(i)}
+						className="rounded px-1 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
+						aria-label={`Remove ${ruleName(i)}`}
+					>
+						×
+					</button>
 				</div>
 			))}
 			<button
 				type="button"
 				onClick={addRule}
-				className="self-start text-xs text-blue-600 hover:underline dark:text-blue-400"
+				className="self-end text-xs text-blue-600 hover:underline dark:text-blue-400"
 			>
-				+ Add rule
+				+ Add text color rule
 			</button>
-			<p className="vc-help">
-				First matching rule wins. Use <code>{">"}</code>, <code>{"<"}</code>,{" "}
-				<code>{">="}</code>, <code>{"<="}</code>, <code>==</code>, or{" "}
-				<code>!=</code> followed by a number.
-			</p>
-			{help && <p className="vc-help">{help}</p>}
-		</CollapsibleSubsection>
+			{stored.length > 0 && (
+				<>
+					<p className="vc-help">
+						First matching rule wins. Use <code>{">"}</code>,{" "}
+						<code>{"<"}</code>, <code>{">="}</code>, <code>{"<="}</code>,{" "}
+						<code>==</code>, or <code>!=</code> followed by a number.
+					</p>
+					{help && <p className="vc-help">{help}</p>}
+				</>
+			)}
+		</div>
 	)
 }
 

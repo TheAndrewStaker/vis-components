@@ -260,6 +260,24 @@ export const resolveFieldFont = (
 	}
 }
 
+/** One PIECE's text properties: its own `fieldFonts` entry laid over the
+ *  label's resolved font (not the layer's), so a piece that only sets a
+ *  weight keeps the label's family. */
+export const resolveFieldFontOver = (
+	cfg: Pick<DataLabelsConfig, "fieldFonts">,
+	key: string | null,
+	base: ResolvedLabelFont
+): ResolvedLabelFont => {
+	const ov = key ? cfg.fieldFonts?.[key] : undefined
+	if (!ov) return base
+	return {
+		fontFamily: ov.fontFamily ?? base.fontFamily,
+		fontWeight: ov.fontWeight ?? base.fontWeight,
+		italic: ov.italic ?? base.italic,
+		underline: ov.underline ?? base.underline,
+	}
+}
+
 /** A variable's font size in PX for one label segment: its `fieldSizes`
  *  entry (points, converted here) when set, else the label's own size —
  *  `basePx`, which the caller resolved from the default size or the mapped

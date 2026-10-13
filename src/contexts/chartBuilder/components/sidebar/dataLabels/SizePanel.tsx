@@ -12,9 +12,11 @@ import { ResetLink } from "../../../../../components/ui/ResetLink"
 // Size panel — a fixed default font size, plus the min/max pixel range the
 // labels lerp across when a size field is mapped. Min / Max only render
 // with a mapped size source (field or derived depth) — without one they'd
-// be inert knobs. With two or more label variables, each variable gets its
-// own Size below (blank = the label's size), mirroring the Color panel's
-// per-variable slots.
+// be inert knobs. With two or more label variables, the layer-wide Default
+// size hides and each variable gets its own Size below (blank = the
+// theme's default, or the mapped size), mirroring the Color panel's
+// per-variable slots — the user sizes each variable where it's named
+// rather than through a shared knob.
 // ---------------------------------------------------------------------------
 export const SizePanel = ({
 	cfg,
@@ -23,6 +25,9 @@ export const SizePanel = ({
 	sizeMapped = false,
 	depthNote = false,
 	multiFields = [],
+	titles,
+	splitToggle,
+	keysFor,
 }: {
 	cfg: DataLabelsConfig
 	onChange: (patch: Partial<DataLabelsConfig>) => void
@@ -38,6 +43,16 @@ export const SizePanel = ({
 	/** Multi-field label variables (two or more). Each gets its own Size
 	 *  input; empty in single-field mode. */
 	multiFields?: string[]
+	/** Section titles by key (a combination shows its variables joined with
+	 *  " + "); a key without one is titled by the key itself. */
+	titles?: Record<string, string>
+	/** The "Split into individual variables" toggle for one label, rendered
+	 *  above its controls; `null` for a label with fewer than two variables
+	 *  (nothing to split). */
+	splitToggle?: (key: string) => React.ReactNode
+	/** The keys one label's controls write to: just the label (styled as
+	 *  one), or one key per variable when its Size is split. */
+	keysFor?: (key: string) => string[]
 }) => (
 	<div className="flex flex-col gap-2">
 		{depthNote && (
@@ -46,24 +61,26 @@ export const SizePanel = ({
 				big group titles, small leaf labels. Swap Min and Max to invert.
 			</p>
 		)}
-		<div className="flex items-center gap-2">
-			<NumberInput
-				label="Default size"
-				labelClassName={LABEL_COL}
-				value={cfg.fontSize}
-				min={6}
-				max={64}
-				step={1}
-				onChange={(fontSize) => onChange({ fontSize })}
-				inputClassName="w-16"
-				suffix="pt"
-			/>
-			{cfg.fontSize !== themeDefaults.fontSize && (
-				<ResetLink
-					onClick={() => onChange({ fontSize: themeDefaults.fontSize })}
+		{multiFields.length === 0 && (
+			<div className="flex items-center gap-2">
+				<NumberInput
+					label="Default size"
+					labelClassName={LABEL_COL}
+					value={cfg.fontSize}
+					min={6}
+					max={64}
+					step={1}
+					onChange={(fontSize) => onChange({ fontSize })}
+					inputClassName="w-16"
+					suffix="pt"
 				/>
-			)}
-		</div>
+				{cfg.fontSize !== themeDefaults.fontSize && (
+					<ResetLink
+						onClick={() => onChange({ fontSize: themeDefaults.fontSize })}
+					/>
+				)}
+			</div>
+		)}
 		{sizeMapped && (
 			<>
 				<div className="flex items-center gap-2">
@@ -107,45 +124,76 @@ export const SizePanel = ({
 					)}
 				</div>
 				<p className="vc-help">
-					Min / Max set the pixel range for the mapped size; the default size applies to values it can&apos;t
-					map (non-numeric).
+					Min / Max set the pixel range for the mapped size; the{" "}
+					{multiFields.length > 0 ? "theme's" : ""} default size applies
+					to values it can&apos;t map (non-numeric).
 				</p>
 			</>
 		)}
 		{multiFields.length > 0 && (
-			<div className="vc-divider-group">
+			/* The hairline + top pad only earn their keep when something
+			 *  renders above them. With two or more variables the layer-wide
+			 *  Default size is hidden, so an unmapped Size channel leaves the
+			 *  per-variable slots as the panel's only content — a divider
+			 *  there is a stray rule with a gap under it. Mirrors the Color
+			 *  panel's per-variable slots. */
+			<div
+				className={
+					depthNote || sizeMapped ? "vc-divider-group" : "flex flex-col gap-2"
+				}
+			>
 				{multiFields.map((name) => {
-					const own = cfg.fieldSizes?.[name] ?? null
-					const clear = () => {
+					// Split → one row per variable, each labeled by its name;
+					// unsplit → the label's single Size row. The rows are the
+					// same control either way, just a different key.
+					const keys = keysFor?.(name) ?? [name]
+					const split = keys.length > 1 || keys[0] !== name
+					const clear = (key: string) => () => {
 						const next = { ...(cfg.fieldSizes ?? {}) }
-						delete next[name]
+						delete next[key]
 						onChange({ fieldSizes: next })
 					}
 					return (
-						<CollapsibleSubsection key={name} title={name} changed={own != null}>
-							<div className="flex items-center gap-2">
-								<NumberInput
-									label="Size"
-									labelClassName={LABEL_COL}
-									value={own}
-									onClear={clear}
-									placeholder={sizeMapped ? "mapped" : String(cfg.fontSize)}
-									stepBase={cfg.fontSize}
-									min={4}
-									max={128}
-									step={1}
-									onChange={(pt) =>
-										onChange({
-											fieldSizes: { ...(cfg.fieldSizes ?? {}), [name]: pt },
-										})
-									}
-									inputClassName="w-16"
-									suffix="pt"
-								/>
-								{own != null && <ResetLink onClick={clear} />}
-							</div>
+						<CollapsibleSubsection
+							key={name}
+							title={titles?.[name] ?? name}
+							changed={keys.some((k) => cfg.fieldSizes?.[k] != null)}
+						>
+							{splitToggle?.(name)}
+							{keys.map((key) => {
+								const own = cfg.fieldSizes?.[key] ?? null
+								return (
+									<div key={key} className="flex items-center gap-2">
+										<NumberInput
+											label={split ? (titles?.[key] ?? key) : "Size"}
+											labelClassName={LABEL_COL}
+											value={own}
+											onClear={clear(key)}
+											placeholder={
+												sizeMapped ? "mapped" : String(cfg.fontSize)
+											}
+											stepBase={cfg.fontSize}
+											min={4}
+											max={128}
+											step={1}
+											onChange={(pt) =>
+												onChange({
+													fieldSizes: {
+														...(cfg.fieldSizes ?? {}),
+														[key]: pt,
+													},
+												})
+											}
+											inputClassName="w-16"
+											suffix="pt"
+										/>
+										{own != null && <ResetLink onClick={clear(key)} />}
+									</div>
+								)
+							})}
 							<p className="vc-help">
-								Empty = the label&apos;s size above
+								Empty = the{" "}
+								{split ? "label's own size" : "theme's default size"}
 								{sizeMapped ? " (or its mapped size)" : ""}.
 							</p>
 						</CollapsibleSubsection>

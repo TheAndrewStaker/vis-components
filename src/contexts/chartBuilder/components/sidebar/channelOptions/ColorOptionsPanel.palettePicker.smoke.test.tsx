@@ -9,7 +9,7 @@ import { currentThemeIdAtom, themesAtom } from "../../../store/atoms"
 import { PalettePickerButton } from "../../../../../components/ui/PalettePickerButton"
 import { QuantitativePanel } from "./ColorOptionsPanel"
 
-/** The circular-arrow button next to each category swatch opens a popover of
+/** The palette-icon button next to each category swatch opens a popover of
  *  the palette's colors (wrapping at 6 per row) instead of blindly stepping
  *  to the next color — picking a swatch commits it and closes the popover.
  *  A chevron at the popover's bottom expands it with the theme's OTHER
@@ -202,7 +202,7 @@ describe("PalettePickerButton", () => {
 		// QuantitativePanel with no stored config seeds the theme default
 		// gradient — pinned to the viridis preset here so it seeds Step 1..5
 		// rows (the system theme's own default is a saved 2-stop gradient).
-		// Every stop row gets the circular-arrow popover offering the theme's
+		// Every stop row gets the palette-icon popover offering the theme's
 		// default categorical palette; picking commits through the row's
 		// onColor (here the preset→custom transition, with the picked color on
 		// that stop).

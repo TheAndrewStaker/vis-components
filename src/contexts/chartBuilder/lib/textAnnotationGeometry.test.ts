@@ -128,6 +128,39 @@ describe("computeTextAnnotationAnchor", () => {
 		).toEqual({ x: 200, y: 150 })
 	})
 
+	it("places pixel coords from the plot's top-left corner, +x right and +y up", () => {
+		const base = { ...newTextAnnotation("t1"), coordSystem: "pixels" as const }
+		expect(
+			computeTextAnnotationAnchor({ ...base, x: -8, y: 14 }, inner, emptyScales)
+		).toEqual({ x: 92, y: 36 }) // 8px left of the spine, 14px above the top
+		expect(
+			computeTextAnnotationAnchor({ ...base, x: 10, y: -20 }, inner, emptyScales)
+		).toEqual({ x: 110, y: 70 }) // inside the plot: negative y
+	})
+
+	it("holds a fixed gap above the plot as the panel height changes", () => {
+		// The point of Pixels mode: 14px above the top-left corner is 14px at
+		// EVERY size. The same placement as a percent past 100 scales with the
+		// panel and drifts across the title band.
+		const inPixels = {
+			...newTextAnnotation("t1"),
+			coordSystem: "pixels" as const,
+			x: 0,
+			y: 14,
+		}
+		const inPercent = { ...newTextAnnotation("t2"), x: 0, y: 1.07 }
+		const short = { x: 100, y: 50, width: 400, height: 200 }
+		const tall = { x: 100, y: 50, width: 400, height: 600 }
+		const gap = (
+			anno: Parameters<typeof computeTextAnnotationAnchor>[0],
+			box: typeof short
+		) => box.y - computeTextAnnotationAnchor(anno, box, emptyScales)!.y
+		expect(gap(inPixels, short)).toBe(14)
+		expect(gap(inPixels, tall)).toBe(14)
+		expect(gap(inPercent, short)).toBeCloseTo(14)
+		expect(gap(inPercent, tall)).toBeCloseTo(42) // drifts with the panel
+	})
+
 	it("returns null when a value coord can't be projected", () => {
 		const xScale = makePositionScale(
 			["a", "b"],

@@ -18,6 +18,7 @@ import {
 	DEFAULT_TEXT_CONFIG,
 	type ChannelConfigs,
 	type ColorSlotConfig,
+	type FieldBarPlacement,
 	type HistogramConfig,
 	type LabelPointsScope,
 	type TextConfig,
@@ -51,12 +52,13 @@ import {
 } from "../../lib/scales"
 import {
 	labelSeriesChannelsFromModes,
-	labelSeriesResolver,
+	labelSeriesResolverAll,
 } from "../../lib/labelSeries"
 import {
 	resolveStackModes,
 	type StackModeEntry,
 } from "../../lib/stackMode"
+import { BAR_LABEL_EDGE_PAD_PX } from "../../lib/dataLabelsLayout"
 import { formatSingleLabel } from "../../lib/dataLabelsStyle"
 import { formatTextValue } from "../../lib/textEncoding"
 import type { Encodings, FieldType } from "../../lib/types"
@@ -849,6 +851,10 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 							decimals: dataLabelsDecimals,
 							formatSpec: dataLabelsFormatSpec,
 							position: dataLabelsCfg?.barLabelPosition ?? "center",
+							side: dataLabelsCfg?.barLabelSide ?? "center",
+							// Own labels (standalone variables, combinations) read their
+							// placement by key; the arranged label never does.
+							fieldPlacements: dataLabelsCfg?.fieldBarPlacements,
 							sizeField: dataLabels?.size?.field ?? null,
 							labelFields: dataLabelsRowFields,
 							encodings,
@@ -1484,6 +1490,8 @@ export const buildBarAnchors = ({
 	decimals,
 	formatSpec,
 	position,
+	side,
+	fieldPlacements,
 	outsideOffsetPx,
 	sizeField,
 	labelFields,
@@ -1503,8 +1511,25 @@ export const buildBarAnchors = ({
 	formatSpec?: string | null
 	/** Where the label sits on the slice's measure axis. Defaults to "center". */
 	position?: "center" | "inside-base" | "inside-end" | "outside-end"
+	/** Which side of the slice the label sits on across the CATEGORY axis
+	 *  (`DataLabelsConfig.barLabelSide`). "before" / "after" anchor the label
+	 *  on the slice's leading / trailing category edge plus the pad — so the
+	 *  Adjust-position nudge measures from the bar's edge and a label beside
+	 *  a bar stays beside it however wide the bar renders — and set the
+	 *  anchor's `hAlign` (vertical bars: the block hangs away from the bar)
+	 *  or `vAlign` (horizontal bars: the block's near edge meets the anchor).
+	 *  Defaults to "center". */
+	side?: "center" | "before" | "after"
+	/** Separate-variables mode: each label field's OWN placement
+	 *  (`DataLabelsConfig.fieldBarPlacements`), position / side falling back
+	 *  to `position` / `side`. Every anchor then also carries
+	 *  `fieldPlacements` — the resolved point + hanging alignment per field
+	 *  that has an entry — which the layer uses for that variable's box
+	 *  instead of the anchor's base point. */
+	fieldPlacements?: Record<string, FieldBarPlacement>
 	/** Pixel pad pushing "inside-base" / "inside-end" / "outside-end" off the
-	 * literal slice edge so labels don't kiss the edge. */
+	 * literal slice edge — and a "before" / "after" side off the category
+	 * edge — so labels don't kiss the bar. */
 	outsideOffsetPx?: number
 	/** When the user maps Data Labels' Size channel, pass the field name
 	 *  here so labels can be sized per-slice. We aggregate the size field
@@ -1531,14 +1556,45 @@ export const buildBarAnchors = ({
 }): DataLabelAnchor[] => {
 	const anchors: DataLabelAnchor[] = []
 	const maxLeaves = countMaxLeaves(aggregation.stacks, modes)
-	const seriesOf = labelSeriesResolver(
-		labelPointsScope ?? "series",
+	// Every scope's series + rank per anchor: the layer-wide one fills the
+	// anchor's `series` / `rank`, and the whole map rides along so each
+	// composed label can be ranked by its OWN "Of each" choice.
+	const seriesAllOf = labelSeriesResolverAll(
 		labelSeriesChannelsFromModes(modes),
 		aggregation.categoryField,
 		encodings
 	)
+	const layerScope = labelPointsScope ?? "series"
 	const pos = position ?? "center"
-	const pad = outsideOffsetPx ?? 4
+	const pad = outsideOffsetPx ?? BAR_LABEL_EDGE_PAD_PX
+	const catSide = side ?? "center"
+	// Beside the bar: the block hangs away from the slice. Vertical bars fix
+	// the text alignment (left of the bar → text ends at the anchor; right →
+	// starts there); horizontal bars fix which vertical edge of the block
+	// meets the anchor (above → block bottom; below → block top).
+	const hangFor = (
+		s: NonNullable<typeof side>
+	): Pick<DataLabelAnchor, "hAlign" | "vAlign"> => ({
+		hAlign:
+			aggregation.isVertical && s !== "center"
+				? s === "after"
+					? "left"
+					: "right"
+				: undefined,
+		vAlign:
+			!aggregation.isVertical && s !== "center"
+				? s === "after"
+					? "top"
+					: "bottom"
+				: undefined,
+	})
+	const { hAlign, vAlign } = hangFor(catSide)
+	// Per-variable placements resolve against the layer-wide pair; only
+	// fields with an entry get a resolved point on the anchor.
+	const ownPlacements = Object.entries(fieldPlacements ?? {}).map(
+		([field, p]) =>
+			[field, p.position ?? pos, p.side ?? catSide] as const
+	)
 	// Rows belonging to each slice (same category + matching mapped
 	// group-channel values), indexed once so per-slice field aggregation
 	// (the size field, the multi-field label fields) doesn't rescan the
@@ -1617,20 +1673,45 @@ export const buildBarAnchors = ({
 			const sliceStart = g.measureStart
 			const sliceEnd = g.measureEnd
 			const catCenter = sliceCatPos + sliceCatSize / 2
+			// Category-axis point: the slice's center, or — beside the bar —
+			// its leading / trailing edge pushed off by the pad. The band
+			// runs left→right (vertical bars) or top→bottom (horizontal), so
+			// "before" is left / above and "after" is right / below.
+			const catPointFor = (s: NonNullable<typeof side>) =>
+				s === "before"
+					? sliceCatPos - pad
+					: s === "after"
+						? sliceCatPos + sliceCatSize + pad
+						: catCenter
+			const catPoint = catPointFor(catSide)
 
 			// Pixel positions of the slice's start/end on the measure axis. For
 			// vertical bars, end is "up" (smaller y); for horizontal, end is
 			// "right" (larger x). The scale already encodes that orientation.
 			const startPx = measureScale(sliceStart)
 			const endPx = measureScale(sliceEnd)
-			const measurePoint = (() => {
-				if (pos === "center") return (startPx + endPx) / 2
+			const measurePointFor = (p: NonNullable<typeof position>) => {
+				if (p === "center") return (startPx + endPx) / 2
 				const direction = endPx >= startPx ? 1 : -1
-				if (pos === "inside-base") return startPx + direction * pad
-				if (pos === "inside-end") return endPx - direction * pad
+				if (p === "inside-base") return startPx + direction * pad
+				if (p === "inside-end") return endPx - direction * pad
 				// outside-end: just past the slice end
 				return endPx + direction * pad
-			})()
+			}
+			const measurePoint = measurePointFor(pos)
+			let fieldPoints: DataLabelAnchor["fieldPlacements"]
+			if (ownPlacements.length > 0) {
+				fieldPoints = {}
+				for (const [field, p, s] of ownPlacements) {
+					const m = measurePointFor(p)
+					const c = catPointFor(s)
+					fieldPoints[field] = {
+						cx: aggregation.isVertical ? c : m,
+						cy: aggregation.isVertical ? m : c,
+						...hangFor(s),
+					}
+				}
+			}
 
 			// A mirrored bar's sign is render-time only — label the magnitude.
 			const measureValue = aggregation.mirrored
@@ -1671,7 +1752,7 @@ export const buildBarAnchors = ({
 				if (aggregation.lengthField) row[aggregation.lengthField] = measureValue
 			}
 
-			const { series, rank } = seriesOf({
+			const seriesByScope = seriesAllOf({
 				category: stack.category,
 				groupValues: slice.groupValues,
 				categoryRank: g.catPos,
@@ -1679,13 +1760,18 @@ export const buildBarAnchors = ({
 				layerIndex: g.stackIndex,
 				negative: slice.value < 0,
 			})
+			const { series, rank } = seriesByScope[layerScope]
 			anchors.push({
 				row,
-				cx: aggregation.isVertical ? catCenter : measurePoint,
-				cy: aggregation.isVertical ? measurePoint : catCenter,
+				cx: aggregation.isVertical ? catPoint : measurePoint,
+				cy: aggregation.isVertical ? measurePoint : catPoint,
+				hAlign,
+				vAlign,
+				fieldPlacements: fieldPoints,
 				key: `${stack.category}|${slice.key}`,
 				series,
 				rank,
+				seriesByScope,
 				label: formatted,
 				// Raw (unformatted) value so conditional text-color / position
 				// rules compare against the number, not its display string.

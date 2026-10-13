@@ -1,3 +1,10 @@
+import {
+	percentToPixelX,
+	percentToPixelY,
+	pixelToPercentX,
+	pixelToPercentY,
+	type AnnotationCoordSystem,
+} from "../../../lib/annotationPixels"
 import type { FieldType } from "../../../lib/types"
 
 /** Resolved per-axis info used by the panel to pick number-input vs.
@@ -107,3 +114,75 @@ export const radiusToPercent = (units: number, axis: AxisInfo): number => {
  *  descriptive name (which replaces the suggestion). */
 export const nameSuggestion = (base: string, index: number): string =>
 	index === 0 ? base : `${base} ${index + 1}`
+
+/** The rendered plot rect's size, from `currentRenderedPanelInnerDimsAtom`.
+ *  Null before the first layout pass — pixel conversions then leave the
+ *  stored number alone rather than guess an extent. */
+export type PlotDims = { widthPx: number; heightPx: number } | null
+
+const extentOf = (dims: PlotDims, dim: "x" | "y"): number | null =>
+	dims === null ? null : dim === "x" ? dims.widthPx : dims.heightPx
+
+/** Convert one stored coordinate between the three coordinate systems so
+ *  the annotation stays where it is when the user switches "Adjust by".
+ *  Every path goes through the percent (0–1) form: values ↔ percent via the
+ *  axis's data span (or category index), pixels ↔ percent via the plot's
+ *  extent on that axis (pixels count from the top-left corner, +y up). */
+export const convertCoord = (
+	value: number | string,
+	from: AnnotationCoordSystem,
+	to: AnnotationCoordSystem,
+	axis: AxisInfo,
+	dim: "x" | "y",
+	dims: PlotDims,
+): number | string => {
+	if (from === to) return value
+	const extent = extentOf(dims, dim)
+	const toPercent = (): number => {
+		if (from === "values") return valueToPercent(value, axis)
+		if (from === "pixels") {
+			if (extent === null) return toNumber(value)
+			return dim === "x"
+				? pixelToPercentX(toNumber(value), extent)
+				: pixelToPercentY(toNumber(value), extent)
+		}
+		return toNumber(value)
+	}
+	const fraction = toPercent()
+	if (to === "values") return percentToValue(fraction, axis)
+	if (to === "pixels") {
+		if (extent === null) return cleanNumber(fraction)
+		return cleanNumber(
+			Math.round(
+				dim === "x"
+					? percentToPixelX(fraction, extent)
+					: percentToPixelY(fraction, extent),
+			),
+		)
+	}
+	return cleanNumber(fraction)
+}
+
+/** `convertCoord` for a circle's radius: a fraction of the radius axis's
+ *  extent (percent), data units along it (values), or on-screen px. */
+export const convertRadius = (
+	value: number,
+	from: AnnotationCoordSystem,
+	to: AnnotationCoordSystem,
+	axis: AxisInfo,
+	extentPx: number | null,
+): number => {
+	if (from === to) return value
+	const fraction =
+		from === "values"
+			? radiusToPercent(value, axis)
+			: from === "pixels"
+				? extentPx !== null && extentPx > 0
+					? value / extentPx
+					: value
+				: value
+	if (to === "values") return radiusToValues(fraction, axis)
+	if (to === "pixels")
+		return extentPx !== null ? Math.round(fraction * extentPx) : cleanNumber(fraction)
+	return cleanNumber(fraction)
+}

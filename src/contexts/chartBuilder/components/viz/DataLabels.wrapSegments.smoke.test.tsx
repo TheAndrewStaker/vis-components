@@ -59,10 +59,10 @@ const cfg: DataLabelsConfig = {
 	...DEFAULT_DATA_LABELS_CONFIG,
 	wrapText: true,
 	wrapMaxChars: 10,
-	labelTemplate: "{sales} {region}",
-	// A configured slot makes the region segments a different fill from the
-	// base, forcing the segmented render path.
-	fieldColors: { region: { field: null, singleColor: "#ff0000" } },
+	composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
+	// The label's own color differs from the base, forcing the segmented
+	// render path.
+	fieldColors: { "lbl-both": { field: null, singleColor: "#ff0000" } },
 }
 
 const initState = (snap: TestStore) => {

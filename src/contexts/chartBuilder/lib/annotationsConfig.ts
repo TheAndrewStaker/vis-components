@@ -1,4 +1,5 @@
 import type { LineDashPattern } from "./channelConfig"
+import type { AnnotationCoordSystem } from "./annotationPixels"
 
 /** A single user-defined rectangle drawn on top of (or behind) the plot.
  *  Position is expressed in plot-area-normalized coordinates:
@@ -58,8 +59,15 @@ export type RectangleAnnotation = {
 	 *     quadrant" annotations regardless of data.
 	 *   - `"values"`: data values along each axis. The renderer feeds the
 	 *     numbers through the chart's actual position scales, so the
-	 *     rectangle tracks data domains and moves with axis rescales. */
-	coordSystem: "percent" | "values"
+	 *     rectangle tracks data domains and moves with axis rescales.
+	 *   - `"pixels"`: whole pixels from the TOP-LEFT corner of the plot,
+	 *     +x right and +y up. The viewport-invariant choice for anything
+	 *     placed OUTSIDE the plot — a percent past 0–1 is a fraction of the
+	 *     plot's size, so its distance beyond the edge scales with the plot
+	 *     while the chrome out there (facet-label band, title band, cell
+	 *     margins) is a fixed pixel height, and the annotation drifts across
+	 *     its neighbors as the chart resizes. See `lib/annotationPixels.ts`. */
+	coordSystem: AnnotationCoordSystem
 	/** Which facet panels the annotation is drawn on, when the chart is
 	 *  faceted. `null`/`undefined` (the default) means "all facets" — the
 	 *  legacy behavior, so saved annotations keep showing everywhere. An
@@ -172,10 +180,12 @@ export type TextAnnotation = {
 	/** Anchor x. In `"percent"` coordSystem a 0–1 plot-area-normalized number
 	 *  (0 hugs the y-axis spine, 1 the right edge). In `"values"` a raw axis
 	 *  value — number for quantitative/temporal/numeric-ordinal, string for
-	 *  categorical — fed through the chart's x position scale. */
+	 *  categorical — fed through the chart's x position scale. In `"pixels"`
+	 *  whole px right of the plot's left edge. */
 	x: number | string
 	/** Anchor y. Same rules as `x`; in `"percent"` mode 0 hugs the BOTTOM
-	 *  spine (cartesian convention) and 1 the top. */
+	 *  spine (cartesian convention) and 1 the top; in `"pixels"` whole px
+	 *  UP from the plot's TOP edge (negative = inside the plot). */
 	y: number | string
 	/** The label itself. A literal `\n` forces a line break. */
 	text: string
@@ -203,7 +213,7 @@ export type TextAnnotation = {
 	/** "behind" draws under the chart marks; "front" draws above them. */
 	zOrder: "behind" | "front"
 	/** How `x`/`y` are interpreted — see the field docs above. */
-	coordSystem: "percent" | "values"
+	coordSystem: AnnotationCoordSystem
 	/** Which facet panels the annotation is drawn on — see
 	 *  `RectangleAnnotation.facetKeys`. */
 	facetKeys?: string[] | null
@@ -232,7 +242,8 @@ export type CircleAnnotation = {
 	 *  data units along `radiusAxis`, projected through that axis's scale.
 	 *  A data-unit radius is only meaningful on a continuous (quantitative /
 	 *  numeric-ordinal) axis; on categorical/temporal axes the circle is
-	 *  skipped at render time. */
+	 *  skipped at render time. In `"pixels"` mode it's the on-screen radius
+	 *  in px (no axis involved). */
 	radius: number
 	/** Which axis the radius is measured against (its pixel extent in percent
 	 *  mode, its scale in values mode). */
@@ -250,7 +261,7 @@ export type CircleAnnotation = {
 	/** "behind" draws under the chart marks; "front" draws above them. */
 	zOrder: "behind" | "front"
 	/** How `centerX/centerY/radius` are interpreted — see field docs above. */
-	coordSystem: "percent" | "values"
+	coordSystem: AnnotationCoordSystem
 	/** Which facet panels the annotation is drawn on — see
 	 *  `RectangleAnnotation.facetKeys`. */
 	facetKeys?: string[] | null
@@ -288,7 +299,7 @@ export type LineSegmentAnnotation = {
 	 *  them (the usual choice for a reference / trend line). */
 	zOrder: "behind" | "front"
 	/** How the endpoints are interpreted — see `RectangleAnnotation`. */
-	coordSystem: "percent" | "values"
+	coordSystem: AnnotationCoordSystem
 	/** Which facet panels the annotation is drawn on — see
 	 *  `RectangleAnnotation.facetKeys`. */
 	facetKeys?: string[] | null

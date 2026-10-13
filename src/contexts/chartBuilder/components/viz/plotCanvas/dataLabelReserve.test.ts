@@ -3,6 +3,7 @@ import {
 	DEFAULT_DATA_LABELS_CONFIG,
 	type DataLabelsConfig,
 } from "../../../lib/channelConfig"
+import { BAR_LABEL_EDGE_PAD_PX } from "../../../lib/dataLabelsLayout"
 import { ptToPx } from "../../../lib/fontUnit"
 import { DEFAULT_MAP_CONFIG } from "../../../lib/mapConfig"
 import { BASE_MARGIN } from "../../../lib/plotLayout"
@@ -417,5 +418,121 @@ describe("computeDataLabelOverflow — per-variable label populations", () => {
 			dataLabels: labelsOn({ alignment: "left", xOffset: 0 }),
 		})
 		expect(plain.right).toBeGreaterThan(valueOnly.right)
+	})
+})
+
+describe("computeDataLabelOverflow — bar side (beside a vertical bar)", () => {
+	// x = category + length = measure → vertical bars. Beside the bar the
+	// layer forces the text to hang away from it and anchors on the edge
+	// plus the pad; the reserve mirrors both so the label stays in view.
+	const barEncodings = (): Encodings => {
+		const e = emptyEncodings()
+		e.x = { field: "cat" }
+		e.length = { field: "val" }
+		return e
+	}
+
+	it("'after' reserves the full width on the right (+ pad), whatever alignment is stored", () => {
+		const dataLabels = labelsOn({
+			alignment: "right",
+			xOffset: 0,
+			barLabelSide: "after",
+		})
+		const r = computeDataLabelOverflow({
+			...base,
+			dataset: view(ROWS),
+			encodings: barEncodings(),
+			dataLabels,
+		})
+		expect(r.left).toBe(0)
+		expect(r.right).toBe(
+			cap(
+				BAR_LABEL_EDGE_PAD_PX +
+					labelPx(LONG, dataLabels) +
+					LABEL_RESERVE_PAD_PX -
+					BASE_MARGIN.right
+			)
+		)
+	})
+
+	it("'before' mirrors to the left", () => {
+		const dataLabels = labelsOn({
+			alignment: "left",
+			xOffset: 0,
+			barLabelSide: "before",
+		})
+		const r = computeDataLabelOverflow({
+			...base,
+			dataset: view(ROWS),
+			encodings: barEncodings(),
+			dataLabels,
+		})
+		expect(r.right).toBe(0)
+		expect(r.left).toBe(
+			cap(
+				BAR_LABEL_EDGE_PAD_PX +
+					labelPx(LONG, dataLabels) +
+					LABEL_RESERVE_PAD_PX -
+					BASE_MARGIN.left
+			)
+		)
+	})
+
+	it("a stored side on a scatter changes nothing", () => {
+		const dataLabels = labelsOn({ alignment: "left", xOffset: 0 })
+		const plain = computeDataLabelOverflow({
+			...base,
+			dataset: view(ROWS),
+			encodings: scatterEncodings(),
+			dataLabels,
+		})
+		const withSide = computeDataLabelOverflow({
+			...base,
+			dataset: view(ROWS),
+			encodings: scatterEncodings(),
+			dataLabels: { ...dataLabels, barLabelSide: "after" },
+		})
+		expect(withSide).toEqual(plain)
+	})
+})
+
+describe("computeDataLabelOverflow — per-variable bar side (separate variables)", () => {
+	const barEncodings = (): Encodings => {
+		const e = emptyEncodings()
+		e.x = { field: "cat" }
+		e.length = { field: "val" }
+		return e
+	}
+	const separateEncodings = () => ({
+		...emptyDataLabelsEncodings(),
+		value: { field: null, multiField: true, fields: ["name", "val"] },
+	})
+
+	it("only the variable beside the bar reserves on that side", () => {
+		const dataLabels = labelsOn({
+			combineVariables: false,
+			alignment: "center",
+			xOffset: 0,
+			fieldBarPlacements: { name: { side: "after" } },
+		})
+		const r = computeDataLabelOverflow({
+			...base,
+			dataset: view(ROWS),
+			encodings: barEncodings(),
+			dataLabels,
+			dataLabelsEncodings: separateEncodings(),
+		})
+		// "name" hangs rightward from the edge: full width + pad on the right.
+		expect(r.right).toBe(
+			cap(
+				BAR_LABEL_EDGE_PAD_PX +
+					labelPx(LONG, dataLabels) +
+					LABEL_RESERVE_PAD_PX -
+					BASE_MARGIN.right
+			)
+		)
+		// "val" stays centered: half its (short) width each side, which the
+		// base margins already cover.
+		expect(r.left).toBe(0)
 	})
 })

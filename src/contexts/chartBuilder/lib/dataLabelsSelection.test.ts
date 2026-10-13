@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest"
 
 import {
-	defaultSharedTemplate,
 	fieldLabelPointsMode,
 	populationOverrides,
-	populationTemplate,
-	populationTemplateFallback,
 	populationsAtTag,
 	presentPopulations,
 	resolveLabelSelection,
@@ -35,48 +32,69 @@ describe("resolveLabelSelection — single-field", () => {
 	})
 })
 
-describe("resolveLabelSelection — multi-field", () => {
-	it("defaults every field to the layer-wide mode", () => {
+describe("resolveLabelSelection — multi-field (composed labels)", () => {
+	it("defaults every label to the layer-wide mode", () => {
 		const sel = resolveLabelSelection(
-			{ labelPoints: "first-last" },
+			{
+				labelPoints: "first-last",
+				composedLabels: [
+					{ id: "value", template: "{value}" },
+					{ id: "series", template: "{series}" },
+				],
+			},
 			multi(["value", "series"])
 		)
-		expect(sel.fields).toEqual({
+		expect(sel.labels).toEqual({
 			all: [],
 			first: ["value", "series"],
 			last: ["value", "series"],
 		})
-		expect(sel.split).toBe(true)
+		// Composed labels never split: each carries its own settings.
+		expect(sel.split).toBe(false)
 		expect(fieldLabelPointsMode({ labelPoints: "first-last" }, "value")).toBe(
 			"first-last"
 		)
 	})
-	it("per-field modes split the fields into populations", () => {
+	it("each label's own mode puts it in its populations", () => {
+		const sel = resolveLabelSelection(
+			{
+				fieldLabelPoints: { series: "last" },
+				composedLabels: [
+					{ id: "value", template: "{value}" },
+					{ id: "series", template: "{series}" },
+				],
+			},
+			multi(["value", "series"])
+		)
+		expect(sel.labels).toEqual({ all: ["value"], first: [], last: ["series"] })
+		expect(sel.present).toEqual({ all: true, first: false, last: true })
+		expect(presentPopulations(sel)).toEqual(["all", "last"])
+	})
+	it("seriesless reads every label as all", () => {
+		const sel = resolveLabelSelection(
+			{
+				fieldLabelPoints: { series: "last" },
+				labelPoints: "first",
+				composedLabels: [
+					{ id: "value", template: "{value}" },
+					{ id: "series", template: "{series}" },
+				],
+			},
+			multi(["value", "series"]),
+			{ seriesless: true }
+		)
+		expect(sel.labels.all).toEqual(["value", "series"])
+	})
+	it("a visual saved before composed labels derives its labels (per-field 'Which labels' → one label per population)", () => {
 		const sel = resolveLabelSelection(
 			{ fieldLabelPoints: { series: "last" } },
 			multi(["value", "series"])
 		)
-		expect(sel.fields).toEqual({ all: ["value"], first: [], last: ["series"] })
-		expect(sel.present).toEqual({ all: true, first: false, last: true })
-		expect(sel.split).toBe(true)
-		expect(presentPopulations(sel)).toEqual(["all", "last"])
-	})
-	it("a lone population is not split", () => {
-		const sel = resolveLabelSelection(
-			{ fieldLabelPoints: { value: "last", series: "last" } },
-			multi(["value", "series"])
-		)
-		expect(sel.present).toEqual({ all: false, first: false, last: true })
-		expect(sel.split).toBe(false)
-	})
-	it("seriesless reads every field as all", () => {
-		const sel = resolveLabelSelection(
-			{ fieldLabelPoints: { series: "last" }, labelPoints: "first" },
-			multi(["value", "series"]),
-			{ seriesless: true }
-		)
-		expect(sel.fields.all).toEqual(["value", "series"])
-		expect(sel.split).toBe(false)
+		expect(sel.labels).toEqual({
+			all: ["arranged"],
+			first: [],
+			last: ["arranged-last"],
+		})
 	})
 })
 
@@ -106,74 +124,17 @@ describe("populationsAtTag", () => {
 	})
 })
 
-describe("populationTemplate / fallback", () => {
-	it("all-labels uses the shared template, else its fields joined", () => {
-		const sel = resolveLabelSelection(
-			{ fieldLabelPoints: { series: "last" } },
-			multi(["value", "series"])
-		)
-		expect(populationTemplate({ labelTemplate: "" }, sel, "all")).toBe("{value}")
-		expect(populationTemplate({ labelTemplate: "{value}!" }, sel, "all")).toBe(
-			"{value}!"
-		)
-	})
-	it("a series-end population prefills its own fields when all-labels also render", () => {
-		const sel = resolveLabelSelection(
-			{ fieldLabelPoints: { series: "last" } },
-			multi(["value", "series"])
-		)
-		// Must NOT borrow the value-only shared text for the series name.
-		expect(
-			populationTemplateFallback({ labelTemplate: "{value}" }, sel, "last")
-		).toBe("{series}")
-		expect(
-			populationTemplate(
-				{ labelTemplate: "{value}", lastLabel: { labelTemplate: "— {series}" } },
-				sel,
-				"last"
-			)
-		).toBe("— {series}")
-	})
-	it("legacy first-and-last inherits the shared template on both ends", () => {
-		const sel = resolveLabelSelection(
-			{ labelPoints: "first-last" },
-			multi(["sales", "region"])
-		)
-		const cfg = {
-			labelTemplate: "{sales}",
-			lastLabel: { labelTemplate: "{sales} {region}" },
-		}
-		expect(populationTemplate(cfg, sel, "first")).toBe("{sales}")
-		expect(populationTemplate(cfg, sel, "last")).toBe("{sales} {region}")
-	})
-	it("a lone population ignores its override block and uses the shared template", () => {
-		const sel = resolveLabelSelection({ labelPoints: "last" }, multi(["sales", "region"]))
-		const cfg = {
-			labelTemplate: "{sales}",
-			lastLabel: { labelTemplate: "{sales} {region}", xOffset: 8 },
-		}
-		expect(populationTemplate(cfg, sel, "last")).toBe("{sales}")
+describe("populationOverrides — single-field series ends", () => {
+	it("a lone population ignores its override block", () => {
+		const sel = resolveLabelSelection({ labelPoints: "last" }, single)
+		const cfg = { lastLabel: { xOffset: 8, alignment: "left" as const } }
 		expect(populationOverrides(cfg, sel, "last")).toEqual({})
 	})
-	it("split selections consult the override blocks for series ends only", () => {
-		const sel = resolveLabelSelection(
-			{ fieldLabelPoints: { series: "last" } },
-			multi(["value", "series"])
-		)
+	it("first and last together consult the override blocks for the series ends only", () => {
+		const sel = resolveLabelSelection({ labelPoints: "first-last" }, single)
 		const cfg = { lastLabel: { xOffset: 8, alignment: "left" as const } }
 		expect(populationOverrides(cfg, sel, "last")).toEqual(cfg.lastLabel)
+		expect(populationOverrides(cfg, sel, "first")).toEqual({})
 		expect(populationOverrides(cfg, sel, "all")).toEqual({})
-	})
-})
-
-describe("defaultSharedTemplate", () => {
-	it("joins every field when unsplit, only the all-labels fields when split", () => {
-		const unsplit = resolveLabelSelection({}, multi(["a", "b"]))
-		expect(defaultSharedTemplate(unsplit, ["a", "b"])).toBe("{a}, {b}")
-		const split = resolveLabelSelection(
-			{ fieldLabelPoints: { b: "last" } },
-			multi(["a", "b"])
-		)
-		expect(defaultSharedTemplate(split, ["a", "b"])).toBe("{a}")
 	})
 })

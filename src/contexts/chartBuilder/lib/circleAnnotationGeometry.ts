@@ -1,4 +1,5 @@
 import type { CircleAnnotation } from "./annotationsConfig"
+import { pixelToCanvasX, pixelToCanvasY } from "./annotationPixels"
 import { applyPositionScale, type PositionScale } from "./scales"
 import type { FieldType } from "./types"
 
@@ -48,12 +49,22 @@ const isContinuous = (type: FieldType | null): type is FieldType =>
  *    converted via that axis's scale: |scale(center+radius) − scale(center)|.
  *    Each axis falls back to the percent placement independently when its
  *    scale/type is unavailable (e.g. a pie chart's missing axis), mirroring
- *    the rectangle renderer. */
+ *    the rectangle renderer.
+ *  - `pixels` mode: center is whole px from the plot's top-left corner (+x
+ *    right, +y up) and the radius is the on-screen radius in px — see
+ *    `lib/annotationPixels.ts`. */
 export const computeCirclePixels = (
 	circle: CircleAnnotation,
 	inner: Inner,
 	ctx: ScaleCtx
 ): CircleGeometry | null => {
+	if (circle.coordSystem === "pixels") {
+		return {
+			cx: pixelToCanvasX(inner, toNumber(circle.centerX)),
+			cy: pixelToCanvasY(inner, toNumber(circle.centerY)),
+			r: Math.max(0, toNumber(circle.radius)),
+		}
+	}
 	const useValues = circle.coordSystem === "values"
 
 	// Center X.

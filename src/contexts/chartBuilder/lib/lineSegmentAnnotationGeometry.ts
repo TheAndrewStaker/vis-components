@@ -1,4 +1,5 @@
 import type { LineSegmentAnnotation } from "./annotationsConfig"
+import { pixelToCanvasX, pixelToCanvasY } from "./annotationPixels"
 import { applyPositionScale, type PositionScale } from "./scales"
 import type { FieldType } from "./types"
 
@@ -39,6 +40,8 @@ const toNumber = (v: number | string): number => {
  *    like rectangle corners). Each axis falls back to the percent placement
  *    independently when its scale/type is unavailable (e.g. a pie chart's
  *    missing axis), mirroring the rectangle renderer.
+ *  - `pixels` mode: each coord is whole px from the plot's top-left corner
+ *    (+x right, +y up) — see `lib/annotationPixels.ts`.
  *
  *  Value-mode endpoints on a categorical (point) axis land on the category's
  *  CENTER — the same convention rectangle min/max coordinates use.
@@ -49,8 +52,10 @@ export const computeLineSegmentPixels = (
 	ctx: ScaleCtx
 ): LineSegmentGeometry | null => {
 	const useValues = line.coordSystem === "values"
+	const usePixels = line.coordSystem === "pixels"
 
 	const projectX = (v: number | string): number | null => {
+		if (usePixels) return pixelToCanvasX(inner, toNumber(v))
 		if (useValues && ctx.xScale && ctx.xType) {
 			return applyPositionScale(ctx.xScale, v, ctx.xType)
 		}
@@ -59,6 +64,7 @@ export const computeLineSegmentPixels = (
 	// SVG is top-down; the percent convention has y=0 at the BOTTOM, so flip.
 	// The value scales are already built with an inverted range.
 	const projectY = (v: number | string): number | null => {
+		if (usePixels) return pixelToCanvasY(inner, toNumber(v))
 		if (useValues && ctx.yScale && ctx.yType) {
 			return applyPositionScale(ctx.yScale, v, ctx.yType)
 		}

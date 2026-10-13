@@ -5,6 +5,7 @@ import type {
 	RectangleAnnotation,
 	TextAnnotation,
 } from "../../../lib/annotationsConfig"
+import type { AnnotationCoordSystem } from "../../../lib/annotationPixels"
 import type { LineDashPattern } from "../../../lib/channelConfig"
 import { dashArrayFor, sanitizeCustomDasharray } from "../../../lib/dashPatterns"
 import type { Rect } from "../../../lib/facetLayoutSolver"
@@ -199,7 +200,7 @@ export const AnnotationRects = ({
 		radiusScale,
 	})
 	if (placed.length === 0) return null
-	const clipFor = (coordSystem: "percent" | "values") =>
+	const clipFor = (coordSystem: AnnotationCoordSystem) =>
 		annotationClipsToPanel(coordSystem, multiPanel ?? false)
 			? `url(#${clipId})`
 			: undefined

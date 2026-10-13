@@ -1,7 +1,4 @@
-import type {
-	DataLabelsConfig,
-	LabelPositionRule,
-} from "../../../lib/channelConfig"
+import type { LabelPositionRule } from "../../../lib/channelConfig"
 
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
@@ -15,30 +12,48 @@ import { Input } from "../../../../../components/ui/Input"
  *  bar chart labeled outside the bar ends: base Y nudges positive labels
  *  up, a `< 0` rule nudges negative labels down.
  *
+ *  Shared by the arranged label's layer-wide rules (`positionRules`) and
+ *  each own label's — a standalone variable's or a combination's
+ *  (`fieldPositionRules[key]`) — which differ only in which value they
+ *  compare against and which base offsets they replace. With the variables
+ *  separate, every label has its own list inside its own subsection, so
+ *  there are as many "+ Add rule" links as there are labels.
+ *
  *  Renders just the "+ Add rule" link until a rule exists — the base X/Y
  *  inputs above are the primary controls; the rules are the exception
  *  path. Y inputs follow the sidebar-wide sign convention (positive = up;
  *  the flip happens at this input boundary). */
 export const PositionRulesEditor = ({
-	cfg,
-	onChange,
+	rules,
+	onChange: update,
+	baseXOffset,
+	baseYOffset,
+	ruleLabel,
+	help,
 }: {
-	cfg: DataLabelsConfig
-	onChange: (patch: Partial<DataLabelsConfig>) => void
+	rules: LabelPositionRule[]
+	onChange: (rules: LabelPositionRule[]) => void
+	/** Seeds a new rule, so the fresh row starts as a no-op the user then
+	 *  diverges from — the offsets the rules replace (the label's own when
+	 *  it has them, else the layer's). */
+	baseXOffset: number
+	baseYOffset: number
+	/** Distinguishes the a11y labels when several rule lists share a panel
+	 *  (one per label). */
+	ruleLabel?: string
+	/** Extra help prose below the grammar note — which value these rules
+	 *  compare against. */
+	help?: React.ReactNode
 }) => {
-	const rules = cfg.positionRules ?? []
-	const update = (next: LabelPositionRule[]) =>
-		onChange({ positionRules: next })
+	const ruleName = (i: number) =>
+		ruleLabel ? `${ruleLabel} position rule ${i + 1}` : `position rule ${i + 1}`
 	const setRule = (i: number, patch: Partial<LabelPositionRule>) =>
 		update(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
 	const removeRule = (i: number) => update(rules.filter((_, idx) => idx !== i))
-	// Seed a new rule from the current base offsets, so the fresh row starts
-	// as a no-op the user then diverges from (same seeding the text-color
-	// rules use with the base color).
 	const addRule = () =>
 		update([
 			...rules,
-			{ condition: "", xOffset: cfg.xOffset, yOffset: cfg.yOffset },
+			{ condition: "", xOffset: baseXOffset, yOffset: baseYOffset },
 		])
 	return (
 		<>
@@ -58,14 +73,14 @@ export const PositionRulesEditor = ({
 							value={rule.condition}
 							onChange={(e) => setRule(i, { condition: e.target.value })}
 							placeholder="< 0"
-							aria-label={`Condition for position rule ${i + 1}`}
+							aria-label={`Condition for ${ruleName(i)}`}
 							className="w-24"
 						/>
 						<button
 							type="button"
 							onClick={() => removeRule(i)}
 							className="rounded px-1 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
-							aria-label={`Remove position rule ${i + 1}`}
+							aria-label={`Remove ${ruleName(i)}`}
 						>
 							×
 						</button>
@@ -98,12 +113,16 @@ export const PositionRulesEditor = ({
 				+ Add rule
 			</button>
 			{rules.length > 0 && (
-				<p className="vc-help">
-					Labels whose value matches a rule use that rule&apos;s X/Y instead of
-					the values above. First matching rule wins. Use <code>{">"}</code>,{" "}
-					<code>{"<"}</code>, <code>{">="}</code>, <code>{"<="}</code>,{" "}
-					<code>==</code>, or <code>!=</code> followed by a number.
-				</p>
+				<>
+					<p className="vc-help">
+						Labels whose value matches a rule use that rule&apos;s X/Y instead
+						of the values above. First matching rule wins. Use{" "}
+						<code>{">"}</code>, <code>{"<"}</code>, <code>{">="}</code>,{" "}
+						<code>{"<="}</code>, <code>==</code>, or <code>!=</code> followed
+						by a number.
+					</p>
+					{help && <p className="vc-help">{help}</p>}
+				</>
 			)}
 		</>
 	)

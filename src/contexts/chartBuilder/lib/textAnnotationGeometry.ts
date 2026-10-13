@@ -1,4 +1,5 @@
 import type { TextAnnotation } from "./annotationsConfig"
+import { pixelToCanvasX, pixelToCanvasY } from "./annotationPixels"
 import { applyPositionScale, type PositionScale } from "./scales"
 import type { FieldType } from "./types"
 
@@ -116,6 +117,9 @@ export const layoutTextAnnotationBox = ({
  *    percent placement independently when its scale/type is unavailable (e.g.
  *    a pie chart's missing axis).
  *
+ *  - `pixels` mode: whole px from the plot's top-left corner, +x right and
+ *    +y up — the viewport-invariant placement (see `lib/annotationPixels.ts`).
+ *
  *  Returns `null` when a value-mode coord can't be projected (e.g. a category
  *  that isn't in the axis domain). */
 export const computeTextAnnotationAnchor = (
@@ -123,6 +127,12 @@ export const computeTextAnnotationAnchor = (
 	inner: Inner,
 	ctx: ScaleCtx
 ): { x: number; y: number } | null => {
+	if (anno.coordSystem === "pixels") {
+		return {
+			x: pixelToCanvasX(inner, toNumber(anno.x)),
+			y: pixelToCanvasY(inner, toNumber(anno.y)),
+		}
+	}
 	const useValues = anno.coordSystem === "values"
 	const x =
 		useValues && ctx.xScale && ctx.xType

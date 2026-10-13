@@ -70,6 +70,13 @@ export const labelBlockHeight = (
  *  half a block — see `alignBoxToAnchorEdge`. Absent = "middle". */
 export type LabelVAlign = "top" | "middle" | "bottom"
 
+/** Pixel pad between a bar's edge and a label placed against it — the
+ *  "inside / outside the end" measure-axis placements and the "beside the
+ *  bar" category-axis sides (`DataLabelsConfig.barLabelSide`) both keep a
+ *  label from kissing the bar. Shared with the edge reserve so the room it
+ *  keeps matches what the anchors draw. */
+export const BAR_LABEL_EDGE_PAD_PX = 4
+
 /** Shift a box so the edge named by its `vAlign` lands where its center
  *  was: "top" moves the block DOWN half its height (the top edge stays on
  *  the anchor), "bottom" moves it UP. Runs after wrapping and endpoint

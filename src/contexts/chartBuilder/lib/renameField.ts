@@ -5,6 +5,7 @@ import type {
 	OpacitySlotConfig,
 } from "./channelConfig"
 import type { AnnotationsConfig } from "./annotationsConfig"
+import { parsePieceKey, pieceKey } from "./dataLabelsSelection"
 import type {
 	DerivedVariable,
 	DerivedVariablesConfig,
@@ -113,6 +114,29 @@ const renameKey = <V>(
 				Object.entries(map).map(([k, v]) => [k === oldName ? newName : k, v])
 			)
 		: map
+
+/** Rename a map keyed by composed-LABEL keys: a whole-label key (a default
+ *  label's id IS the variable's name) or a `pieceKey(labelId, field)`, whose
+ *  BOTH halves can name the renamed variable. Same reference when nothing
+ *  matches. */
+const renameLabelKey = <V>(
+	map: Record<string, V> | undefined,
+	oldName: string,
+	newName: string
+): Record<string, V> | undefined => {
+	if (!map) return map
+	const swap = (k: string): string => {
+		const piece = parsePieceKey(k)
+		if (!piece) return k === oldName ? newName : k
+		return pieceKey(
+			piece.labelId === oldName ? newName : piece.labelId,
+			piece.field === oldName ? newName : piece.field
+		)
+	}
+	return Object.keys(map).some((k) => swap(k) !== k)
+		? Object.fromEntries(Object.entries(map).map(([k, v]) => [swap(k), v]))
+		: map
+}
 
 /** Swap a value in a string array. Same reference when absent. */
 const renameInList = (
@@ -349,16 +373,38 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 				labelTemplate: renameLabelTokens(dlc.labelTemplate, oldName, newName),
 				fieldFormats: renameKey(dlc.fieldFormats, oldName, newName),
 				fieldLabelPoints: renameKey(dlc.fieldLabelPoints, oldName, newName),
+				fieldLabelPointsScope: renameKey(
+					dlc.fieldLabelPointsScope,
+					oldName,
+					newName
+				),
+				// Keyed by the composed label's id; the VALUES are facet panel
+				// keys (facet values), which a field rename doesn't touch.
+				fieldFacetKeys: renameKey(dlc.fieldFacetKeys, oldName, newName),
+				pieceSplits: renameKey(dlc.pieceSplits, oldName, newName),
 				fieldColors: mapRecordValues(
-					renameKey(dlc.fieldColors, oldName, newName),
+					renameLabelKey(dlc.fieldColors, oldName, newName),
 					(s) => renameSlotField(s, oldName, newName)
 				) as Record<string, ColorSlotConfig> | undefined,
-				fieldColorRules: renameKey(dlc.fieldColorRules, oldName, newName),
-				fieldSizes: renameKey(dlc.fieldSizes, oldName, newName),
-				fieldFonts: renameKey(dlc.fieldFonts, oldName, newName),
-				fieldBackgrounds: renameKey(dlc.fieldBackgrounds, oldName, newName),
+				fieldColorRules: renameLabelKey(dlc.fieldColorRules, oldName, newName),
+				fieldSizes: renameLabelKey(dlc.fieldSizes, oldName, newName),
+				fieldFonts: renameLabelKey(dlc.fieldFonts, oldName, newName),
+				fieldBackgrounds: renameLabelKey(dlc.fieldBackgrounds, oldName, newName),
 				fieldAlignments: renameKey(dlc.fieldAlignments, oldName, newName),
 				fieldOffsets: renameKey(dlc.fieldOffsets, oldName, newName),
+				fieldBarPlacements: renameKey(dlc.fieldBarPlacements, oldName, newName),
+				fieldLayouts: renameKey(dlc.fieldLayouts, oldName, newName),
+				// A default label's id IS the variable's name, so the key moves
+				// with the field; every template swaps its tokens.
+				composedLabels: dlc.composedLabels?.map((l) => ({
+					id: l.id === oldName ? newName : l.id,
+					template: renameLabelTokens(l.template, oldName, newName) ?? l.template,
+				})),
+				fieldPositionRules: renameKey(
+					dlc.fieldPositionRules,
+					oldName,
+					newName
+				),
 				firstLabel: dlc.firstLabel
 					? patched(dlc.firstLabel, {
 							labelTemplate: renameLabelTokens(

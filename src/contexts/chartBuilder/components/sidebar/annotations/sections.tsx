@@ -1,15 +1,18 @@
 import type { ReactNode } from "react"
+import { useAtomValue } from "jotai"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { ColorInput } from "../../../../../components/ui/ColorInput"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
+import type { AnnotationCoordSystem } from "../../../lib/annotationPixels"
 import type {
 	BoxAnnotationStyle,
 	RectangleTextStyle,
 } from "../../../lib/annotationsConfig"
 import { fontWeightOptionsFor } from "../../../lib/labelsConfig"
+import { currentRenderedPanelInnerDimsAtom } from "../../../store/atoms"
 import {
 	useFontFamilyOptions,
 	useUserFontWeights,
@@ -17,20 +20,75 @@ import {
 import { AlignmentControl } from "../LabelsPanel"
 import { DashStylePicker } from "../channelOptions/dashControls"
 import {
-	percentToValue,
+	convertCoord,
 	toNumber,
-	valueToPercent,
 	cleanNumber,
 	type AxisInfo,
+	type PlotDims,
 } from "./axisInfo"
 import { AxisValueInput } from "./controls"
 import { Textarea } from "../../../../../components/ui/Input"
+
+/** The rendered plot's size, so unit toggles can convert the stored numbers
+ *  and keep the annotation where it is. */
+export const usePlotDims = (): PlotDims =>
+	useAtomValue(currentRenderedPanelInnerDimsAtom)
+
+/** The "Adjust by" dropdown every annotation kind's Position subsection
+ *  opens with: how the coordinate boxes below it are read.
+ *
+ *  - **Percent (0–100)**: fractions of the plot rect, origin bottom-left.
+ *  - **Values (data units)**: through the chart's position scales.
+ *  - **Pixels**: whole px from the plot's top-left corner, +x right and +y
+ *    up. This is the one to use for anything placed OUTSIDE the plot: a
+ *    percent past 0 or 100 is a fraction of the plot's size, so it drifts
+ *    across the fixed-height chrome (panel titles, the title band) as the
+ *    chart resizes, while "14px above the top-left corner" is 14px on every
+ *    viewport.
+ *
+ *  The caller converts its stored coordinates on change (`convertCoord`) so
+ *  the new boxes show the same position in the new unit. */
+export const CoordSystemSelect = ({
+	value,
+	onChange,
+	disableValues,
+}: {
+	value: AnnotationCoordSystem
+	onChange: (next: AnnotationCoordSystem) => void
+	/** Gray out "Values (data units)" on polar charts (radar / pie), which
+	 *  have no cartesian axes for the coordinates to map against. */
+	disableValues?: boolean
+}) => (
+	<SelectInput
+		label="Adjust by"
+		labelClassName={LABEL_COL}
+		value={value}
+		options={[
+			{ value: "percent", label: "Percent (0–100)" },
+			{
+				value: "values",
+				label: "Values (data units)",
+				disabled: disableValues,
+			},
+			{ value: "pixels", label: "Pixels (from top-left)" },
+		]}
+		onChange={(v) => {
+			const next = v as AnnotationCoordSystem
+			if (next === value) return
+			if (next === "values" && disableValues) return
+			onChange(next)
+		}}
+	/>
+)
+
+export const PIXELS_HELP =
+	"Whole pixels from the plot's top-left corner — x to the right, y up (negative y is inside the plot). The spot holds still as the chart resizes."
 
 /** The coordinate fields rectangles and line segments share: four edge /
  *  endpoint values plus how they're interpreted. Both annotation types store
  *  exactly these members, so one Position section serves both editors. */
 type EdgeCoords = {
-	coordSystem: "percent" | "values"
+	coordSystem: AnnotationCoordSystem
 	xMin: number | string
 	xMax: number | string
 	yMin: number | string
@@ -38,11 +96,11 @@ type EdgeCoords = {
 }
 
 /** "Position" subsection for the two edge-coordinate annotation kinds
- *  (rectangle + line segment): the percent↔values "Adjust by" toggle plus the
- *  four coordinate inputs. The position math is plot-area-normalized — see
- *  `annotationsConfig.ts` for the coordinate convention. The actual drawing
- *  happens in PlotCanvas, which converts the percent coords to pixel coords
- *  against each panel's `inner` rect. */
+ *  (rectangle + line segment): the "Adjust by" unit toggle and the four
+ *  coordinate inputs. The position
+ *  math is plot-area-relative — see `annotationsConfig.ts` for the coordinate
+ *  convention. The actual drawing happens in PlotCanvas, which converts the
+ *  coords to pixel coords against each panel's `inner` rect. */
 export const EdgePositionSection = ({
 	coords,
 	onChange,
@@ -57,129 +115,140 @@ export const EdgePositionSection = ({
 	/** Gray out "Values (data units)" on polar charts (radar / pie), which
 	 *  have no cartesian axes for the edges to map against. */
 	disableValues?: boolean
-}) => (
-	<CollapsibleSubsection title="Position">
-		<div className="flex flex-col gap-2">
-			<SelectInput
-				label="Adjust by"
-				labelClassName={LABEL_COL}
-				value={coords.coordSystem}
-				options={[
-					{ value: "percent", label: "Percent (0–100)" },
-					{
-						value: "values",
-						label: "Values (data units)",
-						disabled: disableValues,
-					},
-				]}
-				onChange={(v) => {
-					const nextSystem = v as "percent" | "values"
-					if (nextSystem === coords.coordSystem) return
-					if (nextSystem === "values" && disableValues) return
-					// Convert the stored coords so the new boxes show the
-					// equivalent position in the target system. Without
-					// this the user sees raw percents being treated as data
-					// values (or vice versa).
-					const convert =
-						nextSystem === "values"
-							? (val: number | string, ax: AxisInfo) =>
-									percentToValue(toNumber(val), ax)
-							: (val: number | string, ax: AxisInfo) =>
-									valueToPercent(val, ax)
-					onChange({
-						coordSystem: nextSystem,
-						xMin: convert(coords.xMin, xAxis),
-						xMax: convert(coords.xMax, xAxis),
-						yMin: convert(coords.yMin, yAxis),
-						yMax: convert(coords.yMax, yAxis),
-					})
-				}}
-			/>
+}) => {
+	const dims = usePlotDims()
+	const pxInput = (
+		key: "xMin" | "xMax" | "yMin" | "yMax",
+		label: string
+	) => (
+		<NumberInput
+			label={label}
+			labelClassName={LABEL_COL}
+			value={cleanNumber(toNumber(coords[key]))}
+			step={1}
+			onChange={(v) => onChange({ [key]: v })}
+			suffix="px"
+		/>
+	)
+	return (
+		<CollapsibleSubsection title="Position">
+			<div className="flex flex-col gap-2">
+				<CoordSystemSelect
+					value={coords.coordSystem}
+					disableValues={disableValues}
+					onChange={(next) => {
+						// Convert the stored coords so the new boxes show the
+						// equivalent position in the target system. Without this
+						// the user sees raw percents being treated as data values
+						// (or vice versa).
+						const cur = coords.coordSystem
+						const convert = (
+							val: number | string,
+							ax: AxisInfo,
+							dim: "x" | "y"
+						) => convertCoord(val, cur, next, ax, dim, dims)
+						onChange({
+							coordSystem: next,
+							xMin: convert(coords.xMin, xAxis, "x"),
+							xMax: convert(coords.xMax, xAxis, "x"),
+							yMin: convert(coords.yMin, yAxis, "y"),
+							yMax: convert(coords.yMax, yAxis, "y"),
+						})
+					}}
+				/>
 
-			{coords.coordSystem === "percent" ? (
-				<div className="flex flex-col gap-2">
-					<NumberInput
-						label="left %"
-						labelClassName={LABEL_COL}
-						value={cleanNumber(toNumber(coords.xMin) * 100)}
-						step={1}
-						onChange={(v) => onChange({ xMin: v / 100 })}
-						suffix="%"
-					/>
-					<NumberInput
-						label="right %"
-						labelClassName={LABEL_COL}
-						value={cleanNumber(toNumber(coords.xMax) * 100)}
-						step={1}
-						onChange={(v) => onChange({ xMax: v / 100 })}
-						suffix="%"
-					/>
-					<NumberInput
-						label="bottom %"
-						labelClassName={LABEL_COL}
-						value={cleanNumber(toNumber(coords.yMin) * 100)}
-						step={1}
-						onChange={(v) => onChange({ yMin: v / 100 })}
-						suffix="%"
-					/>
-					<NumberInput
-						label="top %"
-						labelClassName={LABEL_COL}
-						value={cleanNumber(toNumber(coords.yMax) * 100)}
-						step={1}
-						onChange={(v) => onChange({ yMax: v / 100 })}
-						suffix="%"
-					/>
-				</div>
-			) : (
-				<div className="flex flex-col gap-2">
-					<AxisValueInput
-						label="left"
-						labelClassName={LABEL_COL}
-						value={coords.xMin}
-						axis={xAxis}
-						onChange={(v) => onChange({ xMin: v })}
-					/>
-					<AxisValueInput
-						label="right"
-						labelClassName={LABEL_COL}
-						value={coords.xMax}
-						axis={xAxis}
-						onChange={(v) => onChange({ xMax: v })}
-					/>
-					<AxisValueInput
-						label="bottom"
-						labelClassName={LABEL_COL}
-						value={coords.yMin}
-						axis={yAxis}
-						onChange={(v) => onChange({ yMin: v })}
-					/>
-					<AxisValueInput
-						label="top"
-						labelClassName={LABEL_COL}
-						value={coords.yMax}
-						axis={yAxis}
-						onChange={(v) => onChange({ yMax: v })}
-					/>
-				</div>
-			)}
-		</div>
-	</CollapsibleSubsection>
-)
+				{coords.coordSystem === "percent" ? (
+					<div className="flex flex-col gap-2">
+						<NumberInput
+							label="left %"
+							labelClassName={LABEL_COL}
+							value={cleanNumber(toNumber(coords.xMin) * 100)}
+							step={1}
+							onChange={(v) => onChange({ xMin: v / 100 })}
+							suffix="%"
+						/>
+						<NumberInput
+							label="right %"
+							labelClassName={LABEL_COL}
+							value={cleanNumber(toNumber(coords.xMax) * 100)}
+							step={1}
+							onChange={(v) => onChange({ xMax: v / 100 })}
+							suffix="%"
+						/>
+						<NumberInput
+							label="bottom %"
+							labelClassName={LABEL_COL}
+							value={cleanNumber(toNumber(coords.yMin) * 100)}
+							step={1}
+							onChange={(v) => onChange({ yMin: v / 100 })}
+							suffix="%"
+						/>
+						<NumberInput
+							label="top %"
+							labelClassName={LABEL_COL}
+							value={cleanNumber(toNumber(coords.yMax) * 100)}
+							step={1}
+							onChange={(v) => onChange({ yMax: v / 100 })}
+							suffix="%"
+						/>
+					</div>
+				) : coords.coordSystem === "values" ? (
+					<div className="flex flex-col gap-2">
+						<AxisValueInput
+							label="left"
+							labelClassName={LABEL_COL}
+							value={coords.xMin}
+							axis={xAxis}
+							onChange={(v) => onChange({ xMin: v })}
+						/>
+						<AxisValueInput
+							label="right"
+							labelClassName={LABEL_COL}
+							value={coords.xMax}
+							axis={xAxis}
+							onChange={(v) => onChange({ xMax: v })}
+						/>
+						<AxisValueInput
+							label="bottom"
+							labelClassName={LABEL_COL}
+							value={coords.yMin}
+							axis={yAxis}
+							onChange={(v) => onChange({ yMin: v })}
+						/>
+						<AxisValueInput
+							label="top"
+							labelClassName={LABEL_COL}
+							value={coords.yMax}
+							axis={yAxis}
+							onChange={(v) => onChange({ yMax: v })}
+						/>
+					</div>
+				) : (
+					<div className="flex flex-col gap-2">
+						{pxInput("xMin", "left")}
+						{pxInput("xMax", "right")}
+						{pxInput("yMin", "bottom")}
+						{pxInput("yMax", "top")}
+						<p className="vc-help">{PIXELS_HELP}</p>
+					</div>
+				)}
+			</div>
+		</CollapsibleSubsection>
+	)
+}
 
 /** The coordinate fields a single-anchor annotation stores. Only the text
  *  annotation uses this today: it's a point, not a region, because its box is
  *  auto-sized to the text. */
 type PointCoords = {
-	coordSystem: "percent" | "values"
+	coordSystem: AnnotationCoordSystem
 	x: number | string
 	y: number | string
 }
 
-/** "Position" subsection for point-anchored annotations: the percent↔values
- *  "Adjust by" toggle plus one x and one y input. Same coordinate convention
- *  and same conversion-on-toggle behavior as `EdgePositionSection` — see
- *  `annotationsConfig.ts`. */
+/** "Position" subsection for point-anchored annotations: the "Adjust by" unit
+ *  toggle plus one x and one y input. Same coordinate convention and same conversion-on-toggle behavior
+ *  as `EdgePositionSection` — see `annotationsConfig.ts`. */
 export const PointPositionSection = ({
 	coords,
 	onChange,
@@ -197,81 +266,87 @@ export const PointPositionSection = ({
 	disableValues?: boolean
 	/** Helper prose explaining what the anchor point means for this kind. */
 	help?: string
-}) => (
-	<CollapsibleSubsection title="Position">
-		<SelectInput
-			label="Adjust by"
-			labelClassName={LABEL_COL}
-			value={coords.coordSystem}
-			options={[
-				{ value: "percent", label: "Percent (0–100)" },
-				{
-					value: "values",
-					label: "Values (data units)",
-					disabled: disableValues,
-				},
-			]}
-			onChange={(v) => {
-				const nextSystem = v as "percent" | "values"
-				if (nextSystem === coords.coordSystem) return
-				if (nextSystem === "values" && disableValues) return
-				// Convert the stored coords so the new boxes show the equivalent
-				// position in the target system (see EdgePositionSection).
-				if (nextSystem === "values") {
+}) => {
+	const dims = usePlotDims()
+	return (
+		<CollapsibleSubsection title="Position">
+			<CoordSystemSelect
+				value={coords.coordSystem}
+				disableValues={disableValues}
+				onChange={(next) => {
+					// Convert the stored coords so the new boxes show the equivalent
+					// position in the target system (see EdgePositionSection).
+					const cur = coords.coordSystem
 					onChange({
-						coordSystem: "values",
-						x: percentToValue(toNumber(coords.x), xAxis),
-						y: percentToValue(toNumber(coords.y), yAxis),
+						coordSystem: next,
+						x: convertCoord(coords.x, cur, next, xAxis, "x", dims),
+						y: convertCoord(coords.y, cur, next, yAxis, "y", dims),
 					})
-				} else {
-					onChange({
-						coordSystem: "percent",
-						x: valueToPercent(coords.x, xAxis),
-						y: valueToPercent(coords.y, yAxis),
-					})
-				}
-			}}
-		/>
-		{coords.coordSystem === "percent" ? (
-			<div className="flex flex-col gap-2">
-				<NumberInput
-					label="x %"
-					labelClassName={LABEL_COL}
-					value={cleanNumber(toNumber(coords.x) * 100)}
-					step={1}
-					onChange={(v) => onChange({ x: v / 100 })}
-					suffix="%"
-				/>
-				<NumberInput
-					label="y %"
-					labelClassName={LABEL_COL}
-					value={cleanNumber(toNumber(coords.y) * 100)}
-					step={1}
-					onChange={(v) => onChange({ y: v / 100 })}
-					suffix="%"
-				/>
-			</div>
-		) : (
-			<div className="flex flex-col gap-2">
-				<AxisValueInput
-					label="x"
-					labelClassName={LABEL_COL}
-					value={coords.x}
-					axis={xAxis}
-					onChange={(v) => onChange({ x: v })}
-				/>
-				<AxisValueInput
-					label="y"
-					labelClassName={LABEL_COL}
-					value={coords.y}
-					axis={yAxis}
-					onChange={(v) => onChange({ y: v })}
-				/>
-			</div>
-		)}
-		{help && <p className="vc-help">{help}</p>}
-	</CollapsibleSubsection>
-)
+				}}
+			/>
+			{coords.coordSystem === "percent" ? (
+				<div className="flex flex-col gap-2">
+					<NumberInput
+						label="x %"
+						labelClassName={LABEL_COL}
+						value={cleanNumber(toNumber(coords.x) * 100)}
+						step={1}
+						onChange={(v) => onChange({ x: v / 100 })}
+						suffix="%"
+					/>
+					<NumberInput
+						label="y %"
+						labelClassName={LABEL_COL}
+						value={cleanNumber(toNumber(coords.y) * 100)}
+						step={1}
+						onChange={(v) => onChange({ y: v / 100 })}
+						suffix="%"
+					/>
+				</div>
+			) : coords.coordSystem === "values" ? (
+				<div className="flex flex-col gap-2">
+					<AxisValueInput
+						label="x"
+						labelClassName={LABEL_COL}
+						value={coords.x}
+						axis={xAxis}
+						onChange={(v) => onChange({ x: v })}
+					/>
+					<AxisValueInput
+						label="y"
+						labelClassName={LABEL_COL}
+						value={coords.y}
+						axis={yAxis}
+						onChange={(v) => onChange({ y: v })}
+					/>
+				</div>
+			) : (
+				<div className="flex flex-col gap-2">
+					<NumberInput
+						label="x"
+						labelClassName={LABEL_COL}
+						value={cleanNumber(toNumber(coords.x))}
+						step={1}
+						onChange={(v) => onChange({ x: v })}
+						suffix="px"
+					/>
+					<NumberInput
+						label="y"
+						labelClassName={LABEL_COL}
+						value={cleanNumber(toNumber(coords.y))}
+						step={1}
+						onChange={(v) => onChange({ y: v })}
+						suffix="px"
+					/>
+				</div>
+			)}
+			{help && <p className="vc-help">{help}</p>}
+			{coords.coordSystem === "pixels" && (
+				<p className="vc-help">{PIXELS_HELP}</p>
+			)}
+		</CollapsibleSubsection>
+	)
+}
 
 /** The fill fields rectangles and circles share (from BoxAnnotationStyle). */
 type FillStyle = Pick<BoxAnnotationStyle, "backgroundColor" | "backgroundOpacity">

@@ -18,7 +18,7 @@ import {
 import { ColorPanel } from "./ColorPanel"
 
 /** Every "Vary by → Single color" swatch (Fill's default fill, the Outline
- *  row, and each generic color slot) carries the circular-arrow palette
+ *  row, and each generic color slot) carries the palette-icon palette
  *  popover, so the user can hop to another palette color without the
  *  open-ended picker. */
 

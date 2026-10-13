@@ -6,7 +6,7 @@ import { useCurrentTheme } from "../../contexts/chartBuilder/store/useCurrentThe
 
 import { DisclosureChevron } from "./Chevron"
 
-/** Circular-arrow button that opens a swatch popover of the palette's
+/** Palette-icon button that opens a swatch popover of the palette's
  *  colors — a quick on-palette alternative to the open-ended color picker
  *  beside it. Swatches wrap at 6 per row; picking one commits it and closes
  *  the popover. (Replaces the old step-to-next-color cycling, where
@@ -124,20 +124,24 @@ export const PalettePickerButton = ({
 			>
 				<svg
 					viewBox="0 0 24 24"
-					width={15}
-					height={15}
+					width={16}
+					height={16}
 					aria-hidden="true"
 					fill="none"
 					stroke="currentColor"
-					strokeWidth={2.4}
+					strokeWidth={2}
 					strokeLinecap="round"
 					strokeLinejoin="round"
 				>
-					{/* Open ~300° arc (clear gap top-right) ending in a distinct
-					 *  arrowhead so the control reads as "palette", not a closed
-					 *  circle. */}
-					<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-					<polyline points="23 4 23 10 17 10" />
+					{/* Painter's palette: a rounded board with a thumb notch at the
+					 *  lower right and four filled paint dabs, so the control reads
+					 *  as "palette" (the old open arc + arrowhead dated from when the
+					 *  button CYCLED colors, and read as "refresh"). */}
+					<path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.65-.75 1.65-1.7 0-.45-.18-.85-.45-1.15a1.6 1.6 0 0 1-.43-1.1c0-.93.75-1.7 1.68-1.7h2c3.05 0 5.55-2.5 5.55-5.55C22 6 17.5 2 12 2z" />
+					<circle cx="7.5" cy="10.5" r="1.4" fill="currentColor" stroke="none" />
+					<circle cx="11" cy="6.5" r="1.4" fill="currentColor" stroke="none" />
+					<circle cx="16" cy="7.5" r="1.4" fill="currentColor" stroke="none" />
+					<circle cx="17.5" cy="12.5" r="1.4" fill="currentColor" stroke="none" />
 				</svg>
 			</button>
 			{open && (
