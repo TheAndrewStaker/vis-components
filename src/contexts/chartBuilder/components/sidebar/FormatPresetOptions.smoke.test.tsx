@@ -38,12 +38,50 @@ describe("FormatPresetOptions", () => {
 		expect(values).toContain(LITERAL_FORMAT)
 		expect(values).toContain(`${LITERAL_FORMAT}%`)
 		expect(values).toContain(FORMAT_PRESET_AUTO)
-		for (const v of [",", ".2f", ".0%", ".1%", ".2e", "$,.0f", "$,.2f", ".3s"]) {
+		for (const v of [",", ".2f", ".0%", ".1%"]) {
+			expect(values).toContain(v)
+		}
+		for (const v of ["$,.0f", "$,.2f", "$,.1~fK", "$,.1~fM", "$,.1~fB"]) {
+			expect(values).toContain(v)
+		}
+		for (const v of [".2e", ".3s", ",.1~fM", ",.1~fB"]) {
 			expect(values).toContain(v)
 		}
 		for (const v of ["%Y-%m-%d", "%b %Y", "%Y", "%b %d", "%H:%M"]) {
 			expect(values).toContain(v)
 		}
+	})
+
+	it("groups the dollar presets under Currency, between Numeric and Temporal", () => {
+		const { container } = render(
+			<select>
+				<FormatPresetOptions />
+			</select>
+		)
+		const groups = Array.from(container.querySelectorAll("optgroup")).map((g) =>
+			g.getAttribute("label")
+		)
+		expect(groups).toEqual(["Numeric", "Currency", "Scientific", "Temporal"])
+		const currency = container.querySelector('optgroup[label="Currency"]')!
+		const texts = Array.from(currency.querySelectorAll("option")).map(
+			(o) => o.textContent
+		)
+		expect(texts).toEqual([
+			"Whole dollars ($1,234)",
+			"Dollars and cents ($1,234.56)",
+			"Thousands ($12.5K)",
+			"Millions ($1.2M)",
+			"Billions ($1.2B)",
+		])
+		const scientific = container.querySelector('optgroup[label="Scientific"]')!
+		expect(
+			Array.from(scientific.querySelectorAll("option")).map((o) => o.textContent)
+		).toEqual([
+			"Scientific notation (1.23e+4)",
+			"SI prefix (1.23k)",
+			"Millions (1.2M)",
+			"Billions (1.2B)",
+		])
 	})
 
 	it("adds the Geography group only when countryNames is set", () => {
@@ -75,6 +113,7 @@ describe("formatPresetValueFor", () => {
 		expect(formatPresetValueFor(",.0f")).toBe(",.0f")
 		expect(formatPresetValueFor(`${LITERAL_FORMAT}%`)).toBe(`${LITERAL_FORMAT}%`)
 		expect(formatPresetValueFor("%b %Y")).toBe("%b %Y")
+		expect(formatPresetValueFor("$,.1~fM")).toBe("$,.1~fM")
 	})
 
 	it("keeps showing the preset when the box adds text around the value", () => {

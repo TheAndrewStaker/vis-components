@@ -1723,11 +1723,19 @@ The X-axis and Y-axis panels (under Encodings) configure:
   right-aligned against the y axis, left-aligned at the radar spoke.
   Rotated x labels flip that default with their anchor: negative
   angles naturally right-align, positive left-align.
-- **Tick label format** — a dropdown of preset d3-format strings (e.g.,
-  comma-separated thousands, whole numbers, percent, scientific,
-  currency, SI prefix, plus temporal presets and a Literal "as-is"
-  option) that populates an editable text box. The user can pick a
-  preset and then refine it as raw d3-format syntax. The dropdown keeps
+- **Tick label format** — a dropdown of preset d3-format strings,
+  grouped **Numeric** (comma-separated thousands, whole numbers,
+  percent), **Currency** (whole dollars, dollars and cents, and
+  Thousands / Millions / Billions — `$,.1~fK`, `…M`, `…B`),
+  **Scientific** (scientific notation, SI prefix, and plain-number
+  Millions / Billions — `,.1~fM`, `,.1~fB`) and **Temporal**, plus a
+  Literal "as-is" option, that populates
+  an editable text box. The user can pick a preset and then refine it
+  as raw d3-format syntax. A d3 spec ending in an uppercase `K`, `M` or
+  `B` divides every value by that scale and prints the letter after it
+  ("$12.5K", "$1.2M", "$1.2B"): ONE scale for every label, unlike the
+  SI-prefix preset, which d3 picks per value (and spells billions "G").
+  The letter works on any numeric spec (`,.0fM` → "7M"). The dropdown keeps
   SHOWING the preset the box's text came from, so the pair reads as
   "the preset I picked" over "my edit of it": an exact match wins,
   otherwise the spec is split off the literal text around it (`,.0f kg`

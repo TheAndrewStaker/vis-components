@@ -52,10 +52,34 @@ const NUMERIC_GROUP: FormatPresetGroup = {
 		{ value: ".2f", label: "Two decimals (12.34)" },
 		{ value: ".0%", label: "Percent (12%)" },
 		{ value: ".1%", label: "Percent · 1 decimal (12.3%)" },
-		{ value: ".2e", label: "Scientific (1.23e+4)" },
-		{ value: "$,.0f", label: "Currency · whole ($1,234)" },
-		{ value: "$,.2f", label: "Currency · 2dp ($1,234.56)" },
+	],
+}
+
+/** Millions / Billions here are the plain-number twins of the Currency
+ *  ones: same fixed-scale letter (`parseScaledSpec`), no dollar sign. */
+const SCIENTIFIC_GROUP: FormatPresetGroup = {
+	label: "Scientific",
+	options: [
+		{ value: ".2e", label: "Scientific notation (1.23e+4)" },
 		{ value: ".3s", label: "SI prefix (1.23k)" },
+		{ value: ",.1~fM", label: "Millions (1.2M)" },
+		{ value: ",.1~fB", label: "Billions (1.2B)" },
+	],
+}
+
+/** The K / M / B entries end in a fixed-scale letter (`parseScaledSpec`):
+ *  the value is divided by that scale and the letter printed after it, so
+ *  every label shares ONE scale — unlike the Numeric SI prefix, which d3
+ *  picks per value. `.1~f` keeps one decimal where it carries information
+ *  and trims it otherwise ($2.5M, $5M). */
+const CURRENCY_GROUP: FormatPresetGroup = {
+	label: "Currency",
+	options: [
+		{ value: "$,.0f", label: "Whole dollars ($1,234)" },
+		{ value: "$,.2f", label: "Dollars and cents ($1,234.56)" },
+		{ value: "$,.1~fK", label: "Thousands ($12.5K)" },
+		{ value: "$,.1~fM", label: "Millions ($1.2M)" },
+		{ value: "$,.1~fB", label: "Billions ($1.2B)" },
 	],
 }
 
@@ -78,8 +102,15 @@ const TEMPORAL_GROUP: FormatPresetGroup = {
  *  countries-level geo charts only. */
 export const formatPresetGroups = (countryNames = false): FormatPresetGroup[] =>
 	countryNames
-		? [GENERAL_GROUP, GEOGRAPHY_GROUP, NUMERIC_GROUP, TEMPORAL_GROUP]
-		: [GENERAL_GROUP, NUMERIC_GROUP, TEMPORAL_GROUP]
+		? [
+				GENERAL_GROUP,
+				GEOGRAPHY_GROUP,
+				NUMERIC_GROUP,
+				CURRENCY_GROUP,
+				SCIENTIFIC_GROUP,
+				TEMPORAL_GROUP,
+			]
+		: [GENERAL_GROUP, NUMERIC_GROUP, CURRENCY_GROUP, SCIENTIFIC_GROUP, TEMPORAL_GROUP]
 
 const presetValues = (countryNames: boolean): Set<string> =>
 	new Set(

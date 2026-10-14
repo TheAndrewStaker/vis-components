@@ -18,11 +18,39 @@ const zeroFormatterForSiSpec = (spec: string): ((v: number) => string) | null =>
 	return d3Format(parsed.toString())
 }
 
+/** Divisor per fixed-scale suffix — see `parseScaledSpec`. */
+const SCALE_SUFFIXES: Record<string, number> = { K: 1e3, M: 1e6, B: 1e9 }
+
+export type ScaledSpec = {
+	/** The d3-format spec the suffix was stripped from ("" = d3's default). */
+	base: string
+	divisor: number
+	/** The letter printed after every value: "K", "M" or "B". */
+	suffix: string
+}
+
+/** A d3-format spec with a fixed-scale letter on the end: `$,.1~fK`
+ * divides every value by a thousand and prints "K" after it ("$12.5K"),
+ * `M` a million ("$1.2M"), `B` a billion ("$1.2B") — the Currency presets.
+ * Unlike d3's `s` type, which picks a prefix PER VALUE (and spells
+ * billions "G"), the scale is pinned, so every label on an axis shares it.
+ * No d3-format type is an uppercase K / M / B, so a trailing one can't be
+ * misread. `null` for every other spec. */
+export const parseScaledSpec = (spec: string): ScaledSpec | null => {
+	const suffix = spec.slice(-1)
+	const divisor = SCALE_SUFFIXES[suffix]
+	if (divisor === undefined) return null
+	return { base: spec.slice(0, -1), divisor, suffix }
+}
+
 const safeFormat = (spec: string): ((v: unknown) => string) => {
 	try {
-		const f = d3Format(spec)
-		const zero = zeroFormatterForSiSpec(spec)
-		const fmtNumber = (n: number) => (zero && n === 0 ? zero(n) : f(n))
+		const scaled = parseScaledSpec(spec)
+		const f = d3Format(scaled ? scaled.base : spec)
+		const zero = scaled ? null : zeroFormatterForSiSpec(spec)
+		const fmtNumber = scaled
+			? (n: number) => `${f(n / scaled.divisor)}${scaled.suffix}`
+			: (n: number) => (zero && n === 0 ? zero(n) : f(n))
 		return (v) => {
 			if (typeof v === "number") return fmtNumber(v)
 			// Categorical/ordinal scales hand us domain entries as strings even

@@ -57,6 +57,35 @@ describe("buildTickFormatter", () => {
 		expect(fixed!(0)).toBe("0.00")
 	})
 
+	it("pins one scale per fixed-scale letter: K / M / B divide and suffix", () => {
+		// The Currency presets. Unlike d3's `s` type the scale never changes
+		// per value, and billions read "B", not "G".
+		const k = buildTickFormatter(cfg({ customFormat: "$,.1~fK" }), "quantitative")
+		expect(k!(12500)).toBe("$12.5K")
+		expect(k!(1234567)).toBe("$1,234.6K")
+		expect(k!(5000)).toBe("$5K")
+		expect(k!(0)).toBe("$0K")
+		expect(k!(-2500)).toBe("−$2.5K")
+		expect(k!("750")).toBe("$0.8K")
+		const m = buildTickFormatter(cfg({ customFormat: "$,.1~fM" }), "quantitative")
+		expect(m!(1234567)).toBe("$1.2M")
+		expect(m!(2500000)).toBe("$2.5M")
+		const b = buildTickFormatter(cfg({ customFormat: "$,.1~fB" }), "quantitative")
+		expect(b!(1234567890)).toBe("$1.2B")
+		// The letter works on any numeric spec, not only the dollar ones, and
+		// composes with text around the value.
+		const plain = buildTickFormatter(cfg({ customFormat: ",.0fM" }), "quantitative")
+		expect(plain!(7_400_000)).toBe("7M")
+		const affixed = buildTickFormatter(
+			cfg({ customFormat: ",.0fK people" }),
+			"quantitative"
+		)
+		expect(affixed!(42_000)).toBe("42K people")
+		// A bare letter scales under d3's default format.
+		const bare = buildTickFormatter(cfg({ customFormat: "K" }), "quantitative")
+		expect(bare!(1500)).toBe("1.5K")
+	})
+
 	it("applies thousands grouping via the ',' preset", () => {
 		const f = buildTickFormatter(cfg({ customFormat: ",.2f" }), "quantitative")
 		expect(f!(1234.5)).toBe("1,234.50")
