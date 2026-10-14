@@ -8,7 +8,11 @@ import { currentDatasetViewAtom } from "./useCurrentDatasetView"
 import { captureThumbnail } from "../lib/captureThumbnail"
 import { foldFlowNodeTitles } from "../lib/foldFlowNodeTitles"
 import type { Visual } from "../lib/types"
-import { hydrateVisual, newVisualDraft } from "../lib/visualDefaults"
+import {
+	hydrateVisual,
+	newVisualDraft,
+	newVisualId,
+} from "../lib/visualDefaults"
 import { isTrashed } from "../lib/visualTrash"
 import { getCurrentUser } from "../../../lib/currentUser"
 import { editorHistoryEpochAtom } from "./editorHistory"
@@ -45,9 +49,6 @@ import {
 	userDefaultThemeIdAtom,
 	visualsAtom,
 } from "./atoms"
-
-const newVisualId = () =>
-	`vs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 /**
  * Save the editor's current state as a Visual. Creates a new visual if there

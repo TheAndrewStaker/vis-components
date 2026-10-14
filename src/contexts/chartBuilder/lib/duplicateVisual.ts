@@ -1,8 +1,6 @@
 import { getCurrentUser } from "../../../lib/currentUser"
 import type { Visual } from "./types"
-
-const newVisualId = () =>
-	`vs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+import { newVisualId } from "./visualDefaults"
 
 /**
  * Make an independent copy of a visual: a fresh id, a "(copy)" name, and
