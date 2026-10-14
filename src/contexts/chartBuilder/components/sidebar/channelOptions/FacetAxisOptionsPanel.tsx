@@ -1,17 +1,30 @@
 import { useAtom, useAtomValue } from "jotai"
+import { useMemo } from "react"
 import {
 	DEFAULT_FACET_CONFIG,
 	migrateProportionalSizing,
 	migrateShareValue,
+	rowSizingMeaningful,
 	type FacetConfig,
+	type PanelAxisOverride,
 } from "../../../lib/channelConfig"
+import {
+	facetPanelOptions,
+	resolveFacetPanels,
+} from "../../../lib/resolveFacetPanels"
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { axisRangeIsContinuous } from "../../../lib/axisFields"
-import { facetAxisMapping } from "../../../lib/facetAxisMapping"
+import {
+	facetAxisMapping,
+	type FacetAxisMapping,
+} from "../../../lib/facetAxisMapping"
+import type { ChartModeDef } from "../../../lib/chartModes/types"
 import { effectiveType } from "../../../lib/fieldType"
+import type { DatasetView, Encodings, FieldType } from "../../../lib/types"
 import {
 	currentChannelConfigsAtom,
 	currentEncodingsAtom,
+	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
 	currentRenderedPanelInnerDimsAtom,
 } from "../../../store/atoms"
@@ -28,6 +41,7 @@ import {
 	useUniqueFieldValues,
 	withBound,
 	withBoundInMap,
+	withPanelBound,
 } from "./facetSharedControls"
 
 /** Everything that differs between the facetRow and facetCol option
@@ -60,6 +74,11 @@ type FacetAxisSpec = {
 	renderedDimKey: "heightPx" | "widthPx"
 	overallRangeKey: "overallYRange" | "overallXRange"
 	overridesKey: "rowAxisOverrides" | "colAxisOverrides"
+	/** Which bounds of a `panelAxisOverrides` entry this axis reads. */
+	panelBoundKeys: {
+		min: keyof PanelAxisOverride
+		max: keyof PanelAxisOverride
+	}
 	subsectionTitle: string
 	perGroupLabel: string
 	/** Singular / plural nouns for user-facing copy. */
@@ -89,6 +108,7 @@ const ROW_SPEC: FacetAxisSpec = {
 	renderedDimKey: "heightPx",
 	overallRangeKey: "overallYRange",
 	overridesKey: "rowAxisOverrides",
+	panelBoundKeys: { min: "yMin", max: "yMax" },
 	subsectionTitle: "Rows",
 	perGroupLabel: "Per row",
 	noun: "row",
@@ -96,10 +116,9 @@ const ROW_SPEC: FacetAxisSpec = {
 	valueKeyPrefix: "y-",
 	emptyHint:
 		"Map a categorical field to Facet (row) to control row-specific layout options.",
-	// Pie mode has no R-like channel — the row panel has no axis-specific
-	// controls to show; point the user at the col panel instead.
-	noAxisHint:
-		"This chart type has no row axis to configure. Use the column panel for angle-axis options.",
+	// Pie mode has no R-like channel — there are no row-axis controls to
+	// show. The Columns (angle axis) subsection still renders below.
+	noAxisHint: "This chart type has no row axis to configure.",
 }
 
 const COL_SPEC: FacetAxisSpec = {
@@ -118,6 +137,7 @@ const COL_SPEC: FacetAxisSpec = {
 	renderedDimKey: "widthPx",
 	overallRangeKey: "overallXRange",
 	overridesKey: "colAxisOverrides",
+	panelBoundKeys: { min: "xMin", max: "xMax" },
 	subsectionTitle: "Columns",
 	perGroupLabel: "Per column",
 	noun: "column",
@@ -132,39 +152,41 @@ const COL_SPEC: FacetAxisSpec = {
 	noAxisHint: "This chart type has no column axis to configure.",
 }
 
-/** Shared implementation of the facetRow / facetCol option panels.
- *  Hosts only the controls for the panel's own axis — share, gap,
- *  panel dimension, the sizing toggle, and per-group axis bound
- *  overrides. Which encoding channel that axis targets depends on the
- *  chart mode (y / x for cartesian, r / angle for radar, none / angle
- *  for pies) — see `facetAxisMapping`. The wrap panel
- *  (`FacetOptionsPanel`) surfaces both axes at once. */
-export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
-	const spec = axis === "row" ? ROW_SPEC : COL_SPEC
-	const [configs, setConfigs] = useAtom(currentChannelConfigsAtom)
-	const encodings = useAtomValue(currentEncodingsAtom)
-	const overrides = useAtomValue(currentFieldOverridesAtom)
-	const dataset = useCurrentDatasetView()
-	const renderedPanelDims = useAtomValue(currentRenderedPanelInnerDimsAtom)
-
-	const cfg: FacetConfig = {
-		...DEFAULT_FACET_CONFIG,
-		...configs.facet,
-	}
-
-	const updateCfg = (next: Partial<FacetConfig>) => {
-		setConfigs((prev) => ({
-			...prev,
-			facet: {
-				...DEFAULT_FACET_CONFIG,
-				...prev.facet,
-				...next,
-			},
-		}))
-	}
-
-	const mode = useChartModeDef()
-	const axisMap = facetAxisMapping(mode)
+/** The Rows / Columns subsection for ONE axis: share picker, sizing
+ *  toggle, and range editors. Both facet panels render one of these per
+ *  axis (own axis first, then the perpendicular one) so either panel can
+ *  share or unshare either axis — the share modes are grid-wide bits in
+ *  the single `facet` config, not per-channel state. Returns null when
+ *  the chart mode has no axis in this direction (pie rows).
+ *
+ *  `isOwnAxis` gates the polar "Size panels by unit" toggle: it's a
+ *  single config bit, so only the panel's own subsection surfaces it
+ *  (otherwise a radar panel would show it twice). */
+const FacetAxisSubsection = ({
+	spec,
+	cfg,
+	updateCfg,
+	encodings,
+	overrides,
+	dataset,
+	mode,
+	axisMap,
+	panelOptions,
+	isOwnAxis,
+}: {
+	spec: FacetAxisSpec
+	cfg: FacetConfig
+	updateCfg: (next: Partial<FacetConfig>) => void
+	encodings: Encodings
+	overrides: Record<string, FieldType>
+	dataset: DatasetView | undefined
+	mode: ChartModeDef
+	axisMap: FacetAxisMapping
+	/** Every rendered panel (key + display label), from the same
+	 *  resolver PlotCanvas draws against — drives the per-panel editor. */
+	panelOptions: Array<{ key: string; label: string }>
+	isOwnAxis: boolean
+}) => {
 	// Polar charts (radar / pie): the cartesian "Size … by …" toggle
 	// writes proportionalSizingX/Y but the polar runtime reads the
 	// dedicated proportionalPanelSizing flag — so the cartesian toggle
@@ -174,6 +196,9 @@ export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
 	// at a time, gated by mode).
 	const isPolar = mode.canvas.coordFamily === "polar"
 
+	// The facet field in THIS subsection's direction (may be unmapped
+	// when rendering the perpendicular axis — a single row / column still
+	// has an axis to share or not across the other direction's panels).
 	const ownField = encodings[spec.facetChannel]?.field ?? null
 	const perpField = encodings[spec.perpFacetChannel]?.field ?? null
 
@@ -221,60 +246,30 @@ export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
 		cfg.proportionalSizingByUnit,
 	)
 
-	// "Size rows/columns by …" only makes sense when each row / column
-	// has a single well-defined axis characteristic. Mirrors wrap-panel's
-	// gate ([[feedback-size-by-toggle-gating]]):
-	//   - perpendicular count == 1 + share=none → each group is one panel
-	//   - perpendicular count >= 2 + share=perGroup → the group shares
-	// Everything else collapses to uniform weights or is ambiguous.
-	const showSizing =
-		ownCount >= 2 &&
-		((perpCount === 1 && share === "none") ||
-			(perpCount >= 2 && share === "perGroup"))
+	// "Size row heights / column widths by …" shows whenever it can change anything —
+	// same helper the wrap panel and the runtime use (see its doc). Under
+	// share = none with 2+ panels across, each panel sizes by its own
+	// range and shorter ones sit inside their row, bottom-aligned. The
+	// helper is symmetric in (own, perpendicular), so it serves both specs.
+	const showSizing = rowSizingMeaningful(ownCount, perpCount, share)
+	// Name the dimension that changes ("row heights" / "column widths");
+	// with a single row (column) the sizing is per panel, so say so.
+	const sizingDim = spec.noun === "row" ? "heights" : "widths"
+	const sizingNoun = `${ownCount >= 2 ? spec.noun : "panel"} ${sizingDim}`
 
 	// Defensive panel-dim / proportional-sizing invariant. Gated on the
-	// panel actually surfacing its axis controls (field mapped + the mode
-	// has an axis in this direction) so it can't fire from the hint-only
-	// early-return states.
+	// subsection actually surfacing its axis controls (the mode has an
+	// axis in this direction) so it can't fire from the null-render
+	// state.
 	useClearPanelDimWhenSizing(
-		ownField != null &&
-			axisChannel != null &&
-			showSizing &&
-			size !== "off",
+		axisChannel != null && showSizing && size !== "off",
 		cfg[spec.panelDimKey],
 		() => updateCfg({ [spec.panelDimKey]: null } as Partial<FacetConfig>),
 	)
 
-	// Empty state: nothing meaningful to configure if the facet channel
-	// isn't mapped yet. Mirror the wrap panel's "map a field" hint copy.
-	if (!ownField) {
-		return (
-			<div className="vc-option-panel vc-help">
-				{spec.emptyHint}
-			</div>
-		)
-	}
-
 	// No axis in this direction for the current mode (pies on the row
-	// panel). Keep the gap input (panel layout still applies) and surface
-	// a brief hint so the empty space isn't confusing.
-	if (axisChannel === null) {
-		return (
-			<div className="vc-option-panel">
-				<div className="vc-help">
-					{spec.noAxisHint}
-				</div>
-				<GapInput
-					label={spec.gapLabel}
-					value={cfg[spec.gapKey]}
-					defaultValue={DEFAULT_FACET_CONFIG[spec.gapKey]}
-					onChange={(n) =>
-						updateCfg({ [spec.gapKey]: n } as Partial<FacetConfig>)
-					}
-				/>
-			</div>
-		)
-	}
+	// axis): nothing to share, size, or range.
+	if (axisChannel === null) return null
 
 	const axisLabel = axisMap[spec.axisLabelKey]
 	const axisLabelLower = axisLabel.toLowerCase()
@@ -308,6 +303,17 @@ export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
 	const showValueOverrides =
 		axisIsContinuous &&
 		(share === "perGroup" || (share === "none" && perpCount === 1))
+	// share === "none" + 2+ perpendicular panels: every panel has its own
+	// axis and there's no row / column to key a group bound on, so the
+	// editor lists each panel (keyed by panel key, same as the wrap
+	// panel's per-panel editors) and writes `panelAxisOverrides`. Keeps
+	// the rule "a continuous axis can always be bounded, shared or not"
+	// consistent across the wrap, row, and column panels.
+	const showPanelOverrides =
+		axisIsContinuous &&
+		share === "none" &&
+		perpCount >= 2 &&
+		panelOptions.length > 0
 	// Overall range surfaces under "All panels" sharing on a continuous
 	// axis — lets the user pin the shared scale to a "pretty" floor /
 	// ceiling.
@@ -329,6 +335,20 @@ export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
 		if (all) updateCfg({ [spec.overridesKey]: all } as Partial<FacetConfig>)
 	}
 
+	const updatePanelOverride = (
+		panelKey: string,
+		bound: "min" | "max",
+		raw: string,
+	) => {
+		const all = withPanelBound(
+			cfg.panelAxisOverrides,
+			panelKey,
+			spec.panelBoundKeys[bound],
+			raw,
+		)
+		if (all) updateCfg({ panelAxisOverrides: all })
+	}
+
 	// The help text depends on which path activated the editor: under
 	// "perGroup" it pins the group's SHARED scale; under "none" with one
 	// perpendicular panel it pins each group's single panel directly.
@@ -344,93 +364,213 @@ export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
 			: share
 
 	return (
-		<div className="vc-option-panel">
-			<CollapsibleSubsection title={spec.subsectionTitle}>
-				<ShareAxisRow
-					label={`Share ${axisLabelLower}`}
-					ariaLabel={`Share ${axisLabel}`}
-					value={displayShare}
-					perGroupLabel={spec.perGroupLabel}
-					perGroupAvailable={perGroupAvailable}
-					onChange={(next) => {
-						const other = migrateShareValue(
-							cfg[spec.otherShareKey],
-						)
-						updateCfg({
-							[spec.shareKey]: next,
-							[spec.otherShareKey]: other,
-							// Clear the polar override so the polar runtime picks
-							// up THIS cartesian value via migratePolarShareValue's
-							// fallback (see spec.polarShareClearKey).
-							[spec.polarShareClearKey]: undefined,
-						} as Partial<FacetConfig>)
-					}}
-				/>
+		<CollapsibleSubsection title={spec.subsectionTitle}>
+			<ShareAxisRow
+				label={`Share ${axisLabelLower}`}
+				ariaLabel={`Share ${axisLabel}`}
+				value={displayShare}
+				perGroupLabel={spec.perGroupLabel}
+				perGroupAvailable={perGroupAvailable}
+				onChange={(next) => {
+					const other = migrateShareValue(cfg[spec.otherShareKey])
+					updateCfg({
+						[spec.shareKey]: next,
+						[spec.otherShareKey]: other,
+						// Clear the polar override so the polar runtime picks
+						// up THIS cartesian value via migratePolarShareValue's
+						// fallback (see spec.polarShareClearKey).
+						[spec.polarShareClearKey]: undefined,
+					} as Partial<FacetConfig>)
+				}}
+			/>
 
-				{/* Polar charts use a panel-radius sizing toggle that maps to
-				 *  proportionalPanelSizing, NOT the cartesian per-axis sizing
-				 *  (which has no effect on radar / pie rendering). Hidden
-				 *  under share=all where every panel collapses to the global
-				 *  max — same gate as the wrap panel. */}
-				{isPolar && share !== "all" && (
+			{/* Polar charts use a panel-radius sizing toggle that maps to
+			 *  proportionalPanelSizing, NOT the cartesian per-axis sizing
+			 *  (which has no effect on radar / pie rendering). Hidden
+			 *  under share=all where every panel collapses to the global
+			 *  max — same gate as the wrap panel. Own-axis only: it's one
+			 *  config bit, not a per-axis one. */}
+			{isPolar && isOwnAxis && share !== "all" && (
+				<SizeByCheckboxRow
+					label="Size panels by unit"
+					checked={cfg.proportionalPanelSizing === true}
+					onChange={(checked) =>
+						updateCfg({ proportionalPanelSizing: checked })
+					}
+				/>
+			)}
+			{!isPolar &&
+				showSizing &&
+				(axisType === "categorical" || axisType === "ordinal") && (
 					<SizeByCheckboxRow
-						label="Size panels by unit"
-						checked={cfg.proportionalPanelSizing === true}
+						label={`Size ${sizingNoun} by category count`}
+						checked={size === "categoryCount"}
 						onChange={(checked) =>
-							updateCfg({ proportionalPanelSizing: checked })
+							setSizing(checked ? "categoryCount" : "off")
 						}
 					/>
 				)}
-				{!isPolar &&
-					showSizing &&
-					(axisType === "categorical" || axisType === "ordinal") && (
-						<SizeByCheckboxRow
-							label={`Size ${spec.nounPlural} by category count`}
-							checked={size === "categoryCount"}
-							onChange={(checked) =>
-								setSizing(checked ? "categoryCount" : "off")
-							}
-						/>
-					)}
-				{!isPolar &&
-					showSizing &&
-					(axisType === "quantitative" || axisType === "temporal") && (
-						<SizeByCheckboxRow
-							label={`Size ${spec.nounPlural} by unit range`}
-							checked={size === "unit"}
-							onChange={(checked) => setSizing(checked ? "unit" : "off")}
-						/>
-					)}
-
-				{showOverallRange && (
-					<AxisRangeSection
-						title={`${axisLabel} range`}
-						help={`Blank = auto-fit. Set a bound to pin the shared ${axisLabelLower} (e.g. min = 0).`}
-						entries={[
-							{
-								key: "overall",
-								min: cfg[spec.overallRangeKey]?.min,
-								max: cfg[spec.overallRangeKey]?.max,
-								onChange: updateOverallRange,
-							},
-						]}
+			{!isPolar &&
+				showSizing &&
+				(axisType === "quantitative" || axisType === "temporal") && (
+					<SizeByCheckboxRow
+						label={`Size ${sizingNoun} by unit range`}
+						checked={size === "unit"}
+						onChange={(checked) => setSizing(checked ? "unit" : "off")}
 					/>
 				)}
 
-				{showValueOverrides && ownValues.length > 0 && (
-					<AxisRangeSection
-						title={`${axisLabel} range per ${spec.noun}`}
-						help={valueRangeHelp}
-						entries={ownValues.map((v) => ({
-							key: `${spec.valueKeyPrefix}${v}`,
-							label: v,
-							min: cfg[spec.overridesKey]?.[v]?.min,
-							max: cfg[spec.overridesKey]?.[v]?.max,
-							onChange: (bound, raw) => updateValueOverride(v, bound, raw),
-						}))}
-					/>
-				)}
-			</CollapsibleSubsection>
+			{showOverallRange && (
+				<AxisRangeSection
+					title={`${axisLabel} range`}
+					help={`Blank = auto-fit. Set a bound to pin the shared ${axisLabelLower} (e.g. min = 0).`}
+					entries={[
+						{
+							key: "overall",
+							min: cfg[spec.overallRangeKey]?.min,
+							max: cfg[spec.overallRangeKey]?.max,
+							onChange: updateOverallRange,
+						},
+					]}
+				/>
+			)}
+
+			{showValueOverrides && ownValues.length > 0 && (
+				<AxisRangeSection
+					title={`${axisLabel} range per ${spec.noun}`}
+					help={valueRangeHelp}
+					entries={ownValues.map((v) => ({
+						key: `${spec.valueKeyPrefix}${v}`,
+						label: v,
+						min: cfg[spec.overridesKey]?.[v]?.min,
+						max: cfg[spec.overridesKey]?.[v]?.max,
+						onChange: (bound, raw) => updateValueOverride(v, bound, raw),
+					}))}
+				/>
+			)}
+
+			{showPanelOverrides && (
+				<AxisRangeSection
+					title={`${axisLabel} range per panel`}
+					help="Blank = auto from each panel's data."
+					entries={panelOptions.map((p) => ({
+						key: `${spec.valueKeyPrefix}panel-${p.key}`,
+						label: p.label,
+						min: cfg.panelAxisOverrides?.[p.key]?.[spec.panelBoundKeys.min],
+						max: cfg.panelAxisOverrides?.[p.key]?.[spec.panelBoundKeys.max],
+						onChange: (bound, raw) => updatePanelOverride(p.key, bound, raw),
+					}))}
+				/>
+			)}
+		</CollapsibleSubsection>
+	)
+}
+
+/** Shared implementation of the facetRow / facetCol option panels.
+ *  Each panel hosts BOTH axis subsections (its own axis first, then the
+ *  perpendicular one) — share modes are grid-wide, so a user on the
+ *  Facet (col) panel can unshare Y without hopping to Facet (row) — plus
+ *  the "Custom sizing" block for its own direction: gap, panel
+ *  dimension, and the hide-empty-panels toggle. The "own axis" channel
+ *  depends on the chart mode (y / r for rows, x / angle for columns,
+ *  none for pie rows) — see `facetAxisMapping`. The wrap panel
+ *  (`FacetOptionsPanel`) surfaces both axes the same way. */
+export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
+	const spec = axis === "row" ? ROW_SPEC : COL_SPEC
+	const perpSpec = axis === "row" ? COL_SPEC : ROW_SPEC
+	const [configs, setConfigs] = useAtom(currentChannelConfigsAtom)
+	const encodings = useAtomValue(currentEncodingsAtom)
+	const overrides = useAtomValue(currentFieldOverridesAtom)
+	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
+	const dataset = useCurrentDatasetView()
+	const renderedPanelDims = useAtomValue(currentRenderedPanelInnerDimsAtom)
+
+	const cfg: FacetConfig = useMemo(
+		() => ({ ...DEFAULT_FACET_CONFIG, ...configs.facet }),
+		[configs.facet],
+	)
+
+	// Rendered panels (key + label) from the resolver PlotCanvas draws
+	// against, so per-panel range keys match what the renderer looks up.
+	const panelOptions = useMemo(
+		() =>
+			facetPanelOptions(
+				resolveFacetPanels(dataset, encodings, levelOrders, overrides, cfg),
+			),
+		[dataset, encodings, levelOrders, overrides, cfg],
+	)
+
+	const updateCfg = (next: Partial<FacetConfig>) => {
+		setConfigs((prev) => ({
+			...prev,
+			facet: {
+				...DEFAULT_FACET_CONFIG,
+				...prev.facet,
+				...next,
+			},
+		}))
+	}
+
+	const mode = useChartModeDef()
+	const axisMap = facetAxisMapping(mode)
+
+	const ownField = encodings[spec.facetChannel]?.field ?? null
+	const perpField = encodings[spec.perpFacetChannel]?.field ?? null
+	const ownAxisChannel = axisMap[spec.axisMapKey]
+
+	// Panel dimension conflicts with proportional sizing — hide it when
+	// "Size row heights / column widths by …" is actively driving sizes on this axis.
+	// Same gate the subsection uses for its sizing toggle.
+	const ownCount = countUniqueFieldValues(dataset, ownField)
+	const perpCount = countUniqueFieldValues(dataset, perpField)
+	const ownShare = migrateShareValue(cfg[spec.shareKey])
+	const ownSize = migrateProportionalSizing(
+		cfg[spec.sizingKey],
+		cfg.proportionalSizing,
+		cfg.proportionalSizingByUnit,
+	)
+	const ownSizingActive =
+		ownAxisChannel != null &&
+		ownSize !== "off" &&
+		rowSizingMeaningful(ownCount, perpCount, ownShare)
+
+	// Empty state: nothing meaningful to configure if the facet channel
+	// isn't mapped yet. Mirror the wrap panel's "map a field" hint copy.
+	if (!ownField) {
+		return (
+			<div className="vc-option-panel vc-help">
+				{spec.emptyHint}
+			</div>
+		)
+	}
+
+	const subsectionProps = {
+		cfg,
+		updateCfg,
+		encodings,
+		overrides,
+		dataset,
+		mode,
+		axisMap,
+		panelOptions,
+	}
+
+	return (
+		<div className="vc-option-panel">
+			{/* Own axis first. When the mode has no axis in this direction
+			 *  (pies on the row panel) surface a brief hint so the empty
+			 *  space isn't confusing; the perpendicular subsection below
+			 *  still renders. */}
+			{ownAxisChannel === null ? (
+				<div className="vc-help">{spec.noAxisHint}</div>
+			) : (
+				<FacetAxisSubsection {...subsectionProps} spec={spec} isOwnAxis />
+			)}
+			<FacetAxisSubsection
+				{...subsectionProps}
+				spec={perpSpec}
+				isOwnAxis={false}
+			/>
 
 			<CollapsibleSubsection title="Custom sizing">
 				<GapInput
@@ -442,9 +582,7 @@ export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
 					}
 				/>
 
-				{/* Panel dimension conflicts with proportional sizing — hide it
-				 *  when "Size rows/columns by …" is actively driving sizes. */}
-				{axisMap.showPanelSize && !(showSizing && size !== "off") && (
+				{axisMap.showPanelSize && !ownSizingActive && (
 					<PanelDimInput
 						label={spec.panelDimLabel}
 						value={cfg[spec.panelDimKey]}

@@ -340,10 +340,9 @@ describe("buildSolverPanelInputs", () => {
 		expect(inputs.map((p) => p.yWeight)).toEqual([100, 5])
 	})
 
-	it("collapses weights to 1 when sizing is stored but ill-defined for the share shape", () => {
-		// 2-column grid via facetCol+facetRow would be needed for a multi-col
-		// row; here: multi-column comes from wrap facet (2 panels, cols 2) with
-		// shareY none — per-row weights are ill-defined, so they stay 1.
+	it("gives each panel its own weight under shareY none (per-panel sizing)", () => {
+		// Wrap facet, 2 panels side by side, shareY none: each panel weighs
+		// its own y range; the solver shrinks the shorter one in its cell.
 		const e = emptyEncodings()
 		e.x = { field: "cat" }
 		e.y = { field: "val" }
@@ -364,7 +363,31 @@ describe("buildSolverPanelInputs", () => {
 			},
 		})
 		expect(inputs.length).toBeGreaterThan(1)
-		expect(inputs.every((p) => p.yWeight === 1)).toBe(true)
+		expect(inputs.map((p) => p.yWeight)).toEqual([10, 5])
+	})
+
+	it("collapses weights to uniform under shareY all", () => {
+		const e = emptyEncodings()
+		e.x = { field: "cat" }
+		e.y = { field: "val" }
+		e.facet = { field: "g" }
+		const inputs = build({
+			rows: [
+				{ cat: "a", val: "0", g: "g1" },
+				{ cat: "b", val: "10", g: "g1" },
+				{ cat: "a", val: "0", g: "g2" },
+				{ cat: "b", val: "5", g: "g2" },
+			],
+			encodings: e,
+			isFaceted: true,
+			facetCfg: {
+				...DEFAULT_FACET_CONFIG,
+				shareY: "all",
+				proportionalSizingY: "unit",
+			},
+		})
+		const ws = inputs.map((p) => p.yWeight)
+		expect(new Set(ws).size).toBe(1)
 	})
 })
 

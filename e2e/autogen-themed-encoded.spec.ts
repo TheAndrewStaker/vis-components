@@ -1128,7 +1128,7 @@ const setFacetGapY = async (page: Page, gapY: number): Promise<void> => {
 }
 
 /** Within the (already-expanded) FacetOptionsPanel, toggle every
- *  "Size {columns,rows} by category count" checkbox that's currently
+ *  "Size {column widths,row heights,panel …} by category count" checkbox that's currently
  *  visible. Wrap mode now exposes one toggle per axis (each appears
  *  only when its axis variable is categorical/ordinal), so checking
  *  "all of them" matches the old single-global-flag intent: enable
@@ -1138,7 +1138,9 @@ const setProportionalByCategoryCount = async (
 	on: boolean,
 ): Promise<void> => {
 	const encodingsPanel = page.locator('[id="aside-section-Encodings"]')
-	const cbs = encodingsPanel.getByLabel(/Size (columns|rows) by category count/)
+	const cbs = encodingsPanel.getByLabel(
+		/Size (column widths|row heights|panel widths|panel heights) by category count/,
+	)
 	const count = await cbs.count()
 	for (let i = 0; i < count; i++) {
 		const cb = cbs.nth(i)

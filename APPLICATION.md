@@ -1489,20 +1489,36 @@ Visible when `facet` is mapped. Controls:
   Default is shared. Only for axes the mode draws (`canvas.cartesianAxes`
   — radar / pies swap in R / angle pickers; maps and the structure
   layouts draw no axis, so their facet panel has no share rows or range
-  editors, only the panel size inputs).
-- **Size panels by category count** — when checked, panels with more
-  categories on the relevant axis get proportionally more width / height
-  so categories stay evenly spaced across panels. Requires the axis
-  in question to NOT be shared and to have only one row or column
-  with that variable. Greyed out otherwise.
-- **Size panels by unit** — same idea, but for quantitative axes:
-  panels with a larger axis range get proportionally more space. E.g.
-  panel A's y is 0–10 and panel B's y is 0–20 → B is twice as tall.
-  Same not-shared, one-row/column-only constraints.
+  editors, only the panel size inputs). In grid mode the Facet (row)
+  and Facet (col) panels EACH carry both a "Rows" and a "Columns"
+  subsection (own axis listed first) — the share modes are grid-wide
+  bits, so either panel can share or unshare either axis without
+  hopping to the other. Pie rows have no axis: the row panel shows a
+  one-line hint in place of "Rows" and still offers "Columns".
+- **Size row heights / column widths by category count** — when
+  checked, panels with more categories on the relevant axis get
+  proportionally more height / width so categories stay evenly spaced
+  across every panel. Labeled "Size panel heights / panel widths by …"
+  when there is only one row (column). Shown when it
+  can change anything: Share = None with 2+ panels, or Per row / Per
+  column in a 2D grid; hidden under All panels (every panel identical).
+  Under None, panels side by side can differ in height: the row takes
+  its tallest panel's height and shorter panels sit inside it,
+  bottom-aligned so the x axes share a baseline (columns mirror this,
+  left-aligned). The panel's title moves down with it.
+- **Size row heights / column widths by unit range** — same idea, but for
+  quantitative axes: panels with a larger axis range get proportionally
+  more space. E.g. panel A's y is 0–10 and panel B's y is 0–20 → B is
+  twice as tall, whether they're stacked or side by side. Same gating.
 - **Axis range** — min / max inputs for the continuous axis, shaped by
   its share mode: one overall range under "All panels", one per row /
   column under "Per row" / "Per column", one per panel under "None"
-  (wrap mode keys these by facet value). Blank = auto-fit; a typed
+  (wrap mode keys these by facet value; the row / column panels key
+  them by the rendered panel, labeled "row · column", and with a single
+  panel across the other direction the per-row / per-column editor
+  already IS per panel). The rule across wrap, row, and column panels:
+  a continuous axis (quantitative or temporal — never categorical /
+  ordinal) can always be bounded, shared or not. Blank = auto-fit; a typed
   bound is kept exact (no `.nice()` rounding). The editor gates on the
   field the axis ACTUALLY reads — a vertical bar's y axis is its
   Length measure, so the editor shows even though Y position is empty,
@@ -1522,9 +1538,9 @@ The facet Row and Column option panels each carry a **Hide empty
 panels** checkbox in their "Custom sizing" subsection — one config
 bit (`FacetConfig.hideEmptyPanels`) mirrored into both panels, shown
 only when BOTH `facetRow` and `facetCol` are mapped (the row × col
-cross-product is the only source of empty panels). In pie mode it
-surfaces only in the column panel: the row panel early-returns with
-its "no row axis" hint before reaching the checkbox.
+cross-product is the only source of empty panels). Pie mode included:
+the row panel's "no row axis" hint replaces only its Rows subsection,
+not the Custom sizing block.
 
 Default off. Off — or on with no empty cross-product cell — the grid
 renders as always: full cross-product, top and left header strips, no

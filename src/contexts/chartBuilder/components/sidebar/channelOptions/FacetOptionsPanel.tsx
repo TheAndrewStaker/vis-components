@@ -36,6 +36,7 @@ import {
 	useClearPanelDimWhenSizing,
 	withBound,
 	withBoundInMap,
+	withPanelBound,
 } from "./facetSharedControls"
 
 export const FacetOptionsPanel = () => {
@@ -68,27 +69,8 @@ export const FacetOptionsPanel = () => {
 		bound: keyof PanelAxisOverride,
 		raw: string,
 	) => {
-		const current: PanelAxisOverride = cfg.panelAxisOverrides[panelValue] ?? {}
-		const next: PanelAxisOverride = { ...current }
-		if (raw.trim() === "") {
-			delete next[bound]
-		} else {
-			const n = Number(raw)
-			if (!Number.isFinite(n)) return
-			next[bound] = n
-		}
-		const allOverrides = { ...cfg.panelAxisOverrides }
-		const stillHasAny =
-			next.xMin !== undefined ||
-			next.xMax !== undefined ||
-			next.yMin !== undefined ||
-			next.yMax !== undefined
-		if (stillHasAny) {
-			allOverrides[panelValue] = next
-		} else {
-			delete allOverrides[panelValue]
-		}
-		updateCfg({ panelAxisOverrides: allOverrides })
+		const all = withPanelBound(cfg.panelAxisOverrides, panelValue, bound, raw)
+		if (all) updateCfg({ panelAxisOverrides: all })
 	}
 
 	const fieldName = encodings.facet?.field ?? null
@@ -184,24 +166,18 @@ export const FacetOptionsPanel = () => {
 	const perRowAvailable = perGroupAvailable
 	const perColAvailable = perGroupAvailable
 
-	// "Size rows by …" assigns ONE weight per row, so it only makes sense
-	// when each row has a well-defined Y characteristic:
-	//   - grid.cols == 1 + shareY = none  → each row is a single panel
-	//     with its own Y → row weight = that panel's range. ✓
-	//   - grid.cols >= 2 + shareY = perGroup → each row shares a Y across
-	//     its panels → row weight = the shared range. ✓
-	// Everything else collapses to uniform weights (all panels same Y under
-	// "all"; all rows same range under 1-col + share=all) OR makes the
-	// per-row weight ambiguous (multiple panels per row each with their own
-	// Y under "none" + 2D grid) — user-reported the latter: a 2×2 wrap
-	// with shareY=none sized rows by the MAX panel range, so a row holding
-	// a 0–3 panel and a 0–4 panel got one height when the user expected
-	// each panel to size independently. Per-panel sizing would need a
-	// solver rewrite; for now we just hide the toggle in that case.
-	// (The condition lives in channelConfig so PlotCanvas gates its
-	// panel-dim overrides on exactly the same shapes — see the helper doc.)
+	// "Size row heights / column widths by …" shows whenever it can change anything
+	// (see the helper doc). Under share = none every panel sizes by its own
+	// range: the row takes its tallest panel's height and shorter panels
+	// sit inside their cell, bottom-aligned. (The condition lives in
+	// channelConfig so PlotCanvas gates its panel-dim overrides on exactly
+	// the same shapes.) Labels name the dimension that changes ("row
+	// heights" / "column widths"); a single row / column reads as
+	// "panel heights" / "panel widths".
 	const showRowSizing = rowSizingMeaningful(grid.rows, grid.cols, shareY)
 	const showColSizing = colSizingMeaningful(grid.rows, grid.cols, shareX)
+	const rowSizingNoun = grid.rows >= 2 ? "row heights" : "panel heights"
+	const colSizingNoun = grid.cols >= 2 ? "column widths" : "panel widths"
 
 	// Invariant: a stored panel width / height must not coexist with
 	// active proportional sizing on the same axis (see the hook's doc).
@@ -557,7 +533,7 @@ export const FacetOptionsPanel = () => {
 
 					{showRowSizing && rowAxisIsCategorical && (
 						<SizeByCheckboxRow
-							label="Size rows by category count"
+							label={`Size ${rowSizingNoun} by category count`}
 							checked={sizeY === "categoryCount"}
 							onChange={(checked) =>
 								updateCfg({
@@ -573,7 +549,7 @@ export const FacetOptionsPanel = () => {
 					)}
 					{showRowSizing && rowAxisIsContinuous && (
 						<SizeByCheckboxRow
-							label="Size rows by unit range"
+							label={`Size ${rowSizingNoun} by unit range`}
 							checked={sizeY === "unit"}
 							onChange={(checked) =>
 								updateCfg({
@@ -658,7 +634,7 @@ export const FacetOptionsPanel = () => {
 
 					{showColSizing && colAxisIsCategorical && (
 						<SizeByCheckboxRow
-							label="Size columns by category count"
+							label={`Size ${colSizingNoun} by category count`}
 							checked={sizeX === "categoryCount"}
 							onChange={(checked) =>
 								updateCfg({
@@ -672,7 +648,7 @@ export const FacetOptionsPanel = () => {
 					)}
 					{showColSizing && colAxisIsContinuous && (
 						<SizeByCheckboxRow
-							label="Size columns by unit range"
+							label={`Size ${colSizingNoun} by unit range`}
 							checked={sizeX === "unit"}
 							onChange={(checked) =>
 								updateCfg({

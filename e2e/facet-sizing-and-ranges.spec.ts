@@ -3,15 +3,15 @@ import { seedFixtureScript, type SeedFixture } from "./seed"
 
 /** Integration coverage for the facet sizing + axis-range feature pack:
  *
- *   - "Size rows by unit / category count" actually changes row heights
+ *   - "Size row heights by unit / category count" actually changes row heights
  *     (and only when the per-strip weight is unambiguous).
  *   - Custom panelHeight / panelWidth and proportional sizing don't
  *     coexist: enabling one nulls the other (the defensive invariant).
  *   - Overall, per-row, and per-col range overrides clamp the scale.
  *   - Per-row range under shareY=none in a row-only grid applies as a
  *     per-panel bound.
- *   - 2D grid + share=none collapses sizing weight to uniform (gating
- *     matches the wrap panel's "ambiguous strip" rule).
+ *   - 2D wrap + share=none sizes each panel by its own range; shorter
+ *     panels sit bottom-aligned inside their row.
  *   - No unnecessary scrollbar in fit mode for reasonable layouts.
  *
  *  Each test seeds a saved visual via `addInitScript` (no UI driving
@@ -174,43 +174,30 @@ test.describe("Facet sizing — size by unit range", () => {
 })
 
 test.describe("Facet sizing — runtime gating", () => {
-	test("2D wrap + shareY=none: sizing weight collapses to uniform regardless of stored sizing value", async ({
+	test("2D wrap + shareY=none + size by unit: each panel sizes by its own range, bottom-aligned", async ({
 		page,
 	}) => {
-		// Two cols × two rows, shareY=none, proportionalSizingY="unit" set —
-		// per the UI gate this case hides the toggle, and at runtime the
-		// weight is forced to 1. All four panels should be equal height.
+		// Two cols × two rows, shareY=none. Each panel's height tracks its
+		// own Y range (one px-per-unit across the figure); a shorter panel
+		// sits inside its row's cell, bottom-aligned with its neighbor.
+		// Y maxima 10 / 20 / 40 / 50 so d3's nice() leaves the domains alone.
+		const maxima = { A: 10, B: 20, C: 40, D: 50 } as const
 		const fixture: SeedFixture = {
-			visualId: "vis-2d-none-sizing-inert",
-			datasetId: "ds-2d-none-sizing-inert",
+			visualId: "vis-2d-none-per-panel-sizing",
+			datasetId: "ds-2d-none-per-panel-sizing",
 			datasetName: "2d-none",
 			fields: [
 				{ name: "x", inferredType: "quantitative" },
 				{ name: "y", inferredType: "quantitative" },
 				{ name: "g", inferredType: "categorical" },
 			],
-			rows: [
-				...Array.from({ length: 6 }, (_, i) => ({
+			rows: Object.entries(maxima).flatMap(([g, max]) =>
+				Array.from({ length: 6 }, (_, i) => ({
 					x: String(i),
-					y: String(i * 1),
-					g: "A",
+					y: String((i * max) / 5),
+					g,
 				})),
-				...Array.from({ length: 6 }, (_, i) => ({
-					x: String(i),
-					y: String(i * 10),
-					g: "B",
-				})),
-				...Array.from({ length: 6 }, (_, i) => ({
-					x: String(i),
-					y: String(i * 100),
-					g: "C",
-				})),
-				...Array.from({ length: 6 }, (_, i) => ({
-					x: String(i),
-					y: String(i * 1000),
-					g: "D",
-				})),
-			],
+			),
 			encodings: {
 				x: { field: "x" },
 				y: { field: "y" },
@@ -228,16 +215,35 @@ test.describe("Facet sizing — runtime gating", () => {
 			},
 		}
 		await seedAndOpen(page, fixture)
-		const rects = await panelInnerRects(page)
+		// Screen-space extent of each panel's longest vertical line
+		// (spine / vertical gridline = the plot's full height).
+		const rects = await page.evaluate(() => {
+			const svg = document.querySelector("#vc-scatter-svg")
+			if (!svg) return []
+			return Array.from(
+				svg.querySelectorAll<SVGGElement>("g[data-panel-key]"),
+			).map((g) => {
+				let best = { top: 0, bottom: 0, h: 0 }
+				for (const ln of Array.from(g.querySelectorAll("line"))) {
+					const r = ln.getBoundingClientRect()
+					if (r.width < 1 && r.height > best.h) {
+						best = { top: r.top, bottom: r.bottom, h: r.height }
+					}
+				}
+				return { key: g.dataset.panelKey ?? "", ...best }
+			})
+		})
 		expect(rects.length).toBe(4)
-		// In a 2x2 wrap, panels in the same row have equal height
-		// (uniform-row constraint). Heights across rows should now also
-		// be equal because the ambiguous sizing collapsed to uniform.
-		const heights = rects.map((r) => r.height)
-		const max = Math.max(...heights)
-		const min = Math.min(...heights)
-		// All within ~10% of each other.
-		expect(max - min).toBeLessThan(max * 0.1)
+		const byKey = Object.fromEntries(rects.map((r) => [r.key, r]))
+		const perUnit = (Object.keys(maxima) as (keyof typeof maxima)[]).map(
+			(k) => byKey[k]!.h / maxima[k],
+		)
+		for (const u of perUnit) {
+			expect(Math.abs(u - perUnit[0]!)).toBeLessThan(perUnit[0]! * 0.05)
+		}
+		// Same-row panels share a baseline.
+		expect(Math.abs(byKey.A!.bottom - byKey.B!.bottom)).toBeLessThan(2)
+		expect(Math.abs(byKey.C!.bottom - byKey.D!.bottom)).toBeLessThan(2)
 	})
 })
 

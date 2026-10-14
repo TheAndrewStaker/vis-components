@@ -2508,3 +2508,89 @@ describe("solveFacetLayout — data-label reserves (extraLeft/RightMargin)", () 
 		)
 	})
 })
+
+describe("solveFacetLayout — per-panel sizing within a row / column", () => {
+	const weighted = (
+		rows: number,
+		cols: number,
+		weights: { x?: number; y?: number }[],
+	): SolverPanelInput[] =>
+		makePanels(rows, cols).map((p, i) => ({
+			...p,
+			xWeight: weights[i]?.x ?? 1,
+			yWeight: weights[i]?.y ?? 1,
+		}))
+
+	it("side-by-side panels with different y weights get proportional heights, bottom-aligned", () => {
+		const spec = solveFacetLayout(
+			baseline({
+				rows: 1,
+				cols: 2,
+				proportionalSizing: true,
+				panels: weighted(1, 2, [{ y: 10 }, { y: 4 }]),
+			})
+		)
+		const [a, b] = spec.panels
+		expect(b!.inner.height / a!.inner.height).toBeCloseTo(0.4, 5)
+		// Bottom edges line up so the x axes form one baseline.
+		expect(b!.inner.y + b!.inner.height).toBeCloseTo(a!.inner.y + a!.inner.height, 5)
+		// The cell keeps the row's height; only the plot rect shrinks.
+		expect(b!.cell.height).toBe(a!.cell.height)
+	})
+
+	it("one px-per-unit across every panel in a 2×2 grid", () => {
+		const ys = [10, 4, 2, 8]
+		const spec = solveFacetLayout(
+			baseline({
+				rows: 2,
+				cols: 2,
+				proportionalSizing: true,
+				panels: weighted(2, 2, ys.map((y) => ({ y }))),
+			})
+		)
+		const perUnit = spec.panels.map((p, i) => p.inner.height / ys[i]!)
+		for (const u of perUnit) expect(u).toBeCloseTo(perUnit[0]!, 5)
+	})
+
+	it("stacked panels with different x weights get proportional widths, left-aligned", () => {
+		const spec = solveFacetLayout(
+			baseline({
+				rows: 2,
+				cols: 1,
+				proportionalSizing: true,
+				panels: weighted(2, 1, [{ x: 3 }, { x: 6 }]),
+			})
+		)
+		const [a, b] = spec.panels
+		expect(a!.inner.width / b!.inner.width).toBeCloseTo(0.5, 5)
+		expect(a!.inner.x).toBeCloseTo(b!.inner.x, 5)
+	})
+
+	it("wrap facet labels follow a shortened panel's top edge", () => {
+		const spec = solveFacetLayout(
+			baseline({
+				rows: 1,
+				cols: 2,
+				proportionalSizing: true,
+				panels: weighted(1, 2, [{ y: 10 }, { y: 4 }]),
+			})
+		)
+		const [a, b] = spec.panels
+		const dropA = a!.inner.y - a!.facetLabel!.y
+		const dropB = b!.inner.y - b!.facetLabel!.y
+		expect(dropB).toBeCloseTo(dropA, 5)
+	})
+
+	it("uniform sizing ignores weights (no shrink)", () => {
+		const spec = solveFacetLayout(
+			baseline({
+				rows: 1,
+				cols: 2,
+				proportionalSizing: false,
+				panels: weighted(1, 2, [{ y: 10 }, { y: 4 }]),
+			})
+		)
+		const [a, b] = spec.panels
+		expect(b!.inner.height).toBe(a!.inner.height)
+	})
+})

@@ -219,13 +219,24 @@ export const resolvePanelRenderInputs = ({
 		shareXMode === "all" && xIsContinuous
 			? facetCfg.overallXRange
 			: undefined
-	// Wrap-mode legacy per-panel overrides keyed by the single
-	// facet value (== p.key). Preserved as-is so saved visuals
-	// keep working; in grid mode we ignore this branch.
+	// Per-panel overrides keyed by panel key. Wrap mode: the legacy
+	// map keyed by the single facet value (== p.key), consulted as-is
+	// so saved visuals keep working. Grid mode: the row / column
+	// panels' "range per panel" editor writes the same map (keyed
+	// "row|col") when that axis is unshared and the other direction
+	// has 2+ panels — so it's read only under share "none" for the
+	// axis in question, never outranking a shared scale.
+	const panelOverride = facetCfg.panelAxisOverrides?.[p.key]
 	const legacyPanelOverride =
-		panelData.mode === "wrap"
-			? facetCfg.panelAxisOverrides?.[p.key]
-			: undefined
+		panelData.mode === "wrap" ? panelOverride : undefined
+	const xPanelOverride =
+		panelData.mode === "grid" && shareXMode === "none" && xIsContinuous
+			? panelOverride
+			: legacyPanelOverride
+	const yPanelOverride =
+		panelData.mode === "grid" && shareYMode === "none" && yIsContinuous
+			? panelOverride
+			: legacyPanelOverride
 	// Per-encoding base bounds from the X / Y axis option panels.
 	// Lowest precedence — facet-level overrides above win where set,
 	// but on single-panel charts (and faceted panels without a more
@@ -251,22 +262,22 @@ export const resolvePanelRenderInputs = ({
 	const xMinOverride =
 		xGroupOverride?.min ??
 		xOverallOverride?.min ??
-		legacyPanelOverride?.xMin ??
+		xPanelOverride?.xMin ??
 		xCfgMin
 	const xMaxOverride =
 		xGroupOverride?.max ??
 		xOverallOverride?.max ??
-		legacyPanelOverride?.xMax ??
+		xPanelOverride?.xMax ??
 		xCfgMax
 	const yMinOverride =
 		yGroupOverride?.min ??
 		yOverallOverride?.min ??
-		legacyPanelOverride?.yMin ??
+		yPanelOverride?.yMin ??
 		yCfgMin
 	const yMaxOverride =
 		yGroupOverride?.max ??
 		yOverallOverride?.max ??
-		legacyPanelOverride?.yMax ??
+		yPanelOverride?.yMax ??
 		yCfgMax
 	// Bar / Area renderers consume a single "measure axis"
 	// bound (the quantitative axis). bars-x / areas-x → y is

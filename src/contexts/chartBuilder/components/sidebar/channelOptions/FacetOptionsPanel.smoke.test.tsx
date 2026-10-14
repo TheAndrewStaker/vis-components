@@ -110,7 +110,22 @@ describe("FacetOptionsPanel — Y range editors on a length-encoded bar chart", 
 		expect(utils.getByText("Everything else")).toBeTruthy()
 		// The unit-range sizing toggle stays hidden: its solver weights
 		// read the Y POSITION field, so it would be inert here.
-		expect(utils.queryByText(/size rows by unit range/i)).toBeNull()
+		expect(utils.queryByText(/size (row|panel) heights by unit range/i)).toBeNull()
+	})
+
+	it("wrap mode, Share Y = none, panels side by side: offers per-panel sizing", () => {
+		const utils = mount(
+			{
+				...emptyEncodings(),
+				x: { field: "setting" },
+				y: { field: "value" },
+				facet: { field: "panel" },
+			},
+			facetConfigs({ shareY: "none", rows: 1, cols: 2 }),
+			<FacetOptionsPanel />,
+		)
+		expand(utils, /rows/i)
+		expect(utils.getByText("Size panel heights by unit range")).toBeTruthy()
 	})
 
 	it("wrap mode, Share Y = all: overall Y range editor surfaces", () => {

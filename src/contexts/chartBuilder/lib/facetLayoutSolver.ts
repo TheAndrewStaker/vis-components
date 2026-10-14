@@ -1679,6 +1679,14 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 	// shift toward origin); positive gap = whitespace between cells. With
 	// ridgelineTopGrow / ridgelineLeftGrow applied, even extreme overlap
 	// keeps every cell on-canvas.
+	const shrinkWidths =
+		input.proportionalSizing &&
+		!(input.panelWidthOverride != null && input.panelWidthOverride > 0)
+	const shrinkHeights =
+		input.proportionalSizing &&
+		!(input.panelHeightOverride != null && input.panelHeightOverride > 0)
+	const weightFrac = (w: number, max: number | undefined): number =>
+		max != null && max > 0 ? Math.min(1, Math.max(0, w / max)) : 1
 	const panels: SolverPanelOutput[] = input.panels.map((p) => {
 		const cellX = adjustedGridOriginX + cellXForCol(p.col, cellWidths, input.gapX)
 		const cellY = gridOriginY + cellYForRow(p.row, cellHeights, input.gapY)
@@ -1703,11 +1711,24 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 			edges,
 			cellMargin
 		)
+		// Per-panel sizing within a row / column: the row's height comes
+		// from its largest-weight panel (rowWeights is the max), so a panel
+		// with a smaller weight is drawn shorter than its cell —
+		// bottom-aligned, so x axes across the row share one baseline.
+		// Columns mirror it: narrower, left-aligned (y axes line up). One
+		// px-per-unit holds across the whole figure. A pixel override
+		// pins every panel to the same size, so it skips the shrink.
+		const fullInnerW = safeInnerWidths[p.col] ?? 0
+		const fullInnerH = safeInnerHeights[p.row] ?? 0
+		const xFrac = shrinkWidths ? weightFrac(p.xWeight, colWeights[p.col]) : 1
+		const yFrac = shrinkHeights ? weightFrac(p.yWeight, rowWeights[p.row]) : 1
+		const innerH = fullInnerH * yFrac
+		const yDrop = fullInnerH - innerH
 		const inner: Rect = {
 			x: cellX + m.left,
-			y: cellY + m.top,
-			width: safeInnerWidths[p.col] ?? 0,
-			height: safeInnerHeights[p.row] ?? 0,
+			y: cellY + m.top + yDrop,
+			width: fullInnerW * xFrac,
+			height: innerH,
 		}
 		// Wrap-mode per-panel label sits in the reserved band at the cell
 		// top. For polar (radar / pie) the centered circular mark floats in
@@ -1715,7 +1736,9 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 		// stranded far above it (user-reported June 2026). Pull the label
 		// down to hug the mark's top edge — but never ABOVE its natural band
 		// position (clamp), so densely-packed multi-row wraps are unaffected.
-		const naturalFacetLabelY = cellY + facetLabelHeight * 0.75
+		// Follows a shortened panel's top edge (yDrop) so the label stays
+		// attached to its panel rather than the row's tallest one.
+		const naturalFacetLabelY = cellY + yDrop + facetLabelHeight * 0.75
 		const facetLabelY = isPolarMode
 			? Math.max(
 					naturalFacetLabelY,

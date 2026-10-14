@@ -266,12 +266,35 @@ describe("resolvePanelRenderInputs", () => {
 			expect(r.yMaxOverride).toBe(20)
 		})
 
-		it("legacy panelAxisOverrides are ignored in grid mode", () => {
+		it("per-panel panelAxisOverrides apply in grid mode under share 'none' for that axis", () => {
+			// Row / column panels write this map (keyed "row|col") when an
+			// unshared axis has 2+ panels across — read it per axis.
 			const r = runPanel({
 				key: "g1|h1",
 				rows: gridRows,
 				encodings: gridEncodings(),
 				shareYMode: "none",
+				shareXMode: "none",
+				axisFields: { ...AXIS_CAT_X_QUANT_Y, xType: "quantitative" },
+				facetCfg: {
+					...DEFAULT_FACET_CONFIG,
+					panelAxisOverrides: {
+						"g1|h1": { yMin: 2, yMax: 20, xMin: -1, xMax: 5 },
+					},
+				},
+			})
+			expect(r.yMinOverride).toBe(2)
+			expect(r.yMaxOverride).toBe(20)
+			expect(r.xMinOverride).toBe(-1)
+			expect(r.xMaxOverride).toBe(5)
+		})
+
+		it("per-panel panelAxisOverrides are ignored in grid mode when that axis is shared", () => {
+			const r = runPanel({
+				key: "g1|h1",
+				rows: gridRows,
+				encodings: gridEncodings(),
+				shareYMode: "all",
 				facetCfg: {
 					...DEFAULT_FACET_CONFIG,
 					panelAxisOverrides: { "g1|h1": { yMin: 2, yMax: 20 } },

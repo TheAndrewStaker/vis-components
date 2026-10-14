@@ -22,7 +22,7 @@ const seedAndOpen = async (page: Page, fixture: SeedFixture) => {
 }
 
 /** 2×2 cartesian grid where each cell has a different Y data range —
- *  so "Size rows by unit range" + shareY=perRow should give the two
+ *  so "Size row heights by unit range" + shareY=perRow should give the two
  *  rows visibly different heights. */
 const cartesianGridSizingFixture = (): SeedFixture => ({
 	visualId: "vis-grid-row-sizing-cartesian",
@@ -37,7 +37,7 @@ const cartesianGridSizingFixture = (): SeedFixture => ({
 	rows: (() => {
 		const out: Array<Record<string, string>> = []
 		// Row 0 (North): y in [0, 10]. Row 1 (South): y in [0, 100].
-		// Under shareY=perRow + "Size rows by unit range", row 1 should
+		// Under shareY=perRow + "Size row heights by unit range", row 1 should
 		// render ~10× the height of row 0.
 		const rowMaxY: Record<string, number> = { North: 10, South: 100 }
 		for (const region of ["North", "South"]) {
@@ -100,7 +100,7 @@ const panelInnerHeights = async (page: Page) =>
 	})
 
 test.describe("Grid mode — row/col panel sizing toggles", () => {
-	test("cartesian: shareY=perRow + Size rows by unit range → rows visibly differ in height", async ({
+	test("cartesian: shareY=perRow + Size row heights by unit range → rows visibly differ in height", async ({
 		page,
 	}) => {
 		await seedAndOpen(page, cartesianGridSizingFixture())

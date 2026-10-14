@@ -24,10 +24,11 @@ import { FacetColOptionsPanel } from "./FacetColOptionsPanel"
 import { FacetRowOptionsPanel } from "./FacetRowOptionsPanel"
 
 /** Smoke coverage for the shared `FacetAxisOptionsPanel` core behind the
- *  facetRow / facetCol wrappers: the mirrored share pickers target their
- *  own axis, the per-group range editor keys off facet values, the
- *  panel-dim input follows the focus-fill pattern, and the intentional
- *  row/col asymmetry (pies have no row axis) survives. */
+ *  facetRow / facetCol wrappers: each panel carries BOTH axis
+ *  subsections (own axis first) writing the grid-wide share bits, the
+ *  per-group range editor keys off facet values, the panel-dim input
+ *  follows the focus-fill pattern, and the intentional row/col
+ *  asymmetry (pies have no row axis) survives. */
 
 // Explicit cleanup: this file imports vitest APIs directly (no globals), so
 // testing-library's automatic afterEach unmount never registers.
@@ -105,8 +106,8 @@ const expand = (
 	fireEvent.click(header)
 }
 
-describe("FacetAxisOptionsPanel — mirrored row / col share controls", () => {
-	it("row and col panels surface their own axis picker and write independently", () => {
+describe("FacetAxisOptionsPanel — both axes on both panels", () => {
+	it("each panel offers Rows AND Columns, own axis first, writing the shared grid-wide share bits", () => {
 		const utils = mount(
 			scatterEncodings(),
 			facetConfigs(),
@@ -115,40 +116,58 @@ describe("FacetAxisOptionsPanel — mirrored row / col share controls", () => {
 				<FacetColOptionsPanel />
 			</>,
 		)
-		expand(utils, /rows/i)
-		expand(utils, /columns/i)
+		// Own axis first: row panel = Rows, Columns, Custom sizing; col
+		// panel = Columns, Rows, Custom sizing.
+		const headers = utils
+			.getAllByRole("button", { name: /^(rows|columns|custom sizing)$/i })
+			.map((b) => b.textContent?.trim())
+		expect(headers).toEqual([
+			"Rows",
+			"Columns",
+			"Custom sizing",
+			"Columns",
+			"Rows",
+			"Custom sizing",
+		])
+		expand(utils, /rows/i, 0)
+		expand(utils, /rows/i, 1)
+		expand(utils, /columns/i, 0)
+		expand(utils, /columns/i, 1)
 
-		const rowGroup = utils.getByRole("group", { name: "Share Y axis" })
-		const colGroup = utils.getByRole("group", { name: "Share X axis" })
+		// DOM order: row panel's Y picker, then the col panel's Y picker.
+		const yGroups = utils.getAllByRole("group", { name: "Share Y axis" })
+		const xGroups = utils.getAllByRole("group", { name: "Share X axis" })
+		expect(yGroups).toHaveLength(2)
+		expect(xGroups).toHaveLength(2)
 		// 2x2 grid → the per-group option surfaces on both, axis-named.
-		expect(within(rowGroup).getByRole("button", { name: "Per row" })).toBeTruthy()
+		expect(within(yGroups[0]!).getByRole("button", { name: "Per row" })).toBeTruthy()
 		expect(
-			within(colGroup).getByRole("button", { name: "Per column" }),
+			within(xGroups[1]!).getByRole("button", { name: "Per column" }),
 		).toBeTruthy()
 
-		// Clicking "None" on the ROW panel must not disturb the col panel's
-		// share mode (they write shareY vs shareX).
-		fireEvent.click(within(rowGroup).getByRole("button", { name: "None" }))
-		expect(
-			within(rowGroup)
-				.getByRole("button", { name: "None" })
-				.getAttribute("aria-pressed"),
-		).toBe("true")
-		expect(
-			within(colGroup)
-				.getByRole("button", { name: "All panels" })
-				.getAttribute("aria-pressed"),
-		).toBe("true")
+		// Clicking "None" on the COL panel's Y picker writes shareY — the
+		// row panel's Y picker follows (one config bit) and neither X
+		// picker moves (they write shareX).
+		fireEvent.click(within(yGroups[1]!).getByRole("button", { name: "None" }))
+		for (const g of yGroups) {
+			expect(
+				within(g).getByRole("button", { name: "None" }).getAttribute("aria-pressed"),
+			).toBe("true")
+		}
+		for (const g of xGroups) {
+			expect(
+				within(g)
+					.getByRole("button", { name: "All panels" })
+					.getAttribute("aria-pressed"),
+			).toBe("true")
+		}
 	})
 
 	it("shows the overall range under share=all and the per-group editor under perGroup", () => {
 		const utils = mount(
 			scatterEncodings(),
 			facetConfigs({ shareY: "perGroup" }),
-			<>
-				<FacetRowOptionsPanel />
-				<FacetColOptionsPanel />
-			</>,
+			<FacetRowOptionsPanel />,
 		)
 		expand(utils, /rows/i)
 		expand(utils, /columns/i)
@@ -159,6 +178,38 @@ describe("FacetAxisOptionsPanel — mirrored row / col share controls", () => {
 		expect(utils.getByText("South")).toBeTruthy()
 		// Col axis (default all): overall X range.
 		expect(utils.getByText("X axis range")).toBeTruthy()
+	})
+
+	it("row-only grid with an unshared x axis offers an X range per panel (one per row)", () => {
+		// One column, 2+ rows, share X = None: every row panel has its own
+		// x axis and there's no column value to key a group bound on, so
+		// the editor lists each panel.
+		const utils = mount(
+			scatterEncodings({ facetCol: { field: null } }),
+			facetConfigs({ shareX: "none" }),
+			<FacetRowOptionsPanel />,
+		)
+		expand(utils, /columns/i)
+		expect(utils.getByText("X axis range per panel")).toBeTruthy()
+		expect(utils.getByText("North")).toBeTruthy()
+		expect(utils.getByText("South")).toBeTruthy()
+		// Two panels → two min inputs; editing the first commits a value.
+		const mins = utils.getAllByLabelText("min") as HTMLInputElement[]
+		expect(mins).toHaveLength(2)
+		fireEvent.change(mins[0]!, { target: { value: "0" } })
+		expect(mins[0]!.value).toBe("0")
+	})
+
+	it("2D grid with an unshared y axis offers a Y range per panel keyed row · column", () => {
+		const utils = mount(
+			scatterEncodings(),
+			facetConfigs({ shareY: "none" }),
+			<FacetRowOptionsPanel />,
+		)
+		expand(utils, /rows/i)
+		expect(utils.getByText("Y axis range per panel")).toBeTruthy()
+		expect(utils.getByText("North · Left")).toBeTruthy()
+		expect(utils.getByText("South · Right")).toBeTruthy()
 	})
 
 	it("panel height input steps from the auto value, not from min=1", () => {
@@ -181,7 +232,7 @@ describe("FacetAxisOptionsPanel — mirrored row / col share controls", () => {
 })
 
 describe("FacetAxisOptionsPanel — preserved asymmetries", () => {
-	it("row panel shows the no-row-axis hint on pies; col panel still offers the angle picker", () => {
+	it("row panel shows the no-row-axis hint on pies but still offers the Columns (angle) picker", () => {
 		const utils = mount(
 			{
 				...emptyEncodings(),
@@ -195,16 +246,19 @@ describe("FacetAxisOptionsPanel — preserved asymmetries", () => {
 				<FacetColOptionsPanel />
 			</>,
 		)
-		expect(
-			utils.getByText(/no row axis to configure/i).textContent,
-		).toContain("Use the column panel")
+		expect(utils.getByText(/no row axis to configure/i)).toBeTruthy()
+		expect(utils.queryByRole("button", { name: /^rows$/i })).toBeNull()
 		// The row panel still surfaces Vertical gap (panel layout applies to pies).
+		expand(utils, /custom sizing/i, 0)
 		expect(utils.getByLabelText(/Vertical gap/)).toBeTruthy()
 
-		expand(utils, /columns/i)
+		// Both panels carry the Columns subsection with the angle picker:
+		// the row panel no longer has to point the user elsewhere.
+		expand(utils, /columns/i, 0)
+		expand(utils, /columns/i, 1)
 		expect(
-			utils.getByRole("group", { name: "Share angle axis" }),
-		).toBeTruthy()
+			utils.getAllByRole("group", { name: "Share angle axis" }),
+		).toHaveLength(2)
 	})
 
 	it("shows the map-a-field hint when the facet channel is unmapped", () => {

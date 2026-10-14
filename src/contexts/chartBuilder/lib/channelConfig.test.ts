@@ -111,8 +111,10 @@ describe("migrateProportionalSizing", () => {
  *  share these predicates — the lockstep contract that keeps the sidebar
  *  from offering a pixel input the renderer would ignore. */
 describe("rowSizingMeaningful / colSizingMeaningful", () => {
-	it("rows: meaningful only for 1-col+shareY=none or 2+cols+shareY=perGroup", () => {
+	it("rows: meaningful for any 2+ panels under shareY=none, or a 2D grid under perGroup", () => {
 		expect(rowSizingMeaningful(4, 1, "none")).toBe(true)
+		expect(rowSizingMeaningful(1, 3, "none")).toBe(true) // side by side: per-panel heights
+		expect(rowSizingMeaningful(2, 3, "none")).toBe(true) // 2D + none: per-panel heights
 		expect(rowSizingMeaningful(2, 3, "perGroup")).toBe(true)
 	})
 
@@ -121,9 +123,8 @@ describe("rowSizingMeaningful / colSizingMeaningful", () => {
 		expect(rowSizingMeaningful(2, 3, "all")).toBe(false)
 	})
 
-	it("rows: NOT meaningful for ambiguous / degenerate shapes", () => {
-		expect(rowSizingMeaningful(1, 3, "none")).toBe(false) // single row
-		expect(rowSizingMeaningful(2, 3, "none")).toBe(false) // 2D + none: per-row weight ambiguous
+	it("rows: NOT meaningful for degenerate shapes", () => {
+		expect(rowSizingMeaningful(1, 1, "none")).toBe(false) // single panel
 		expect(rowSizingMeaningful(4, 1, "perGroup")).toBe(false) // 1 col: perGroup needs 2+ cols
 	})
 
@@ -131,7 +132,8 @@ describe("rowSizingMeaningful / colSizingMeaningful", () => {
 		expect(colSizingMeaningful(1, 4, "none")).toBe(true)
 		expect(colSizingMeaningful(3, 2, "perGroup")).toBe(true)
 		expect(colSizingMeaningful(1, 4, "all")).toBe(false)
-		expect(colSizingMeaningful(3, 1, "none")).toBe(false) // single col
-		expect(colSizingMeaningful(3, 2, "none")).toBe(false) // 2D + none: ambiguous
+		expect(colSizingMeaningful(3, 1, "none")).toBe(true) // stacked: per-panel widths
+		expect(colSizingMeaningful(3, 2, "none")).toBe(true) // 2D + none: per-panel widths
+		expect(colSizingMeaningful(1, 4, "perGroup")).toBe(false) // 1 row: perGroup needs 2+ rows
 	})
 })

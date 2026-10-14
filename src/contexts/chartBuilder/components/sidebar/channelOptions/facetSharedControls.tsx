@@ -5,6 +5,7 @@
  *  one panel importing UI from another. */
 
 import { useEffect, useMemo } from "react"
+import type { PanelAxisOverride } from "../../../lib/channelConfig"
 
 import { LABEL_COL, LabelSpacer } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
@@ -256,6 +257,7 @@ export const AxisRangeSection = ({
 					<div className="flex flex-col gap-1">
 						<NumberInput
 							label="min"
+							labelClassName={LABEL_COL}
 							value={entry.min ?? null}
 							onChange={(n) => entry.onChange("min", String(n))}
 							onClear={() => entry.onChange("min", "")}
@@ -263,6 +265,7 @@ export const AxisRangeSection = ({
 						/>
 						<NumberInput
 							label="max"
+							labelClassName={LABEL_COL}
 							value={entry.max ?? null}
 							onChange={(n) => entry.onChange("max", String(n))}
 							onClear={() => entry.onChange("max", "")}
@@ -387,6 +390,41 @@ export const withBoundInMap = (
 		all[key] = next
 	} else {
 		delete all[key]
+	}
+	return all
+}
+
+/** Apply one bound edit to the per-panel `panelAxisOverrides` map (keyed
+ *  by panel key; each entry carries xMin / xMax / yMin / yMax). Empty
+ *  input clears that bound; when every bound on the panel clears, the
+ *  entry is dropped. Returns the next map, or null when the edit was
+ *  invalid and should be ignored. Shared by the wrap panel (share =
+ *  "None" per-panel editors) and the row / column panels (same editors
+ *  when the other direction has 2+ panels). */
+export const withPanelBound = (
+	map: Record<string, PanelAxisOverride> | undefined,
+	panelKey: string,
+	bound: keyof PanelAxisOverride,
+	raw: string,
+): Record<string, PanelAxisOverride> | null => {
+	const next: PanelAxisOverride = { ...(map?.[panelKey] ?? {}) }
+	if (raw.trim() === "") {
+		delete next[bound]
+	} else {
+		const n = Number(raw)
+		if (!Number.isFinite(n)) return null
+		next[bound] = n
+	}
+	const all = { ...(map ?? {}) }
+	const stillHasAny =
+		next.xMin !== undefined ||
+		next.xMax !== undefined ||
+		next.yMin !== undefined ||
+		next.yMax !== undefined
+	if (stillHasAny) {
+		all[panelKey] = next
+	} else {
+		delete all[panelKey]
 	}
 	return all
 }

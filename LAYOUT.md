@@ -268,8 +268,9 @@ opt out and don't over-reserve.
 
 ## 6. Proportional sizing
 
-Activated when `proportionalSizing=true` (UI: "Size panels by category
-count" or "Size panels by unit").
+Activated when `proportionalSizing=true` (UI: "Size row heights /
+column widths by category count" or "… by unit range"; "panel heights /
+panel widths" when there is a single row / column).
 
 ```
 xWeight (per panel) = if proportionalSizingByUnit: data range on x
@@ -282,7 +283,25 @@ rowWeights[r] = max(yWeight for panels in row r)
 
 innerWidths[c]  = availableInnerW × colWeights[c] / sum(colWeights)
 innerHeights[r] = availableInnerH × rowWeights[r] / sum(rowWeights)
+
+# per panel: shrink inside the cell when smaller than its strip's max
+panel.inner.height = innerHeights[r] × yWeight / rowWeights[r]   # bottom-aligned
+panel.inner.width  = innerWidths[c]  × xWeight / colWeights[c]   # left-aligned
 ```
+
+### Per-panel sizing within a row / column
+
+Cells stay a grid (one height per row, one width per column), but a
+panel's plot rect is drawn only as tall as its own weight: a row takes
+its tallest panel's height and every other panel in it shrinks inside
+its cell, **bottom-aligned** so the row's x axes share a baseline.
+Columns mirror it — narrower panels are **left-aligned** so y axes line
+up. Because row heights are already distributed by `rowWeights`, one
+px-per-unit (or per category) holds across the whole figure. A wrap
+facet label follows its panel's shifted top edge. Under a shared axis
+every panel in the group has the same weight, so nothing shrinks; a
+pixel panel-dim override or a fixed aspect ratio skips the shrink.
+Nothing downstream reads `cell` — everything draws into `inner`.
 
 `proportionalWeightSource` flag distinguishes the two modes:
 
@@ -312,7 +331,8 @@ Practical consequences:
 - shareX=false + proportional: per-panel `xWeight` varies → cols can
   vary in width by category count (or quant range under by-unit).
 - shareY=false + proportional: per-panel `yWeight` varies → rows can
-  vary.
+  vary, and panels within a row can differ (shorter ones shrink inside
+  their cell, see above).
 - The "1-col proportional tall stack" use case (default shareX=true,
   user wants varied row heights): shareX doesn't constrain yWeight,
   so per-panel y-category counts still drive different row heights.

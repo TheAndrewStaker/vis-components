@@ -1463,34 +1463,37 @@ export const migrateProportionalSizing = (
 	return "categoryCount" // legacyOn === true or unset; the historical default
 }
 
-/** Whether "Size rows by …" is meaningful for this grid shape + share mode.
- *  Sizing assigns ONE weight per row, so it needs each row to have a
- *  well-defined Y characteristic: a single panel with its own Y (1 col +
- *  shareY=none), or a row-shared Y (2+ cols + shareY=perGroup). Everything
- *  else collapses to uniform weights or makes the per-row weight ambiguous.
+/** Whether "Size row heights by …" can change anything for this grid shape +
+ *  share mode. Panels in a shared group have the same range, so:
+ *  - shareY = "all"      → every panel identical → no-op.
+ *  - shareY = "perGroup" → rows can differ (needs a 2D grid for per-row
+ *    sharing to mean anything).
+ *  - shareY = "none"     → every panel sizes by its own range, as soon as
+ *    there are 2+ panels. Panels in the same row can then differ: the
+ *    row takes its tallest panel's height and the solver draws the rest
+ *    shorter inside their cells, bottom-aligned (LAYOUT.md §6).
  *
- *  Shared by FacetOptionsPanel (whether to SHOW the sizing toggle / panel-dim
- *  inputs) and PlotCanvas (whether sizing WINS over an explicit panelHeight at
- *  render time). The two must stay in lockstep: when the UI hides the sizing
- *  toggle as a no-op and offers the pixel input instead, the runtime must
- *  honor that pixel value rather than treating the inert sizing flag as
- *  active. */
+ *  Shared by FacetOptionsPanel / FacetAxisOptionsPanel (whether to SHOW
+ *  the sizing toggle / panel-dim inputs) and solverSpec (whether sizing
+ *  WINS over an explicit panelHeight at render time). The two must stay
+ *  in lockstep: when the UI hides the sizing toggle as a no-op and offers
+ *  the pixel input instead, the runtime must honor that pixel value
+ *  rather than treating the inert sizing flag as active. */
 export const rowSizingMeaningful = (
 	rows: number,
 	cols: number,
 	shareY: "none" | "perGroup" | "all",
 ): boolean =>
-	rows >= 2 &&
-	((cols === 1 && shareY === "none") || (cols >= 2 && shareY === "perGroup"))
+	shareY === "none"
+		? rows * cols >= 2
+		: shareY === "perGroup" && rows >= 2 && cols >= 2
 
 /** Column-axis counterpart of `rowSizingMeaningful` — same lockstep contract. */
 export const colSizingMeaningful = (
 	rows: number,
 	cols: number,
 	shareX: "none" | "perGroup" | "all",
-): boolean =>
-	cols >= 2 &&
-	((rows === 1 && shareX === "none") || (rows >= 2 && shareX === "perGroup"))
+): boolean => rowSizingMeaningful(cols, rows, shareX)
 
 // Defaults for when no field is mapped to an encoding.
 // These replace hardcoded constants in ScatterPlot.tsx so users can customize

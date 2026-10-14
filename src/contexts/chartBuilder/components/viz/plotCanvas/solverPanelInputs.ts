@@ -468,7 +468,7 @@ export const buildSolverPanelInputs = ({
 		// Same expansion as the render-loop's override-applies gate:
 		// in a row-only grid (cols===1) with shareY=none, each row is
 		// a single panel and the row override doubles as a per-panel
-		// bound — feed it into the weight so "Size rows by unit
+		// bound — feed it into the weight so "Size row heights by unit
 		// range" reflects the user's pinned range here too.
 		const yRowOverrideAppliesForWeight =
 			shareYMode === "perGroup" ||
@@ -484,8 +484,12 @@ export const buildSolverPanelInputs = ({
 			: undefined
 		const yOverallOverrideForWeight =
 			shareYMode === "all" ? facetCfg.overallYRange : undefined
+		// Per-panel map: wrap mode's legacy keying AND grid mode's
+		// "range per panel" editor (row / column panels, share = none
+		// with 2+ panels across) both write it, so read it under
+		// share "none" in either faceted mode.
 		const yLegacyOverrideForWeight =
-			shareYMode === "none" && panelData.mode === "wrap"
+			shareYMode === "none" && panelData.mode !== "single"
 				? facetCfg.panelAxisOverrides?.[key]
 				: undefined
 		const yWeightOverrideMin =
@@ -511,7 +515,7 @@ export const buildSolverPanelInputs = ({
 		const xOverallOverrideForWeight =
 			shareXMode === "all" ? facetCfg.overallXRange : undefined
 		const xLegacyOverrideForWeight =
-			shareXMode === "none" && panelData.mode === "wrap"
+			shareXMode === "none" && panelData.mode !== "single"
 				? facetCfg.panelAxisOverrides?.[key]
 				: undefined
 		const xWeightOverrideMin =
@@ -533,31 +537,13 @@ export const buildSolverPanelInputs = ({
 			const max = overrideMax ?? dataMax
 			return Math.max(0, max - min)
 		}
-		// Mirror the wrap / row / col panel's "unambiguous strip" gate
-		// at runtime: if the share mode would make a per-strip weight
-		// ill-defined (e.g. shareY=none + multi-col, multiple panels
-		// per row with their own Y), force the axis's weight to 1 so
-		// the row/col distribution stays uniform — even if the user
-		// previously checked "Size by …" under a different share
-		// mode (the toggle hides, but the stored value persists for
-		// when the user switches back).
-		//
-		// Well-defined weight cases per axis:
-		//   - share = "perGroup"               → each strip shares its axis
-		//   - share = "none" + perpendicular strip count == 1  → single-panel strips
-		//   - share = "all"                    → uniform anyway; the
-		//     range-based weight collapses across strips naturally
-		//     since every panel sees the same source.
-		const ySizingActive =
-			shareYMode === "perGroup" ||
-			shareYMode === "all" ||
-			(shareYMode === "none" && panelData.grid.cols === 1)
-		const xSizingActive =
-			shareXMode === "perGroup" ||
-			shareXMode === "all" ||
-			(shareXMode === "none" && panelData.grid.rows === 1)
+		// Weights follow the share group (xWeightRows / yWeightRows), so
+		// share = "all" collapses to uniform on its own and share = "none"
+		// gives every panel its own weight — the solver shrinks a panel
+		// inside its row / column cell when it's smaller than the strip's
+		// max (per-panel sizing, LAYOUT.md §6).
 		const xWeight =
-			!xSizingActive || sizeX === "off"
+			sizeX === "off"
 				? 1
 				: sizeX === "unit"
 					? Math.max(
@@ -570,7 +556,7 @@ export const buildSolverPanelInputs = ({
 						)
 					: Math.max(1, xWeightLabels.length)
 		const yWeight =
-			!ySizingActive || sizeY === "off"
+			sizeY === "off"
 				? 1
 				: sizeY === "unit"
 					? Math.max(
