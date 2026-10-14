@@ -12,7 +12,10 @@ import {
 } from "../lib/renameField"
 import type { Field } from "../lib/types"
 
-import { currentDatasetViewAtom } from "./useCurrentDatasetView"
+import {
+	currentDatasetViewAtom,
+	derivedReshapeStagesAtom,
+} from "./useCurrentDatasetView"
 
 import {
 	currentAnnotationsAtom,
@@ -134,10 +137,25 @@ export const useRenameDerivedVariable = () => {
 						i === index ? { ...v, name: newName } : v
 					),
 				})
+				// The wide table as the reshape sees it: dataset columns plus the
+				// derived variables it may list. A derived variable checked under
+				// Combine is a melted column, so its rename has to rewrite the
+				// melted-value references (level orders keyed on the category
+				// column), exactly like a combined dataset column's.
+				const stages = get(derivedReshapeStagesAtom)
 				const datasetId = get(currentDatasetIdAtom)
-				const fields = datasetId
-					? (get(datasetIndexAtom)[datasetId]?.fields ?? [])
-					: []
+				const fields: Field[] = [
+					...(datasetId
+						? (get(datasetIndexAtom)[datasetId]?.fields ?? [])
+						: []),
+					...stages.candidates.map(
+						(c): Field => ({
+							name: c.name,
+							inferredType: "categorical",
+							derived: true,
+						})
+					),
+				]
 				renameFieldAcrossEditorAtoms(get, set, fields, oldName, newName)
 				return { ok: true }
 			},

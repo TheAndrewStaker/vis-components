@@ -151,7 +151,11 @@ are checked, so unchecking them all restores the wide table. The
 panel is a purple option box whose
 "Reshape (wide → long)" subheader is a standard collapsible
 subsection (chevron; open by default since the tray click should
-reveal the options). It lists the RAW wide columns:
+reveal the options). It lists the RAW wide columns, followed by the
+derived variables (§2.1c) that can be computed from them — each
+marked with the tray's italic **ƒ**, which reopens that variable's
+edit popup (a variable under Combine has no column of its own after
+the melt, so this is where it stays reachable):
 
 - **ID columns** — checkboxes over every column; checked columns are
   kept as-is on every output row. Checking a column here withdraws it
@@ -182,6 +186,28 @@ chart. A new
 version of the wide file flows through the same reshape, and its
 net-new columns simply appear unchecked. Uploading a different
 dataset resets the reshape.
+
+**Derived variables and the reshape compose** in the natural order,
+derive → reshape → derive, with no extra switch. A derived variable
+the reshape USES — checked as an ID or Combine column — is computed
+on the wide table before the melt and then behaves like any other
+wide column (kept on every row, or combined into the pair); every
+other variable is computed after the melt as before. So "trend" from
+`{start}` and `{end}` can be checked as an ID column while start/end
+are combined, and once the table is long the tray's **+** makes a
+new variable over `{value}` / `{category}`. The panel only lists
+variables that can run on the wide table: one that mentions a column
+the melt creates (the category/value pair, or a variable that itself
+depends on them) is left out. If a checked variable references an
+earlier derived variable, that one is computed wide too so the
+checked one can be, but it only survives the melt if it's checked
+itself (and still runs after the melt as usual). A variable the
+reshape uses is evaluated against the wide table with the
+percent/dollar conversions applied, so Math over `$1,234` cells
+still reads numbers; its edit popup offers the wide columns and
+refuses (amber issue, Save disabled) a reference to a column that
+only exists after the reshape — uncheck it in Reshape first.
+Renaming it renames it in the Reshape lists too.
 
 ### 2.1c Derived variables
 Users can mint new columns computed from existing ones — no new
@@ -262,8 +288,9 @@ Derived variables are **per-visual config, not a data rewrite**
 (`lib/derivedVariables.ts`, `Visual.derivedVariablesConfig`),
 applied as the LAST stage of the view chain — after the reshape and
 the percent/dollar cell conversions, so Math sees plain numeric
-strings and expressions may reference reshape-minted columns.
-Variables evaluate in list order, so a later one can reference an
+strings and expressions may reference reshape-minted columns — except
+for a variable the reshape itself uses, which runs on the wide table
+before the melt (§2.1b). Variables evaluate in list order, so a later one can reference an
 earlier one (chaining); a forward reference is just a missing
 column. The computed columns are ordinary view columns everywhere
 downstream — the tray (headers marked with an italic **ƒ**), the

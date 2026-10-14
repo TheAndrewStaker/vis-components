@@ -1,4 +1,4 @@
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { Button } from "../../../../components/ui/Button"
 import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
 import {
@@ -6,22 +6,30 @@ import {
 	reshapeIssues,
 	type ReshapeConfig,
 } from "../../lib/reshape"
+import type { Field } from "../../lib/types"
 import {
 	currentReshapeConfigAtom,
+	derivedVariableEditorAtom,
 	reshapePanelOpenAtom,
 } from "../../store/atoms"
 import {
 	currentDatasetViewAtom,
 	currentRawDatasetViewAtom,
+	derivedReshapeStagesAtom,
+	preReshapeDatasetViewAtom,
 } from "../../store/useCurrentDatasetView"
 import { Input } from "../../../../components/ui/Input"
 
 /** Wide→long reshape options under Data, shown/hidden by the data tray's
  * "Reshape" button and the "Save and close" button below — closing the menu
  * never un-applies the reshape; unchecking every Combine column is what
- * restores the wide table. The checkboxes list the RAW (wide) columns —
- * everything else in the editor sees the reshaped view — and apply live:
- * the tray table and the chart re-render as columns are checked.
+ * restores the wide table. The checkboxes list the RAW (wide) columns plus
+ * the derived variables that can be computed from them (ƒ-marked, after the
+ * data columns like the tray) — everything else in the editor sees the
+ * reshaped view — and apply live: the tray table and the chart re-render
+ * as columns are checked. Checking a derived variable is what makes it
+ * compute BEFORE the melt (see derivedReshapeStages.ts); nothing else
+ * changes for it.
  * Half-configured states (no Combine column yet, name collisions) simply
  * pass the wide data through, so the panel can be explored without blanking
  * the chart; blanked name boxes fall back to the "category" / "value"
@@ -30,10 +38,20 @@ export const ReshapePanel = () => {
 	const [open, setOpen] = useAtom(reshapePanelOpenAtom)
 	const [config, setConfig] = useAtom(currentReshapeConfigAtom)
 	const raw = useAtomValue(currentRawDatasetViewAtom)
+	const stages = useAtomValue(derivedReshapeStagesAtom)
+	const wide = useAtomValue(preReshapeDatasetViewAtom)
 	const reshaped = useAtomValue(currentDatasetViewAtom)
-	if (!open || !raw) return null
+	const setDerivedEditor = useSetAtom(derivedVariableEditorAtom)
+	if (!open || !raw || !wide) return null
 
-	const fields = raw.fields
+	// Only the names matter to the reshape checks; the type is a stand-in.
+	const fields: Field[] = [
+		...raw.fields,
+		...stages.candidates.map(
+			(c): Field => ({ name: c.name, inferredType: "categorical", derived: true })
+		),
+	]
+	const derivedIdByName = new Map(stages.candidates.map((c) => [c.name, c.id]))
 	const idSet = new Set(config.idFields)
 	const combineCandidates = fields.filter((f) => !idSet.has(f.name))
 	const issues = reshapeIssues(fields, config)
@@ -59,6 +77,27 @@ export const ReshapePanel = () => {
 				: prev.meltFields.filter((n) => n !== name),
 		}))
 
+	/** The tray header's italic ƒ, as a button that reopens the variable's
+	 * editor — a derived variable under Combine has no column of its own
+	 * after the melt, so this is where it's reachable. Inside the checkbox
+	 * label, so stop the click from toggling the box. */
+	const derivedMarker = (f: Field) =>
+		f.derived ? (
+			<button
+				type="button"
+				onClick={(e) => {
+					e.preventDefault()
+					const id = derivedIdByName.get(f.name)
+					if (id) setDerivedEditor({ mode: "edit", id })
+				}}
+				title={`Edit the derived variable ${f.name}`}
+				aria-label={`Edit derived variable ${f.name}`}
+				className="flex-shrink-0 font-serif text-xs italic text-brand-500 hover:text-brand-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+			>
+				ƒ
+			</button>
+		) : null
+
 	return (
 		// mt-2: the Data section body has no gap of its own and the upload
 		// controls render directly above.
@@ -81,6 +120,7 @@ export const ReshapePanel = () => {
 								checked={idSet.has(f.name)}
 								onChange={(e) => toggleId(f.name, e.target.checked)}
 							/>
+							{derivedMarker(f)}
 							<span className="min-w-0 truncate" title={f.name}>
 								{f.name}
 							</span>
@@ -109,6 +149,7 @@ export const ReshapePanel = () => {
 									checked={config.meltFields.includes(f.name)}
 									onChange={(e) => toggleMelt(f.name, e.target.checked)}
 								/>
+								{derivedMarker(f)}
 								<span className="min-w-0 truncate" title={f.name}>
 									{f.name}
 								</span>
@@ -160,7 +201,7 @@ export const ReshapePanel = () => {
 				))}
 				{applies && reshaped && (
 					<p className="vc-help">
-						{raw.rows.length} rows × {raw.fields.length} columns →{" "}
+						{wide.rows.length} rows × {wide.fields.length} columns →{" "}
 						{reshaped.rows.length} rows × {reshaped.fields.length} columns.
 					</p>
 				)}

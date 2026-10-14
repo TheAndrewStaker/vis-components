@@ -1,5 +1,10 @@
 import { atom, useAtomValue, useSetAtom } from "jotai"
 import { useEffect } from "react"
+import {
+	applyDerivedVariablesBeforeReshape,
+	splitDerivedVariablesAroundReshape,
+	type DerivedReshapeStages,
+} from "../lib/derivedReshapeStages"
 import { applyDerivedVariablesToView } from "../lib/derivedVariables"
 import { applyDollarConversionToView } from "../lib/dollarCells"
 import { applyPercentConversionToView } from "../lib/percentCells"
@@ -9,7 +14,7 @@ import {
 	resolveDatasetViewFromMeta,
 	resolveVersionIdFromMeta,
 } from "../lib/resolveDatasetVersion"
-import type { DatasetView } from "../lib/types"
+import type { DatasetView, FieldType } from "../lib/types"
 
 import {
 	currentDatasetIdAtom,
@@ -58,13 +63,61 @@ export const currentRawDatasetViewAtom = atom(
 	}
 )
 
-/** The raw view with the per-visual wide→long reshape applied when active,
- * BEFORE the percent / dollar cell conversions. Kept as its own stage so
- * `reshapeAppliedAtom` can detect the reshape by identity without a cell
- * conversion registering as a reshape. */
+/** Which derived variables run before the melt (the ones the reshape uses)
+ * and which after — see `derivedReshapeStages.ts`. Read by the Reshape
+ * panel (its column lists) and the derived-variable editor (which table a
+ * variable evaluates against). */
+export const derivedReshapeStagesAtom = atom(
+	(get): DerivedReshapeStages =>
+		splitDerivedVariablesAroundReshape(
+			get(currentRawDatasetViewAtom)?.fields ?? [],
+			get(currentDerivedVariablesAtom),
+			get(currentReshapeConfigAtom)
+		)
+)
+
+const applyCellConversions = (
+	view: DatasetView | undefined,
+	overrides: Record<string, FieldType>
+): DatasetView | undefined =>
+	applyDollarConversionToView(
+		applyPercentConversionToView(view, overrides),
+		overrides
+	)
+
+/** The wide table with the cell conversions applied and nothing else: what
+ * a before-melt derived variable evaluates against. Exported for the
+ * derived-variable editor only (editing a variable the reshape uses); the
+ * view chain reads it lazily through `preReshapeDatasetViewAtom`, so
+ * visuals with no such variable never compute it. */
+export const convertedWideDatasetViewAtom = atom(
+	(get): DatasetView | undefined =>
+		applyCellConversions(
+			get(currentRawDatasetViewAtom),
+			get(currentFieldOverridesAtom)
+		)
+)
+
+/** The raw wide view plus the derived variables the reshape uses, computed
+ * as wide columns so the melt can keep or combine them. Same object as the
+ * raw view when the reshape uses none. */
+export const preReshapeDatasetViewAtom = atom(
+	(get): DatasetView | undefined =>
+		applyDerivedVariablesBeforeReshape(
+			get(currentRawDatasetViewAtom),
+			get(currentDerivedVariablesAtom),
+			get(derivedReshapeStagesAtom).beforeIds,
+			() => get(convertedWideDatasetViewAtom)
+		)
+)
+
+/** The pre-reshape view with the per-visual wide→long reshape applied when
+ * active, BEFORE the percent / dollar cell conversions. Kept as its own
+ * stage so `reshapeAppliedAtom` can detect the reshape by identity without
+ * a cell conversion registering as a reshape. */
 const reshapedDatasetViewAtom = atom((get): DatasetView | undefined =>
 	applyReshapeToView(
-		get(currentRawDatasetViewAtom),
+		get(preReshapeDatasetViewAtom),
 		get(currentReshapeConfigAtom)
 	)
 )
@@ -77,11 +130,8 @@ const reshapedDatasetViewAtom = atom((get): DatasetView | undefined =>
  * reference itself or a later one); everything else wants
  * {@link currentDatasetViewAtom}. */
 export const preDerivedDatasetViewAtom = atom((get): DatasetView | undefined =>
-	applyDollarConversionToView(
-		applyPercentConversionToView(
-			get(reshapedDatasetViewAtom),
-			get(currentFieldOverridesAtom)
-		),
+	applyCellConversions(
+		get(reshapedDatasetViewAtom),
 		get(currentFieldOverridesAtom)
 	)
 )
@@ -92,13 +142,16 @@ export const preDerivedDatasetViewAtom = atom((get): DatasetView | undefined =>
  * formatted cells ("$1,234.56") converted to plain numeric strings, both
  * in effectively-quantitative columns (inferred or overridden; tagging
  * those fields with the "percent" / "dollar" format hint), then the
- * per-visual derived variables appended as computed columns. A derived atom rather than a per-component derive so the view
+ * per-visual derived variables appended as computed columns (those the
+ * reshape doesn't use — the ones it uses were computed wide, upstream of
+ * the melt). A derived atom rather than a per-component derive so the view
  * (and its `fields`/`rows` arrays) keeps a stable identity between store
  * updates — memos and effects may key on it safely. */
 export const currentDatasetViewAtom = atom((get): DatasetView | undefined =>
 	applyDerivedVariablesToView(
 		get(preDerivedDatasetViewAtom),
-		get(currentDerivedVariablesAtom)
+		get(currentDerivedVariablesAtom),
+		get(derivedReshapeStagesAtom).afterIds
 	)
 )
 
@@ -108,8 +161,8 @@ export const currentDatasetViewAtom = atom((get): DatasetView | undefined =>
  * "Reshape ✓" active state. Compares the reshape STAGE, not the final view,
  * so a cell conversion alone doesn't read as a reshape. */
 export const reshapeAppliedAtom = atom((get): boolean => {
-	const raw = get(currentRawDatasetViewAtom)
-	return raw !== undefined && get(reshapedDatasetViewAtom) !== raw
+	const wide = get(preReshapeDatasetViewAtom)
+	return wide !== undefined && get(reshapedDatasetViewAtom) !== wide
 })
 
 /**

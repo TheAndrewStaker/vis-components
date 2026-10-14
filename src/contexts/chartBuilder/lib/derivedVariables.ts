@@ -8,10 +8,12 @@ import { inferFieldType } from "./inferFieldType"
 import type { DatasetView, Field } from "./types"
 
 /** Derived variables: new columns computed from existing ones, applied to the
- * current dataset VIEW at read time as the LAST stage of the view chain
- * (after reshape and the percent/dollar conversions, so Math formulas see
- * plain numeric strings and may reference reshape-minted columns). The
- * stored dataset is never rewritten — the definitions are per-visual config
+ * current dataset VIEW at read time, normally as the LAST stage of the view
+ * chain (after reshape and the percent/dollar conversions, so Math formulas
+ * see plain numeric strings and may reference reshape-minted columns). A
+ * variable the reshape itself uses (checked as an ID or Combine column) runs
+ * on the wide table BEFORE the melt instead — see `derivedReshapeStages.ts`.
+ * The stored dataset is never rewritten — the definitions are per-visual config
  * (like ReshapeConfig), so a new version of the data flows through the same
  * definitions and the columns recompute for free.
  *
@@ -92,6 +94,32 @@ const substituteTokens = (
 	template.replace(TOKEN_RE, (token, field: string) =>
 		known.has(field) ? (row[field] ?? "") : token
 	)
+
+/** Every column name a variable mentions: Math formula fields, Combine-text
+ * tokens, and the If/else conditions, outputs and fallback. Unparseable
+ * formulas / conditions contribute nothing (they're reported as issues
+ * elsewhere). Drives the before/after-reshape split, where "mentions a
+ * column the melt creates" is what pins a variable to the long table. */
+export const referencedFields = (variable: DerivedVariable): string[] => {
+	const out = new Set<string>()
+	const tokensOf = (text: string) => {
+		for (const m of text.matchAll(TOKEN_RE)) out.add(m[1])
+	}
+	const parsedOf = (src: string) => {
+		const parsed = parseExpression(src)
+		if (parsed.ok) for (const f of parsed.fields) out.add(f)
+	}
+	if (variable.kind === "math") parsedOf(variable.math?.formula ?? "")
+	else if (variable.kind === "concat") tokensOf(variable.concat?.template ?? "")
+	else {
+		for (const rule of variable.rules?.rules ?? []) {
+			parsedOf(rule.condition)
+			tokensOf(rule.output)
+		}
+		tokensOf(variable.rules?.fallback ?? "")
+	}
+	return [...out]
+}
 
 /** Problems that stop a variable from applying against the given upstream
  * column names (the view's columns plus every EARLIER derived variable).
@@ -239,10 +267,16 @@ const TYPE_SAMPLE_CELLS = 2000
  * object) when nothing applies, so visuals without derived variables keep
  * the exact upstream identities. Variables evaluate in list order, each
  * seeing the columns of the ones before it — chaining works, and a forward
- * reference is just a missing column (that variable is skipped). */
+ * reference is just a missing column (that variable is skipped).
+ *
+ * `onlyIds` restricts the pass to a subset of the variables WITHOUT
+ * changing their positions — the before/after-reshape split runs the same
+ * config twice, and positional default names ("Variable N") must not shift
+ * between the two passes. Omitted = every variable. */
 export const applyDerivedVariablesToView = (
 	view: DatasetView | undefined,
-	config: DerivedVariablesConfig
+	config: DerivedVariablesConfig,
+	onlyIds?: ReadonlySet<string>
 ): DatasetView | undefined => {
 	if (!view || config.variables.length === 0) return view
 
@@ -252,6 +286,7 @@ export const applyDerivedVariablesToView = (
 		compute: (row: Record<string, string>) => string
 	}> = []
 	config.variables.forEach((variable, index) => {
+		if (onlyIds && !onlyIds.has(variable.id)) return
 		if (derivedVariableIssues(variable, index, available).length > 0) return
 		const compute = buildDerivedCompute(variable, available)
 		if (!compute) return

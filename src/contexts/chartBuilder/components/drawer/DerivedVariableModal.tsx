@@ -15,6 +15,7 @@ import {
 	makeLevelLookup,
 	splitComparison,
 } from "../../lib/derivedRuleForm"
+import { postMeltOnlyNames } from "../../lib/derivedReshapeStages"
 import {
 	applyDerivedVariablesToView,
 	buildDerivedCompute,
@@ -23,6 +24,7 @@ import {
 	effectiveDerivedName,
 	makeNonNumericLookup,
 	nextDefaultDerivedName,
+	referencedFields,
 	type DerivedRule,
 	type DerivedVariable,
 	type DerivedVariableKind,
@@ -33,10 +35,15 @@ import {
 	currentDatasetIdAtom,
 	currentDerivedVariablesAtom,
 	currentFieldOverridesAtom,
+	currentReshapeConfigAtom,
 	datasetIndexAtom,
 	derivedVariableEditorAtom,
 } from "../../store/atoms"
-import { preDerivedDatasetViewAtom } from "../../store/useCurrentDatasetView"
+import {
+	convertedWideDatasetViewAtom,
+	derivedReshapeStagesAtom,
+	preDerivedDatasetViewAtom,
+} from "../../store/useCurrentDatasetView"
 import { renameFieldAcrossEditorAtoms } from "../../store/useRenameField"
 import { Select } from "../../../../components/ui/Select"
 import type { InputProps } from "../../../../components/ui/Input"
@@ -140,14 +147,33 @@ const TokenInput = ({
 export const DerivedVariableModal = () => {
 	const [target, setTarget] = useAtom(derivedVariableEditorAtom)
 	const config = useAtomValue(currentDerivedVariablesAtom)
-	const preView = useAtomValue(preDerivedDatasetViewAtom)
-	if (!target || !preView) return null
+	const stages = useAtomValue(derivedReshapeStagesAtom)
+	const reshape = useAtomValue(currentReshapeConfigAtom)
+	const longView = useAtomValue(preDerivedDatasetViewAtom)
+	const wideView = useAtomValue(convertedWideDatasetViewAtom)
+	if (!target) return null
 	const existing =
 		target.mode === "edit"
 			? config.variables.find((v) => v.id === target.id)
 			: undefined
 	// A stale edit target (variable deleted elsewhere) has nothing to show.
 	if (target.mode === "edit" && !existing) return null
+	// A variable the reshape uses evaluates against the WIDE table (that's
+	// where it runs); everything else — including every new variable —
+	// against the table as shown, long once a reshape is on.
+	const before = existing !== undefined && stages.beforeIds.has(existing.id)
+	const preView = before ? wideView : longView
+	if (!preView) return null
+	// Names a before-melt variable must not reach: the melt's own pair and
+	// the variables that only exist after it.
+	const lockedNames = before
+		? new Set([
+				...postMeltOnlyNames(new Set(preView.fields.map((f) => f.name)), reshape),
+				...config.variables.flatMap((v, i) =>
+					stages.beforeIds.has(v.id) ? [] : [effectiveDerivedName(v, i)]
+				),
+			])
+		: new Set<string>()
 	return (
 		<DerivedVariableEditor
 			// Remount per target so a reopened modal starts from the stored
@@ -155,6 +181,8 @@ export const DerivedVariableModal = () => {
 			key={target.mode === "edit" ? target.id : "new"}
 			existing={existing}
 			preView={preView}
+			stageIds={before ? stages.beforeIds : stages.afterIds}
+			lockedNames={lockedNames}
 			onClose={() => setTarget(null)}
 		/>
 	)
@@ -163,10 +191,18 @@ export const DerivedVariableModal = () => {
 const DerivedVariableEditor = ({
 	existing,
 	preView,
+	stageIds,
+	lockedNames,
 	onClose,
 }: {
 	existing: DerivedVariable | undefined
 	preView: DatasetView
+	/** The variables that run in the same stage as this one (before or
+	 * after the melt) — only those are visible upstream of it. */
+	stageIds: ReadonlySet<string>
+	/** Columns this variable may not reference (reshape-used variables can't
+	 * reach the melt's columns); empty for an after-melt variable. */
+	lockedNames: ReadonlySet<string>
 	onClose: () => void
 }) => {
 	const config = useAtomValue(currentDerivedVariablesAtom)
@@ -197,15 +233,18 @@ const DerivedVariableEditor = ({
 		: config.variables.length
 
 	/** The view this variable evaluates against: the pre-derived view plus
-	 * every EARLIER derived variable. Full rows, not a sample — the Math
-	 * numeric check has to see every cell before it lets a formula save; the
-	 * preview slices this back down to its handful of rows. */
+	 * every EARLIER derived variable of the same stage. Full rows, not a
+	 * sample — the Math numeric check has to see every cell before it lets
+	 * a formula save; the preview slices this back down to its handful of
+	 * rows. */
 	const upstream = useMemo(
 		() =>
-			applyDerivedVariablesToView(preView, {
-				variables: config.variables.slice(0, Math.max(editIndex, 0)),
-			}) ?? preView,
-		[preView, config, editIndex]
+			applyDerivedVariablesToView(
+				preView,
+				{ variables: config.variables.slice(0, Math.max(editIndex, 0)) },
+				stageIds
+			) ?? preView,
+		[preView, config, editIndex, stageIds]
 	)
 	// Scanned lazily, once per column (the formula changes on every
 	// keystroke; a column's numeric-ness doesn't).
@@ -321,6 +360,14 @@ const DerivedVariableEditor = ({
 		// Math over a text column is an error here, not a blank row — the
 		// view seam stays lenient, the editor refuses to mint it.
 		list.push(...derivedMathTypeIssues(draft, upstreamNames, nonNumeric))
+		// A variable the reshape uses runs on the wide table, so it can't
+		// reach the columns the melt creates — refuse rather than silently
+		// dropping it out of the Reshape lists.
+		for (const field of referencedFields(draft))
+			if (lockedNames.has(field) && !upstreamNames.has(field))
+				list.push(
+					`Reshape uses this variable, so it can only use the original columns — {${field}} only exists after the reshape. Uncheck it in Reshape first.`
+				)
 		// The lib check only sees UPSTREAM names; also refuse the name of any
 		// other derived variable (a later one would be silently shadowed).
 		if (
@@ -335,7 +382,15 @@ const DerivedVariableEditor = ({
 				`"${effectiveName}" is already the name of another derived variable.`
 			)
 		return list
-	}, [draft, editIndex, upstreamNames, nonNumeric, config, effectiveName])
+	}, [
+		draft,
+		editIndex,
+		upstreamNames,
+		nonNumeric,
+		config,
+		effectiveName,
+		lockedNames,
+	])
 
 	// Per-rule errors, keyed by row index; only the If/else body can block.
 	const ruleErrors = useMemo(
@@ -767,6 +822,15 @@ const DerivedVariableEditor = ({
 								)}
 							</div>
 						))}
+						{/* mr-6 = the × column (w-4) + gap-2, so the link's right
+						 *  edge lines up with the output boxes above and below. */}
+						<button
+							type="button"
+							onClick={() => setRules((prev) => [...prev, blankRule()])}
+							className="mr-6 self-end text-xs text-brand-500 hover:underline dark:text-indigo-400"
+						>
+							+ Add rule
+						</button>
 						<div className="flex items-center gap-2">
 							<span className="flex-1 text-right text-sm vc-muted">
 								Otherwise
@@ -785,13 +849,6 @@ const DerivedVariableEditor = ({
 							/>
 							<span aria-hidden="true" className="w-4 flex-shrink-0" />
 						</div>
-						<button
-							type="button"
-							onClick={() => setRules((prev) => [...prev, blankRule()])}
-							className="self-start text-xs text-brand-500 hover:underline dark:text-indigo-400"
-						>
-							+ Add rule
-						</button>
 						<p className="vc-help">
 							Rules run top to bottom; the first match wins. Each side of a
 							comparison can be a variable, a number, plain text, or a
