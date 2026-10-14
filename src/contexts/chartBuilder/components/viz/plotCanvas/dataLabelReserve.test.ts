@@ -55,8 +55,16 @@ const labelsOn = (over: Partial<DataLabelsConfig> = {}): DataLabelsConfig => ({
 	...over,
 })
 
-const nameValueEncodings = () => ({
+/** Position + value mapped on the Data Labels shelf — the layer's render
+ *  gate, which the reserve mirrors. */
+const positionEncodings = () => ({
 	...emptyDataLabelsEncodings(),
+	x: { field: "cat" },
+	y: { field: "val" },
+})
+
+const nameValueEncodings = () => ({
+	...positionEncodings(),
 	value: { field: "name" },
 })
 
@@ -106,6 +114,50 @@ describe("computeDataLabelOverflow", () => {
 				dataLabelsEncodings: emptyDataLabelsEncodings(),
 			}),
 		).toEqual({ left: 0, right: 0 })
+	})
+
+	it("reserves nothing while labels aren't mapped, even with a y field of long names", () => {
+		// The chart's y field composes the label TEXT when the Value is
+		// unmapped — but no label renders until position AND value are
+		// mapped, so nothing may be reserved for them.
+		const e = scatterEncodings()
+		e.y = { field: "name" }
+		const unlabeled = {
+			...base,
+			dataset: view(ROWS),
+			encodings: e,
+			dataLabels: labelsOn({ alignment: "center" }),
+		}
+		expect(
+			computeDataLabelOverflow({
+				...unlabeled,
+				dataLabelsEncodings: emptyDataLabelsEncodings(),
+			}),
+		).toEqual({ left: 0, right: 0 })
+		// Value alone (no position) still draws nothing.
+		expect(
+			computeDataLabelOverflow({
+				...unlabeled,
+				dataLabelsEncodings: {
+					...emptyDataLabelsEncodings(),
+					value: { field: "name" },
+				},
+			}),
+		).toEqual({ left: 0, right: 0 })
+		// Position alone (no value) still draws nothing.
+		expect(
+			computeDataLabelOverflow({
+				...unlabeled,
+				dataLabelsEncodings: positionEncodings(),
+			}),
+		).toEqual({ left: 0, right: 0 })
+		// Both mapped: the long name reserves on both sides.
+		const labeled = computeDataLabelOverflow({
+			...unlabeled,
+			dataLabelsEncodings: nameValueEncodings(),
+		})
+		expect(labeled.right).toBeGreaterThan(0)
+		expect(labeled.left).toBeGreaterThan(0)
 	})
 
 	it("left alignment reserves the full label width on the right only", () => {
@@ -374,7 +426,7 @@ describe("computeDataLabelOverflow — series ends per facet panel", () => {
 
 describe("computeDataLabelOverflow — per-variable label populations", () => {
 	const multiEncodings = () => ({
-		...emptyDataLabelsEncodings(),
+		...positionEncodings(),
 		value: { field: null, multiField: true, fields: ["val", "name"] },
 	})
 	it("reserves for a last-label population's own offset and template", () => {
@@ -412,7 +464,7 @@ describe("computeDataLabelOverflow — per-variable label populations", () => {
 			dataset: view(ROWS),
 			encodings: scatterEncodings(),
 			dataLabelsEncodings: {
-				...emptyDataLabelsEncodings(),
+				...positionEncodings(),
 				value: { field: null, multiField: true, fields: ["val"] },
 			},
 			dataLabels: labelsOn({ alignment: "left", xOffset: 0 }),
@@ -504,7 +556,7 @@ describe("computeDataLabelOverflow — per-variable bar side (separate variables
 		return e
 	}
 	const separateEncodings = () => ({
-		...emptyDataLabelsEncodings(),
+		...positionEncodings(),
 		value: { field: null, multiField: true, fields: ["name", "val"] },
 	})
 

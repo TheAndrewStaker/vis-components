@@ -2485,7 +2485,9 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   pre-formatted area / pie / tile / geo labels ignore them, as they do
   per-variable colors.
 
-When data labels are enabled, the solver reserves extra right-margin
+When data labels are mapped — position field(s) AND a value, the same
+gate that renders them; a chart drawing no labels reserves nothing —
+the solver reserves extra right-margin
 space if the rightmost label would extend past the plot edge. The
 amount is estimated from the longest formatted value × font size ×
 0.55 × alignment fraction (full width for left-anchored, half for

@@ -51,6 +51,29 @@ export const LABEL_RESERVE_PAD_PX = 4
  *  one are dropped. */
 const MAX_MEASURED_CANDIDATES = 2000
 
+/** The layer's render gate (DataLabelsLayer `positionMapped` /
+ *  `valueMapped`), resolved from the mode's canvas traits instead of the
+ *  renderer's `positionGate` prop: labels draw only once the position
+ *  field(s) AND a value are explicitly mapped on the Data Labels shelf.
+ *  Polar modes take `angle` (or legacy x + y); the axis-less structure
+ *  layouts (packed circles / treemap / sunburst / chord / sankey) pick
+ *  their own labeled nodes and text, so they skip both gates. */
+const labelsRender = (
+	mode: NonNullable<ReturnType<typeof getChartModeDef>>,
+	enc: DataLabelsEncodings,
+): boolean => {
+	const { coordFamily, cartesianAxes } = mode.canvas
+	if (coordFamily === "cartesian" && !cartesianAxes.x && !cartesianAxes.y)
+		return true
+	const xy = Boolean(enc.x?.field) && Boolean(enc.y?.field)
+	const positionMapped =
+		coordFamily === "polar" ? Boolean(enc.angle?.field) || xy : xy
+	const valueMapped =
+		Boolean(enc.value?.field) ||
+		(enc.value?.multiField === true && (enc.value.fields?.length ?? 0) > 0)
+	return positionMapped && valueMapped
+}
+
 export const computeDataLabelOverflow = ({
 	dataset,
 	encodings,
@@ -80,6 +103,13 @@ export const computeDataLabelOverflow = ({
 		mapConfig
 	)
 	if (memoMode.canvas.coordFamily === "geo") return empty
+	// A chart that draws no labels reserves nothing. The y / length fallback
+	// below only composes the TEXT once labels exist; it used to double as
+	// the "labels exist" test, so an unlabeled chart with long category
+	// names reserved for the widest name on BOTH sides — on a row-faceted
+	// dumbbell of hospital names that squeezed the plot to a 33px sliver
+	// at export size and left a blank strip beside the row titles.
+	if (!labelsRender(memoMode, dataLabelsEncodings)) return empty
 	// Data labels have their own encoding atom; the rendered text comes
 	// from that `value` mapping. Fall back to the chart's measure encoding
 	// when the data-labels value isn't explicitly mapped (mirrors
