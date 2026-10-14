@@ -9,6 +9,15 @@ import { OUTLINE_HUE_SCATTER, seedFixtureScript } from "./seed"
 
 const openExportTab = async (page: import("@playwright/test").Page) => {
 	await page.addInitScript(seedFixtureScript(OUTLINE_HUE_SCATTER))
+	// Headless Chromium can't show the File System Access Save-as dialog
+	// (and Playwright can't drive it), so hide the API: the exporter then
+	// takes its anchor-download fallback, which fires the "download" event.
+	await page.addInitScript(() => {
+		Object.defineProperty(window, "showSaveFilePicker", {
+			value: undefined,
+			configurable: true,
+		})
+	})
 	await page.goto(`/editor/${OUTLINE_HUE_SCATTER.visualId}`, {
 		waitUntil: "networkidle",
 	})
@@ -34,9 +43,8 @@ test.describe("Export image", () => {
 		const downloadPromise = page.waitForEvent("download")
 		await page.getByRole("button", { name: "Save SVG" }).click()
 		const download = await downloadPromise
-		expect(download.suggestedFilename()).toBe(
-			`${OUTLINE_HUE_SCATTER.visualId}.svg`
-		)
+		// Named after the visual ("Seeded fixture"), not its id.
+		expect(download.suggestedFilename()).toBe("seeded-fixture.svg")
 
 		// Keep the artifact alongside the visual-smoke screenshots so layout
 		// regressions in the capture walk can be eyeballed.
@@ -213,6 +221,8 @@ test.describe("Export image", () => {
 		const downloadPromise = page.waitForEvent("download")
 		await page.getByRole("button", { name: "Save SVG" }).click()
 		await downloadPromise
+		// A successful save closes the modal.
+		await expect(page.locator('[role="dialog"]')).toBeHidden()
 
 		// Full reload — the size must come back from storage, not React state.
 		await page.reload({ waitUntil: "networkidle" })

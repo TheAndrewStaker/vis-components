@@ -1,4 +1,5 @@
 import { embedFontsInSvg } from "./fontEmbed"
+import { flattenTextBaselines, stampResolvedFonts } from "./portableSvg"
 
 export const PLOT_SVG_ID = "vc-scatter-svg"
 
@@ -445,8 +446,15 @@ const appendLegendCapture = (
  * HTML legend — into one standalone SVG for image export. Positions come
  * from live layout rects, so the output matches the preview iframe
  * pixel-for-pixel. Falls back to the chart-only capture when the document
- * has no export root (e.g. older embeds mid-deploy). */
-export const serializeEmbedCapture = (doc: Document): string | null => {
+ * has no export root (e.g. older embeds mid-deploy).
+ *
+ * `portable` (the SVG download) additionally rewrites text for renderers
+ * that ignore baselines, `dy` and webfonts — PowerPoint et al. See
+ * lib/portableSvg.ts. */
+export const serializeEmbedCapture = (
+	doc: Document,
+	opts: { portable?: boolean } = {}
+): string | null => {
 	const root = doc.querySelector<HTMLElement>("[data-export-root]")
 	if (!root) return serializeChartSvg(doc)
 	const rootRect = root.getBoundingClientRect()
@@ -494,6 +502,25 @@ export const serializeEmbedCapture = (doc: Document): string | null => {
 		"[data-legend-root]"
 	)) {
 		appendLegendCapture(legend, wrapper, origin, doc)
+	}
+
+	if (opts.portable) {
+		// Measuring needs live layout: mount the composed SVG off-screen
+		// beside the live chart, so text that inherits its font from page CSS
+		// resolves exactly as it does in the preview.
+		wrapper.setAttribute(
+			"style",
+			"position:fixed;left:-100000px;top:0;visibility:hidden;pointer-events:none"
+		)
+		const host = svgs[0].parentElement ?? doc.body
+		host.append(wrapper)
+		try {
+			stampResolvedFonts(wrapper)
+			flattenTextBaselines(wrapper)
+		} finally {
+			wrapper.remove()
+			wrapper.removeAttribute("style")
+		}
 	}
 
 	return new XMLSerializer().serializeToString(wrapper)

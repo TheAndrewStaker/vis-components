@@ -5,9 +5,13 @@ import {
 	chartLayoutReady,
 	serializeEmbedCapture,
 } from "../lib/captureThumbnail"
-import { downloadVisualsBundle } from "../lib/downloadVisuals"
+import {
+	downloadVisualsBundle,
+	sanitizeVisualFilename,
+} from "../lib/downloadVisuals"
 import { upsertEmbedInstance } from "../lib/embedInstances"
 import { embedFontsInSvg } from "../lib/fontEmbed"
+import { nameWeightedFaces } from "../lib/portableSvg"
 import {
 	pxToUnit,
 	unitToPx,
@@ -15,6 +19,8 @@ import {
 	UNIT_STEP,
 } from "../lib/displayUnits"
 import { withJpegDpi, withPngDpi } from "../lib/imageDpi"
+import { pickSaveTarget, writeSaveTarget } from "../lib/saveFile"
+import type { SaveFileType } from "../lib/saveFile"
 import type { ExportUnit } from "../lib/storage"
 import { getStorageAdapter } from "../lib/storage/registry"
 import {
@@ -43,6 +49,27 @@ type Props = {
 type PinMode = "live" | "pinned"
 type Tab = "embed" | "export"
 type ImageFormat = "png" | "jpeg" | "svg" | "pdf"
+
+/** What the Save-as dialog offers for each format. The first extension is
+ *  the one the suggested filename carries. */
+const IMAGE_FILE_TYPES: Record<ImageFormat, SaveFileType> = {
+	png: { description: "PNG image", mimeType: "image/png", extensions: [".png"] },
+	jpeg: {
+		description: "JPEG image",
+		mimeType: "image/jpeg",
+		extensions: [".jpg", ".jpeg"],
+	},
+	svg: {
+		description: "SVG image",
+		mimeType: "image/svg+xml",
+		extensions: [".svg"],
+	},
+	pdf: {
+		description: "PDF document",
+		mimeType: "application/pdf",
+		extensions: [".pdf"],
+	},
+}
 
 const FORMAT_OPTIONS: Array<{ value: ImageFormat; label: string }> = [
 	{ value: "png", label: "PNG" },
@@ -730,6 +757,10 @@ const ExportTab = ({
 }) => {
 	const view = useCurrentDatasetView()
 	const setExportSizes = useSetAtom(exportSizesAtom)
+	const visuals = useAtomValue(visualsAtom)
+	// The file is named after the SAVED visual, like the JSON download.
+	const visualName =
+		visuals.find((v) => v.id === visualId)?.name ?? "visualization"
 	// Persists on change, so the unit picked here is the default next export.
 	const [unit, setUnit] = useAtom(exportUnitAtom)
 	const [format, setFormat] = useState<ImageFormat>("png")
@@ -756,29 +787,50 @@ const ExportTab = ({
 		setError(null)
 		setBusy(true)
 		try {
+			// Ask where to save FIRST, while the click's user activation is
+			// still live — the capture below can take seconds, after which the
+			// browser would refuse to open the dialog. Browsers without a
+			// Save-as dialog get a plain download under the suggested name.
+			const fileType = IMAGE_FILE_TYPES[format]
+			const filename = `${sanitizeVisualFilename(visualName)}${fileType.extensions[0]}`
+			const target = await pickSaveTarget({
+				suggestedName: filename,
+				type: fileType,
+				rememberAs: "vis-export-image",
+			})
+			// The user closed the dialog — nothing to export.
+			if (target === null) return
+
 			// Inline webfont faces (Google-hosted presets + user library fonts)
 			// as data: @font-face rules — the raster path loads the SVG through
 			// an <img>, which can't fetch external stylesheets, and downloaded
 			// SVGs must render on machines without the fonts installed.
-			const svgText = await embedFontsInSvg(
-				await waitForChartSvg(iframeRef.current)
-			)
-			const filename = `${visualId}.${format}`
-			if (format === "svg") {
-				downloadBlob(new Blob([svgText], { type: "image/svg+xml" }), filename)
-			} else if (format === "pdf") {
-				const blob = await generatePdf(svgText, width, height, effectiveRatio)
-				downloadBlob(blob, filename)
-			} else {
-				const blob = await rasterizeSvg(
-					svgText,
-					width,
-					height,
-					effectiveRatio,
-					format
-				)
-				downloadBlob(blob, filename)
-			}
+			const captured = await waitForChartSvg(iframeRef.current)
+			// The SVG download is opened in PowerPoint & co., which ignore
+			// baselines, dy and webfonts — re-serialize the now-stable layout
+			// with text flattened for them (lib/portableSvg.ts).
+			const portable =
+				format === "svg" && iframeRef.current?.contentDocument
+					? serializeEmbedCapture(iframeRef.current.contentDocument, {
+							portable: true,
+						})
+					: null
+			const svgText = await embedFontsInSvg(portable ?? captured)
+			const blob =
+				format === "svg"
+					? new Blob([nameWeightedFaces(svgText)], {
+							type: fileType.mimeType,
+						})
+					: format === "pdf"
+						? await generatePdf(svgText, width, height, effectiveRatio)
+						: await rasterizeSvg(
+								svgText,
+								width,
+								height,
+								effectiveRatio,
+								format
+							)
+			await writeSaveTarget(target, blob, filename)
 			// Remember the size this visual was exported at so the modal
 			// reopens with it next time (only on success — a failed capture
 			// shouldn't overwrite a size that previously worked).
@@ -786,6 +838,10 @@ const ExportTab = ({
 				...prev,
 				[visualId]: { width, height, aspectLocked },
 			}))
+			// The file is written — the modal's job is done. A cancelled
+			// Save-as dialog (early return above) or a failed capture (catch
+			// below) keeps it open so the user can retry.
+			onClose()
 		} catch (error_) {
 			setError(error_ instanceof Error ? error_.message : "Export failed.")
 		} finally {
@@ -1136,40 +1192,36 @@ const waitForChartSvg = async (
 	)
 }
 
-const downloadBlob = (blob: Blob, filename: string) => {
-	const url = URL.createObjectURL(blob)
-	const a = document.createElement("a")
-	a.href = url
-	a.download = filename
-	document.body.append(a)
-	a.click()
-	a.remove()
-	// Defer revocation so the browser has a chance to start the download —
-	// some browsers race the click() / revoke pair otherwise.
-	window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
 // Ceilings for the rendered bitmap. iOS Safari refuses canvases past
 // ~16.7M px² total area; most browsers cap a single edge well above 8192.
 const MAX_CANVAS_EDGE = 8192
 const MAX_CANVAS_AREA = 16_777_216
 
+/** DPIs a clamped export steps down through. PowerPoint snaps a placed
+ * picture to whole points and rounds inconsistently by DPI: measured on a
+ * 13 in figure, 303.6 dpi placed at 12.97 in and 302/303/320/383 dpi at
+ * 12.99 in, while these placed at exactly 13.00 in. */
+const POWERPOINT_EXACT_DPIS = [350, 300, 254]
+
 /** Largest usable multiplier ≤ the requested one, so width × ratio never
- * blows past canvas limits (a silently-failed canvas exports as blank). */
+ * blows past canvas limits (a silently-failed canvas exports as blank).
+ * When the limits force it below the request, it snaps DOWN to a DPI from
+ * POWERPOINT_EXACT_DPIS, so the stamped DPI re-derives the chosen inches
+ * exactly in PowerPoint/Word. */
 const clampPixelRatio = (
 	width: number,
 	height: number,
 	ratio: number
-): number =>
-	Math.max(
-		1,
-		Math.min(
-			ratio,
-			MAX_CANVAS_EDGE / width,
-			MAX_CANVAS_EDGE / height,
-			Math.sqrt(MAX_CANVAS_AREA / (width * height))
-		)
+): number => {
+	const fit = Math.min(
+		MAX_CANVAS_EDGE / width,
+		MAX_CANVAS_EDGE / height,
+		Math.sqrt(MAX_CANVAS_AREA / (width * height))
 	)
+	if (ratio <= fit) return Math.max(1, ratio)
+	const dpi = POWERPOINT_EXACT_DPIS.find((d) => d <= fit * 96)
+	return Math.max(1, (dpi ?? Math.floor(fit * 96)) / 96)
+}
 
 /** Draw the chart SVG onto a canvas at `width × height` logical px scaled by
  * `pixelRatio`. Browsers rasterize an <img> SVG at its *intrinsic* size and

@@ -3632,9 +3632,24 @@ just made from the Export modal, and the frame costs no layout (an
 inset shadow, not a border) so it can't shift the export/embed size
 defaults measured off the viewport.
 
-**Export image** renders the chart in a preview iframe and downloads
+**Export image** renders the chart in a preview iframe and saves
 it as **PNG**, **JPEG**, **SVG**, or **PDF**:
 
+- **Save as** — the Save button opens the browser's own Save-as
+  dialog where the browser has one (File System Access API: Chrome,
+  Edge), so the user names the file and picks the folder; the
+  browser remembers the folder last used for an image export. The
+  dialog is requested FIRST, in the click, because the capture can
+  take seconds and the browser refuses to open a picker once the
+  click's activation has expired. Cancelling the dialog exports
+  nothing (no error) and leaves the modal open. Once the file is
+  written the Export modal closes itself; a failed capture keeps it
+  open with the error shown so the user can retry. Browsers without the dialog (Safari, Firefox)
+  get a plain download into the downloads folder. Either way the
+  suggested filename is the saved visual's name slugified the same
+  way the JSON bundle download is (`sanitizeVisualFilename`), never
+  its id. The two-step pick / write helper lives in
+  `lib/saveFile.ts`.
 - **Size** — Width / Height inputs plus a **Units** picker of
   `px` / `in` / `cm`. The unit is display-only: sizes are stored,
   dragged, and exported in px, and the picker just converts what the
