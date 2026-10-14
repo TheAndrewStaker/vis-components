@@ -1,6 +1,15 @@
-import { useEffect } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import useMeasure from "react-use-measure"
 import { useAtomValue, useSetAtom } from "jotai"
+import type { CanvasMargins } from "../../lib/channelConfig"
+import {
+	inkSlack,
+	MARGIN_MAX_PASSES,
+	measureInkExtent,
+	nextMarginCorrection,
+	ZERO_SIDES,
+	type SideValues,
+} from "../../lib/inkExtent"
 import {
 	DEFAULT_LABELS_CONFIG,
 	hasChartTitle,
@@ -10,10 +19,14 @@ import {
 } from "../../lib/labelsConfig"
 import { INSIDE_AUTO_X_INSET } from "../../lib/legendSections"
 import { BASE_MARGIN, subtitleReserve, titleReserve } from "../../lib/plotLayout"
+import { resolveCanvasMargins } from "../../lib/themeConfig"
+import { useCurrentTheme } from "../../store/useCurrentTheme"
 import {
 	currentLabelsAtom,
+	currentRenderedCanvasSlackAtom,
 	currentRenderedFigureSlackAtom,
 	currentRenderedInsideAutoXAtom,
+	currentRenderedLayoutVersionAtom,
 } from "../../store/atoms"
 import {
 	renderChannelConfigsAtom,
@@ -128,11 +141,7 @@ export const ChartBody = () => {
 export const ChartCanvas = () => {
 	const dataset = useCurrentDatasetView()
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
-	const legendCfg: LegendConfig = {
-		...DEFAULT_LEGEND_CONFIG,
-		...useAtomValue(renderLegendConfigAtom),
-	}
-	const figureSlack = useAtomValue(currentRenderedFigureSlackAtom)
+	const theme = useCurrentTheme()
 	const bgStyle: React.CSSProperties | undefined =
 		channelConfigs.backgroundColor
 			? { backgroundColor: channelConfigs.backgroundColor }
@@ -141,6 +150,145 @@ export const ChartCanvas = () => {
 	if (!dataset) {
 		return <ChartBody />
 	}
+	// Fixed canvas size (Aesthetics → Canvas size): the chart box sits inside
+	// a frame that enforces the user's margins against the RENDERED ink. The
+	// body element is created here, so the frame's own re-renders (every
+	// layout pass) never re-render the chart tree underneath.
+	const canvasSize = channelConfigs.canvasSize
+	const body = <ChartCanvasBody bgStyle={bgStyle} />
+	if (!canvasSize?.enabled) return body
+	// Sides the visual leaves blank inherit the theme's Exporting defaults
+	// (live — the theme is the current `themesAtom` entry, not a snapshot).
+	return (
+		<CanvasMarginFrame
+			margins={resolveCanvasMargins(theme, canvasSize.margins)}
+			bgStyle={bgStyle}
+		>
+			{body}
+		</CanvasMarginFrame>
+	)
+}
+
+/** Enforces fixed-canvas margins (`CanvasSizeConfig.margins`) by measuring
+ *  the rendered ink and moving the chart box's edges so the nearest painted
+ *  content on each SET side lands exactly `margin` px from the canvas edge
+ *  (auto sides keep the inset at 0 — today's layout slack). The layout
+ *  solver's bands leave slack nobody asked for, so this is a measure →
+ *  correct → re-solve loop: each layout pass (`currentRenderedLayoutVersionAtom`)
+ *  re-measures, and a side settles once its slack is within
+ *  `MARGIN_TOLERANCE_PX` of the correction — normally on the second pass.
+ *  `MARGIN_MAX_PASSES` self-induced passes cap a layout that flips with
+ *  the box size. The measured slack is published for the sidebar's
+ *  placeholders whether or not any side is set.
+ *
+ *  Measuring happens ONLY on a layout bump, never on the correction's own
+ *  render: right after an inset changes the SVG is still the previous
+ *  solve's size, so a measurement then would read stale slack. */
+const CanvasMarginFrame = ({
+	margins,
+	bgStyle,
+	children,
+}: {
+	margins: CanvasMargins
+	bgStyle: React.CSSProperties | undefined
+	children: React.ReactNode
+}) => {
+	const boxRef = useRef<HTMLDivElement>(null)
+	const [correction, setCorrection] = useState<SideValues>({ ...ZERO_SIDES })
+	// Refs, not deps: the effect below must run on layout bumps ONLY. A
+	// margin edit changes the inset in the same render, which re-solves and
+	// bumps on its own; measuring at edit time would read the previous
+	// solve's SVG against the new box and chase a bogus slack first.
+	const correctionRef = useRef(correction)
+	const marginsRef = useRef(margins)
+	// Synced in a layout effect (never during render), declared BEFORE the
+	// measuring effect so it always sees the committed values.
+	useLayoutEffect(() => {
+		correctionRef.current = correction
+		marginsRef.current = margins
+	})
+	const layoutVersion = useAtomValue(currentRenderedLayoutVersionAtom)
+	const setSlack = useSetAtom(currentRenderedCanvasSlackAtom)
+	// Passes this frame caused itself (a correction → re-solve → bump), so a
+	// layout that never settles stops being chased.
+	const selfPasses = useRef(0)
+	const pending = useRef(false)
+
+	useLayoutEffect(() => {
+		const box = boxRef.current
+		if (!box) return
+		const ink = measureInkExtent(box)
+		if (!ink) return
+		const slack = inkSlack(ink, box.offsetWidth, box.offsetHeight)
+		const rounded: SideValues = {
+			top: Math.round(slack.top),
+			right: Math.round(slack.right),
+			bottom: Math.round(slack.bottom),
+			left: Math.round(slack.left),
+		}
+		setSlack((prev) =>
+			prev &&
+			prev.top === rounded.top &&
+			prev.right === rounded.right &&
+			prev.bottom === rounded.bottom &&
+			prev.left === rounded.left
+				? prev
+				: rounded,
+		)
+		if (pending.current) {
+			pending.current = false
+			selfPasses.current += 1
+		} else {
+			selfPasses.current = 0
+		}
+		const next = nextMarginCorrection(
+			marginsRef.current,
+			slack,
+			correctionRef.current,
+		)
+		if (!next || selfPasses.current >= MARGIN_MAX_PASSES) return
+		pending.current = true
+		setCorrection(next)
+	}, [layoutVersion, setSlack])
+
+	useEffect(() => () => setSlack(null), [setSlack])
+
+	const inset = (side: keyof SideValues): number =>
+		margins[side] == null ? 0 : margins[side] - correction[side]
+
+	return (
+		<div
+			className="relative h-full w-full overflow-hidden"
+			style={bgStyle}
+			data-canvas-margin-frame
+		>
+			<div
+				ref={boxRef}
+				className="absolute"
+				data-canvas-margin-box
+				style={{
+					top: inset("top"),
+					right: inset("right"),
+					bottom: inset("bottom"),
+					left: inset("left"),
+				}}
+			>
+				{children}
+			</div>
+		</div>
+	)
+}
+
+const ChartCanvasBody = ({
+	bgStyle,
+}: {
+	bgStyle: React.CSSProperties | undefined
+}) => {
+	const legendCfg: LegendConfig = {
+		...DEFAULT_LEGEND_CONFIG,
+		...useAtomValue(renderLegendConfigAtom),
+	}
+	const figureSlack = useAtomValue(currentRenderedFigureSlackAtom)
 
 	const pos = legendCfg.position
 

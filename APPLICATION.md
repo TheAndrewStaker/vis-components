@@ -3278,6 +3278,18 @@ Theme settings:
   creation and flowed through on a theme switch like the data-label
   font knobs. Themes saved before these fields existed fall back to
   the built-in defaults (#999999, 1px).
+- **Exporting** (last section of the sheet) — default **canvas
+  margins** for visuals drawn on a fixed canvas (§13 "Canvas size"):
+  Top / Right / Bottom / Left, entered in px or inches (a Units
+  select; stored in px at 96 px/inch). A margin is the white space
+  between the canvas edge and the nearest painted content, so 0 means
+  flush. Read live: a visual inherits every side it hasn't set in its
+  own Margins inputs (those show the theme value as their placeholder
+  and a changed dot when the visual deviates), and editing the theme
+  moves open charts. A blank side in the theme means auto — whatever
+  the layout leaves. Stored sparsely as `exportCanvasMargins` +
+  `exportMarginUnit`; themes saved before these fields existed set no
+  defaults.
 
 Custom themes can be set as the user's default; new charts pick that
 up automatically. The Hue panel reads palettes from the active theme
@@ -3295,6 +3307,26 @@ A small catch-all panel:
   declares no background), and switching themes in the editor re-seeds
   it from the new theme — replacing a custom pick — like the legend
   background.
+- **Canvas size** — a "Set canvas size" checkbox that, when on, draws
+  the chart inside a fixed Width × Height rectangle (default 1000 × 600,
+  px / in / cm display units at 96 px/inch; stored in px) instead of
+  filling the viewport. The editor shows the rectangle as a white canvas
+  centered in a gray viewport; exports default to its dimensions. Scroll
+  mode and the aspect ratio operate within the rectangle. Published
+  embeds ignore the size (the iframe is its own canvas).
+  **Margins** (shown only with a canvas size): Top / Right / Bottom /
+  Left inputs in the canvas unit. A margin is the white space between
+  the canvas edge and the nearest *painted* content on that side — the
+  chart title, an axis title or tick label, the legend box, a caption —
+  not padding added on top of the layout's own slack. A blank side
+  inherits the theme's Exporting default (§12) when the theme sets one,
+  else it is auto (whatever the layout leaves today); either way the
+  inherited amount shows as the placeholder and the spinner steps from
+  it, and a side the visual sets itself carries the changed dot. 0 puts
+  the content flush against the edge. Enforced by measuring the rendered ink after
+  each layout pass and shifting the chart box so the ink lands at the
+  margin (LAYOUT.md §16); applies in the editor, in image exports, and
+  in published embeds. Stored sparsely as `canvasSize.margins`.
 - **Scroll mode** — "Fit" (canvas matches container, panels shrink to
   fit) or "Scroll" (preserve minimum panel/category sizes, scroll if
   needed). Avoids squishing very long or wide visuals so much that

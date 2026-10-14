@@ -42,6 +42,7 @@ import {
 	currentLabelsAtom,
 	currentMapConfigAtom,
 	currentRenderedFigureSlackAtom,
+	currentRenderedLayoutVersionAtom,
 	currentRenderedPanelInnerDimsAtom,
 } from "../../store/atoms"
 import {
@@ -128,6 +129,7 @@ export const PlotCanvas = () => {
 		currentRenderedPanelInnerDimsAtom,
 	)
 	const setFigureSlack = useSetAtom(currentRenderedFigureSlackAtom)
+	const setLayoutVersion = useSetAtom(currentRenderedLayoutVersionAtom)
 	const setRenderedCaptionBox = useSetAtom(currentRenderedCaptionBoxAtom)
 	// Bumps when webfonts finish loading so the canvas-measured widths below
 	// (tick labels, data-label reserve) are recomputed against the real face
@@ -706,6 +708,10 @@ export const PlotCanvas = () => {
 				? prev
 				: spec.figureSlack,
 		)
+		// Every committed solve bumps the layout version: the fixed-canvas
+		// margin frame (ChartCanvas) re-measures the rendered ink on each
+		// bump, which is the only moment the DOM is known to reflect `spec`.
+		setLayoutVersion((v) => v + 1)
 		const p = spec.panels[0]
 		if (!p) {
 			setRenderedPanelDims(null)
@@ -715,7 +721,7 @@ export const PlotCanvas = () => {
 			widthPx: Math.round(p.inner.width),
 			heightPx: Math.round(p.inner.height),
 		})
-	}, [spec, setRenderedPanelDims, setFigureSlack])
+	}, [spec, setRenderedPanelDims, setFigureSlack, setLayoutVersion])
 
 	// Re-measure the caption against the final canvas and publish its rendered
 	// box dims so the Caption panel's Width / Height inputs can step UP/DOWN from

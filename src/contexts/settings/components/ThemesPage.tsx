@@ -19,6 +19,7 @@ import { ConfirmDialog } from "../../../components/ui/Modal"
 import { ManagedThemeGate } from "../../chartBuilder/components/ManagedThemeGate"
 
 import { AestheticRangesSection } from "./themeSections/AestheticRangesSection"
+import { ExportingSection } from "./themeSections/ExportingSection"
 import { AnnotationsSection } from "./themeSections/AnnotationsSection"
 import { AxesSection } from "./themeSections/AxesSection"
 import { DistributionRegressionSection } from "./themeSections/DistributionRegressionSection"
@@ -399,6 +400,7 @@ export const ThemesPage = ({
 					<AnnotationsSection {...sectionProps} />
 					<MapsSection {...sectionProps} />
 					<AestheticRangesSection {...sectionProps} />
+					<ExportingSection {...sectionProps} />
 				</div>
 
 				{/* Footer: Delete on the left, Done on the right. Delete sits at

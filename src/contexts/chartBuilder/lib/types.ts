@@ -265,6 +265,7 @@ export const emptyDataLabelsEncodings = (): DataLabelsEncodings => ({
 import type { AnnotationsConfig } from "./annotationsConfig"
 import type { CaptionConfig } from "./captionConfig"
 import type {
+	CanvasMargins,
 	ChannelConfigs,
 	DataLabelsConfig,
 	LineDashPattern,
@@ -754,6 +755,15 @@ export type Theme = {
 	/** Default outline width (px) around legend swatches; `0` = no outline.
 	 * Per-visual override: `LegendConfig.swatchOutlineWidths`. */
 	legendSwatchOutlineWidth: number
+	/** Settings → Themes → Exporting: default fixed-canvas margins (px,
+	 * sparse per side — an absent side is auto). A visual with a canvas
+	 * size inherits each side it hasn't set itself
+	 * (`CanvasSizeConfig.margins`); see `resolveCanvasMargins`. Optional:
+	 * themes saved before this field existed set no defaults. */
+	exportCanvasMargins?: CanvasMargins
+	/** Unit the theme sheet's margin inputs display in (px-truth stays in
+	 * `exportCanvasMargins`). Absent = px. */
+	exportMarginUnit?: "px" | "in"
 }
 
 /** Identity attached to a saved theme so the editor can list them, set

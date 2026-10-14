@@ -27,6 +27,7 @@ import {
 	type OpacitySlotKey,
 	type PatternConfig,
 	type ShapeConfig,
+	type CanvasMargins,
 	type TextConfig,
 } from "./channelConfig"
 import { colorSlotEdited } from "./colorSlots"
@@ -316,6 +317,22 @@ export const captionConfigFromTheme = (t: Theme): CaptionConfig => ({
  * annotation fields keep the original look. An unset border color follows the
  * fill color — the built-in seed ties them together (and the border is
  * invisible by default anyway: opacity 0). */
+/** Fixed-canvas margins a visual renders with: each side the visual set
+ *  itself (`CanvasSizeConfig.margins`) wins, every other side inherits the
+ *  theme's Exporting default, and a side neither sets is auto (absent).
+ *  Always returns a sparse record — callers never see `undefined` entries. */
+export const resolveCanvasMargins = (
+	t: Theme,
+	visual: CanvasMargins | undefined,
+): CanvasMargins => {
+	const out: CanvasMargins = {}
+	for (const side of ["top", "right", "bottom", "left"] as const) {
+		const v = visual?.[side] ?? t.exportCanvasMargins?.[side]
+		if (v != null) out[side] = v
+	}
+	return out
+}
+
 export const boxAnnotationStyleFromTheme = (t: Theme): BoxAnnotationStyle => ({
 	backgroundColor:
 		t.annotationFillColor ?? DEFAULT_BOX_ANNOTATION_STYLE.backgroundColor,

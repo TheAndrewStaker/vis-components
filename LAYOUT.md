@@ -820,3 +820,82 @@ Applies per panel under faceting, and — unlike the §10b pixel
 overrides, which are facet-only — to single-panel charts too. That's
 the headline use: a 1:1 ratio gives equal-length axes, so hexbin cells
 render as regular hexagons.
+
+---
+
+## 16. Canvas margins (fixed canvas size)
+
+`CanvasSizeConfig.margins` (Aesthetics → Canvas size → Margins) is a
+sparse `{top?, right?, bottom?, left?}` in px. A margin is the distance
+from the canvas edge to the nearest PAINTED content on that side. It is
+NOT a solver input: the solver's bands (`BASE_MARGIN`, `titleReserve`,
+`TITLE_LABEL_GAP_PX`, the tick-label floors) and ChartCanvas's 12 px
+`CHART_PAD` all leave slack that varies by side and by chart, so a
+margin added on top of them could never mean "0 = flush". Instead it is
+enforced OUTSIDE the solver by a measure → correct → re-solve loop.
+
+**Theme defaults.** The sides a visual leaves blank inherit the theme's
+Exporting defaults (`Theme.exportCanvasMargins`, px, sparse;
+`exportMarginUnit` is display-only). `resolveCanvasMargins(theme,
+visual)` in themeConfig.ts merges the two — visual side wins, then
+theme, then auto — and ChartCanvas reads the theme through
+`useCurrentTheme()` so a theme-sheet edit re-solves open charts.
+
+**Frame.** With a fixed canvas, `ChartCanvas` wraps its usual layout
+(edge-legend flex row/column or the inside-legend overlay) in
+`CanvasMarginFrame`: a `relative` W×H frame (carrying the background
+color) holding an `absolute` chart box whose per-side inset is
+
+```
+inset(side) = margin[side] set ? margin[side] − correction[side] : 0
+```
+
+**Measurement** ([inkExtent.ts](src/contexts/chartBuilder/lib/inkExtent.ts)).
+After every committed solve PlotCanvas bumps
+`currentRenderedLayoutVersionAtom`; the frame's layout effect then
+walks the box's DOM and unions the client rects of everything that
+paints, converted to the box's layout px (CSS transforms undone) and
+clamped to the box:
+
+- SVG leaves count when they paint: a visible fill, or a visible stroke
+  with a positive width (the rect grows by half the stroke). The
+  transparent `vc-line-hit` strokes and `fill="none"` hover rects don't.
+  `defs` / `clipPath` / `mask` / `pattern` / gradients are skipped. A
+  group with `clip-path="url(#id)"` contributes its geometry
+  INTERSECTED with the clip's `<rect>` (area layers, the regression
+  layer and panel-clipped annotations all clip to a plain rect), so a
+  pinned-range area never pulls the frame toward off-plot geometry.
+- Hidden subtrees (`display:none`, `visibility:hidden`, opacity 0) are
+  skipped.
+- HTML text nodes count by their Range rect; an element's background /
+  border counts only inside `[data-legend-root]` — the chart's own
+  wrappers carry the canvas background, which is not content. Tooltips
+  portal to `document.body` and never count.
+
+`slack[side]` is the gap between the box edge and that ink.
+
+**Correction.** `nextMarginCorrection` sets `correction[side] =
+slack[side]` for every SET side (auto sides stay 0). The box edge then
+moves outward by exactly the slack the layout left, the chart re-solves
+at the new box size, the frame re-measures on the next bump, and a side
+is settled once `|slack − correction| ≤ 0.5 px` — normally the second
+pass, since the slack is a property of the chrome, not of the box size.
+`MARGIN_MAX_PASSES` (4) self-induced passes cap a layout that flips with
+the box size (a tick label appearing / disappearing). The frame measures
+ONLY on layout bumps, never on its own correction render or on a margin
+edit: at that moment the SVG is still the previous solve's size, and a
+measurement would chase a bogus slack first.
+
+With no side set the frame still measures and publishes
+`currentRenderedCanvasSlackAtom`, which the sidebar shows as each
+input's "auto" placeholder (so stepping starts from the on-screen white
+space). Scroll mode is unaffected: ink past the box clamps to 0 slack,
+so a set margin is simply the inset.
+
+A 0 margin leaves only the font's own line box: SVG text measures by
+its ascent/descent box, so ≈ 3–5 px of internal leading remains above a
+20 px title's cap height.
+
+**Where.** Editor fixed canvas, image export (the export iframe renders
+the same `ChartCanvas` from the same config) and published embeds.
+Thumbnails serialize the SVG alone and are unaffected.

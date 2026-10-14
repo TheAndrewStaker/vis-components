@@ -1251,6 +1251,24 @@ export const currentRenderedFigureSlackAtom = atom<{
 	y: number
 }>({ x: 0, y: 0 })
 
+/** Counts PlotCanvas layout passes (bumped after every solve commits).
+ *  ChartCanvas's CanvasMarginFrame measures the rendered ink on each bump
+ *  — the only moment the DOM is guaranteed to reflect the latest spec —
+ *  so a fixed-canvas margin can correct for the slack the layout left. */
+export const currentRenderedLayoutVersionAtom = atom(0)
+
+/** White space (px) the layout currently leaves between the fixed canvas
+ *  edge and the nearest painted content on each side, measured by
+ *  CanvasMarginFrame after each layout pass. The Aesthetics panel's
+ *  margin inputs show it as the "auto" placeholder and step from it.
+ *  Null when no fixed canvas is rendered (or nothing has been measured). */
+export const currentRenderedCanvasSlackAtom = atom<{
+	top: number
+	right: number
+	bottom: number
+	left: number
+} | null>(null)
+
 /** Last rendered gradient-bar length (px along the bar's axis — height when
  *  the legend is stacked, width when horizontal). The legend's
  *  `GradientBarRamp` publishes it after each render so the Legend panel's

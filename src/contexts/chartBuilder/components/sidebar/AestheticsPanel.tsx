@@ -1,9 +1,15 @@
-import { useAtom } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
 import { ColorInput } from "../../../../components/ui/ColorInput"
 import { LABEL_COL } from "../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../components/ui/NumberInput"
-import type { AspectRatioConfig, CanvasSizeConfig } from "../../lib/channelConfig"
+import {
+	CANVAS_SIDES,
+	withCanvasMargin,
+	type AspectRatioConfig,
+	type CanvasSide,
+	type CanvasSizeConfig,
+} from "../../lib/channelConfig"
 import {
 	pxToUnit,
 	unitToPx,
@@ -12,13 +18,23 @@ import {
 	type DisplayUnit,
 } from "../../lib/displayUnits"
 import type { DrawOrderConfig } from "../../lib/drawOrder"
-import { currentChannelConfigsAtom } from "../../store/atoms"
+import {
+	currentChannelConfigsAtom,
+	currentRenderedCanvasSlackAtom,
+} from "../../store/atoms"
 import { useCurrentTheme } from "../../store/useCurrentTheme"
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
 import { Select } from "../../../../components/ui/Select"
 
 // Smallest usable canvas edge, in px (matches the Export modal's floor).
 const MIN_CANVAS_DIM = 50
+
+const SIDE_LABEL: Record<CanvasSide, string> = {
+	top: "Top",
+	right: "Right",
+	bottom: "Bottom",
+	left: "Left",
+}
 
 /** Per-visual aesthetic settings that don't fit neatly under a single
  * encoding channel. */
@@ -53,6 +69,19 @@ export const AestheticsPanel = () => {
 	const canvasUnit = canvasSize?.unit ?? "px"
 	const setCanvasSize = (next: CanvasSizeConfig | null) =>
 		setConfigs((prev) => ({ ...prev, canvasSize: next ?? undefined }))
+	// White space the layout currently leaves on each side of the fixed
+	// canvas (measured by ChartCanvas's margin frame) — the margin inputs'
+	// "auto" placeholder, so stepping starts from what's on screen.
+	const canvasSlack = useAtomValue(currentRenderedCanvasSlackAtom)
+	const setCanvasMargin = (side: CanvasSide, px: number | null) =>
+		setConfigs((prev) => {
+			const cs = prev.canvasSize
+			if (!cs) return prev
+			return {
+				...prev,
+				canvasSize: { ...cs, margins: withCanvasMargin(cs.margins, side, px) },
+			}
+		})
 
 	// Subsection "changed" dots. Fresh charts seed backgroundColor from the
 	// theme (channelConfigsFromTheme), so the theme is the background's
@@ -190,6 +219,50 @@ export const AestheticsPanel = () => {
 						rectangle; the viewport area outside it is shaded gray.
 					</p>
 				</div>
+				{canvasSize?.enabled && (
+					<div className="vc-divider-group" data-canvas-margins>
+						<span className="vc-group-header">Margins</span>
+						{CANVAS_SIDES.map((side) => {
+							const px = canvasSize.margins?.[side]
+							// Blank = inherit: the theme's Exporting default when it has
+							// one (the placeholder shows it), else whatever white space
+							// the layout leaves (the measured amount).
+							const themePx = theme.exportCanvasMargins?.[side]
+							const placeholder =
+								themePx != null
+									? String(pxToUnit(themePx, canvasUnit))
+									: canvasSlack
+										? String(pxToUnit(canvasSlack[side], canvasUnit))
+										: "auto"
+							return (
+								<NumberInput
+									key={side}
+									label={SIDE_LABEL[side]}
+									labelClassName={LABEL_COL}
+									value={px == null ? null : pxToUnit(px, canvasUnit)}
+									onChange={(v) =>
+										setCanvasMargin(side, Math.max(0, unitToPx(v, canvasUnit)))
+									}
+									onClear={() => setCanvasMargin(side, null)}
+									placeholder={placeholder}
+									stepBase={0}
+									min={0}
+									step={UNIT_STEP[canvasUnit]}
+									clamp
+									suffix={canvasUnit}
+									changed={px != null && px !== themePx}
+								/>
+							)
+						})}
+						<p className="vc-help">
+							White space between the canvas edge and the nearest content on
+							that side — the title, an axis title, the legend. Blank uses the
+							theme&apos;s default (Settings → Themes → Exporting) or, without
+							one, whatever the layout leaves — either way shown as the
+							placeholder. 0 puts the content flush against the edge.
+						</p>
+					</div>
+				)}
 				<div className="vc-divider-group">
 					<label className="flex items-center gap-2 text-sm vc-text">
 						<input

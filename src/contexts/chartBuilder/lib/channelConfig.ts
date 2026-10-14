@@ -288,6 +288,37 @@ export type CanvasSizeConfig = {
 	 * width/height above stay px-truth (converted at 96 px/inch, matching
 	 * the Export modal's unit convention). Absent = px. */
 	unit?: DisplayUnit
+	/** White space between the canvas edge and the nearest PAINTED content
+	 * on each side (px). Sparse: an absent side is "auto" — whatever slack
+	 * the layout leaves today. A set side is enforced by measuring the
+	 * rendered ink and shifting the chart box so the ink lands exactly that
+	 * far from the edge, so 0 means flush (see ChartCanvas's
+	 * CanvasMarginFrame + lib/inkExtent.ts). Display converts through
+	 * `unit` like width/height. */
+	margins?: CanvasMargins
+}
+
+export type CanvasSide = "top" | "right" | "bottom" | "left"
+export const CANVAS_SIDES: readonly CanvasSide[] = [
+	"top",
+	"right",
+	"bottom",
+	"left",
+]
+export type CanvasMargins = Partial<Record<CanvasSide, number>>
+
+/** Set or clear one canvas-margin side, keeping the record sparse (a
+ *  cleared side is DELETED, not nulled, so "auto" survives a JSON round
+ *  trip as absence) and dropping the whole record when nothing is set. */
+export const withCanvasMargin = (
+	margins: CanvasMargins | undefined,
+	side: CanvasSide,
+	px: number | null,
+): CanvasMargins | undefined => {
+	const next: CanvasMargins = { ...(margins ?? {}) }
+	if (px == null) delete next[side]
+	else next[side] = px
+	return Object.keys(next).length > 0 ? next : undefined
 }
 
 export const DEFAULT_HISTOGRAM_CONFIG: HistogramConfig = {
