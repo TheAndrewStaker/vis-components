@@ -10,7 +10,7 @@ import {
 } from "../../../lib/annotationsConfig"
 import { DashStylePicker } from "../channelOptions/dashControls"
 import type { AxisInfo } from "./axisInfo"
-import { AnnotationCard, LayerRow } from "./controls"
+import { AnnotationCard } from "./controls"
 import { EdgePositionSection } from "./sections"
 
 /** Sidebar editor for line-segment annotations. Endpoint A = (xMin, yMin),
@@ -27,7 +27,7 @@ export const LineSegmentEditor = ({
 	xAxis,
 	yAxis,
 	disableValues,
-	namePlaceholder,
+	fallbackName,
 	facetScope,
 }: {
 	line: LineSegmentAnnotation
@@ -43,8 +43,8 @@ export const LineSegmentEditor = ({
 	/** Gray out "Values (data units)" on polar charts (radar / pie), which
 	 *  have no cartesian axes for a straight segment to map against. */
 	disableValues?: boolean
-	/** Light suggestion shown when the user hasn't named the annotation. */
-	namePlaceholder?: string
+	/** Name shown when the stored one is blank (pre-default-name saves). */
+	fallbackName: string
 	/** Facet-targeting control, rendered at the top when faceted (else null). */
 	facetScope?: ReactNode
 }) => {
@@ -52,7 +52,7 @@ export const LineSegmentEditor = ({
 		<AnnotationCard
 			kind="line"
 			name={line.name}
-			namePlaceholder={namePlaceholder}
+			fallbackName={fallbackName}
 			onNameChange={(name) => onChange({ name })}
 			onRemove={onRemove}
 			open={open}
@@ -66,6 +66,8 @@ export const LineSegmentEditor = ({
 				xAxis={xAxis}
 				yAxis={yAxis}
 				disableValues={disableValues}
+				zOrder={line.zOrder}
+				onZOrderChange={(zOrder) => onChange({ zOrder })}
 			/>
 
 			<CollapsibleSubsection title="Line">
@@ -130,11 +132,6 @@ export const LineSegmentEditor = ({
 					</div>
 				</div>
 			</CollapsibleSubsection>
-
-			<LayerRow
-				zOrder={line.zOrder}
-				onChange={(zOrder) => onChange({ zOrder })}
-			/>
 		</AnnotationCard>
 	)
 }

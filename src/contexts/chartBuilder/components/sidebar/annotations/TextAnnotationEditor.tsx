@@ -8,11 +8,12 @@ import {
 	type TextAnnotationBoxStyle,
 } from "../../../lib/annotationsConfig"
 import type { AxisInfo } from "./axisInfo"
-import { AnnotationCard, LayerRow } from "./controls"
+import { AnnotationCard } from "./controls"
 import {
 	BorderSection,
 	FillSection,
 	PointPositionSection,
+	TextContentField,
 	TextStyleSection,
 } from "./sections"
 
@@ -21,7 +22,12 @@ import {
  *  position: a text annotation is anchored at ONE point, because its box is
  *  auto-sized to the label rather than dragged out by the user. `textAlign`
  *  picks which edge of that box lands on the anchor (see
- *  `lib/textAnnotationGeometry.ts`). */
+ *  `lib/textAnnotationGeometry.ts`).
+ *
+ *  Body order: the text box first and OUTSIDE any subsection (it's the
+ *  annotation itself, so it must never hide behind a collapsed header), then
+ *  "Text formatting", then Position (which ends with the layer toggle),
+ *  Fill, Border. */
 export const TextAnnotationEditor = ({
 	anno,
 	defaults,
@@ -32,7 +38,7 @@ export const TextAnnotationEditor = ({
 	xAxis,
 	yAxis,
 	disableValues,
-	namePlaceholder,
+	fallbackName,
 	facetScope,
 }: {
 	anno: TextAnnotation
@@ -48,21 +54,38 @@ export const TextAnnotationEditor = ({
 	/** Gray out the "Values (data units)" option — used on polar charts
 	 *  (radar / pie) where the anchor has no cartesian axes to map against. */
 	disableValues?: boolean
-	/** Light suggestion shown when the user hasn't named the annotation. */
-	namePlaceholder?: string
+	/** Name shown when the stored one is blank (pre-default-name saves). */
+	fallbackName: string
 	/** Facet-targeting control, rendered at the top when faceted (else null). */
 	facetScope?: ReactNode
 }) => (
 	<AnnotationCard
 		kind="text"
 		name={anno.name}
-		namePlaceholder={namePlaceholder}
+		fallbackName={fallbackName}
 		onNameChange={(name) => onChange({ name })}
 		onRemove={onRemove}
 		open={open}
 		onToggle={onToggle}
 	>
 		{facetScope}
+
+		{/* px-2 aligns the bare field with the rows inside the boxed subsections. */}
+		<TextContentField
+			className="px-2"
+			label={null}
+			value={anno.text}
+			onChange={(text) => onChange({ text })}
+			placeholder="Text drawn on the chart…"
+		/>
+
+		<TextStyleSection
+			title="Text formatting"
+			style={anno}
+			defaults={defaults}
+			onChange={onChange}
+			alignmentHelp="Also sets the anchor: left starts the text at x, center straddles it, right ends there."
+		/>
 
 		<PointPositionSection
 			coords={anno}
@@ -71,14 +94,8 @@ export const TextAnnotationEditor = ({
 			yAxis={yAxis}
 			disableValues={disableValues}
 			help="The label is centered on y. Alignment picks which side of it sits at x."
-		/>
-
-		<TextStyleSection
-			style={anno}
-			defaults={defaults}
-			onChange={onChange}
-			placeholder="Text drawn on the chart…"
-			alignmentHelp="Also sets the anchor: left starts the text at x, center straddles it, right ends there."
+			zOrder={anno.zOrder}
+			onZOrderChange={(zOrder) => onChange({ zOrder })}
 		/>
 
 		<FillSection style={anno} defaults={defaults} onChange={onChange} />
@@ -106,10 +123,5 @@ export const TextAnnotationEditor = ({
 				)}
 			</div>
 		</BorderSection>
-
-		<LayerRow
-			zOrder={anno.zOrder}
-			onChange={(zOrder) => onChange({ zOrder })}
-		/>
 	</AnnotationCard>
 )

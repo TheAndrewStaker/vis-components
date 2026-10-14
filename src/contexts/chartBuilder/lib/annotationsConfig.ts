@@ -66,7 +66,16 @@ export type RectangleAnnotation = {
 	 *     plot's size, so its distance beyond the edge scales with the plot
 	 *     while the chrome out there (facet-label band, title band, cell
 	 *     margins) is a fixed pixel height, and the annotation drifts across
-	 *     its neighbors as the chart resizes. See `lib/annotationPixels.ts`. */
+	 *     its neighbors as the chart resizes. See `lib/annotationPixels.ts`.
+	 *   - `"pixelsBottomLeft"`: the same unit measured from the BOTTOM-LEFT
+	 *     corner (so +y up means inside the plot is positive and below it
+	 *     is negative). For notes hung UNDER the plot: measured from the
+	 *     top they'd scale with the plot height again, and on a facet grid
+	 *     with panels of different heights they'd land at a different depth
+	 *     under each panel.
+	 *   - `"pixelsTopRight"` / `"pixelsBottomRight"`: the same again from
+	 *     the right-hand corners (+x still right, so inside the plot x is
+	 *     negative). For notes beside the plot's RIGHT edge. */
 	coordSystem: AnnotationCoordSystem
 	/** Which facet panels the annotation is drawn on, when the chart is
 	 *  faceted. `null`/`undefined` (the default) means "all facets" — the
@@ -180,12 +189,16 @@ export type TextAnnotation = {
 	/** Anchor x. In `"percent"` coordSystem a 0–1 plot-area-normalized number
 	 *  (0 hugs the y-axis spine, 1 the right edge). In `"values"` a raw axis
 	 *  value — number for quantitative/temporal/numeric-ordinal, string for
-	 *  categorical — fed through the chart's x position scale. In `"pixels"`
-	 *  whole px right of the plot's left edge. */
+	 *  categorical — fed through the chart's x position scale. In the pixel
+	 *  systems, whole px RIGHT of the corner's edge (the plot's left edge for
+	 *  the left-hand corners, its right edge for the right-hand ones, where
+	 *  negative = inside the plot). */
 	x: number | string
 	/** Anchor y. Same rules as `x`; in `"percent"` mode 0 hugs the BOTTOM
 	 *  spine (cartesian convention) and 1 the top; in `"pixels"` whole px
-	 *  UP from the plot's TOP edge (negative = inside the plot). */
+	 *  UP from the plot's TOP edge (negative = inside the plot); in
+	 *  the bottom-corner pixel systems whole px UP from the BOTTOM edge
+	 *  (negative = below the plot). */
 	y: number | string
 	/** The label itself. A literal `\n` forces a line break. */
 	text: string
@@ -242,7 +255,7 @@ export type CircleAnnotation = {
 	 *  data units along `radiusAxis`, projected through that axis's scale.
 	 *  A data-unit radius is only meaningful on a continuous (quantitative /
 	 *  numeric-ordinal) axis; on categorical/temporal axes the circle is
-	 *  skipped at render time. In `"pixels"` mode it's the on-screen radius
+	 *  skipped at render time. In the pixel modes it's the on-screen radius
 	 *  in px (no axis involved). */
 	radius: number
 	/** Which axis the radius is measured against (its pixel extent in percent
@@ -328,8 +341,9 @@ export const newRectangle = (
 	style?: BoxAnnotationStyle & RectangleTextStyle
 ): RectangleAnnotation => ({
 	id,
-	// Left blank so the sidebar shows an iterating "Rectangle N" suggestion
-	// (placeholder) — the user is nudged to type a more descriptive label.
+	// Blank here; the sidebar's add handlers stamp the iterating "Rectangle N"
+	// default (`nextAnnotationName`), and a blank name displays that same
+	// numbered fallback for annotations saved before defaults were stored.
 	name: "",
 	xMin: 0.25,
 	xMax: 0.75,
@@ -351,7 +365,7 @@ export const newLineSegment = (
 	style?: LineAnnotationStyle
 ): LineSegmentAnnotation => ({
 	id,
-	// Blank — see `newRectangle` (sidebar shows an iterating suggestion).
+	// Blank — see `newRectangle` (the sidebar stamps the numbered default).
 	name: "",
 	xMin: 0.25,
 	yMin: 0.4,
@@ -372,7 +386,7 @@ export const newCircle = (
 	style?: BoxAnnotationStyle
 ): CircleAnnotation => ({
 	id,
-	// Blank — see `newRectangle` (sidebar shows an iterating suggestion).
+	// Blank — see `newRectangle` (the sidebar stamps the numbered default).
 	name: "",
 	centerX: 0.5,
 	centerY: 0.5,
@@ -394,7 +408,7 @@ export const newTextAnnotation = (
 	style?: TextAnnotationBoxStyle & RectangleTextStyle
 ): TextAnnotation => ({
 	id,
-	// Blank — see `newRectangle` (sidebar shows an iterating suggestion).
+	// Blank — see `newRectangle` (the sidebar stamps the numbered default).
 	name: "",
 	x: 0.5,
 	y: 0.5,

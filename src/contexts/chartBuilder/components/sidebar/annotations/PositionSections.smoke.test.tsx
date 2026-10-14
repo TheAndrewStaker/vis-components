@@ -8,9 +8,9 @@ import type { AxisInfo } from "./axisInfo"
 import { EdgePositionSection, PointPositionSection } from "./sections"
 
 /** Every annotation's Position subsection: ONE set of coordinate inputs
- *  whose unit comes from "Adjust by" — Percent, Values, or Pixels (from the
- *  plot's top-left corner, +y up). Switching unit converts the stored
- *  numbers so the annotation stays where it is. */
+ *  whose unit comes from "Adjust by" — Percent, Values, or Pixels (from one
+ *  of the plot's four corners, +x right and +y up). Switching unit converts
+ *  the stored numbers so the annotation stays where it is. */
 
 const AXIS: AxisInfo = {
 	field: "val",
@@ -44,13 +44,25 @@ describe("annotation Position — Pixels unit", () => {
 				onChange={() => {}}
 				xAxis={AXIS}
 				yAxis={AXIS}
+				zOrder="front"
+				onZOrderChange={() => {}}
 			/>
 		)
+		// The layer toggle lives at the bottom of Position, not loose in the card.
+		expect(screen.queryByRole("group", { name: "Layer order" })).toBeNull()
 		expandPosition()
+		expect(screen.getByRole("group", { name: "Layer order" })).toBeTruthy()
 		const options = Array.from(
 			screen.getByLabelText<HTMLSelectElement>("Adjust by").options
 		).map((o) => o.value)
-		expect(options).toEqual(["percent", "values", "pixels"])
+		expect(options).toEqual([
+			"percent",
+			"values",
+			"pixels",
+			"pixelsBottomLeft",
+			"pixelsTopRight",
+			"pixelsBottomRight",
+		])
 		// No second adjuster, no corner picker.
 		expect(screen.queryByText("Adjust position")).toBeNull()
 		expect(screen.queryByLabelText("Measured from")).toBeNull()
@@ -64,6 +76,8 @@ describe("annotation Position — Pixels unit", () => {
 				onChange={onChange}
 				xAxis={AXIS}
 				yAxis={AXIS}
+				zOrder="front"
+				onZOrderChange={() => {}}
 			/>
 		)
 		expandPosition()
@@ -74,6 +88,72 @@ describe("annotation Position — Pixels unit", () => {
 			x: -8,
 			y: 24,
 		})
+	})
+
+	it("switching to bottom-left Pixels converts the coords from the plot's bottom-left", () => {
+		const onChange = vi.fn()
+		mount(
+			<PointPositionSection
+				coords={{ ...newTextAnnotation("t1"), x: -0.02, y: -0.07 }}
+				onChange={onChange}
+				xAxis={AXIS}
+				yAxis={AXIS}
+				zOrder="front"
+				onZOrderChange={() => {}}
+			/>
+		)
+		expandPosition()
+		select("Adjust by", "pixelsBottomLeft")
+		// 400 × 200 plot: -2% → 8px left of the spine, -7% → 14px below the bottom.
+		expect(onChange).toHaveBeenCalledWith({
+			coordSystem: "pixelsBottomLeft",
+			x: -8,
+			y: -14,
+		})
+	})
+
+	it("switching to a right-hand corner converts x from the plot's right edge", () => {
+		const onChange = vi.fn()
+		mount(
+			<PointPositionSection
+				coords={{ ...newTextAnnotation("t1"), x: 1.03, y: -0.07 }}
+				onChange={onChange}
+				xAxis={AXIS}
+				yAxis={AXIS}
+				zOrder="front"
+				onZOrderChange={() => {}}
+			/>
+		)
+		expandPosition()
+		select("Adjust by", "pixelsBottomRight")
+		// 400 × 200 plot: 103% → 12px right of the right edge, -7% → 14px below.
+		expect(onChange).toHaveBeenCalledWith({
+			coordSystem: "pixelsBottomRight",
+			x: 12,
+			y: -14,
+		})
+	})
+
+	it("explains the bottom-left corner in the helper line", () => {
+		mount(
+			<PointPositionSection
+				coords={{
+					...newTextAnnotation("t1"),
+					coordSystem: "pixelsBottomLeft",
+					x: -8,
+					y: -14,
+				}}
+				onChange={() => {}}
+				xAxis={AXIS}
+				yAxis={AXIS}
+				zOrder="front"
+				onZOrderChange={() => {}}
+			/>
+		)
+		expandPosition()
+		expect(screen.getByLabelText<HTMLInputElement>("y").value).toBe("-14")
+		expect(screen.getByText(/bottom-left corner/)).toBeTruthy()
+		expect(screen.queryByText(/top-left corner/)).toBeNull()
 	})
 
 	it("shows px inputs that write as typed — +y is up by definition", () => {
@@ -89,6 +169,8 @@ describe("annotation Position — Pixels unit", () => {
 				onChange={onChange}
 				xAxis={AXIS}
 				yAxis={AXIS}
+				zOrder="front"
+				onZOrderChange={() => {}}
 			/>
 		)
 		expandPosition()
@@ -111,6 +193,8 @@ describe("annotation Position — Pixels unit", () => {
 				onChange={onChange}
 				xAxis={AXIS}
 				yAxis={AXIS}
+				zOrder="front"
+				onZOrderChange={() => {}}
 			/>
 		)
 		expandPosition()
@@ -129,6 +213,8 @@ describe("annotation Position — Pixels unit", () => {
 				onChange={onChange}
 				xAxis={AXIS}
 				yAxis={AXIS}
+				zOrder="front"
+				onZOrderChange={() => {}}
 			/>
 		)
 		expandPosition()

@@ -5,7 +5,7 @@ import {
 	type RectangleTextStyle,
 } from "../../../lib/annotationsConfig"
 import type { AxisInfo } from "./axisInfo"
-import { AnnotationCard, LayerRow } from "./controls"
+import { AnnotationCard } from "./controls"
 import {
 	BorderSection,
 	EdgePositionSection,
@@ -27,7 +27,7 @@ export const RectangleEditor = ({
 	xAxis,
 	yAxis,
 	disableValues,
-	namePlaceholder,
+	fallbackName,
 	facetScope,
 }: {
 	rect: RectangleAnnotation
@@ -43,15 +43,15 @@ export const RectangleEditor = ({
 	/** Gray out the "Values (data units)" option — used on polar charts
 	 *  (radar / pie) where a rectangle has no cartesian axes to map against. */
 	disableValues?: boolean
-	/** Light suggestion shown when the user hasn't named the annotation. */
-	namePlaceholder?: string
+	/** Name shown when the stored one is blank (pre-default-name saves). */
+	fallbackName: string
 	/** Facet-targeting control, rendered at the top when faceted (else null). */
 	facetScope?: ReactNode
 }) => (
 	<AnnotationCard
 		kind="rectangle"
 		name={rect.name}
-		namePlaceholder={namePlaceholder}
+		fallbackName={fallbackName}
 		onNameChange={(name) => onChange({ name })}
 		onRemove={onRemove}
 		open={open}
@@ -65,6 +65,8 @@ export const RectangleEditor = ({
 			xAxis={xAxis}
 			yAxis={yAxis}
 			disableValues={disableValues}
+			zOrder={rect.zOrder}
+			onZOrderChange={(zOrder) => onChange({ zOrder })}
 		/>
 
 		<FillSection style={rect} defaults={defaults} onChange={onChange} />
@@ -81,11 +83,6 @@ export const RectangleEditor = ({
 			defaults={defaults}
 			onChange={onChange}
 			placeholder="Label drawn inside the rectangle…"
-		/>
-
-		<LayerRow
-			zOrder={rect.zOrder}
-			onChange={(zOrder) => onChange({ zOrder })}
 		/>
 	</AnnotationCard>
 )

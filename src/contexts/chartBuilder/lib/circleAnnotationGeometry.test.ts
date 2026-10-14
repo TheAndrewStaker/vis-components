@@ -53,6 +53,20 @@ describe("computeCirclePixels — percent mode", () => {
 		expect(geo?.r).toBe(12) // no axis involved
 	})
 
+	it("places a bottom-left pixel center from the plot's bottom-left corner", () => {
+		const circle = {
+			...newCircle("c1"),
+			coordSystem: "pixelsBottomLeft" as const,
+			centerX: 30,
+			centerY: -20,
+			radius: 12,
+		}
+		const geo = computeCirclePixels(circle, inner, noScales)
+		expect(geo?.cx).toBe(130)
+		expect(geo?.cy).toBe(inner.y + inner.height + 20) // 20px below the bottom
+		expect(geo?.r).toBe(12)
+	})
+
 	it("respects a non-centered center with the bottom-up y convention", () => {
 		const circle = {
 			...newCircle("c1"),

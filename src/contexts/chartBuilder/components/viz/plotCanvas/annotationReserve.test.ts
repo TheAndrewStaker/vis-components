@@ -170,6 +170,52 @@ describe("measureAnnotationSpill", () => {
 		)
 	})
 
+	it("measures a bottom-left pixel-mode rectangle from the plot's bottom edge", () => {
+		const { solve } = makeSolver()
+		const spec = solve({ left: 0, right: 0, top: 0, bottom: 0 })
+		const inner = spec.panels[0]!.inner
+		// A 20px-tall box whose bottom sits 30px below the plot's bottom-left corner.
+		const annotations: AnnotationsConfig = {
+			...emptyAnnotations(),
+			rectangles: [
+				rect({
+					coordSystem: "pixelsBottomLeft",
+					xMin: 0,
+					xMax: 200,
+					yMin: -30,
+					yMax: -10,
+				}),
+			],
+		}
+		const spill = spillOf(spec, annotations)
+		expect(spill.bottom).toBeCloseTo(
+			ANNOTATION_RESERVE_PAD_PX + 30 - (CANVAS.height - (inner.y + inner.height))
+		)
+	})
+
+	it("measures a top-right pixel-mode rectangle from the plot's right edge", () => {
+		const { solve } = makeSolver()
+		const spec = solve({ left: 0, right: 0, top: 0, bottom: 0 })
+		const inner = spec.panels[0]!.inner
+		// A 40px-wide box whose right edge sits 50px past the plot's right edge.
+		const annotations: AnnotationsConfig = {
+			...emptyAnnotations(),
+			rectangles: [
+				rect({
+					coordSystem: "pixelsTopRight",
+					xMin: 10,
+					xMax: 50,
+					yMin: -40,
+					yMax: -20,
+				}),
+			],
+		}
+		const spill = spillOf(spec, annotations)
+		expect(spill.right).toBeCloseTo(
+			inner.x + inner.width + 50 + ANNOTATION_RESERVE_PAD_PX - CANVAS.width
+		)
+	})
+
 	it("ignores value-mode annotations on a multi-panel chart (they clip)", () => {
 		const { solve } = makeSolver(2)
 		const spec = solve({ left: 0, right: 0, top: 0, bottom: 0 })

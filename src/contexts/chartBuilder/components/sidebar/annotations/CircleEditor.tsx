@@ -18,7 +18,7 @@ import {
 	BorderSection,
 	CoordSystemSelect,
 	FillSection,
-	PIXELS_HELP,
+	pixelsHelpFor,
 	usePlotDims,
 } from "./sections"
 
@@ -37,7 +37,7 @@ export const CircleEditor = ({
 	yAxis,
 	isRadar,
 	disableValues,
-	namePlaceholder,
+	fallbackName,
 	facetScope,
 }: {
 	circle: CircleAnnotation
@@ -56,8 +56,8 @@ export const CircleEditor = ({
 	isRadar?: boolean
 	/** Gray out the "Values (data units)" option (non-radar polar / pie). */
 	disableValues?: boolean
-	/** Light suggestion shown when the user hasn't named the annotation. */
-	namePlaceholder?: string
+	/** Name shown when the stored one is blank (pre-default-name saves). */
+	fallbackName: string
 	/** Facet-targeting control, rendered at the top when faceted (else null). */
 	facetScope?: ReactNode
 }) => {
@@ -80,7 +80,7 @@ export const CircleEditor = ({
 		<AnnotationCard
 			kind="circle"
 			name={circle.name}
-			namePlaceholder={namePlaceholder}
+			fallbackName={fallbackName}
 			onNameChange={(name) => onChange({ name })}
 			onRemove={onRemove}
 			open={open}
@@ -206,7 +206,7 @@ export const CircleEditor = ({
 								onChange={(v) => onChange({ radius: v })}
 								suffix="px"
 							/>
-							<p className="vc-help">{PIXELS_HELP}</p>
+							<p className="vc-help">{pixelsHelpFor(circle.coordSystem)}</p>
 						</div>
 					)}
 
@@ -250,6 +250,12 @@ export const CircleEditor = ({
 						</div>
 					)}
 				</div>
+				<div className="vc-divider-group">
+					<LayerRow
+						zOrder={circle.zOrder}
+						onChange={(zOrder) => onChange({ zOrder })}
+					/>
+				</div>
 			</CollapsibleSubsection>
 
 			<FillSection style={circle} defaults={defaults} onChange={onChange} />
@@ -259,11 +265,6 @@ export const CircleEditor = ({
 				defaults={defaults}
 				onChange={onChange}
 				ariaContext="circle border"
-			/>
-
-			<LayerRow
-				zOrder={circle.zOrder}
-				onChange={(zOrder) => onChange({ zOrder })}
 			/>
 		</AnnotationCard>
 	)

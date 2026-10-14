@@ -138,6 +138,47 @@ describe("computeTextAnnotationAnchor", () => {
 		).toEqual({ x: 110, y: 70 }) // inside the plot: negative y
 	})
 
+	it("places bottom-left pixel coords from the plot's bottom-left corner, +y up", () => {
+		const base = { ...newTextAnnotation("t1"), coordSystem: "pixelsBottomLeft" as const }
+		expect(
+			computeTextAnnotationAnchor({ ...base, x: -8, y: -14 }, inner, emptyScales)
+		).toEqual({ x: 92, y: 264 }) // 8px left of the spine, 14px below the bottom
+		expect(
+			computeTextAnnotationAnchor({ ...base, x: 10, y: 20 }, inner, emptyScales)
+		).toEqual({ x: 110, y: 230 }) // inside the plot: positive y
+	})
+
+	it("places right-hand pixel coords from the plot's right edge", () => {
+		const right = inner.x + inner.width
+		const bottom = inner.y + inner.height
+		expect(
+			computeTextAnnotationAnchor(
+				{ ...newTextAnnotation("t1"), coordSystem: "pixelsTopRight", x: 12, y: 14 },
+				inner,
+				emptyScales
+			)
+		).toEqual({ x: right + 12, y: inner.y - 14 })
+		expect(
+			computeTextAnnotationAnchor(
+				{ ...newTextAnnotation("t1"), coordSystem: "pixelsBottomRight", x: -10, y: -14 },
+				inner,
+				emptyScales
+			)
+		).toEqual({ x: right - 10, y: bottom + 14 })
+	})
+
+	it("holds a fixed gap below each panel when the panels differ in height", () => {
+		// The facet-grid case: a note 14px under every plot must sit 14px
+		// under EACH panel's bottom edge, however tall the panel is.
+		const note = { ...newTextAnnotation("t1"), coordSystem: "pixelsBottomLeft" as const, x: 0, y: -14 }
+		const tall = { x: 100, y: 50, width: 400, height: 300 }
+		const short = { x: 100, y: 400, width: 400, height: 120 }
+		const gapUnder = (panel: typeof tall) =>
+			computeTextAnnotationAnchor(note, panel, emptyScales)!.y - (panel.y + panel.height)
+		expect(gapUnder(tall)).toBe(14)
+		expect(gapUnder(short)).toBe(14)
+	})
+
 	it("holds a fixed gap above the plot as the panel height changes", () => {
 		// The point of Pixels mode: 14px above the top-left corner is 14px at
 		// EVERY size. The same placement as a percent past 100 scales with the

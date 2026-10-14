@@ -6,6 +6,7 @@ import {
 	type TextAnnotation,
 } from "../../../lib/annotationsConfig"
 import {
+	isPixelSystem,
 	pixelToCanvasX,
 	pixelToCanvasY,
 	type AnnotationCoordSystem,
@@ -339,14 +340,14 @@ export const layoutPanelAnnotations = ({
 	const placed: PlacedAnnotation[] = []
 	for (const r of rectangles) {
 		const useValues = r.coordSystem === "values"
-		const usePixels = r.coordSystem === "pixels"
+		const pixelSystem = isPixelSystem(r.coordSystem) ? r.coordSystem : null
 		let left: number, width: number
 		let top: number, height: number
-		if (usePixels) {
-			// Whole px from the plot's top-left corner, +x right; min/max name
-			// the exact edges, as in the other systems.
-			const a = pixelToCanvasX(inner, toNumber(r.xMin))
-			const b = pixelToCanvasX(inner, toNumber(r.xMax))
+		if (pixelSystem) {
+			// Whole px from the corner's edge (left or right), +x right; min/max
+			// name the exact edges, as in the other systems.
+			const a = pixelToCanvasX(inner, toNumber(r.xMin), pixelSystem)
+			const b = pixelToCanvasX(inner, toNumber(r.xMax), pixelSystem)
 			left = Math.min(a, b)
 			width = Math.max(a, b) - left
 		} else if (useValues && xScale && axisFields.xType) {
@@ -366,10 +367,11 @@ export const layoutPanelAnnotations = ({
 			left = inner.x + inner.width * x0
 			width = inner.width * (x1 - x0)
 		}
-		if (usePixels) {
-			// +y is up from the top edge; the helper flips to SVG top-down.
-			const a = pixelToCanvasY(inner, toNumber(r.yMin))
-			const b = pixelToCanvasY(inner, toNumber(r.yMax))
+		if (pixelSystem) {
+			// +y is up from the corner's edge (top or bottom); the helper flips
+			// to SVG top-down.
+			const a = pixelToCanvasY(inner, toNumber(r.yMin), pixelSystem)
+			const b = pixelToCanvasY(inner, toNumber(r.yMax), pixelSystem)
 			top = Math.min(a, b)
 			height = Math.max(a, b) - top
 		} else if (useValues && yScale && axisFields.yType) {

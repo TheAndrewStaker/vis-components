@@ -36,7 +36,7 @@ import {
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
-import { nameSuggestion, type AxisInfo } from "./axisInfo"
+import { nameSuggestion, nextAnnotationName, type AxisInfo } from "./axisInfo"
 import { CircleEditor } from "./CircleEditor"
 import { FacetScopeControl } from "../FacetScopeControl"
 import { LineSegmentEditor } from "./LineSegmentEditor"
@@ -178,7 +178,13 @@ export const AnnotationsPanel = () => {
 			.slice(2, 6)}`
 		update({
 			...cfg,
-			rectangles: [...cfg.rectangles, newRectangle(id, rectDefaults)],
+			rectangles: [
+				...cfg.rectangles,
+				{
+					...newRectangle(id, rectDefaults),
+					name: nextAnnotationName("Rectangle", cfg.rectangles),
+				},
+			],
 		})
 		setExpanded(id, true)
 	}
@@ -201,7 +207,16 @@ export const AnnotationsPanel = () => {
 		const id = `circle-${Date.now().toString(36)}-${Math.random()
 			.toString(36)
 			.slice(2, 6)}`
-		update({ ...cfg, circles: [...circles, newCircle(id, circleDefaults)] })
+		update({
+			...cfg,
+			circles: [
+				...circles,
+				{
+					...newCircle(id, circleDefaults),
+					name: nextAnnotationName("Circle", circles),
+				},
+			],
+		})
 		setExpanded(id, true)
 	}
 
@@ -223,7 +238,13 @@ export const AnnotationsPanel = () => {
 			.slice(2, 6)}`
 		update({
 			...cfg,
-			lineSegments: [...lineSegments, newLineSegment(id, lineDefaults)],
+			lineSegments: [
+				...lineSegments,
+				{
+					...newLineSegment(id, lineDefaults),
+					name: nextAnnotationName("Line", lineSegments),
+				},
+			],
 		})
 		setExpanded(id, true)
 	}
@@ -246,7 +267,16 @@ export const AnnotationsPanel = () => {
 		const id = `text-${Date.now().toString(36)}-${Math.random()
 			.toString(36)
 			.slice(2, 6)}`
-		update({ ...cfg, texts: [...texts, newTextAnnotation(id, textDefaults)] })
+		update({
+			...cfg,
+			texts: [
+				...texts,
+				{
+					...newTextAnnotation(id, textDefaults),
+					name: nextAnnotationName("Text", texts),
+				},
+			],
+		})
 		setExpanded(id, true)
 	}
 
@@ -304,7 +334,7 @@ export const AnnotationsPanel = () => {
 					xAxis={xAxis}
 					yAxis={yAxis}
 					disableValues={disableValues}
-					namePlaceholder={nameSuggestion("Rectangle", i)}
+					fallbackName={nameSuggestion("Rectangle", i)}
 					facetScope={
 						isFaceted ? (
 							<FacetScopeControl
@@ -331,7 +361,7 @@ export const AnnotationsPanel = () => {
 					yAxis={yAxis}
 					isRadar={isRadar}
 					disableValues={disableValues && !isRadar}
-					namePlaceholder={nameSuggestion("Circle", i)}
+					fallbackName={nameSuggestion("Circle", i)}
 					facetScope={
 						isFaceted ? (
 							<FacetScopeControl
@@ -357,7 +387,7 @@ export const AnnotationsPanel = () => {
 					xAxis={xAxis}
 					yAxis={yAxis}
 					disableValues={disableValues}
-					namePlaceholder={nameSuggestion("Line", i)}
+					fallbackName={nameSuggestion("Line", i)}
 					facetScope={
 						isFaceted ? (
 							<FacetScopeControl
@@ -383,7 +413,7 @@ export const AnnotationsPanel = () => {
 					xAxis={xAxis}
 					yAxis={yAxis}
 					disableValues={disableValues}
-					namePlaceholder={nameSuggestion("Text", i)}
+					fallbackName={nameSuggestion("Text", i)}
 					facetScope={
 						isFaceted ? (
 							<FacetScopeControl

@@ -94,8 +94,8 @@ test("text annotation box is measured to fit its label", async ({ page }) => {
 	await expect(page.locator(BOX)).toHaveCount(0)
 	await expect(page.locator(LABEL)).toHaveCount(0)
 
-	// The editor opens expanded; the Text subsection holds the textarea.
-	await page.getByRole("button", { name: "Text", exact: true }).first().click()
+	// The editor opens expanded with the text box visible at the top of the
+	// card — not tucked inside a collapsed subsection.
 	const textarea = page.getByPlaceholder("Text drawn on the chart…")
 	await textarea.fill("Q3")
 	await expect(page.locator(LABEL)).toHaveText("Q3")
@@ -115,7 +115,9 @@ test("text annotation box is measured to fit its label", async ({ page }) => {
 
 	// Alignment moves which edge of the box sits on the anchor point, so the
 	// box shifts by its own width between left- and right-aligned — while its
-	// vertical center (the y anchor) stays put.
+	// vertical center (the y anchor) stays put. Alignment lives in the
+	// collapsed "Text formatting" subsection.
+	await page.getByRole("button", { name: "Text formatting" }).click()
 	await page.getByRole("button", { name: "Align left" }).click()
 	const leftAligned = await boxRect(page)
 	await page.getByRole("button", { name: "Align right" }).click()

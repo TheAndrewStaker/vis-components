@@ -6,7 +6,10 @@ import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
-import type { AnnotationCoordSystem } from "../../../lib/annotationPixels"
+import {
+	isPixelSystem,
+	type AnnotationCoordSystem,
+} from "../../../lib/annotationPixels"
 import type {
 	BoxAnnotationStyle,
 	RectangleTextStyle,
@@ -26,7 +29,7 @@ import {
 	type AxisInfo,
 	type PlotDims,
 } from "./axisInfo"
-import { AxisValueInput } from "./controls"
+import { AxisValueInput, LayerRow } from "./controls"
 import { Textarea } from "../../../../../components/ui/Input"
 
 /** The rendered plot's size, so unit toggles can convert the stored numbers
@@ -39,12 +42,16 @@ export const usePlotDims = (): PlotDims =>
  *
  *  - **Percent (0–100)**: fractions of the plot rect, origin bottom-left.
  *  - **Values (data units)**: through the chart's position scales.
- *  - **Pixels**: whole px from the plot's top-left corner, +x right and +y
- *    up. This is the one to use for anything placed OUTSIDE the plot: a
- *    percent past 0 or 100 is a fraction of the plot's size, so it drifts
- *    across the fixed-height chrome (panel titles, the title band) as the
- *    chart resizes, while "14px above the top-left corner" is 14px on every
- *    viewport.
+ *  - **Pixels (from top-left / bottom-left / top-right / bottom-right)**:
+ *    whole px from that corner of the plot, +x right and +y up in every
+ *    case — only the origin moves. These are the ones to use for anything
+ *    placed OUTSIDE the plot: a percent past 0 or 100 is a fraction of the
+ *    plot's size, so it drifts across the fixed-height chrome (panel titles,
+ *    the title band) as the chart resizes, while "14px above the top-left
+ *    corner" is 14px on every viewport. Pick the corner on the side the
+ *    annotation hangs off: a note under the plot measured from the top
+ *    scales with the plot height again (and lands at a different depth under
+ *    each panel of a facet grid whose panels differ in height).
  *
  *  The caller converts its stored coordinates on change (`convertCoord`) so
  *  the new boxes show the same position in the new unit. */
@@ -71,6 +78,9 @@ export const CoordSystemSelect = ({
 				disabled: disableValues,
 			},
 			{ value: "pixels", label: "Pixels (from top-left)" },
+			{ value: "pixelsBottomLeft", label: "Pixels (from bottom-left)" },
+			{ value: "pixelsTopRight", label: "Pixels (from top-right)" },
+			{ value: "pixelsBottomRight", label: "Pixels (from bottom-right)" },
 		]}
 		onChange={(v) => {
 			const next = v as AnnotationCoordSystem
@@ -83,6 +93,29 @@ export const CoordSystemSelect = ({
 
 export const PIXELS_HELP =
 	"Whole pixels from the plot's top-left corner — x to the right, y up (negative y is inside the plot). The spot holds still as the chart resizes."
+export const PIXELS_BOTTOM_LEFT_HELP =
+	"Whole pixels from the plot's bottom-left corner — x to the right, y up (negative y is below the plot). The spot holds still as the chart resizes, and sits the same distance under every facet panel."
+export const PIXELS_TOP_RIGHT_HELP =
+	"Whole pixels from the plot's top-right corner — x to the right, y up (negative x or y is inside the plot). The spot holds still as the chart resizes."
+export const PIXELS_BOTTOM_RIGHT_HELP =
+	"Whole pixels from the plot's bottom-right corner — x to the right, y up (negative x is inside the plot, negative y is below it). The spot holds still as the chart resizes."
+
+/** The helper line for whichever pixel corner is selected (null for the
+ *  non-pixel units). */
+export const pixelsHelpFor = (system: AnnotationCoordSystem): string | null => {
+	switch (system) {
+		case "pixels":
+			return PIXELS_HELP
+		case "pixelsBottomLeft":
+			return PIXELS_BOTTOM_LEFT_HELP
+		case "pixelsTopRight":
+			return PIXELS_TOP_RIGHT_HELP
+		case "pixelsBottomRight":
+			return PIXELS_BOTTOM_RIGHT_HELP
+		default:
+			return null
+	}
+}
 
 /** The coordinate fields rectangles and line segments share: four edge /
  *  endpoint values plus how they're interpreted. Both annotation types store
@@ -95,9 +128,16 @@ type EdgeCoords = {
 	yMax: number | string
 }
 
+/** The layer field every annotation stores: drawn under or over the chart
+ *  marks. Each Position subsection ends with its toggle, under a divider. */
+type LayerProps = {
+	zOrder: "behind" | "front"
+	onZOrderChange: (zOrder: "behind" | "front") => void
+}
+
 /** "Position" subsection for the two edge-coordinate annotation kinds
- *  (rectangle + line segment): the "Adjust by" unit toggle and the four
- *  coordinate inputs. The position
+ *  (rectangle + line segment): the "Adjust by" unit toggle, the four
+ *  coordinate inputs, and the layer toggle. The position
  *  math is plot-area-relative — see `annotationsConfig.ts` for the coordinate
  *  convention. The actual drawing happens in PlotCanvas, which converts the
  *  coords to pixel coords against each panel's `inner` rect. */
@@ -107,6 +147,8 @@ export const EdgePositionSection = ({
 	xAxis,
 	yAxis,
 	disableValues,
+	zOrder,
+	onZOrderChange,
 }: {
 	coords: EdgeCoords
 	onChange: (patch: Partial<EdgeCoords>) => void
@@ -115,7 +157,7 @@ export const EdgePositionSection = ({
 	/** Gray out "Values (data units)" on polar charts (radar / pie), which
 	 *  have no cartesian axes for the edges to map against. */
 	disableValues?: boolean
-}) => {
+} & LayerProps) => {
 	const dims = usePlotDims()
 	const pxInput = (
 		key: "xMin" | "xMax" | "yMin" | "yMax",
@@ -229,9 +271,12 @@ export const EdgePositionSection = ({
 						{pxInput("xMax", "right")}
 						{pxInput("yMin", "bottom")}
 						{pxInput("yMax", "top")}
-						<p className="vc-help">{PIXELS_HELP}</p>
+						<p className="vc-help">{pixelsHelpFor(coords.coordSystem)}</p>
 					</div>
 				)}
+			</div>
+			<div className="vc-divider-group">
+				<LayerRow zOrder={zOrder} onChange={onZOrderChange} />
 			</div>
 		</CollapsibleSubsection>
 	)
@@ -247,8 +292,9 @@ type PointCoords = {
 }
 
 /** "Position" subsection for point-anchored annotations: the "Adjust by" unit
- *  toggle plus one x and one y input. Same coordinate convention and same conversion-on-toggle behavior
- *  as `EdgePositionSection` — see `annotationsConfig.ts`. */
+ *  toggle, one x and one y input, and the layer toggle. Same coordinate
+ *  convention and same conversion-on-toggle behavior as `EdgePositionSection`
+ *  — see `annotationsConfig.ts`. */
 export const PointPositionSection = ({
 	coords,
 	onChange,
@@ -256,6 +302,8 @@ export const PointPositionSection = ({
 	yAxis,
 	disableValues,
 	help,
+	zOrder,
+	onZOrderChange,
 }: {
 	coords: PointCoords
 	onChange: (patch: Partial<PointCoords>) => void
@@ -266,7 +314,7 @@ export const PointPositionSection = ({
 	disableValues?: boolean
 	/** Helper prose explaining what the anchor point means for this kind. */
 	help?: string
-}) => {
+} & LayerProps) => {
 	const dims = usePlotDims()
 	return (
 		<CollapsibleSubsection title="Position">
@@ -341,9 +389,12 @@ export const PointPositionSection = ({
 				</div>
 			)}
 			{help && <p className="vc-help">{help}</p>}
-			{coords.coordSystem === "pixels" && (
-				<p className="vc-help">{PIXELS_HELP}</p>
+			{isPixelSystem(coords.coordSystem) && (
+				<p className="vc-help">{pixelsHelpFor(coords.coordSystem)}</p>
 			)}
+			<div className="vc-divider-group">
+				<LayerRow zOrder={zOrder} onChange={onZOrderChange} />
+			</div>
 		</CollapsibleSubsection>
 	)
 }
@@ -522,22 +573,63 @@ type TextStyle = Partial<RectangleTextStyle> & { text?: string }
  *  free-standing text annotation: the text box plus font family / size /
  *  color / weight / alignment / padding, each with a reset link against the
  *  theme-seeded `defaults` baseline. */
+/** The annotation's text content: a labeled, auto-sizing textarea. The
+ *  rectangle keeps it inside its "Text" subsection (the label is optional
+ *  there); the text annotation hoists it to the top of the card, outside any
+ *  subsection, because the text IS the annotation and hiding it behind a
+ *  collapsed header led users to type it into the name box instead. */
+export const TextContentField = ({
+	value,
+	onChange,
+	placeholder,
+	className,
+	label = "Text",
+}: {
+	value: string | undefined
+	onChange: (text: string) => void
+	/** Placeholder for the text box, naming where the label is drawn. */
+	placeholder: string
+	className?: string
+	/** Visible caption above the box. `null` hides it (the text annotation
+	 *  hoists the box to the top of its card, where a "Text" caption just
+	 *  repeats the card's own kind); the textarea keeps it as its
+	 *  accessible name. */
+	label?: string | null
+}) => (
+	<label className={`flex flex-col gap-1 text-sm ${className ?? ""}`}>
+		{label !== null && <span className="vc-muted">{label}</span>}
+		<Textarea
+			aria-label={label === null ? "Text" : undefined}
+			value={value ?? ""}
+			onChange={(e) => onChange(e.target.value)}
+			placeholder={placeholder}
+			rows={2}
+			autoSize
+		/>
+	</label>
+)
+
 export const TextStyleSection = ({
 	style,
 	defaults,
 	onChange,
 	placeholder,
 	alignmentHelp,
+	title = "Text",
 }: {
 	style: TextStyle
 	/** Theme-seeded text baseline the reset links compare against. */
 	defaults: RectangleTextStyle
 	onChange: (patch: Partial<TextStyle>) => void
-	/** Placeholder for the text box, naming where the label is drawn. */
-	placeholder: string
+	/** Placeholder for the text box, naming where the label is drawn. Omit
+	 *  to leave the text box out of the subsection (the caller renders a
+	 *  `TextContentField` elsewhere) so this holds formatting only. */
+	placeholder?: string
 	/** Extra prose under the Alignment row — the text annotation's alignment
 	 *  also picks which edge of the box lands on the anchor point. */
 	alignmentHelp?: string
+	/** Subsection header; "Text formatting" when the text box lives outside. */
+	title?: string
 }) => {
 	const familyOptions = useFontFamilyOptions()
 	const userFontWeights = useUserFontWeights()
@@ -548,17 +640,14 @@ export const TextStyleSection = ({
 	const align = style.textAlign ?? defaults.textAlign
 	const padding = style.textPadding ?? defaults.textPadding
 	return (
-		<CollapsibleSubsection title="Text">
-			<label className="flex flex-col gap-1 text-sm">
-				<span className="vc-muted">Text</span>
-				<Textarea
-					value={style.text ?? ""}
-					onChange={(e) => onChange({ text: e.target.value })}
+		<CollapsibleSubsection title={title}>
+			{placeholder !== undefined && (
+				<TextContentField
+					value={style.text}
+					onChange={(text) => onChange({ text })}
 					placeholder={placeholder}
-					rows={2}
-					autoSize
 				/>
-			</label>
+			)}
 			<SelectInput
 				label="Font"
 				labelClassName={LABEL_COL}

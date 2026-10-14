@@ -3008,17 +3008,27 @@ A top-level "Annotations" section in the sidebar. Users can add
 to highlight regions of the chart. Each annotation's editor is
 individually collapsible: a chevron in its header row toggles the
 body, while a glyph of the kind (box / circle / diagonal stroke / "T"),
-the name box, and the remove link stay visible so a long list remains
-scannable by shape as well as by name. Existing annotations start collapsed when the
-panel mounts; a freshly added annotation starts expanded. Each
-rectangle has:
+the name, and the remove link stay visible so a long list remains
+scannable by shape as well as by name. The name is plain text with a
+pencil beside it, not an input box — an open box in the first row was
+read as the annotation's content. A new annotation is named for its
+kind and position ("Rectangle 1", "Circle 2", "Line 1", "Text 3"),
+numbered one past the kind's current count and skipping any number a
+sibling already holds; the name is stored at creation, so it stays put
+when earlier siblings are removed. Clicking the pencil or
+double-clicking the name opens an inline rename box (Enter / blur
+commits, Escape cancels); committing an emptied box reverts to the
+numbered default. Existing annotations start collapsed when the panel
+mounts; a freshly added annotation starts expanded. Each rectangle
+has:
 
-- A name (free text, shown in the panel list).
+- A name (free text, defaulted as above; shown in the card header).
 - **Adjust by** dropdown — Percent (0–100), Values (data units), or
-  Pixels (from top-left). One set of coordinate inputs; the dropdown
+  Pixels from one of the plot's four corners (top-left, bottom-left,
+  top-right, bottom-right). One set of coordinate inputs; the dropdown
   sets their unit, and switching converts the stored numbers (through
   the axis span, or the rendered plot's size) so the annotation stays
-  where it is.
+  where it is — including between the pixel corners.
   - **Percent**: xMin/xMax/yMin/yMax are plot-area-normalized (0–1,
     with 0,0 at the bottom-left spine corner).
   - **Pixels**: whole px from the plot's **top-left corner**, +x right
@@ -3033,6 +3043,25 @@ rectangle has:
     viewport. It also makes the edge reserve (below) converge in a single
     extra solve, since a pixel-anchored annotation's spill no longer
     depends on the plot's size.
+  - **Pixels (from bottom-left)**: the same unit measured from the
+    plot's **bottom-left corner**, still +x right and +y up (so inside
+    the plot is positive y and a negative y is **below** the plot). A
+    pixel placement only holds still on the side it's measured from: a
+    note hung under the plot in top-left px sits at `-(plot height + N)`,
+    which scales with the plot again — and on a facet grid whose panels
+    differ in height ("Label all facets" with, say, two stacked panels
+    where the top one is taller), the same stored coordinate lands at a
+    different depth under each panel. Bottom-left px puts it N px under
+    every panel's own bottom edge.
+  - **Pixels (from top-right)** / **Pixels (from bottom-right)**: the
+    same again measured from the plot's right-hand corners. +x is
+    still to the right, so a negative x is inside the plot and a
+    positive x is beside it; y follows the corner's top or bottom edge
+    as above. These hold a note beside the plot's right edge the same
+    distance out at every width (and under every panel of a facet grid
+    whose panels differ in width). All four corners share the same
+    directions and the circle's on-screen px radius; only the origin
+    moves.
   - **Values**: same fields are interpreted as data values along
     whichever encoding drives each axis (`x`/`y` for scatter,
     `length` for the measure axis in bars/areas, etc. — the mode's
@@ -3051,7 +3080,8 @@ rectangle has:
   dash-dot); Custom opens a dasharray text box (e.g. `2,2`), and a
   custom dasharray wins over the swatch pick at render time.
 - Layer toggle: **Behind chart** (under marks) or **In front** (over
-  marks).
+  marks). It sits at the bottom of every kind's Position subsection,
+  under a hairline divider — not as a loose row after the subsections.
 
 **Circles** (`lib/circleAnnotationGeometry.ts`) are defined by a
 center (x, y) and a radius, with the same Percent / Values coordinate
@@ -3080,6 +3110,15 @@ the same Percent / Values toggle every other kind has:
 
 A text annotation with a blank label draws nothing at all, box
 included (there is nothing to size the box to).
+
+The text annotation's editor leads with its **Text** box, sitting
+directly under the header outside any collapsible subsection — the
+text is the annotation, so it is never hidden behind a collapsed
+header. Its font controls follow in a **Text formatting** subsection,
+then Position (ending with the layer toggle), Fill, and Border. (The
+rectangle keeps its
+optional inner label inside its "Text" subsection, after Fill and
+Border.)
 
 New annotations seed their style (fill, border, text font, line
 stroke) from the active theme's **Annotations** defaults (§12), and

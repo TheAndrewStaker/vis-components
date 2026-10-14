@@ -41,6 +41,22 @@ describe("computeLineSegmentPixels — percent mode", () => {
 		expect(geo?.y2).toBe(40)
 	})
 
+	it("places bottom-left pixel endpoints from the plot's bottom-left corner", () => {
+		const line = {
+			...newLineSegment("l1"),
+			coordSystem: "pixelsBottomLeft" as const,
+			xMin: 0,
+			yMin: -10,
+			xMax: 40,
+			yMax: -10,
+		}
+		const geo = computeLineSegmentPixels(line, inner, noScales)
+		expect(geo?.x1).toBe(100)
+		expect(geo?.x2).toBe(140)
+		expect(geo?.y1).toBe(inner.y + inner.height + 10) // 10px below the bottom
+		expect(geo?.y2).toBe(inner.y + inner.height + 10)
+	})
+
 	it("supports a horizontal reference line (yMin == yMax)", () => {
 		const line = {
 			...newLineSegment("l1"),

@@ -1,10 +1,9 @@
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { SectionChevron } from "../../../../../components/ui/Chevron"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { cleanNumber, type AxisInfo } from "./axisInfo"
-import { Input } from "../../../../../components/ui/Input"
 
 /** Which annotation an editor card belongs to — drives the kind glyph in its
  *  header row. */
@@ -57,11 +56,16 @@ const AnnotationKindGlyph = ({ kind }: { kind: AnnotationKind }) => (
  *  visible so a long list of annotations stays scannable; the body (position,
  *  style, layer controls) renders only while expanded. Collapse state lives in
  *  the parent so a freshly added annotation starts open while existing ones
- *  stay collapsed. */
+ *  stay collapsed.
+ *
+ *  The name reads as plain text (not an input box): an open box in the first
+ *  row of a fresh card was taken for the annotation's content, and users typed
+ *  their label into it. Renaming is click-the-pencil or double-click-the-name,
+ *  which opens an inline box (see `AnnotationNameEditor`). */
 export const AnnotationCard = ({
 	kind,
 	name,
-	namePlaceholder,
+	fallbackName,
 	onNameChange,
 	onRemove,
 	open,
@@ -71,7 +75,9 @@ export const AnnotationCard = ({
 	/** Which annotation this card edits — shown as a glyph beside the name. */
 	kind: AnnotationKind
 	name: string
-	namePlaceholder?: string
+	/** Shown when the stored name is blank — annotations saved before names
+	 *  were assigned at creation, or a rename the user emptied out. */
+	fallbackName: string
 	onNameChange: (name: string) => void
 	onRemove: () => void
 	open: boolean
@@ -93,12 +99,10 @@ export const AnnotationCard = ({
 			<span className="text-vc-section-header flex flex-shrink-0 items-center">
 				<AnnotationKindGlyph kind={kind} />
 			</span>
-			<Input
-				type="text"
-				value={name}
-				placeholder={namePlaceholder}
-				onChange={(e) => onNameChange(e.target.value)}
-				className="flex-1"
+			<AnnotationNameEditor
+				name={name}
+				fallbackName={fallbackName}
+				onChange={onNameChange}
 			/>
 			<button
 				type="button"
@@ -111,6 +115,84 @@ export const AnnotationCard = ({
 		{open && children}
 	</div>
 )
+
+/** The annotation's name in the card header: plain text with a pencil beside
+ *  it. Clicking the pencil or double-clicking the name swaps in an inline
+ *  rename box (Enter / blur commit, Escape cancels). Committing an EMPTIED
+ *  box stores "" so the display falls back to the kind's numbered default —
+ *  the same clear-to-default convention as the Fields panel's rename. The
+ *  raw bordered `<input>` is one of the deliberate inline-rename exceptions
+ *  to the form-primitive rule (see CLAUDE.md). */
+const AnnotationNameEditor = ({
+	name,
+	fallbackName,
+	onChange,
+}: {
+	name: string
+	fallbackName: string
+	onChange: (name: string) => void
+}) => {
+	const [editing, setEditing] = useState(false)
+	const [draft, setDraft] = useState(name)
+	const shown = name.trim() === "" ? fallbackName : name
+
+	const startEditing = () => {
+		setDraft(shown)
+		setEditing(true)
+	}
+	const commit = () => {
+		const trimmed = draft.trim()
+		if (trimmed !== name.trim()) onChange(trimmed)
+		setEditing(false)
+	}
+	const cancel = () => setEditing(false)
+
+	if (editing) {
+		return (
+			<input
+				type="text"
+				value={draft}
+				onChange={(e) => setDraft(e.target.value)}
+				onBlur={commit}
+				onKeyDown={(e) => {
+					if (e.key === "Enter") commit()
+					if (e.key === "Escape") cancel()
+				}}
+				aria-label={`New name for ${shown}`}
+				// eslint-disable-next-line jsx-a11y/no-autofocus -- initial focus for the inline rename editor the user just opened
+				autoFocus
+				onFocus={(e) => e.target.select()}
+				className="min-w-0 flex-1 rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none dark:bg-stone-900 vc-text"
+			/>
+		)
+	}
+	return (
+		<span className="flex min-w-0 flex-1 items-center gap-1 text-sm vc-text">
+			{/* Double-click is a shortcut; the pencil button is the keyboard-reachable control. */}
+			<span
+				className="min-w-0 truncate"
+				title={`${shown} — double-click to rename`}
+				onDoubleClick={startEditing}
+			>
+				{shown}
+			</span>
+			<button
+				type="button"
+				onClick={startEditing}
+				aria-label={`Rename ${shown}`}
+				title="Rename"
+				className="flex-shrink-0 text-stone-400 hover:text-stone-900 dark:text-stone-500 dark:hover:text-white"
+			>
+				<svg viewBox="0 0 16 16" width={11} height={11} aria-hidden>
+					<path
+						d="M11.7 1.6l2.7 2.7-9.2 9.2-3.4.7.7-3.4 9.2-9.2z"
+						fill="currentColor"
+					/>
+				</svg>
+			</button>
+		</span>
+	)
+}
 
 /** Picks the right input for an axis: a dropdown of unique categories
  *  for categorical/string-ordinal axes, a number input for everything
@@ -155,9 +237,11 @@ export const AxisValueInput = ({
 	)
 }
 
-/** Behind-chart / in-front layer toggle — identical across all three
- *  annotation kinds, so it lives here rather than being copy-pasted into
- *  each editor. */
+/** Behind-chart / in-front layer toggle — identical across all four
+ *  annotation kinds. Each kind's Position subsection renders it last, under
+ *  a hairline divider (`.vc-divider-group`): where the annotation sits in
+ *  the stack is part of where it sits, and a bare row trailing the card's
+ *  subsections read as an orphan. */
 export const LayerRow = ({
 	zOrder,
 	onChange,
@@ -165,9 +249,7 @@ export const LayerRow = ({
 	zOrder: "behind" | "front"
 	onChange: (zOrder: "behind" | "front") => void
 }) => (
-	/* px-2 keeps this bare row's label/control column aligned with the
-	 * rows inside the p-2 subsection cards above. */
-	<div className="flex items-center gap-2 px-2 text-sm">
+	<div className="flex items-center gap-2 text-sm">
 		<span className={LABEL_COL}>Layer</span>
 		<div
 			role="group"
