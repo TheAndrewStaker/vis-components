@@ -737,7 +737,7 @@ const SegmentPropertiesSection = () => {
 	}
 
 	// Picking a variable SEEDS every level at the single width (renders
-	// identically until a row is edited); "Single level" clears both.
+	// identically until a row is edited); "— none —" clears both.
 	const setVaryBy = (next: string) => {
 		if (next === "") {
 			updateLength({ segmentThicknessField: null, segmentThicknessByValue: {} })
@@ -766,7 +766,7 @@ const SegmentPropertiesSection = () => {
 					changed={!!varyField}
 					value={varyField ?? ""}
 					options={[
-						{ value: "", label: "Single level" },
+						{ value: "", label: "— none —" },
 						...varyByFields.map((name) => ({ value: name, label: name })),
 					]}
 					onChange={setVaryBy}

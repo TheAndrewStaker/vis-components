@@ -335,7 +335,7 @@ export const ConnectionOptionsPanel = () => {
 				changed={thicknessVarying}
 				value={thicknessVarying ? "field" : "single"}
 				options={[
-					{ value: "single", label: "Single level" },
+					{ value: "single", label: "— none —" },
 					{ value: "field", label: connectionFieldName ?? "Connection" },
 				]}
 				onChange={(v) => setThicknessVaryBy(v === "field")}

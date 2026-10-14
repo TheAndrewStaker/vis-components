@@ -1373,12 +1373,12 @@ of showing scatter's inert default-length control).
 Whenever scatter draws line segments (a Length variable is mapped, or a
 default length is set), the Length panel adds a collapsible **Segment
 properties** subsection, modeled on Connection → Line properties:
-- **Vary by** — "Single level" shows one **Thickness** input (px,
+- **Vary by** — "— none —" shows one **Thickness** input (px,
   default 3; 0 hides the segments). Picking a categorical / ordinal
   variable swaps it for one thickness row per level (in the Fields
   panel's level order), each seeded at the single thickness with a
   per-row reset. The stored `segmentThicknessField` IS the mode — no
-  separate flag; "Single level" clears the field and the per-level map.
+  separate flag; "— none —" clears the field and the per-level map.
   Levels key on the stringified cell, like connection thickness.
 - **Line cap** — Round (default) or Square. Square maps to SVG's `butt`
   cap so segments end flush at their endpoints.

@@ -23,7 +23,7 @@ export type ConnectionThicknessArgs = {
  *   2. `thickness` — the single global value.
  *  An empty / absent `byValue` therefore behaves exactly like the pre-existing
  *  single-thickness code, which is what keeps the "Vary by" dropdown's
- *  "Single level" option byte-identical to before. */
+ *  "— none —" option byte-identical to before. */
 export const resolveConnectionThickness = ({
 	groupKey,
 	thickness,

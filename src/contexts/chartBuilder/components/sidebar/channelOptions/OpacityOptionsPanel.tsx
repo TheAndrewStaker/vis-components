@@ -130,7 +130,7 @@ export const OpacityOptionsPanel = () => {
 
 /** Overall (fill) opacity — the existing opacity encoding. Leads with a "Vary
  * by" selector two-way bound to the TOP-LEVEL opacity encoding (the same field
- * the shelf shows), mirroring Color's Fill. "Single level" shows a static
+ * the shelf shows), mirroring Color's Fill. "— none —" shows a static
  * opacity level (with reset); a mapped field shows per-value / min–max controls. */
 const FillOpacityControls = ({
 	/** Hide the in-panel "Vary by" selector — area / filled-radar set the
@@ -176,7 +176,7 @@ const FillOpacityControls = ({
 		channelAccepts("opacity", overrides[f.name] ?? f.inferredType)
 	)
 	const varyByOptions = [
-		{ value: "", label: "Single level" },
+		{ value: "", label: "— none —" },
 		...eligible.map((f) => ({ value: f.name, label: f.name })),
 		// Histograms add ONE measure option matching the current measure mode.
 		...(histMeasure
@@ -435,7 +435,7 @@ const OpacitySlotSubsection = ({
 		})
 
 	const fieldOptions = [
-		{ value: "", label: "Single level" },
+		{ value: "", label: "— none —" },
 		...(dataset?.fields ?? []).map((f) => ({ value: f.name, label: f.name })),
 	]
 
@@ -587,7 +587,7 @@ const QuantOpacityRange = ({
 
 /** A single opacity-level number input with a `reset` link that appears once
  * the value differs from its default (the theme's `defaultOpacity` for Fill, or
- * the slot's `defaultLevel`). Used by every "Single level" opacity control —
+ * the slot's `defaultLevel`). Used by every "— none —" opacity control —
  * Fill (no field), Border, Line, Stem, … — so a user who nudges a level can
  * always get back to the default. */
 const OpacityLevelInput = ({
