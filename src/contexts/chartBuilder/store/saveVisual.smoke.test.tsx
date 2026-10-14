@@ -169,8 +169,11 @@ describe("useSaveVisual → useLoadVisual round-trip", () => {
 		expect(v.labelsConfig.titleAngles).toEqual({ facetTitle: 90 })
 		expect(v.dataLabelsConfig).toEqual(DATA_LABELS)
 		// No chart SVG in the test DOM → capture returns null, and there's no
-		// prior thumbnail to preserve.
+		// prior thumbnail to preserve. The stamp moves only with a real
+		// capture, so it stays absent — which is what marks the preview as
+		// stale for the library's automatic refresh.
 		expect(v.thumbnail).toBeNull()
+		expect(v.thumbnailAt).toBeUndefined()
 		expect(v.createdAt).toBeGreaterThan(0)
 		expect(v.updatedAt).toBe(v.createdAt)
 		// The dataset isn't in the datasets store, so there's no latest version

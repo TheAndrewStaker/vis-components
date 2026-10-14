@@ -216,6 +216,18 @@ const contentAtom = <T>(
  *  3. One-time migration: a bootstrap that still carries inline thumbnails
  *     (pre-IndexedDB) is re-saved once, which strips the localStorage copy
  *     and seeds the IndexedDB side-table. */
+/** Resolved once the thumbnails have landed — merged from the IndexedDB
+ *  side-table in local mode, delivered inline with the visuals in server
+ *  mode, or (no IndexedDB at all) never coming. Until then every local-mode
+ *  visual reads `thumbnail: null`, which the library's automatic preview
+ *  refresh would otherwise take for "every preview is missing" and set about
+ *  re-rendering. A failed side-table read leaves it pending on purpose: the
+ *  previews exist, this session just can't see them. */
+let markThumbnailsHydrated: () => void = () => {}
+const thumbnailsHydrated = new Promise<void>((resolve) => {
+	markThumbnailsHydrated = resolve
+})
+
 const visualsBaseAtom = atom<Visual[] | Unset>(UNSET)
 visualsBaseAtom.onMount = (setSelf) => {
 	const adapter = getStorageAdapter()
@@ -226,6 +238,7 @@ visualsBaseAtom.onMount = (setSelf) => {
 			.loadVisuals()
 			.then((visuals) => {
 				setSelf(() => visuals)
+				markThumbnailsHydrated()
 			})
 			.catch((error) => {
 				// eslint-disable-next-line no-console
@@ -237,7 +250,10 @@ visualsBaseAtom.onMount = (setSelf) => {
 			})
 		return
 	}
-	if (!idbAvailable()) return
+	if (!idbAvailable()) {
+		markThumbnailsHydrated()
+		return
+	}
 	const boot = loadVisuals()
 	// Ephemeral seed examples always carry their thumbnail inline (it's served
 	// from the bundle, never from the side-table), so they must not be read as
@@ -254,8 +270,24 @@ visualsBaseAtom.onMount = (setSelf) => {
 		// trigger the migration save explicitly. Only needed once — afterwards
 		// the localStorage blob never carries inline thumbnails again.
 		if (legacyInline) void adapter.saveVisuals(merged)
+		markThumbnailsHydrated()
 	})
 }
+
+const thumbnailsHydratedBaseAtom = atom(false)
+thumbnailsHydratedBaseAtom.onMount = (setSelf) => {
+	void thumbnailsHydrated.then(() => {
+		setSelf(true)
+	})
+}
+
+/** True once a visual's `thumbnail: null` really means "no preview" (see
+ *  `thumbnailsHydrated`). Reading it also subscribes `visualsBaseAtom`, whose
+ *  mount is what loads the thumbnails in the first place. */
+export const thumbnailsHydratedAtom = atom((get) => {
+	get(visualsBaseAtom)
+	return get(thumbnailsHydratedBaseAtom)
+})
 
 export const visualsAtom = atom(
 	(get) => {

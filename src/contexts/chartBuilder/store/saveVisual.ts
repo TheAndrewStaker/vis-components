@@ -108,6 +108,10 @@ export const useSaveVisual = () => {
 			// thumbnail.
 			const captured = await captureThumbnail()
 			const thumbnail = captured ?? existing?.thumbnail ?? null
+			// The stamp moves only with a real capture: a preserved-old thumbnail
+			// keeps its old stamp, which is what lets the library spot it as
+			// stale (stamp < updatedAt) and re-render it offscreen.
+			const thumbnailAt = captured ? now : existing?.thumbnailAt
 
 			const id = existing?.id ?? newVisualId()
 			// Stamp `createdAtVersionId` once at first save with whatever version
@@ -152,6 +156,7 @@ export const useSaveVisual = () => {
 				variables: derivedVariablesConfig.variables.map((v) => ({ ...v })),
 			},
 			thumbnail,
+			thumbnailAt,
 			createdAt: existing?.createdAt ?? now,
 			updatedAt: now,
 			}

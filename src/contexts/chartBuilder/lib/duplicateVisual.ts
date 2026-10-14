@@ -16,4 +16,9 @@ export const duplicateVisual = (visual: Visual, now = Date.now()): Visual => ({
 	name: `${visual.name} (copy)`,
 	createdAt: now,
 	updatedAt: now,
+	// The copied thumbnail is exactly as current as the copy itself: the
+	// stamp moves with `updatedAt`, or the library would read the copy as
+	// stale (stamp < updatedAt) and re-render an identical preview. A
+	// never-stamped original stays never-stamped.
+	...(visual.thumbnailAt !== undefined ? { thumbnailAt: now } : {}),
 })

@@ -37,8 +37,10 @@ import {
 import {
 	backfillCandidates,
 	runThumbnailBackfill,
+	withFreshThumbnail,
 	type BackfillProgress,
 } from "../lib/thumbnailBackfill"
+import { useAutoRefreshThumbnails } from "../hooks/useAutoRefreshThumbnails"
 import { BulkMoveModal } from "./BulkMoveModal"
 import { DeleteVisualButton } from "./DeleteVisualButton"
 import { DownloadVisualsButton } from "./DownloadVisualsButton"
@@ -46,7 +48,10 @@ import { DuplicateVisualButton } from "./DuplicateVisualButton"
 import { UNFILED_FOLDER_ID } from "../lib/folderSubtree"
 import { FolderTree } from "./FolderTree"
 import { MoveToFolderButton } from "./MoveToFolderButton"
-import { RegeneratePreviewButton } from "./RegeneratePreviewButton"
+import {
+	RefreshIcon,
+	RegeneratePreviewButton,
+} from "./RegeneratePreviewButton"
 import { TrashButton } from "./TrashButton"
 import { VisualsTable } from "./VisualsTable"
 
@@ -253,6 +258,13 @@ export const LibraryPage = () => {
 			? new Set(tableRows.map((r) => r.visual.id))
 			: new Set(gridRows.map((d) => d.visual.id))
 	const visibleKey = [...visibleVisualIds].sort().join("|")
+
+	// Whatever is listed gets its previews kept fresh in the background —
+	// opening a folder is the trigger the user feels, but any narrowing of
+	// the listing counts. One entry per visual: table rows repeat a visual
+	// per embed instance.
+	const visibleVisuals = visuals.filter((v) => visibleVisualIds.has(v.id))
+	const refreshingPreviewId = useAutoRefreshThumbnails(visibleVisuals, datasets)
 	useEffect(() => {
 		setSelectedVisualIds((prev) => {
 			let changed = false
@@ -327,10 +339,11 @@ export const LibraryPage = () => {
 				onCaptured: (visualId, thumbnail) => {
 					// Fill only if still empty — a visual edited (and re-captured)
 					// mid-run has a fresher thumbnail than our offscreen render.
-					// updatedAt stays put: regenerating a preview isn't an edit.
 					setVisuals((prev) =>
 						prev.map((v) =>
-							v.id === visualId && !v.thumbnail ? { ...v, thumbnail } : v
+							v.id === visualId && !v.thumbnail
+								? withFreshThumbnail(v, thumbnail)
+								: v
 						)
 					)
 				},
@@ -580,7 +593,7 @@ export const LibraryPage = () => {
 										}`}
 									>
 										<div
-											className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-stone-50 dark:bg-stone-900"
+											className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-stone-50 dark:bg-stone-900"
 											style={
 												d.visual.channelConfigs?.backgroundColor
 													? {
@@ -599,8 +612,22 @@ export const LibraryPage = () => {
 												/>
 											) : (
 												<div className="text-sm vc-muted">
-													No preview
+													{refreshingPreviewId === d.visual.id
+														? "Rendering preview…"
+														: "No preview"}
 												</div>
+											)}
+											{refreshingPreviewId === d.visual.id && (
+												<span
+													className="absolute right-2 bottom-2 flex h-6 w-6 items-center justify-center rounded bg-white/90 shadow-sm ring-1 ring-stone-200 dark:bg-stone-800/90 dark:ring-stone-700 vc-muted"
+													title="Rendering a fresh preview"
+													aria-label="Rendering a fresh preview"
+													role="status"
+												>
+													<span className="animate-spin">
+														<RefreshIcon />
+													</span>
+												</span>
 											)}
 										</div>
 										<div className="border-t border-stone-200 px-3 py-2 dark:border-stone-700">

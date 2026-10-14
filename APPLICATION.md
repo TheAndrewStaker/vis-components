@@ -3435,6 +3435,28 @@ listing with **Move…**, **Duplicate**, **Download**, **Delete** and
 would otherwise inherit from the brand style — and **Clear**, which
 only undoes a selection, is a plain text link.
 
+**Previews refresh themselves.** A card's picture is captured when the
+visual is saved, and the visual remembers when (`thumbnailAt`, stamped
+only by a capture that actually produced a picture). Whenever the
+listing changes — a folder is opened, a search or data-set filter
+narrows it, a visual lands in it — every listed visual whose preview is
+missing or provably stale is re-rendered in a hidden offscreen embed,
+one at a time, and its new picture stored without touching
+`updatedAt`. "Provably stale" means the stamp is behind the visual's
+last save (a save mid-render keeps the old picture and the old stamp),
+behind the data set's latest version, or absent altogether (saved
+before stamps existed). The card being re-rendered shows a small
+spinning refresh badge over its picture, and reads "Rendering
+preview…" in place of "No preview". Each visual is attempted once per
+session per (save, data version), so one that can't render doesn't
+burn its timeout on every visit; the session-only example visuals are
+skipped, since their stamp could never persist. Leaving the library
+stops the run at once, restoring the editor's draft keys before the
+editor mounts. The hover refresh button on a card still forces a fresh
+capture — the recovery for a picture that captured badly even though
+its stamp reads as current — and the header's **Regenerate N previews**
+still fills missing ones in bulk.
+
 **Trash.** Deleting a visual — the card's trash icon or the bulk bar's
 **Delete** — moves it to the Trash immediately, with no confirm step:
 the Trash is a round floating can fixed to the bottom-right of the

@@ -372,6 +372,14 @@ export type Visual = {
 	 * captions existed; falls back to DEFAULT_CAPTION_CONFIG on load. */
 	captionConfig?: CaptionConfig
 	thumbnail: string | null
+	/** When `thumbnail` was captured (epoch ms). Stamped only by a capture
+	 * that actually produced a picture — a save whose capture came back
+	 * null keeps the old thumbnail AND the old stamp, so the stamp falling
+	 * behind `updatedAt` (or behind the data set's latest version) is how
+	 * the library knows a preview is stale and re-renders it. Absent on
+	 * visuals saved before the stamp existed, which reads as "never
+	 * verified". Sparse, so no storage version bump. */
+	thumbnailAt?: number
 	createdAt: number
 	updatedAt: number
 	/** When the visual was moved to the Trash (epoch ms). Absent = live.

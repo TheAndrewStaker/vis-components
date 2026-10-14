@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react"
 import { useSetAtom } from "jotai"
 import { visualsAtom } from "../../chartBuilder/store/atoms"
-import { runThumbnailBackfill } from "../lib/thumbnailBackfill"
+import {
+	runThumbnailBackfill,
+	withFreshThumbnail,
+} from "../lib/thumbnailBackfill"
 
 type Props = {
 	visualId: string
 	visualName: string
 }
 
-const RefreshIcon = () => (
+export const RefreshIcon = () => (
 	<svg
 		viewBox="0 0 16 16"
 		width={12}
@@ -26,10 +29,11 @@ const RefreshIcon = () => (
 
 /**
  * Hover-over-tile button that re-renders this visual offscreen and replaces
- * its thumbnail — the recovery path for previews that captured badly (e.g.
- * mid-layout frames from the old first-nonzero-size capture) or that show
- * stale data. Unlike the library-header bulk backfill, this OVERWRITES an
- * existing thumbnail; the bulk run only fills missing ones.
+ * its thumbnail — the recovery path for a preview that captured badly (a
+ * mid-layout frame, say) even though its stamp reads as current, so the
+ * library's automatic refresh (useAutoRefreshThumbnails) leaves it alone.
+ * Unlike the header's bulk backfill, this OVERWRITES an existing thumbnail;
+ * the bulk run only fills missing ones.
  */
 export const RegeneratePreviewButton = ({ visualId, visualName }: Props) => {
 	const setVisuals = useSetAtom(visualsAtom)
@@ -55,7 +59,9 @@ export const RegeneratePreviewButton = ({ visualId, visualName }: Props) => {
 				onProgress: () => {},
 				onCaptured: (id, thumbnail) => {
 					setVisuals((prev) =>
-						prev.map((v) => (v.id === id ? { ...v, thumbnail } : v))
+						prev.map((v) =>
+							v.id === id ? withFreshThumbnail(v, thumbnail) : v
+						)
 					)
 				},
 			})

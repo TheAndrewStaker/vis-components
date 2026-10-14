@@ -34,6 +34,16 @@ describe("duplicateVisual", () => {
 		expect(copy.updatedAt).toBe(999)
 	})
 
+	it("moves the thumbnail stamp with updatedAt so the copy doesn't read as stale", () => {
+		const copy = duplicateVisual(mkVisual({ thumbnailAt: 2 }), 999)
+		expect(copy.thumbnailAt).toBe(999)
+	})
+
+	it("leaves a never-stamped original's copy never-stamped", () => {
+		const copy = duplicateVisual(mkVisual(), 999)
+		expect(copy.thumbnailAt).toBeUndefined()
+	})
+
 	it("preserves folder, dataset, version, thumbnail and all config", () => {
 		const original = mkVisual()
 		const copy = duplicateVisual(original, 999)
