@@ -11,6 +11,7 @@ import {
 	DEFAULT_PATTERN_CONFIG,
 	DEFAULT_QUANTITATIVE_HUE_CONFIG,
 	DEFAULT_REGRESSION_CONFIG,
+	DEFAULT_SEGMENT_THICKNESS,
 	DEFAULT_SHAPE_CONFIG,
 	DEFAULT_TEXT_CONFIG,
 	EMPTY_CHANNEL_CONFIGS,
@@ -816,6 +817,17 @@ const CHANNEL_DOT_CONTROLS: Record<string, (ctx: DotCtx) => DotControl[]> = {
 		},
 		{ label: "bar gap", changed: (configs.length?.barGapPx ?? null) !== null },
 		{ label: "default length", changed: differs(configs.defaultLength, null) },
+		{
+			label: "segment thickness",
+			changed:
+				(configs.length?.segmentThickness ?? DEFAULT_SEGMENT_THICKNESS) !==
+					DEFAULT_SEGMENT_THICKNESS ||
+				!!configs.length?.segmentThicknessField,
+		},
+		{
+			label: "segment line cap",
+			changed: (configs.length?.segmentLineCap ?? "round") !== "round",
+		},
 	],
 	angle: ({ configs, theme }) => [
 		{ label: "angle config", changed: differs(configs.angle, angleConfigFromTheme(theme)) },

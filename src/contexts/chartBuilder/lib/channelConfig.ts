@@ -887,7 +887,22 @@ export type LengthConfig = {
 	 * = auto (the proportional 15%-of-slot gap). Histograms ignore it: their
 	 * bars always abut. */
 	barGapPx?: number | null
+	/** Scatter line segments (Length / default length): stroke width in px.
+	 * Absent = `DEFAULT_SEGMENT_THICKNESS`; 0 hides the segments. */
+	segmentThickness?: number
+	/** "Vary by" variable for per-level segment thickness. null/absent =
+	 * single level. Keyed with `segmentThicknessByValue`; a field that no
+	 * longer exists renders as single level. */
+	segmentThicknessField?: string | null
+	/** Per-level segment thickness, keyed by `String(row[field])`. Seeded
+	 * with every level when a Vary-by field is picked. */
+	segmentThicknessByValue?: Record<string, number>
+	/** Segment end caps. "square" ends flush at the endpoints (SVG butt),
+	 * matching Connection's Line cap. Absent = "round". */
+	segmentLineCap?: "round" | "square"
 }
+/** Built-in segment stroke width — the width segments always drew at. */
+export const DEFAULT_SEGMENT_THICKNESS = 3
 export const DEFAULT_LENGTH_CONFIG: LengthConfig = {
 	minLength: 4,
 	maxLength: 40,

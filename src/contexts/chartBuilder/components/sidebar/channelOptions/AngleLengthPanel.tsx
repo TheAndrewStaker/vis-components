@@ -5,23 +5,32 @@ import {
 	DEFAULT_ANGLE_CONFIG,
 	DEFAULT_DONUT_HOLE_RADIUS,
 	DEFAULT_LENGTH_CONFIG,
+	DEFAULT_SEGMENT_THICKNESS,
 	DEFAULT_SPINE_CONFIG,
 	type AngleConfig,
+	type LengthConfig,
 } from "../../../lib/channelConfig"
+import { MIN_LINE_THICKNESS } from "../../../lib/connectionThickness"
+import { parseValue } from "../../../lib/scales"
+import { orderedLevels } from "../../../lib/smartSort"
 import { isBarModeId, isPieModeId } from "../../../lib/chartModes/families"
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { angleConfigFromTheme, valueChanged } from "../../../lib/themeConfig"
 import {
 	currentChannelConfigsAtom,
 	currentEncodingsAtom,
+	currentFieldLevelOrdersAtom,
+	currentFieldOverridesAtom,
 } from "../../../store/atoms"
+import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
-import type { Theme } from "../../../lib/types"
+import type { FieldType, Theme } from "../../../lib/types"
 
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
+import { SelectInput } from "../../../../../components/ui/SelectInput"
 import { SpineControls, TickFormatControl, ordinalSuffix } from "./AxisOptionsPanel"
 
 // ---------------------------------------------------------------------------
@@ -625,6 +634,7 @@ export const LengthOptionsPanel = () => {
 					Defaults: {DEFAULT_LENGTH_CONFIG.minLength}px –{" "}
 					{DEFAULT_LENGTH_CONFIG.maxLength}px
 				</div>
+				<SegmentPropertiesSection />
 			</div>
 		)
 	}
@@ -658,6 +668,195 @@ export const LengthOptionsPanel = () => {
 				underline
 				className="self-start"
 			/>
+			{currentLength !== null && <SegmentPropertiesSection />}
 		</div>
+	)
+}
+
+/** Variable types the segment-thickness "Vary by" offers — discrete levels
+ *  only; a quantitative column would list one row per distinct number. */
+const SEGMENT_VARY_BY_TYPES: ReadonlySet<FieldType> = new Set<FieldType>([
+	"categorical",
+	"ordinal",
+])
+
+/** Length → "Segment properties": stroke styling for the line segments a
+ *  scatter draws when Length is mapped (or a default length is set).
+ *  Thickness mirrors Connection → Line properties: a single width, or a
+ *  "Vary by" variable with one width per level. The dropdown position is
+ *  the stored `segmentThicknessField` itself — no separate mode flag. */
+const SegmentPropertiesSection = () => {
+	const [configs, setConfigs] = useAtom(currentChannelConfigsAtom)
+	const fieldOverrides = useAtomValue(currentFieldOverridesAtom)
+	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
+	const dataset = useCurrentDatasetView()
+
+	const length = configs.length ?? DEFAULT_LENGTH_CONFIG
+	const thickness = length.segmentThickness ?? DEFAULT_SEGMENT_THICKNESS
+	const lineCap = length.segmentLineCap ?? "round"
+	const updateLength = (next: Partial<LengthConfig>) =>
+		setConfigs((prev) => ({
+			...prev,
+			length: { ...(prev.length ?? DEFAULT_LENGTH_CONFIG), ...next },
+		}))
+
+	const typeOf = (name: string): FieldType =>
+		fieldOverrides[name] ??
+		dataset?.fields.find((f) => f.name === name)?.inferredType ??
+		"categorical"
+	const varyByFields = (dataset?.fields ?? [])
+		.map((f) => f.name)
+		.filter((name) => SEGMENT_VARY_BY_TYPES.has(typeOf(name)))
+	// A stored field that's gone from the data set renders as single level
+	// (the resolver finds no matching cells), so the dropdown reads that way.
+	const storedField = length.segmentThicknessField ?? null
+	const varyField =
+		storedField && dataset?.fields.some((f) => f.name === storedField)
+			? storedField
+			: null
+	// Distinct levels of a field, in the Fields panel's pinned order —
+	// parsed through the effective type so keys match the drawn rows.
+	const levelsOf = (name: string): string[] => {
+		if (!dataset) return []
+		const type = typeOf(name)
+		const values = [
+			...new Set(
+				dataset.rows
+					.map((r) => parseValue(r[name], type))
+					.filter((v) => v !== null)
+					.map(String)
+			),
+		]
+		return orderedLevels(values, type, levelOrders[name]).map((l) => l.value)
+	}
+	const levels = varyField ? levelsOf(varyField) : []
+
+	const ch = {
+		thickness: thickness !== DEFAULT_SEGMENT_THICKNESS || !!varyField,
+		lineCap: lineCap !== "round",
+	}
+
+	// Picking a variable SEEDS every level at the single width (renders
+	// identically until a row is edited); "Single level" clears both.
+	const setVaryBy = (next: string) => {
+		if (next === "") {
+			updateLength({ segmentThicknessField: null, segmentThicknessByValue: {} })
+			return
+		}
+		const seeded: Record<string, number> = {}
+		for (const v of levelsOf(next)) seeded[v] = thickness
+		updateLength({ segmentThicknessField: next, segmentThicknessByValue: seeded })
+	}
+	const setThicknessFor = (value: string, n: number) => {
+		if (n < 0) return
+		updateLength({
+			segmentThicknessByValue: { ...(length.segmentThicknessByValue ?? {}), [value]: n },
+		})
+	}
+
+	return (
+		<CollapsibleSubsection
+			title="Segment properties"
+			changed={ch.thickness || ch.lineCap}
+		>
+			<div className="flex flex-col gap-2">
+				<SelectInput
+					label="Vary by"
+					labelClassName={LABEL_COL}
+					changed={!!varyField}
+					value={varyField ?? ""}
+					options={[
+						{ value: "", label: "Single level" },
+						...varyByFields.map((name) => ({ value: name, label: name })),
+					]}
+					onChange={setVaryBy}
+					selectClassName="flex-1"
+				/>
+				{varyField ? (
+					<div className="flex flex-col gap-1.5">
+						{levels.map((v) => {
+							const rowValue = length.segmentThicknessByValue?.[v] ?? thickness
+							return (
+								<div key={v} className="flex items-center gap-2 text-sm">
+									<span className="w-24 shrink-0 truncate vc-text" title={v}>
+										{v}
+									</span>
+									<NumberInput
+										label={`Segment thickness for ${v}`}
+										labelClassName="sr-only"
+										value={rowValue}
+										min={MIN_LINE_THICKNESS}
+										step={0.5}
+										onChange={(n) => setThicknessFor(v, n)}
+										inputClassName="w-16"
+										suffix="px"
+									/>
+									{rowValue !== thickness && (
+										// Back to the single width WITHOUT deleting the key.
+										<ResetLink onClick={() => setThicknessFor(v, thickness)} />
+									)}
+								</div>
+							)
+						})}
+						{levels.length === 0 && (
+							<p className="vc-help">No {varyField} values in the data yet.</p>
+						)}
+					</div>
+				) : (
+					<div className="flex items-center gap-2 text-sm">
+						<NumberInput
+							label="Thickness"
+							labelClassName={LABEL_COL}
+							changed={ch.thickness}
+							value={thickness}
+							min={MIN_LINE_THICKNESS}
+							step={0.5}
+							onChange={(n) => {
+								// Negative typed input is ignored; 0 hides the segments.
+								if (n >= 0) updateLength({ segmentThickness: n })
+							}}
+							inputClassName="w-16"
+							suffix="px"
+						/>
+						{thickness !== DEFAULT_SEGMENT_THICKNESS && (
+							<ResetLink
+								onClick={() =>
+									updateLength({ segmentThickness: DEFAULT_SEGMENT_THICKNESS })
+								}
+							/>
+						)}
+					</div>
+				)}
+				<div className="flex flex-col gap-1.5">
+					<span
+						className={
+							ch.lineCap
+								? "text-sm font-semibold !text-vc-section-header"
+								: "text-sm vc-muted"
+						}
+					>
+						Line cap
+					</span>
+					{(
+						[
+							["round", "Round"],
+							["square", "Square"],
+						] as const
+					).map(([value, label]) => (
+						<label key={value} className="flex items-center gap-2 text-sm">
+							<input
+								type="radio"
+								name="segment-line-cap"
+								value={value}
+								checked={lineCap === value}
+								onChange={() => updateLength({ segmentLineCap: value })}
+								className="h-3 w-3"
+							/>
+							<span className="vc-muted">{label}</span>
+						</label>
+					))}
+				</div>
+			</div>
+		</CollapsibleSubsection>
 	)
 }

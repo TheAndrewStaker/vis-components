@@ -15,6 +15,10 @@ import {
 	makePositionScale,
 } from "../../../lib/scales"
 import { GlyphMark, resolveGlyph } from "../../../lib/customGlyphs"
+import {
+	resolveSegmentThickness,
+	segmentStrokeLinecap,
+} from "../../../lib/segmentStroke"
 import { resolveShapeColors } from "../../../lib/shapeColors"
 import { resolveRuleColor } from "../../../lib/textColorRules"
 import { formatTextValue, resolveTextColor } from "../../../lib/textEncoding"
@@ -92,8 +96,8 @@ export const renderMarkPaths = (args: {
 							key={m.i}
 							{...m.line}
 							stroke={mh.fill ?? m.fill}
-							strokeWidth={3}
-							strokeLinecap="round"
+							strokeWidth={resolveSegmentThickness(channelConfigs.length, m.row)}
+							strokeLinecap={segmentStrokeLinecap(channelConfigs.length)}
 							opacity={hoverFocus * m.markOpacity}
 							onMouseEnter={(e) => {
 								setHovered({

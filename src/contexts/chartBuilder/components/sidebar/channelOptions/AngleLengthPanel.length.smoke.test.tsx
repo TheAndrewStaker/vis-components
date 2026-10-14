@@ -131,3 +131,54 @@ describe("Length panel — mode trait decides, not the mapped field", () => {
 		expect(q.getByText(/doesn.t draw length/)).not.toBeNull()
 	})
 })
+
+describe("Length panel — Segment properties", () => {
+	const openSection = async (q: Awaited<ReturnType<typeof mount>>) => {
+		q.getByRole("button", { name: /Segment properties/ }).click()
+		await new Promise((r) => setTimeout(r, 0))
+	}
+
+	it("segment mode: offers thickness, Vary by, and line cap", async () => {
+		seed(SEGMENTS)
+		const q = await mount()
+		await openSection(q)
+		expect(q.getByLabelText("Thickness")).not.toBeNull()
+		expect(q.getByLabelText("Round")).not.toBeNull()
+		expect(q.getByLabelText("Square")).not.toBeNull()
+		// Vary by lists the categorical variable only.
+		const varyBy = q.getByLabelText("Vary by") as HTMLSelectElement
+		expect([...varyBy.options].map((o) => o.value)).toEqual(["", "region"])
+	})
+
+	it("vary by: one thickness row per level replaces the single input", async () => {
+		seed(SEGMENTS, {
+			length: {
+				minLength: 4,
+				maxLength: 40,
+				segmentThicknessField: "region",
+				segmentThicknessByValue: { East: 2, West: 6 },
+			},
+		})
+		const q = await mount()
+		await openSection(q)
+		expect(q.queryByLabelText("Thickness")).toBeNull()
+		expect(
+			(q.getByLabelText("Segment thickness for East") as HTMLInputElement).value
+		).toBe("2")
+		expect(
+			(q.getByLabelText("Segment thickness for West") as HTMLInputElement).value
+		).toBe("6")
+	})
+
+	it("bar mode: no segment properties", async () => {
+		seed(BARS)
+		const q = await mount()
+		expect(q.queryByText("Segment properties")).toBeNull()
+	})
+
+	it("no length field and no default length: shapes draw, so no segment properties", async () => {
+		seed({ ...SEGMENTS, length: { field: null } })
+		const q = await mount()
+		expect(q.queryByText("Segment properties")).toBeNull()
+	})
+})
