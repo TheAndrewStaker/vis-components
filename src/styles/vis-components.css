@@ -159,9 +159,36 @@
 		flex-direction: column;
 		gap: 0.5rem; /* matches gap-2 */
 		background-color: var(--color-vc-option-panel);
+		/* Off-state toggles sitting directly on this purple fill go WHITE so
+		 * they don't melt into the panel (Nancy, 2026-10-15). Read by
+		 * .vc-toggle-off; a .vc-subsection-card nested inside flips it back
+		 * to purple because there the surface is white again. */
+		--vc-toggle-off-bg: #ffffff;
+		/* Hairline dividers on this fill: stone-200 all but vanishes on the
+		 * periwinkle, so rules here go one step darker. Read by
+		 * .vc-divider-group and the panel-scoped hr rule in utilities; a
+		 * .vc-subsection-card resets it because its surface is white. */
+		--vc-divider-color: var(--color-stone-300);
 	}
 	.dark .vc-option-panel {
 		background-color: var(--color-vc-option-panel-dark);
+		--vc-divider-color: var(--color-stone-700);
+	}
+
+	/* White card wrapping a CollapsibleSubsection's body inside an option
+	 * panel. Owns the fill (white / dark stone-900) and re-tints off-state
+	 * toggles to light purple: on a white surface that's what makes them
+	 * read as controls. Nests correctly either way — the nearest ancestor
+	 * that sets --vc-toggle-off-bg wins, so a purple panel inside a card
+	 * inside a panel still gets white toggles. */
+	.vc-subsection-card {
+		background-color: #ffffff;
+		--vc-toggle-off-bg: var(--color-vc-option-panel);
+		--vc-divider-color: var(--color-stone-200);
+	}
+	.dark .vc-subsection-card {
+		background-color: var(--color-stone-900);
+		--vc-divider-color: var(--color-stone-700);
 	}
 
 	/* Helper / explanatory prose inside sidebar panels. Indigo (not stone)
@@ -233,11 +260,11 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem; /* matches gap-2 */
-		border-top: 1px solid var(--color-stone-200);
+		border-top: 1px solid var(--vc-divider-color, var(--color-stone-200));
 		padding-top: 0.5rem; /* matches pt-2 */
 	}
 	.dark .vc-divider-group {
-		border-top-color: var(--color-stone-700);
+		border-top-color: var(--vc-divider-color, var(--color-stone-700));
 	}
 
 	/* Toggle / segmented-control states. Every ACTION button in the app is
@@ -247,7 +274,12 @@
 	 * COLORS only (fill, border color, text); call sites keep `border` +
 	 * rounding/spacing.
 	 *
-	 *   .vc-toggle-off  light purple fill, brand-purple text + border
+	 *   .vc-toggle-off  brand-purple text + border; fill depends on the
+	 *                   surface it sits on — light purple on white (modals,
+	 *                   .vc-subsection-card), WHITE directly on the purple
+	 *                   .vc-option-panel so it doesn't vanish into it. The
+	 *                   surface publishes --vc-toggle-off-bg; the fallback
+	 *                   (no option panel above) is light purple.
 	 *   .vc-toggle-on   brand-500 fill (same purple as <Button>), white text
 	 *
 	 * NOT for the glyph swatch pickers (pattern / dash / shape / legend
@@ -261,7 +293,7 @@
 	 * Tokens are the sidebar's own: --color-vc-option-panel under
 	 * --color-vc-brand-text. */
 	.vc-toggle-off {
-		background-color: var(--color-vc-option-panel);
+		background-color: var(--vc-toggle-off-bg, var(--color-vc-option-panel));
 		border-color: var(--color-vc-brand-text);
 		color: var(--color-vc-brand-text);
 		transition-property: background-color, color;
@@ -270,7 +302,7 @@
 	.vc-toggle-off:hover:not(:disabled) {
 		background-color: color-mix(
 			in srgb,
-			var(--color-vc-option-panel),
+			var(--vc-toggle-off-bg, var(--color-vc-option-panel)),
 			var(--color-vc-brand-text) 12%
 		);
 	}
@@ -327,6 +359,15 @@
  * Utility layer — one-offs that Tailwind doesn't cover
  * -------------------------------------------------------------------------- */
 @layer utilities {
+	/* Plain hairline rules (`<hr>`, `border-t border-stone-200`) inside an
+	 * option panel take the panel's --vc-divider-color (darker on the purple
+	 * fill, see .vc-option-panel). Utilities layer + extra specificity so it
+	 * beats the call site's border-stone-200 / dark:border-stone-700. */
+	.vc-option-panel hr,
+	.vc-option-panel .border-t.border-stone-200 {
+		border-color: var(--vc-divider-color);
+	}
+
 	/* Editor shell: exactly fills the viewport below the sticky header (the
 	 * editor has no footer). The editor manages its own inner scrolling
 	 * (sidebar, chart viewport), so the window must not scroll or there'd be

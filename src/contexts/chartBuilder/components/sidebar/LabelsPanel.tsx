@@ -372,22 +372,21 @@ export const LabelsPanel = () => {
 		channelConfigs.text?.fontFamily ?? DEFAULT_TEXT_CONFIG.fontFamily
 	const nodeTitleBaseWeight =
 		channelConfigs.text?.fontWeight ?? DEFAULT_TEXT_CONFIG.fontWeight
-	// OR over the facet keys actually shown: grid-split renders the
-	// Column/Row (+ optional Panel) rows; wrap/single-axis renders the one
-	// unified Facet-title row.
-	const facetChanged =
-		(facetGridSplit
-			? keyChanged("facetColTitle") ||
-				keyChanged("facetRowTitle") ||
-				(hideEmptyOn && keyChanged("facetPanelTitle"))
-			: keyChanged("facetTitle")) ||
-		// "Color by facet" is a rendered deviation only while checked — colors
-		// retained under an unchecked box don't apply, so they don't dot.
-		labels.facetTitleColorByValue === true
+	// Wrap/single-axis renders one unified "Facet titles" subsection; a
+	// both-axes grid renders per-strip row / column (+ optional panel)
+	// subsections, each dotting on its own key. "Color by facet" is a
+	// rendered deviation only while checked — colors retained under an
+	// unchecked box don't apply, so they don't dot. Its toggle lives in the
+	// row and column editors, so it dots both.
+	const facetColorByChanged = labels.facetTitleColorByValue === true
+	const facetChanged = keyChanged("facetTitle") || facetColorByChanged
+	const facetRowChanged = keyChanged("facetRowTitle") || facetColorByChanged
+	const facetColChanged = keyChanged("facetColTitle") || facetColorByChanged
+	const facetPanelChanged = keyChanged("facetPanelTitle")
 	// "Color by facet" block, rendered directly under the Color row of the
 	// facet-title font editor(s) via the `afterColor` slot. In a both-axes
-	// grid each header strip's editor hosts its own values (Column titles →
-	// column values, Row titles → row values); otherwise the single inline
+	// grid each header strip's editor hosts its own values ("(column)" →
+	// column values, "(row)" → row values); otherwise the single inline
 	// editor hosts the one flat list (wrap panel keys, or the mapped axis's
 	// values in a row-/col-only grid). The checkbox gates both the swatch
 	// rows and the render-time lookup, so unchecking reverts every title to
@@ -645,113 +644,42 @@ export const LabelsPanel = () => {
 				</CollapsibleSubsection>
 			)}
 			{/* Facet titles are populated from the dataset's facet values, so
-			 *  there's no text to type — the subsection exposes only the
-			 *  alignment / font / offset styling controls. Since a single-axis
-			 *  facet has just one title to style, those controls render inline the
-			 *  moment the subsection opens (no redundant "Auto" row to expand).
-			 *  Only shown when the visual is actually faceted.
+			 *  there's no text to type — each subsection exposes only the
+			 *  alignment / font / offset styling controls, inline the moment it
+			 *  opens (no redundant "Auto" row to expand). Only shown when the
+			 *  visual is actually faceted.
 			 *
 			 *  When BOTH facetCol and facetRow are mapped the chart draws two
-			 *  separate header strips (column titles across the top, row titles
-			 *  down the left side) — genuinely several targets — so the body
-			 *  splits into individually-collapsible "Column titles" / "Row titles"
-			 *  rows instead. Each layers on top of the shared `facetTitle` styling,
-			 *  so anything configured on a wrap / single-axis facet carries through
-			 *  as the baseline. */}
-			{isFaceted && (
-				<CollapsibleSubsection title="Facet titles" changed={facetChanged}>
-					{facetGridSplit ? (
-				<div className="flex flex-col gap-2">
-					<LabelRow
-						label="Column titles"
-						fontKey="facetColTitle"
-						textless
-						value=""
-						onChange={() => {}}
-						override={overrides.facetColTitle}
-						onOverride={(patch) => setOverride("facetColTitle", patch)}
-						alignment={titleAlignments.facetColTitle}
-						onAlignment={(a) => setAlignment("facetColTitle", a)}
-						angle={titleAngles.facetColTitle}
-						onAngle={(deg) => setAngle("facetColTitle", deg)}
-						baseColor={overrides.facetTitle?.color ?? labels.baseFont.titles.color}
-						baseSize={
-							overrides.facetTitle?.size ?? labels.baseFont.titles.secondarySize
-						}
-						baseFamily={
-							overrides.facetTitle?.family ?? labels.baseFont.titles.family
-						}
-						baseWeight={
-							overrides.facetTitle?.weight ??
-							secondaryInheritWeight(labels.baseFont.titles)
-						}
-						afterColor={facetColorControls(
-							facetColVals,
-							overrides.facetColTitle?.color ?? facetTitleBaseColor
-						)}
-						hideColor={colorByFacetOn}
-						extraActive={!!labels.titleOffsets?.facetColTitle}
-						extraControls={
-							<OffsetControl
-								value={labels.titleOffsets?.facetColTitle ?? {}}
-								onChange={(axis, n) => setOffset("facetColTitle", axis, n)}
-							/>
-						}
-					/>
-					<LabelRow
-						label="Row titles"
-						fontKey="facetRowTitle"
-						textless
-						value=""
-						onChange={() => {}}
-						override={overrides.facetRowTitle}
-						onOverride={(patch) => setOverride("facetRowTitle", patch)}
-						alignment={titleAlignments.facetRowTitle}
-						onAlignment={(a) => setAlignment("facetRowTitle", a)}
-						verticalAlignment={titleVerticalAlignments.facetRowTitle}
-						onVerticalAlignment={(a) => setVerticalAlignment("facetRowTitle", a)}
-						angle={titleAngles.facetRowTitle}
-						onAngle={(deg) => setAngle("facetRowTitle", deg)}
-						baseColor={overrides.facetTitle?.color ?? labels.baseFont.titles.color}
-						baseSize={
-							overrides.facetTitle?.size ?? labels.baseFont.titles.secondarySize
-						}
-						baseFamily={
-							overrides.facetTitle?.family ?? labels.baseFont.titles.family
-						}
-						baseWeight={
-							overrides.facetTitle?.weight ??
-							secondaryInheritWeight(labels.baseFont.titles)
-						}
-						afterColor={facetColorControls(
-							facetRowVals,
-							overrides.facetRowTitle?.color ?? facetTitleBaseColor
-						)}
-						hideColor={colorByFacetOn}
-						extraActive={!!labels.titleOffsets?.facetRowTitle}
-						extraControls={
-							<OffsetControl
-								value={labels.titleOffsets?.facetRowTitle ?? {}}
-								onChange={(axis, n) => setOffset("facetRowTitle", axis, n)}
-							/>
-						}
-					/>
-					{hideEmptyOn && (
-						<LabelRow
-							label="Panel titles"
-							fontKey="facetPanelTitle"
-							textless
-							value=""
-							onChange={() => {}}
-							override={overrides.facetPanelTitle}
-							onOverride={(patch) => setOverride("facetPanelTitle", patch)}
-							alignment={titleAlignments.facetPanelTitle}
-							onAlignment={(a) => setAlignment("facetPanelTitle", a)}
-							angle={titleAngles.facetPanelTitle}
-							onAngle={(deg) => setAngle("facetPanelTitle", deg)}
-							baseColor={overrides.facetTitle?.color ?? labels.baseFont.titles.color}
+			 *  separate header strips (row titles down the left side, column
+			 *  titles across the top) — genuinely several targets — so instead of
+			 *  one "Facet titles" subsection the panel shows sibling "Facet titles
+			 *  (row)" / "Facet titles (column)" subsections (+ "(panel)" when
+			 *  empty panels are hidden). Each layers on top of the shared
+			 *  `facetTitle` styling, so anything configured on a wrap /
+			 *  single-axis facet carries through as the baseline. */}
+			{isFaceted && facetGridSplit && (
+				<>
+					<CollapsibleSubsection
+						title="Facet titles (row)"
+						changed={facetRowChanged}
+					>
+						<LabelStyleControls
+							override={overrides.facetRowTitle}
+							onOverride={(patch) => setOverride("facetRowTitle", patch)}
+							alignment={titleAlignments.facetRowTitle}
+							onAlignment={(a) => setAlignment("facetRowTitle", a)}
+							verticalAlignment={titleVerticalAlignments.facetRowTitle}
+							onVerticalAlignment={(a) =>
+								setVerticalAlignment("facetRowTitle", a)
+							}
+							angle={titleAngles.facetRowTitle}
+							onAngle={(deg) => setAngle("facetRowTitle", deg)}
+							baseColor={
+								overrides.facetTitle?.color ?? labels.baseFont.titles.color
+							}
 							baseSize={
-								overrides.facetTitle?.size ?? labels.baseFont.titles.secondarySize
+								overrides.facetTitle?.size ??
+								labels.baseFont.titles.secondarySize
 							}
 							baseFamily={
 								overrides.facetTitle?.family ?? labels.baseFont.titles.family
@@ -760,49 +688,127 @@ export const LabelsPanel = () => {
 								overrides.facetTitle?.weight ??
 								secondaryInheritWeight(labels.baseFont.titles)
 							}
-							extraActive={!!labels.titleOffsets?.facetPanelTitle}
+							afterColor={facetColorControls(
+								facetRowVals,
+								overrides.facetRowTitle?.color ?? facetTitleBaseColor
+							)}
+							hideColor={colorByFacetOn}
 							extraControls={
 								<OffsetControl
-									value={labels.titleOffsets?.facetPanelTitle ?? {}}
-									onChange={(axis, n) => setOffset("facetPanelTitle", axis, n)}
+									value={labels.titleOffsets?.facetRowTitle ?? {}}
+									onChange={(axis, n) => setOffset("facetRowTitle", axis, n)}
 								/>
 							}
 						/>
-					)}
-				</div>
-			) : (
-				// Single facet axis → one automatic title. There's no text to
-					// type, so the styling options are shown inline the moment the
-					// subsection opens instead of behind a second "Auto"-row chevron.
-					<LabelStyleControls
-					override={overrides.facetTitle}
-					onOverride={(patch) => setOverride("facetTitle", patch)}
-					alignment={titleAlignments.facetTitle}
-					onAlignment={(a) => setAlignment("facetTitle", a)}
-					verticalAlignment={
-						facetRowOnly ? titleVerticalAlignments.facetTitle : undefined
-					}
-					onVerticalAlignment={
-						facetRowOnly
-							? (a) => setVerticalAlignment("facetTitle", a)
-							: undefined
-					}
-					angle={titleAngles.facetTitle}
-					onAngle={(deg) => setAngle("facetTitle", deg)}
-					baseColor={labels.baseFont.titles.color}
-					baseSize={labels.baseFont.titles.secondarySize}
-					baseFamily={labels.baseFont.titles.family}
-					baseWeight={secondaryInheritWeight(labels.baseFont.titles)}
-					afterColor={facetColorControls(facetFlatVals, facetTitleBaseColor)}
-					hideColor={colorByFacetOn}
-					extraControls={
-						<OffsetControl
-							value={labels.titleOffsets?.facetTitle ?? {}}
-							onChange={(axis, n) => setOffset("facetTitle", axis, n)}
+					</CollapsibleSubsection>
+					<CollapsibleSubsection
+						title="Facet titles (column)"
+						changed={facetColChanged}
+					>
+						<LabelStyleControls
+							override={overrides.facetColTitle}
+							onOverride={(patch) => setOverride("facetColTitle", patch)}
+							alignment={titleAlignments.facetColTitle}
+							onAlignment={(a) => setAlignment("facetColTitle", a)}
+							angle={titleAngles.facetColTitle}
+							onAngle={(deg) => setAngle("facetColTitle", deg)}
+							baseColor={
+								overrides.facetTitle?.color ?? labels.baseFont.titles.color
+							}
+							baseSize={
+								overrides.facetTitle?.size ??
+								labels.baseFont.titles.secondarySize
+							}
+							baseFamily={
+								overrides.facetTitle?.family ?? labels.baseFont.titles.family
+							}
+							baseWeight={
+								overrides.facetTitle?.weight ??
+								secondaryInheritWeight(labels.baseFont.titles)
+							}
+							afterColor={facetColorControls(
+								facetColVals,
+								overrides.facetColTitle?.color ?? facetTitleBaseColor
+							)}
+							hideColor={colorByFacetOn}
+							extraControls={
+								<OffsetControl
+									value={labels.titleOffsets?.facetColTitle ?? {}}
+									onChange={(axis, n) => setOffset("facetColTitle", axis, n)}
+								/>
+							}
 						/>
-					}
-				/>
+					</CollapsibleSubsection>
+					{hideEmptyOn && (
+						<CollapsibleSubsection
+							title="Facet titles (panel)"
+							changed={facetPanelChanged}
+						>
+							<LabelStyleControls
+								override={overrides.facetPanelTitle}
+								onOverride={(patch) => setOverride("facetPanelTitle", patch)}
+								alignment={titleAlignments.facetPanelTitle}
+								onAlignment={(a) => setAlignment("facetPanelTitle", a)}
+								angle={titleAngles.facetPanelTitle}
+								onAngle={(deg) => setAngle("facetPanelTitle", deg)}
+								baseColor={
+									overrides.facetTitle?.color ?? labels.baseFont.titles.color
+								}
+								baseSize={
+									overrides.facetTitle?.size ??
+									labels.baseFont.titles.secondarySize
+								}
+								baseFamily={
+									overrides.facetTitle?.family ??
+									labels.baseFont.titles.family
+								}
+								baseWeight={
+									overrides.facetTitle?.weight ??
+									secondaryInheritWeight(labels.baseFont.titles)
+								}
+								extraControls={
+									<OffsetControl
+										value={labels.titleOffsets?.facetPanelTitle ?? {}}
+										onChange={(axis, n) =>
+											setOffset("facetPanelTitle", axis, n)
+										}
+									/>
+								}
+							/>
+						</CollapsibleSubsection>
+					)}
+				</>
 			)}
+			{isFaceted && !facetGridSplit && (
+				<CollapsibleSubsection title="Facet titles" changed={facetChanged}>
+					<LabelStyleControls
+						override={overrides.facetTitle}
+						onOverride={(patch) => setOverride("facetTitle", patch)}
+						alignment={titleAlignments.facetTitle}
+						onAlignment={(a) => setAlignment("facetTitle", a)}
+						verticalAlignment={
+							facetRowOnly ? titleVerticalAlignments.facetTitle : undefined
+						}
+						onVerticalAlignment={
+							facetRowOnly
+								? (a) => setVerticalAlignment("facetTitle", a)
+								: undefined
+						}
+						angle={titleAngles.facetTitle}
+						onAngle={(deg) => setAngle("facetTitle", deg)}
+						baseColor={labels.baseFont.titles.color}
+						baseSize={labels.baseFont.titles.secondarySize}
+						baseFamily={labels.baseFont.titles.family}
+						baseWeight={secondaryInheritWeight(labels.baseFont.titles)}
+						afterColor={facetColorControls(facetFlatVals, facetTitleBaseColor)}
+						hideColor={colorByFacetOn}
+						extraControls={
+							<OffsetControl
+								value={labels.titleOffsets?.facetTitle ?? {}}
+								onChange={(axis, n) => setOffset("facetTitle", axis, n)}
+							/>
+						}
+					/>
 				</CollapsibleSubsection>
 			)}
 			{activeLegendChannels.length > 0 && (

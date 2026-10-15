@@ -1780,6 +1780,37 @@ describe("solveFacetLayout — grid mode header strips", () => {
 		expect(spec.rowHeaders[0]!.x).toBeLessThan(row0Panel.cell.x)
 	})
 
+	it("draws the shared y-title outside (left of) the row header strip", () => {
+		const rowHeaders = [
+			{ text: "North", fontSize: 13, align: "center" as const },
+			{ text: "South", fontSize: 13, align: "center" as const },
+		]
+		const yTitle = { text: "Revenue", fontSize: 12, align: "center" as const }
+		for (const horizontal of [false, true]) {
+			const spec = solveFacetLayout(
+				baseline({
+					rows: 2,
+					cols: 2,
+					panels: makePanels(2, 2),
+					rowHeaders,
+					rowHeaderWidth: 80,
+					yTitle: { ...yTitle, horizontal },
+				})
+			)
+			const header = spec.rowHeaders[0]!
+			const stripLeft = header.x - header.width / 2
+			const t = spec.yTitle!
+			// Rotated: anchor is the title's center; horizontal: anchor is
+			// the block's center (align "center"). Either way the whole title
+			// ends left of the strip and stays on-canvas.
+			const titleRight = horizontal
+				? t.x + estimateLongestLineWidth("Revenue", 12) / 2
+				: t.x + 6
+			expect(titleRight).toBeLessThanOrEqual(stripLeft)
+			expect(t.x).toBeGreaterThan(0)
+		}
+	})
+
 	it("aligns a quantitative-y row header to the plot edges (no inset)", () => {
 		// Quantitative y (empty yLabels) lands its extreme ticks at the plot
 		// edges, so top/bottom sit exactly at the inner rect's top/bottom and

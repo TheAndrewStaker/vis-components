@@ -60,7 +60,7 @@ export const Header = () => {
 				 *  editor's page-fill height assumes `--vc-header-h`), and the
 				 *  badge is the first thing to give. */}
 				<span
-					className="-ml-4 hidden rounded bg-stone-100 px-1.5 py-0.5 text-[11px] font-medium tabular-nums sm:inline dark:bg-stone-800 vc-muted"
+					className="-ml-4 hidden rounded bg-vc-option-panel px-1.5 py-0.5 text-[11px] font-medium text-vc-section-header tabular-nums sm:inline dark:bg-vc-brand-text/20 dark:text-brand-200"
 					title={`Built ${new Date(__BUILD_DATE__).toLocaleString(undefined, {
 						dateStyle: "medium",
 						timeStyle: "short",

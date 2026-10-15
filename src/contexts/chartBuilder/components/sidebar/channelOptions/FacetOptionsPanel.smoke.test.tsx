@@ -108,9 +108,9 @@ describe("FacetOptionsPanel — Y range editors on a length-encoded bar chart", 
 		expect(utils.getByText("Y axis range per panel")).toBeTruthy()
 		expect(utils.getByText("Home")).toBeTruthy()
 		expect(utils.getByText("Everything else")).toBeTruthy()
-		// The unit-range sizing toggle stays hidden: its solver weights
-		// read the Y POSITION field, so it would be inert here.
-		expect(utils.queryByText(/size (row|panel) heights by unit range/i)).toBeNull()
+		// The unit-range sizing toggle is offered on the Length measure axis:
+		// the solver weighs it by the measure extent, same as the renderer.
+		expect(utils.queryByText(/size (row|panel) heights by unit range/i)).toBeTruthy()
 	})
 
 	it("wrap mode, Share Y = none, panels side by side: offers per-panel sizing", () => {

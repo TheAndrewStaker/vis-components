@@ -1,6 +1,5 @@
 import {
 	DEFAULT_FILL,
-	DEFAULT_PATTERN_CONFIG,
 	DEFAULT_SHAPE_CONFIG,
 	type LineDashPattern,
 } from "../../../lib/channelConfig"
@@ -26,6 +25,7 @@ import {
 	inkForHueColor,
 	inkPaletteForHue,
 	patternCategoriesFor,
+	resolveDefaultPatternForMark,
 	resolvePatternForMark,
 	type ThemeInkFallback,
 } from "../../../lib/patterns"
@@ -367,6 +367,7 @@ export const CombinedGroupLegend = ({
 						ink: resolved.inkColor,
 						paletteIdx: resolved.paletteIdx,
 						svgId: resolved.svgId,
+						scale: resolved.scale,
 					}
 				} else if (!hasHue && !showDash) {
 					// PATTERN_NONE is a legitimate category — "this one has no
@@ -390,17 +391,19 @@ export const CombinedGroupLegend = ({
 			hasHue &&
 			patView.defaultPattern !== null
 		) {
-			const resolved = resolvePatternForMark("__default__", 0, color, {
-				...DEFAULT_PATTERN_CONFIG,
-				overrides: { __default__: patView.defaultPattern },
-				inkColors: { __default__: patView.defaultPatternInk },
-			})
+			const resolved = resolveDefaultPatternForMark(
+				color,
+				patView.defaultPattern,
+				patView.defaultPatternInk,
+				patView.pattern.defaultScale
+			)
 			if (resolved !== null) {
 				pattern = {
 					bg: resolved.bgColor,
 					ink: resolved.inkColor,
 					paletteIdx: resolved.paletteIdx,
 					svgId: resolved.svgId,
+					scale: resolved.scale,
 				}
 			}
 		}

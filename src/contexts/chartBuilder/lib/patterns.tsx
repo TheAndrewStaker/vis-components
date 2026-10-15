@@ -1,4 +1,10 @@
-import type { ChannelConfigs, PatternConfig } from "./channelConfig"
+import {
+	DEFAULT_PATTERN_CONFIG,
+	DEFAULT_PATTERN_SCALE,
+	PATTERN_SCALE_MAX,
+	type ChannelConfigs,
+	type PatternConfig,
+} from "./channelConfig"
 import { parseValue } from "./scales"
 import type { FieldType, Theme } from "./types"
 
@@ -29,75 +35,133 @@ export const DEFAULT_PATTERN_INK = "#0f172a"
 export const PATTERN_NONE = "none" as const
 export type PatternNone = typeof PATTERN_NONE
 
+/** The tile a pattern is drawn into, as `PatternTile` computes it from the
+ * category's Scale pick. */
+export type PatternTileGeometry = {
+	/** Tile side (px) — the repeat distance between marks. */
+	side: number
+	/** Multiplier on the native mark dimensions (dot radius, stripe width);
+	 * ×1 = the palette's own. */
+	mark: number
+}
+
 export type PatternDef = {
 	id: string
+	/** Tile side at ×1. */
 	size: number
-	/** Returns the SVG children rendered inside `<pattern>`. The background
-	 * rect is added separately by the caller. */
-	render: (inkColor: string) => React.ReactNode
+	/** How the tile — the SPACING between marks — grows with the Scale
+	 * pick: `size × scale^spacingExponent`, while the marks themselves
+	 * always grow by the full `scale`. 1 = pure zoom (crosshatch, checker:
+	 * the whole texture magnifies uniformly). Below 1 the marks outgrow
+	 * their spacing a little, so zoomed-in dots and stripes don't drift
+	 * apart as fast as they swell. */
+	spacingExponent: number
+	/** Returns the SVG children rendered inside a `<pattern>` of side
+	 * `geom.side`, with mark dimensions multiplied by `geom.mark`. At
+	 * `{ side: size, mark: 1 }` this is the palette's native drawing. The
+	 * background rect is added separately by the caller (`PatternTile`). */
+	render: (inkColor: string, geom: PatternTileGeometry) => React.ReactNode
 }
+
+/** Spacing exponent for the dot and stripe patterns (see
+ * `PatternDef.spacingExponent`): at ×2 the marks are 2× and the spacing
+ * ≈1.8×; at ×4, 4× and ≈3.25×. */
+export const MARK_WEIGHTED_SPACING_EXPONENT = 0.85
+
+/** Attribute-ready number: 3 decimals, so scaled geometry (1.4 × 0.1)
+ * doesn't leak float noise into the SVG. */
+const px = (v: number): number => Number(v.toFixed(3))
+
+/** The anti-diagonal stripe across an `L` tile at stroke scale `m`: the
+ * main line plus short stubs of the neighbouring tiles' line through the
+ * two corners it passes, so the stroke isn't clipped there. The stubs reach
+ * `m` each way, which covers a stroke up to 2m wide. */
+const antiDiagonal = (L: number, m: number): string =>
+	`M${px(-m)},${px(m)} l${px(2 * m)},${px(-2 * m)} M0,${px(L)} l${px(L)},${px(-L)} M${px(L - m)},${px(L + m)} l${px(2 * m)},${px(-2 * m)}`
+/** The matching main-diagonal stripe (the crosshatch's second line). */
+const mainDiagonal = (L: number, m: number): string =>
+	`M${px(-m)},${px(L - m)} l${px(2 * m)},${px(2 * m)} M0,0 l${px(L)},${px(L)} M${px(L - m)},${px(-m)} l${px(2 * m)},${px(2 * m)}`
 
 // Patterns are intentionally ink-dense: default mark radii are small (~4px),
 // and the pattern tiles need enough visible ink to read as "a pattern" in
 // that little space. Tiles are sized so that at least one full repeat fits
-// inside an r=4 mark (diameter 8).
+// inside an r=4 mark (diameter 8). Each drawing is written against the
+// tile geometry it's given (see `PatternDef.render`) so the Scale control
+// can grow marks and spacing at different rates.
 export const PATTERN_PALETTE: PatternDef[] = [
 	{
 		id: "vc-pat-dots",
 		size: 10,
-		render: (ink) => (
+		spacingExponent: MARK_WEIGHTED_SPACING_EXPONENT,
+		render: (ink, { side: L, mark: m }) => (
 			<>
-				<circle cx={2.5} cy={2.5} r={1.4} fill={ink} />
-				<circle cx={7.5} cy={7.5} r={1.4} fill={ink} />
+				<circle cx={px(L / 4)} cy={px(L / 4)} r={px(1.4 * m)} fill={ink} />
+				<circle
+					cx={px((3 * L) / 4)}
+					cy={px((3 * L) / 4)}
+					r={px(1.4 * m)}
+					fill={ink}
+				/>
 			</>
 		),
 	},
 	{
 		id: "vc-pat-diag",
 		size: 10,
-		render: (ink) => (
-			<path
-				d="M-1,1 l2,-2 M0,10 l10,-10 M9,11 l2,-2"
-				stroke={ink}
-				strokeWidth={1.5}
-			/>
+		spacingExponent: MARK_WEIGHTED_SPACING_EXPONENT,
+		render: (ink, { side: L, mark: m }) => (
+			<path d={antiDiagonal(L, m)} stroke={ink} strokeWidth={px(1.5 * m)} />
 		),
 	},
 	{
 		id: "vc-pat-vert",
 		size: 8,
-		render: (ink) => <path d="M4,-1 v10" stroke={ink} strokeWidth={1.5} />,
+		spacingExponent: MARK_WEIGHTED_SPACING_EXPONENT,
+		render: (ink, { side: L, mark: m }) => (
+			<path
+				d={`M${px(L / 2)},${px(-m)} v${px(L + 2 * m)}`}
+				stroke={ink}
+				strokeWidth={px(1.5 * m)}
+			/>
+		),
 	},
 	{
 		id: "vc-pat-horiz",
 		size: 8,
-		render: (ink) => <path d="M-1,4 h10" stroke={ink} strokeWidth={1.5} />,
+		spacingExponent: MARK_WEIGHTED_SPACING_EXPONENT,
+		render: (ink, { side: L, mark: m }) => (
+			<path
+				d={`M${px(-m)},${px(L / 2)} h${px(L + 2 * m)}`}
+				stroke={ink}
+				strokeWidth={px(1.5 * m)}
+			/>
+		),
 	},
 	{
 		id: "vc-pat-cross",
 		size: 10,
-		render: (ink) => (
+		spacingExponent: 1,
+		render: (ink, { side: L, mark: m }) => (
 			<>
-				<path
-					d="M-1,1 l2,-2 M0,10 l10,-10 M9,11 l2,-2"
-					stroke={ink}
-					strokeWidth={1.2}
-				/>
-				<path
-					d="M-1,9 l2,2 M0,0 l10,10 M9,-1 l2,2"
-					stroke={ink}
-					strokeWidth={1.2}
-				/>
+				<path d={antiDiagonal(L, m)} stroke={ink} strokeWidth={px(1.2 * m)} />
+				<path d={mainDiagonal(L, m)} stroke={ink} strokeWidth={px(1.2 * m)} />
 			</>
 		),
 	},
 	{
 		id: "vc-pat-checker",
 		size: 10,
-		render: (ink) => (
+		spacingExponent: 1,
+		render: (ink, { side: L }) => (
 			<>
-				<rect x={0} y={0} width={5} height={5} fill={ink} />
-				<rect x={5} y={5} width={5} height={5} fill={ink} />
+				<rect x={0} y={0} width={px(L / 2)} height={px(L / 2)} fill={ink} />
+				<rect
+					x={px(L / 2)}
+					y={px(L / 2)}
+					width={px(L / 2)}
+					height={px(L / 2)}
+					fill={ink}
+				/>
 			</>
 		),
 	},
@@ -108,6 +172,24 @@ export const PATTERN_PALETTE: PatternDef[] = [
 /** Turn any CSS color string into a short slug safe for SVG ids. */
 const colorSlug = (color: string): string =>
 	color.replaceAll(/[^a-zA-Z0-9]/g, "").slice(0, 12)
+
+/** Smallest tile zoom the renderer will draw. The Pattern menu's Scale box
+ * accepts 0 (see `PATTERN_SCALE_MIN`), but a zero-size `<pattern>` paints
+ * nothing per the SVG spec — the mark would vanish — so 0 renders as the
+ * finest step instead. */
+export const PATTERN_SCALE_RENDER_MIN = 0.1
+
+/** The tile zoom a stored scale actually renders at: absent / non-numeric →
+ * ×1, otherwise clamped to [PATTERN_SCALE_RENDER_MIN, PATTERN_SCALE_MAX]. */
+export const effectivePatternScale = (raw: number | null | undefined): number => {
+	if (typeof raw !== "number" || !Number.isFinite(raw)) return DEFAULT_PATTERN_SCALE
+	return Math.min(PATTERN_SCALE_MAX, Math.max(PATTERN_SCALE_RENDER_MIN, raw))
+}
+
+/** Id-safe spelling of a scale ("1.5" → "1p5"); empty at ×1 so ids of
+ * unscaled patterns stay exactly as before the Scale control existed. */
+const scaleSlug = (scale: number): string =>
+	scale === DEFAULT_PATTERN_SCALE ? "" : `-x${String(scale).replace(".", "p")}`
 
 // ----- Per-category pattern resolution -------------------------------------
 
@@ -131,6 +213,9 @@ export type ResolvedPattern = {
 	bgColor: string
 	inkColor: string
 	svgId: string
+	/** Tile zoom to draw at (already passed through `effectivePatternScale`,
+	 * so ×1 when the category has no stored scale). */
+	scale: number
 }
 
 /** Look up the per-hue-color pattern-ink override for a mark. Returns the
@@ -237,6 +322,26 @@ export const resolvePatternForMark = (
 			: categoryIndex % PATTERN_PALETTE.length
 	const inkColor =
 		config?.inkColors?.[category] ?? preferredInk ?? DEFAULT_PATTERN_INK
-	const svgId = `vc-pat-${paletteIdx}-${colorSlug(bgColor)}-${colorSlug(inkColor)}`
-	return { paletteIdx, bgColor, inkColor, svgId }
+	const scale = effectivePatternScale(config?.scales?.[category])
+	// The scale is part of the id: two categories sharing colors but zoomed
+	// differently need two defs.
+	const svgId = `vc-pat-${paletteIdx}-${colorSlug(bgColor)}-${colorSlug(inkColor)}${scaleSlug(scale)}`
+	return { paletteIdx, bgColor, inkColor, svgId, scale }
 }
+
+/** The single no-variable DEFAULT pattern (`ChannelConfigs.defaultPattern`
+ * + its ink + `PatternConfig.defaultScale`) resolved for one mark, through
+ * the same resolver as field-mapped categories so renderers and legends
+ * agree on the def's id. `scale` null/absent = ×1. */
+export const resolveDefaultPatternForMark = (
+	bgColor: string,
+	paletteIdx: number,
+	inkColor: string,
+	scale?: number | null
+): ResolvedPattern | null =>
+	resolvePatternForMark("__default__", 0, bgColor, {
+		...DEFAULT_PATTERN_CONFIG,
+		overrides: { __default__: paletteIdx },
+		inkColors: { __default__: inkColor },
+		scales: scale == null ? {} : { __default__: scale },
+	})

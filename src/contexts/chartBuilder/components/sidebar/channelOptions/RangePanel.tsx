@@ -2,13 +2,17 @@ import { useAtom, useAtomValue } from "jotai"
 import { resolveHierarchyIdField } from "../../../lib/buildHierarchy"
 import {
 	PACKED_DERIVED_LABELS,
+	PACKED_MEASURE_OPTION_VALUE,
 	hierarchyDepthLevels,
 	isFlowModeId,
 	isHierarchyModeId,
+	packedDerivedOptions,
+	packedSourceForOptionValue,
 	packedSourceOf,
 	topLevelGroupNames,
 	type PackedDerivedSource,
 } from "../../../lib/packedMeasure"
+import { explainChannelCustomization } from "../../../lib/themeConfig"
 import {
 	currentChannelConfigsAtom,
 	currentEncodingsAtom,
@@ -32,6 +36,19 @@ import { useCurrentTheme } from "../../../store/useCurrentTheme"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
+import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
+import { SelectInput } from "../../../../../components/ui/SelectInput"
+import type { ModulationSlotConfig } from "../../../lib/channelConfig"
+import { channelAccepts } from "../../../lib/channels"
+import type { ChartMode } from "../../../lib/chartMode"
+import {
+	MODULATION_SLOTS_KEY,
+	applicableModulationSlots,
+	modulationSlotEdited,
+	type ModulationChannel,
+	type ModulationSlotDef,
+} from "../../../lib/modulationSlots"
+import { usePureDensityCurve } from "../../../store/usePureDensityCurve"
 import { StackModeRow } from "./StackModeRow"
 
 // Generic min/max numeric-range panel, used for Area (pixel radius) plus
@@ -310,7 +327,262 @@ const ScaleByRow = () => {
 	)
 }
 
-export const SaturationOptionsPanel = () => {
+export const SaturationOptionsPanel = () => (
+	<ModulationPartsPanel channel="saturation" fill={<SaturationFillControls />} />
+)
+
+export const BrightnessOptionsPanel = () => (
+	<ModulationPartsPanel channel="brightness" fill={<BrightnessFillControls />} />
+)
+
+/** Saturation / Brightness menu, split by mark part like Color and Opacity:
+ *  one purple option panel holding a white card per part. Fill leads with a
+ *  "Vary by" selector bound to the channel's own encoding (the shelf row),
+ *  then the pre-split editor; Outline / Line follow where the renderer reads
+ *  them. Fill is always a subsection, even with no other part on offer, so
+ *  the menu has one shape across chart types. */
+const ModulationPartsPanel = ({
+	channel,
+	fill,
+}: {
+	channel: ModulationChannel
+	fill: React.ReactNode
+}) => {
+	const encodings = useAtomValue(currentEncodingsAtom)
+	const configs = useAtomValue(currentChannelConfigsAtom)
+	const theme = useCurrentTheme()
+	const mode = useChartModeDef().id as ChartMode
+	// Pure density curve: the points (and so their outlines) aren't drawn.
+	const pureDensityCurve = usePureDensityCurve()
+	const slots = applicableModulationSlots(mode, encodings, configs).filter(
+		(d) => !(pureDensityCurve && d.key === "outline")
+	)
+
+	// Fill dot — the SAME change data the encoding-row dot uses (so the two
+	// can't disagree), minus the part slots, which dot their own subsections.
+	const fillChanged = explainChannelCustomization(
+		channel,
+		configs,
+		theme,
+		!!encodings[channel]?.field
+	).some((label) => label !== `${channel} slots`)
+
+	return (
+		<div className="vc-option-panel">
+			<CollapsibleSubsection title="Fill" defaultOpen changed={fillChanged}>
+				<FillVaryBy channel={channel} />
+				{fill}
+			</CollapsibleSubsection>
+			{slots.map((def) => (
+				<ModulationSlotSubsection key={def.key} channel={channel} def={def} />
+			))}
+		</div>
+	)
+}
+
+/** One part's saturation / brightness (Outline / Line): a "Vary by" selector,
+ *  then the single-level control (— none —), a min/max range (quantitative
+ *  field) or one level per category (categorical field). Mirrors the Opacity
+ *  menu's `OpacitySlotSubsection`. */
+const ModulationSlotSubsection = ({
+	channel,
+	def,
+}: {
+	channel: ModulationChannel
+	def: ModulationSlotDef
+}) => {
+	const fieldOverrides = useAtomValue(currentFieldOverridesAtom)
+	const [configs, setConfigs] = useAtom(currentChannelConfigsAtom)
+	const theme = useCurrentTheme()
+	const dataset = useCurrentDatasetView()
+	const slotsKey = MODULATION_SLOTS_KEY[channel]
+	const label = channel === "saturation" ? "Saturation" : "Brightness"
+	const baseMin = theme[`${channel}Min`]
+	const baseMax = theme[`${channel}Max`]
+
+	const slotCfg = configs[slotsKey]?.[def.key]
+	const field = slotCfg?.field ?? null
+	const range = slotCfg?.range ?? { min: baseMin, max: baseMax }
+
+	// Merge a partial update, always carrying a concrete `field` and `level`
+	// so the stored slot is well-formed once created.
+	const updateSlot = (partial: Partial<ModulationSlotConfig>) =>
+		setConfigs((prev) => {
+			const existing = prev[slotsKey]?.[def.key]
+			const base: ModulationSlotConfig = {
+				field: existing?.field ?? null,
+				level: existing?.level ?? null,
+				...existing,
+			}
+			return {
+				...prev,
+				[slotsKey]: {
+					...prev[slotsKey],
+					[def.key]: { ...base, ...partial },
+				},
+			}
+		})
+
+	const fieldOptions = [
+		{ value: "", label: "— none —" },
+		...(dataset?.fields ?? [])
+			.filter((f) =>
+				channelAccepts(channel, fieldOverrides[f.name] ?? f.inferredType)
+			)
+			.map((f) => ({ value: f.name, label: f.name })),
+	]
+	const setField = (name: string) =>
+		updateSlot(
+			name === ""
+				? { field: null }
+				: { field: name, range: { min: baseMin, max: baseMax } }
+		)
+
+	const discrete = discreteValuesFor(dataset, field, fieldOverrides)
+	const setOverride = (value: string, level: number | null) => {
+		const { [value]: _removed, ...rest } = range.overrides ?? {}
+		updateSlot({
+			range: {
+				...range,
+				overrides: level === null ? rest : { ...rest, [value]: level },
+			},
+		})
+	}
+	const setRange = (next: { min?: number; max?: number }) =>
+		updateSlot({ range: { ...range, ...next } })
+
+	return (
+		<CollapsibleSubsection
+			title={def.label}
+			changed={modulationSlotEdited(slotCfg)}
+		>
+			<div className="flex flex-col gap-2">
+				<SelectInput
+					label="Vary by"
+					labelClassName={LABEL_COL}
+					value={field ?? ""}
+					options={fieldOptions}
+					onChange={setField}
+					disabled={!dataset}
+					selectClassName="flex-1"
+				/>
+				{field === null ? (
+					<ModulationLevelControl
+						channel={channel}
+						label={label}
+						value={slotCfg?.level ?? null}
+						onChange={(level) => updateSlot({ level })}
+						partNoun={def.label.toLowerCase()}
+					/>
+				) : discrete ? (
+					<ModulationCategoryList
+						channel={channel}
+						label={label}
+						fieldName={field}
+						discrete={discrete}
+						min={range.min}
+						max={range.max}
+						overrides={range.overrides ?? {}}
+						onSetOverride={setOverride}
+					/>
+				) : (
+					<>
+						<NumberInput
+							label="Min"
+							labelClassName={LABEL_COL}
+							value={range.min}
+							min={0}
+							max={1}
+							step={0.05}
+							clamp
+							onChange={(min) => setRange({ min })}
+							inputClassName="w-20"
+						/>
+						<NumberInput
+							label="Max"
+							labelClassName={LABEL_COL}
+							value={range.max}
+							min={0}
+							max={1}
+							step={0.05}
+							clamp
+							onChange={(max) => setRange({ max })}
+							inputClassName="w-20"
+						/>
+						<div className="vc-help">
+							Defaults: {baseMin} – {baseMax} — {anchorHelp(channel)}
+						</div>
+						{(range.min !== baseMin || range.max !== baseMax) && (
+							<ResetLink
+								onClick={() => setRange({ min: baseMin, max: baseMax })}
+								underline
+								className="self-start"
+							/>
+						)}
+					</>
+				)}
+			</div>
+		</CollapsibleSubsection>
+	)
+}
+
+/** Fill's "Vary by" — two-way bound to the TOP-LEVEL saturation / brightness
+ *  encoding (the field the shelf row shows), so changing it here changes the
+ *  shelf and vice-versa. Mirrors Color's and Opacity's Fill. "— none —" leaves
+ *  the single-level control; packed circles add the hierarchy-derived options
+ *  (Top-level group / Nesting depth), same list as the shelf's dropdown. */
+const FillVaryBy = ({ channel }: { channel: ModulationChannel }) => {
+	const overrides = useAtomValue(currentFieldOverridesAtom)
+	const [encodings, setEncodings] = useAtom(currentEncodingsAtom)
+	const dataset = useCurrentDatasetView()
+	const fieldName = encodings[channel]?.field ?? null
+	const packedSource = packedSourceOf(encodings[channel])
+	const packedOptions = packedDerivedOptions(
+		channel,
+		isHierarchyModeId(useChartModeDef().id),
+		!!encodings.connection?.field
+	)
+	const eligible = (dataset?.fields ?? []).filter((f) =>
+		channelAccepts(channel, overrides[f.name] ?? f.inferredType)
+	)
+	const options = [
+		{ value: "", label: "— none —" },
+		...eligible.map((f) => ({ value: f.name, label: f.name })),
+		...packedOptions.map(({ value, label }) => ({ value, label })),
+	]
+	const setField = (value: string) => {
+		// A derived source picked → store the source, clear the field (mutually
+		// exclusive); a field (or "— none —") clears any derived source.
+		const packed = packedSourceForOptionValue(value)
+		setEncodings((prev) => ({
+			...prev,
+			[channel]: packed
+				? { ...prev[channel], field: null, measureSource: packed }
+				: {
+						...prev[channel],
+						field: value === "" ? null : value,
+						measureSource: undefined,
+					},
+		}))
+	}
+	return (
+		<SelectInput
+			label="Vary by"
+			labelClassName={LABEL_COL}
+			value={
+				packedSource
+					? PACKED_MEASURE_OPTION_VALUE[packedSource]
+					: (fieldName ?? "")
+			}
+			options={options}
+			onChange={setField}
+			disabled={!dataset}
+			selectClassName="flex-1"
+		/>
+	)
+}
+
+const SaturationFillControls = () => {
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const theme = useCurrentTheme()
 	const fieldMapped = !!encodings.saturation?.field
@@ -353,11 +625,12 @@ export const SaturationOptionsPanel = () => {
 				min: theme.saturationMin,
 				max: theme.saturationMax,
 			}}
+			nested
 		/>
 	)
 }
 
-export const BrightnessOptionsPanel = () => {
+const BrightnessFillControls = () => {
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const theme = useCurrentTheme()
 	const fieldMapped = !!encodings.brightness?.field
@@ -397,6 +670,7 @@ export const BrightnessOptionsPanel = () => {
 				min: theme.brightnessMin,
 				max: theme.brightnessMax,
 			}}
+			nested
 		/>
 	)
 }
@@ -412,7 +686,20 @@ const useModulationDiscreteValues = (
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const overrides = useAtomValue(currentFieldOverridesAtom)
 	const dataset = useCurrentDatasetView()
-	const fieldName = encodings[channel]?.field ?? null
+	return discreteValuesFor(
+		dataset,
+		encodings[channel]?.field ?? null,
+		overrides
+	)
+}
+
+/** Pure core of `useModulationDiscreteValues`, for any field (the Outline /
+ *  Line slots carry their own field rather than the channel's encoding). */
+const discreteValuesFor = (
+	dataset: ReturnType<typeof useCurrentDatasetView>,
+	fieldName: string | null,
+	overrides: Record<string, FieldType>
+): { values: string[]; type: FieldType } | null => {
 	if (!fieldName || !dataset) return null
 	const type = effectiveType(dataset, fieldName, overrides)
 	if (type === "quantitative" || type === "temporal") return null
@@ -448,26 +735,8 @@ const ModulationLevelsPanel = ({
 }) => {
 	const [configs, setConfigs] = useAtom(currentChannelConfigsAtom)
 	const encodings = useAtomValue(currentEncodingsAtom)
-	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
-	const dataset = useCurrentDatasetView()
 	const fieldName = encodings[channel]?.field ?? null
 	const cfg = configs[channel]
-	const min = cfg?.min ?? baseMin
-	const max = cfg?.max ?? baseMax
-	const overrides = cfg?.overrides ?? {}
-
-	// Resolve each row through the SAME scale the renderer builds, so an unset
-	// row shows exactly what that category draws with (numeric ordinals scale
-	// by value, everything else spreads evenly — the scale knows which).
-	const makeScale =
-		channel === "saturation" ? makeSaturationScale : makeBrightnessScale
-	const scale = makeScale(
-		dataset && fieldName ? dataset.rows.map((r) => r[fieldName]) : [],
-		discrete.type,
-		{ min, max, overrides }
-	)
-	const resolve = (value: string) =>
-		Math.round((scale(value) ?? min) * 100) / 100
 
 	const setOverride = (value: string, level: number | null) =>
 		setConfigs((prev) => {
@@ -483,7 +752,63 @@ const ModulationLevelsPanel = ({
 		})
 
 	return (
-		<div className="vc-option-panel">
+		<div className="flex flex-col gap-2">
+			<ModulationCategoryList
+				channel={channel}
+				label={label}
+				fieldName={fieldName}
+				discrete={discrete}
+				min={cfg?.min ?? baseMin}
+				max={cfg?.max ?? baseMax}
+				overrides={cfg?.overrides ?? {}}
+				onSetOverride={setOverride}
+			/>
+			<StackModeRow channel={channel} />
+		</div>
+	)
+}
+
+/** One 0–1 input per category, each showing the level the REAL scale
+ *  resolves (override, else the even min→max spread). Shared by the Fill's
+ *  categorical editor and the Outline / Line slots. */
+const ModulationCategoryList = ({
+	channel,
+	label,
+	fieldName,
+	discrete,
+	min,
+	max,
+	overrides,
+	onSetOverride,
+}: {
+	channel: "saturation" | "brightness"
+	label: string
+	fieldName: string | null
+	discrete: { values: string[]; type: FieldType }
+	min: number
+	max: number
+	overrides: Record<string, number>
+	onSetOverride: (value: string, level: number | null) => void
+}) => {
+	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
+	const dataset = useCurrentDatasetView()
+	const setOverride = onSetOverride
+
+	// Resolve each row through the SAME scale the renderer builds, so an unset
+	// row shows exactly what that category draws with (numeric ordinals scale
+	// by value, everything else spreads evenly — the scale knows which).
+	const makeScale =
+		channel === "saturation" ? makeSaturationScale : makeBrightnessScale
+	const scale = makeScale(
+		dataset && fieldName ? dataset.rows.map((r) => r[fieldName]) : [],
+		discrete.type,
+		{ min, max, overrides }
+	)
+	const resolve = (value: string) =>
+		Math.round((scale(value) ?? min) * 100) / 100
+
+	return (
+		<>
 			<span className="vc-group-header">{label} per category</span>
 			{orderedLevels(
 				discrete.values,
@@ -516,8 +841,7 @@ const ModulationLevelsPanel = ({
 				in the order it appears in the data. Edit any value to set an exact
 				level. {anchorHelp(channel)}
 			</p>
-			<StackModeRow channel={channel} />
-		</div>
+		</>
 	)
 }
 
@@ -582,7 +906,7 @@ const DerivedLevelsPanel = ({
 		})
 
 	return (
-		<div className="vc-option-panel">
+		<div className="flex flex-col gap-2">
 			{values.map((value, idx) => {
 				const overridden = overrides[value] !== undefined
 				const current = overrides[value] ?? spreadFor(idx)
@@ -625,6 +949,7 @@ const RangePanel = ({
 	variant,
 	header,
 	footer,
+	nested = false,
 }: {
 	variant: Variant
 	/** Optional row rendered at the top of the panel (the packed-circles
@@ -633,6 +958,10 @@ const RangePanel = ({
 	/** Optional block rendered at the BOTTOM of the panel (the area channel's
 	 * per-category ordinal size editor). */
 	footer?: React.ReactNode
+	/** Rendered inside a subsection's white card (saturation / brightness
+	 * Fill): a plain column, not the purple option panel — the panel is the
+	 * card's parent, and a purple box inside a white box isn't a thing. */
+	nested?: boolean
 }) => {
 	const [configs, setConfigs] = useAtom(currentChannelConfigsAtom)
 	const cfg = configs[variant.channel]
@@ -667,7 +996,7 @@ const RangePanel = ({
 	}
 
 	return (
-		<div className="vc-option-panel">
+		<div className={nested ? "flex flex-col gap-2" : "vc-option-panel"}>
 			{header}
 			<NumberInput
 				label="Min"
@@ -769,16 +1098,49 @@ const ModulationDefaultPanel = ({
 	header?: React.ReactNode
 }) => {
 	const [configs, setConfigs] = useAtom(currentChannelConfigsAtom)
-	const stored = configs[configKey]
-	const enabled = stored != null
+	return (
+		<div className="flex flex-col gap-2">
+			{header}
+			<ModulationLevelControl
+				channel={channel}
+				label={label}
+				value={configs[configKey] ?? null}
+				onChange={(next) =>
+					setConfigs((prev) => ({ ...prev, [configKey]: next }))
+				}
+			/>
+		</div>
+	)
+}
+
+/** The single-level saturation / brightness control: a 0–1 slider that is
+ *  OFF (`null`, no modulation) until enabled. Shared by the Fill's no-field
+ *  default and every part slot (Outline / Line) with no field mapped. */
+const ModulationLevelControl = ({
+	channel,
+	label,
+	value,
+	onChange,
+	partNoun = "mark",
+}: {
+	channel: "saturation" | "brightness"
+	label: string
+	value: number | null
+	onChange: (next: number | null) => void
+	/** What the help text says gets shifted ("mark", "outline", "line"). */
+	partNoun?: string
+}) => {
+	const enabled = value != null
 	// Enabling starts ON the anchor — a no-op the user then dials away from —
 	// so switching the override on never jolts the chart's colors.
-	const currentValue = stored ?? MODULATION_ANCHOR
+	const currentValue = value ?? MODULATION_ANCHOR
 	const atAnchor = currentValue === MODULATION_ANCHOR
+	// A mark's fill IS its palette color; an outline / line has its own color
+	// (theme outline, Line color slot), so the copy doesn't call it "palette".
+	const colorNoun = partNoun === "mark" ? "palette color" : "color"
 
 	return (
-		<div className="vc-option-panel">
-			{header}
+		<>
 			<label className="flex items-center gap-2 text-sm">
 				<span className={LABEL_COL}>{label}</span>
 				<input
@@ -788,12 +1150,7 @@ const ModulationDefaultPanel = ({
 					step={0.05}
 					value={currentValue}
 					disabled={!enabled}
-					onChange={(e) =>
-						setConfigs((prev) => ({
-							...prev,
-							[configKey]: Number(e.target.value),
-						}))
-					}
+					onChange={(e) => onChange(Number(e.target.value))}
 					className="flex-1 disabled:opacity-50"
 				/>
 				<span className="w-10 text-right font-mono text-sm vc-muted">
@@ -802,36 +1159,26 @@ const ModulationDefaultPanel = ({
 			</label>
 			<div className="vc-help">
 				{!enabled
-					? "Off — marks use their palette colors as-is."
+					? `Off — ${partNoun}s use their ${colorNoun}s as-is.`
 					: atAnchor
-						? `On, at ${MODULATION_ANCHOR} — every mark's palette color, unchanged. Dial away from ${MODULATION_ANCHOR} to shift it.`
-						: `Shifts every mark's ${label.toLowerCase()} relative to its palette color. ${anchorHelp(channel)}`}
+						? `On, at ${MODULATION_ANCHOR} — every ${partNoun}'s ${colorNoun}, unchanged. Dial away from ${MODULATION_ANCHOR} to shift it.`
+						: `Shifts every ${partNoun}'s ${label.toLowerCase()} relative to its ${colorNoun}. ${anchorHelp(channel)}`}
 			</div>
 			{enabled && !atAnchor && (
 				<ResetLink
 					label="Back to palette color"
-					onClick={() =>
-						setConfigs((prev) => ({
-							...prev,
-							[configKey]: MODULATION_ANCHOR,
-						}))
-					}
+					onClick={() => onChange(MODULATION_ANCHOR)}
 					underline
 					className="self-start"
 				/>
 			)}
 			<button
 				type="button"
-				onClick={() =>
-					setConfigs((prev) => ({
-						...prev,
-						[configKey]: enabled ? null : MODULATION_ANCHOR,
-					}))
-				}
+				onClick={() => onChange(enabled ? null : MODULATION_ANCHOR)}
 				className="self-start text-sm underline hover:text-stone-900 dark:hover:text-white vc-muted"
 			>
 				{enabled ? "Turn off override" : "Enable override"}
 			</button>
-		</div>
+		</>
 	)
 }

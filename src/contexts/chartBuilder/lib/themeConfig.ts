@@ -31,6 +31,7 @@ import {
 	type TextConfig,
 } from "./channelConfig"
 import { colorSlotEdited } from "./colorSlots"
+import { modulationSlotEdited } from "./modulationSlots"
 import { opacitySlotEdited } from "./opacitySlots"
 import {
 	DEFAULT_BOX_ANNOTATION_STYLE,
@@ -874,6 +875,10 @@ const CHANNEL_DOT_CONTROLS: Record<string, (ctx: DotCtx) => DotControl[]> = {
 			label: "default saturation",
 			changed: !fieldMapped && differs(configs.defaultSaturation, null),
 		},
+		{
+			label: "saturation slots",
+			changed: Object.values(configs.saturationSlots ?? {}).some(modulationSlotEdited),
+		},
 	],
 	brightness: ({ configs, theme, fieldMapped }) => [
 		{
@@ -899,6 +904,10 @@ const CHANNEL_DOT_CONTROLS: Record<string, (ctx: DotCtx) => DotControl[]> = {
 			label: "default brightness",
 			changed: !fieldMapped && differs(configs.defaultBrightness, null),
 		},
+		{
+			label: "brightness slots",
+			changed: Object.values(configs.brightnessSlots ?? {}).some(modulationSlotEdited),
+		},
 	],
 	connection: ({ configs, theme, fieldMapped }) => {
 		const c = configs.connection
@@ -914,7 +923,17 @@ const CHANNEL_DOT_CONTROLS: Record<string, (ctx: DotCtx) => DotControl[]> = {
 					fieldMapped &&
 					(c?.fill ?? DEFAULT_CONNECTION_CONFIG.fill) !== DEFAULT_CONNECTION_CONFIG.fill,
 			},
-			{ label: "line thickness", changed: differs(c?.thickness, theme.connectionThickness) },
+			// A per-level thickness ("Vary by") is a real change too — but only
+			// while a connection field is mapped, since that's the only time the
+			// panel offers the control that could clear it.
+			{
+				label: "line thickness",
+				changed:
+					differs(c?.thickness, theme.connectionThickness) ||
+					(fieldMapped &&
+						(!!c?.thicknessField ||
+							Object.keys(c?.thicknessByValue ?? {}).length > 0)),
+			},
 			{ label: "line cap", changed: (c?.lineCap ?? "round") !== "round" },
 			{
 				label: "point sampling",

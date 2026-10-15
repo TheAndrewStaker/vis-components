@@ -339,6 +339,30 @@ const POLAR_HEADER_GAP = 8
  *  comfortably within this bound. */
 const VIEWPORT_BUFFER_PX = 10
 
+/** Grid mode with a row-header strip: the shared y-title moves OUT of the
+ *  leftmost cells' chrome into its own band left of the strip, so it reads
+ *  as the outermost label ([title][row titles][ticks][plot]) instead of
+ *  being sandwiched between the row titles and the tick labels. */
+const yTitleOutsideRowStrip = (input: SolverInput): boolean =>
+	Boolean(input.yTitle) && (input.rowHeaders?.length ?? 0) > 0
+
+/** Space between an outside y-title and the row-header strip's left edge.
+ *  Small because the strip band already carries 12px of side padding. */
+const Y_TITLE_STRIP_GAP = 8
+
+/** Width of the outer band holding an outside y-title (0 when the title
+ *  stays in the cell chrome): canvas buffer + the title block + strip gap.
+ *  A rotated title's block is one line-height per line; a horizontal one is
+ *  its widest line. */
+const yTitleOuterBand = (input: SolverInput): number => {
+	if (!input.yTitle || !yTitleOutsideRowStrip(input)) return 0
+	const { text, fontSize, horizontal } = input.yTitle
+	const block = horizontal
+		? estimateLongestLineWidth(text, fontSize)
+		: fontSize * 1.2 * lineCount(text)
+	return VIEWPORT_BUFFER_PX + block + Y_TITLE_STRIP_GAP
+}
+
 /** Clamp a baseline-anchored text's y coordinate so its bounding box
  *  (ascender + descender) doesn't cross the viewport edge with buffer.
  *  Used by chart title / subtitle / x-title. */
@@ -653,9 +677,15 @@ const computeOuterReserves = (
 		cellMargin.left + leftFloor - VIEWPORT_BUFFER_PX,
 	)
 	const rawYTitleOffsetX = input.yTitle?.offsetX ?? 0
+	// An outside y-title (left of the row strip) has no cell chrome to
+	// reclaim, so a toward-the-plot offset is a pure shift — no extension.
 	const leftGrow = input.yTitle
-		? Math.max(-leftExtensionRoom, -rawYTitleOffsetX)
+		? Math.max(
+				yTitleOutsideRowStrip(input) ? 0 : -leftExtensionRoom,
+				-rawYTitleOffsetX,
+			)
 		: 0
+	const yTitleBand = yTitleOuterBand(input)
 	// Grid-mode header strips (Task 1.7). Column headers run across the
 	// top above row 0; row headers run down the left of col 0. The bands
 	// reserve canvas space ADDITIVELY on top of any other top/left
@@ -678,7 +708,7 @@ const computeOuterReserves = (
 		input,
 		cellMargin,
 		leftFloor,
-		leftGrow + rowHeaderBand,
+		leftGrow + rowHeaderBand + yTitleBand,
 	)
 	//
 	// Title-offset semantics (LAYOUT.md §8): canvas matches the
@@ -696,7 +726,7 @@ const computeOuterReserves = (
 			columnHeaderBand +
 			(input.extraTopMargin ?? 0),
 		bottom: bottomGrow + (input.extraBottomMargin ?? 0),
-		left: leftGrow + labelReserve.left + rowHeaderBand,
+		left: leftGrow + labelReserve.left + rowHeaderBand + yTitleBand,
 		right: labelReserve.right,
 		titleHeight,
 		subtitleHeight,
@@ -1029,13 +1059,22 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 	// title (pies-x bottom, pies-y left) keep the cartesian reserve so
 	// the title has room to render — resolved per-side here.
 	const isPolarMode = input.isPolar === true
+	// With row titles the y-title lives in its own band left of the strip
+	// (yTitleOuterBand), so the leftmost cells give back the slot the base
+	// margin holds for it — the floors below are then sized for tick labels
+	// alone.
+	const yTitleOutside = yTitleOutsideRowStrip(input)
 	const cellMargin: CellMargin = {
 		top: isPolarMode ? POLAR_MARGIN.top : BASE_MARGIN.top,
 		right: isPolarMode ? POLAR_MARGIN.right : BASE_MARGIN.right,
 		bottom:
 			isPolarMode && !input.xTitle ? POLAR_MARGIN.bottom : BASE_MARGIN.bottom,
 		left:
-			isPolarMode && !input.yTitle ? POLAR_MARGIN.left : BASE_MARGIN.left,
+			isPolarMode && !input.yTitle
+				? POLAR_MARGIN.left
+				: yTitleOutside
+					? Math.max(40, BASE_MARGIN.left - (yTitleFontSize + 24))
+					: BASE_MARGIN.left,
 	}
 
 	const edges = computeEdgePositions(input.panels)
@@ -1064,9 +1103,9 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 		estimateGlobalFloors(
 			input.panels,
 			edges,
-			yTitleHorizontal,
-			yTitleText,
-			yTitleFontSize,
+			yTitleOutside ? false : yTitleHorizontal,
+			yTitleOutside ? "" : yTitleText,
+			yTitleOutside ? 0 : yTitleFontSize,
 			xTitleText,
 			xTitleFontSize,
 			xTitleLines,
@@ -1257,7 +1296,7 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 	// left edge, pushing the title against (or past) the edge. Bump
 	// leftFloor so the title's center is at least MIN_TITLE_X from the edge.
 	const MIN_TITLE_X = 12 + yTitleFontSize / 2
-	const requiredLeftFloor = input.yTitle
+	const requiredLeftFloor = input.yTitle && !yTitleOutside
 		? Math.max(0, MIN_TITLE_X + yTitleGap - cellMargin.left)
 		: 0
 	const leftFloor = Math.max(estimatedLeftFloor, requiredLeftFloor)
@@ -1316,7 +1355,7 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 		approxPlotLeft - yTitleGap + (input.yTitle?.offsetX ?? 0)
 	const yTitleDesiredRightEdge = yTitleDesiredAnchor + yTitleHalfBbox
 	const yTitleViewportRightMax = approxCanvasW - VIEWPORT_BUFFER_PX
-	const phase3RightGrowFromYTitle = input.yTitle
+	const phase3RightGrowFromYTitle = input.yTitle && !yTitleOutside
 		? Math.max(0, yTitleDesiredRightEdge - yTitleViewportRightMax)
 		: 0
 
@@ -1897,8 +1936,57 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 				height: outerReserves.xTitleHeight,
 			}
 		: null
+	// Outside y-title: right edge of its block sits Y_TITLE_STRIP_GAP left
+	// of the row strip (which follows the figureSlack-centered grid).
+	const yTitleOutsideRight =
+		outerReserves.left +
+		figureSlackX / 2 -
+		(input.rowHeaderWidth ?? 80) -
+		Y_TITLE_STRIP_GAP
 	const yTitle: TextRect | null = input.yTitle
-		? input.yTitle.horizontal
+		? yTitleOutside
+			? input.yTitle.horizontal
+				? {
+						x: horizontalYTitleAnchorX(
+							input.yTitle.align,
+							yTitleOutsideRight + yTOffsetX,
+							estimateLongestLineWidth(input.yTitle.text, input.yTitle.fontSize),
+						),
+						y:
+							horizontalYTitleBaselineY(
+								plotTop,
+								plotBottom,
+								input.yTitle.fontSize,
+								lineCount(input.yTitle.text),
+							) + yTOffsetY,
+						textAnchor: textAnchorFor(input.yTitle.align),
+						rotation: 0,
+						width: yTitleOuterBand(input),
+						height: input.yTitle.fontSize * 1.2,
+					}
+				: {
+						// Rotated -90°, extra lines stack toward the strip, so the
+						// anchor (first line's center) sits that many lines out.
+						x: clampRotatedTitleX(
+							yTitleOutsideRight -
+								input.yTitle.fontSize * 1.2 * (lineCount(input.yTitle.text) - 1) -
+								input.yTitle.fontSize / 2 +
+								yTOffsetX,
+							input.yTitle.fontSize,
+							canvasW,
+						),
+						y:
+							(input.yTitle.align === "left"
+								? plotBottom
+								: input.yTitle.align === "right"
+									? plotTop
+									: (plotTop + plotBottom) / 2) + yTOffsetY,
+						textAnchor: textAnchorFor(input.yTitle.align),
+						rotation: -90,
+						width: input.yTitle.fontSize * 1.2,
+						height: plotBottom - plotTop,
+					}
+			: input.yTitle.horizontal
 			? {
 					// Horizontal title: the block's RIGHT EDGE lands at
 					// `plotLeft - yTitleGap`, just left of the tick labels, and

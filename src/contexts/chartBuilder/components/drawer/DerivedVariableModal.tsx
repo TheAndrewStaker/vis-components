@@ -588,7 +588,12 @@ const DerivedVariableEditor = ({
 			title={existing ? "Edit derived variable" : "New derived variable"}
 			// Fixed height on purpose: the popup must not resize as you flip
 			// Function or pile on rules — the fields region scrolls instead.
-			panelClassName="flex h-[580px] max-h-[85vh] flex-col"
+			// 800px is sized so an If/else with three rules shows its whole
+			// form AND the preview table without scrolling (measured: 638px of
+			// fields + 142px of title, padding and footer = 780, plus slack);
+			// a fourth rule is what first pushes the preview into the scroll.
+			// The Modal's own max-h-full keeps it inside a shorter viewport.
+			panelClassName="flex h-[800px] flex-col"
 			bodyClassName="flex min-h-0 flex-1 flex-col"
 		>
 			<div
@@ -878,7 +883,12 @@ const DerivedVariableEditor = ({
 				)}
 
 				{preview && preview.rows.length > 0 && (
-					<div className="overflow-x-auto rounded-md border border-stone-200 dark:border-stone-700">
+					/* flex-shrink-0: the overflow class drops this box's automatic
+					 *  min-height to 0, so without it the fields column (a flex column)
+					 *  squashes the table to a sliver to fit the fixed panel height — an
+					 *  If/else form is tall enough to trigger that — instead of letting
+					 *  the column scroll. */
+					<div className="flex-shrink-0 overflow-x-auto rounded-md border border-stone-200 dark:border-stone-700">
 						<table className="min-w-full text-left text-xs">
 							<thead className="bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300">
 								<tr>

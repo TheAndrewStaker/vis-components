@@ -27,6 +27,7 @@ import {
 	type RegionKeyType,
 } from "../../lib/mapConfig"
 import { zctaTopologyAvailable } from "../../lib/geo/zctaTopology"
+import { PatternTile } from "../../lib/patternDefs"
 import { PATTERN_PALETTE } from "../../lib/patterns"
 import { swatchChipClass } from "./channelOptions/glyphShared"
 import { currentMapConfigAtom } from "../../store/atoms"
@@ -75,20 +76,11 @@ const NoDataPatternChip = ({
 	bg: string
 	ink: string
 }) => {
-	const def = PATTERN_PALETTE[idx % PATTERN_PALETTE.length]
 	const uniqueId = `maps-nodata-chip-${idx}`
 	return (
 		<svg width={20} height={20} aria-hidden="true">
 			<defs>
-				<pattern
-					id={uniqueId}
-					patternUnits="userSpaceOnUse"
-					width={def.size}
-					height={def.size}
-				>
-					<rect width={def.size} height={def.size} fill={bg} />
-					{def.render(ink)}
-				</pattern>
+				<PatternTile id={uniqueId} paletteIdx={idx} bgColor={bg} inkColor={ink} />
 			</defs>
 			<rect
 				width={20}

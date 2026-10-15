@@ -1,5 +1,9 @@
 import type { CSSProperties } from "react"
-import type { ChannelConfigs, ColorSlotKey } from "./channelConfig"
+import type {
+	ChannelConfigs,
+	ColorSlotKey,
+	HueConfig,
+} from "./channelConfig"
 import { densityCurveGroupField, densityCurveOn } from "./colorSlots"
 import { flowNodeNames, resolveFlowEndpoints } from "./buildFlowGraph"
 import { resolveHierarchyIdField } from "./buildHierarchy"
@@ -47,6 +51,7 @@ import {
 	applyAreaScale,
 	applyHueScale,
 	makeAreaScale,
+	makeHueScale,
 	makeLengthScale,
 	parseValue,
 } from "./scales"
@@ -197,8 +202,94 @@ export type SlotSection = {
 	field: string
 	type: FieldType
 	values: unknown[]
+	/** Legend keys of OTHER slot sections folded into this one because they
+	 * color the same field with the very same swatches (the rug AND the
+	 * density curve both varying by `group` on one palette). Present → the
+	 * section describes the variable rather than one feature, so it titles
+	 * with the field name the way a combined section does. */
+	coalesced?: LegendChannel[]
 }
 export type SectionInfo = SingleSection | CombinedSection | SlotSection
+
+/** The swatch rows a discrete color section renders, as a comparable
+ *  string: each category → its fill, plus the outline where the section
+ *  draws one (ColorLegend / CombinedGroupLegend stroke no border when the
+ *  outline equals the fill). Resolved through the same scales those
+ *  renderers build, so two sections with equal rows really do look the
+ *  same. `null` when the rows aren't plain color swatches — a gradient
+ *  (quantitative / temporal field), a group section with any non-color
+ *  channel folded in (pattern / shape / opacity / … change the glyph), an
+ *  outline-color encoding (its own rules), or a non-color section. */
+const colorSwatchRows = (
+	section: SectionInfo,
+	configs: ChannelConfigs,
+): string | null => {
+	const { values, type } = section
+	if (type === "quantitative" || type === "temporal") return null
+	const colorsOf = (
+		hue: HueConfig | undefined,
+		palette: readonly string[] | null | undefined,
+	): Map<string, string> | null => {
+		const scale = makeHueScale(values, type, hue, palette ?? undefined)
+		if (scale.kind !== "categorical") return null
+		const out = new Map<string, string>()
+		for (const v of uniqueValues(values, type)) {
+			const c = applyHueScale(scale, v, type)
+			if (c) out.set(v, c)
+		}
+		return out
+	}
+	let fill: Map<string, string> | null
+	let outline: Map<string, string> | null = null
+	if (section.kind === "combined") {
+		// Same scale CombinedGroupLegend builds for a hue-only section.
+		if (section.channels.length !== 1 || section.channels[0] !== "hue") {
+			return null
+		}
+		fill = colorsOf(
+			configs.hue,
+			type === "ordinal"
+				? (configs.ordinalPalette ?? configs.categoricalPalette)
+				: configs.categoricalPalette,
+		)
+	} else if (section.kind === "slot") {
+		// Mirrors LegendSection's slot branch: the density curve shows its
+		// FILL outlined in its OUTLINE color when both are mapped (and the
+		// curve is filled); otherwise one slot's colors, on the slot's own
+		// palette or else the chart's.
+		const fillCfg = configs.colorSlots?.densityCurveFill
+		const strokeCfg = configs.colorSlots?.densityCurveStroke
+		const densityFilled =
+			configs.x?.histogram?.densityFill === true ||
+			configs.y?.histogram?.densityFill === true
+		const splitDensity =
+			section.legendKey === "densityCurve" &&
+			!!fillCfg?.field &&
+			!!strokeCfg?.field &&
+			densityFilled
+		const fillSlot = splitDensity ? fillCfg : configs.colorSlots?.[section.slotKey]
+		fill = colorsOf(
+			fillSlot?.hue,
+			type === "ordinal"
+				? (fillSlot?.palette ?? configs.ordinalPalette ?? configs.categoricalPalette)
+				: (fillSlot?.palette ?? configs.categoricalPalette),
+		)
+		if (splitDensity && strokeCfg) {
+			outline = colorsOf(strokeCfg.hue, strokeCfg.palette)
+		}
+	} else {
+		return null
+	}
+	if (!fill) return null
+	// A fingerprint, not a serialization: category / fill / outline joined
+	// on separators no value or color contains.
+	return [...fill]
+		.map(([v, c]) => {
+			const o = outline?.get(v)
+			return `${v}\u0000${c}\u0000${o && o !== c ? o : ""}`
+		})
+		.join("\u0001")
+}
 
 export type PlanLegendSectionsInput = {
 	encodings: Encodings
@@ -249,6 +340,11 @@ export type LegendPlan = {
 	 *  and each section's entry block should pin to the legend's left edge
 	 *  so all swatches line up on one vertical axis. */
 	alignSwatchColumn: boolean
+	/** Slot legends (rug / density curve) that folded into another legend on
+	 *  their field instead of drawing their own section — see the coalescing
+	 *  pass in `planLegendSections`. The Legend sidebar mirrors this so it
+	 *  doesn't offer swatch controls for a section that isn't drawn. */
+	coalescedSlots: LegendChannel[]
 }
 
 /** Pure section planning + legend-box sizing for the `Legend` component.
@@ -617,6 +713,61 @@ export const planLegendSections = ({
 			type: effectiveType(fieldMeta?.inferredType, overrides[densityGroupField]),
 			values: dataset.rows.map((r) => r[densityGroupField]),
 		})
+	}
+
+	// --- Fold slot legends into a same-field legend they would duplicate ---
+	// A distribution grouped by one variable typically colors EVERY part by
+	// it: Color = group, Rug = group, Density curve fill + outline = group.
+	// Each slot section above would then draw its own "Rug" / "Density
+	// curve" legend with exactly the swatch rows the "group" legend already
+	// shows. Treat that like the same-field merge of group channels: a slot
+	// section folds into the first earlier section on its field whose
+	// rendered swatch rows are identical (same categories → same fill, and an
+	// outline only where that section draws one). Different palettes or
+	// per-value colors keep the legends apart — each then says something the
+	// other doesn't — as do a gradient field, a distinct user title on the
+	// slot legend, and the "Combine legends with same variables" toggle off.
+	const coalescedSlots: LegendChannel[] = []
+	if (legendCfg.combineSameVariable !== false) {
+		const titleOf = (s: SectionInfo): string =>
+			labels.legendTitles?.[
+				s.kind === "slot"
+					? s.legendKey
+					: ((s.kind === "combined"
+							? (s.titleChannel ?? s.channels[0])
+							: (s.titleChannel ?? s.channel)) as LegendChannel)
+			]?.trim() ?? ""
+		const rowsCache = new Map<SectionInfo, string | null>()
+		const rowsOf = (s: SectionInfo): string | null => {
+			let rows = rowsCache.get(s)
+			if (rows === undefined) {
+				rows = colorSwatchRows(s, configs)
+				rowsCache.set(s, rows)
+			}
+			return rows
+		}
+		for (let i = 0; i < sections.length; i++) {
+			const s = sections[i]
+			if (!s || s.kind !== "slot") continue
+			const rows = rowsOf(s)
+			if (rows === null) continue
+			const slotTitle = titleOf(s)
+			const target = sections
+				.slice(0, i)
+				.find(
+					(t) =>
+						t.field === s.field &&
+						(slotTitle === "" || slotTitle === titleOf(t)) &&
+						rowsOf(t) === rows,
+				)
+			if (!target) continue
+			if (target.kind === "slot") {
+				target.coalesced = [...(target.coalesced ?? []), s.legendKey]
+			}
+			coalescedSlots.push(s.legendKey)
+			sections.splice(i, 1)
+			i--
+		}
 	}
 
 	if (sections.length === 0) return null
@@ -1267,5 +1418,6 @@ export const planLegendSections = ({
 		effectiveCols,
 		entryColumns,
 		alignSwatchColumn,
+		coalescedSlots,
 	}
 }

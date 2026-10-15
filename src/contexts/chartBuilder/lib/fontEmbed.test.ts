@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import type { GoogleFontFace } from "../../../lib/googleFonts"
 import { collectFontUsage, embedFontsInSvg, selectFaces } from "./fontEmbed"
@@ -97,7 +97,19 @@ describe("embedFontsInSvg", () => {
 		expect(await embedFontsInSvg(svg, { allowNetwork: false })).toBe(svg)
 	})
 
-	it("returns the markup unchanged when faces aren't cached and network is off", async () => {
-		expect(await embedFontsInSvg(SVG, { allowNetwork: false })).toBe(SVG)
+	it("returns the markup unchanged when faces aren't cached and network is off, warming the cache in the background", async () => {
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response("", { status: 404 }))
+		try {
+			expect(await embedFontsInSvg(SVG, { allowNetwork: false })).toBe(SVG)
+			await vi.waitFor(() =>
+				expect(fetchSpy).toHaveBeenCalledWith(
+					expect.stringContaining("family=DM+Sans")
+				)
+			)
+		} finally {
+			fetchSpy.mockRestore()
+		}
 	})
 })

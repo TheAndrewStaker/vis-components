@@ -44,6 +44,13 @@ describe("duplicateVisual", () => {
 		expect(copy.thumbnailAt).toBeUndefined()
 	})
 
+	it("places the copy in the given folder, root included", () => {
+		const original = mkVisual({ folderId: "f-a" })
+		expect(duplicateVisual(original, 999, "f-b").folderId).toBe("f-b")
+		expect(duplicateVisual(original, 999, null).folderId).toBeNull()
+		expect(original.folderId).toBe("f-a")
+	})
+
 	it("preserves folder, dataset, version, thumbnail and all config", () => {
 		const original = mkVisual()
 		const copy = duplicateVisual(original, 999)

@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest"
 
-import { DEFAULT_PATTERN_CONFIG } from "./channelConfig"
+import { DEFAULT_PATTERN_CONFIG, PATTERN_SCALE_MAX } from "./channelConfig"
 import {
 	buildThemeInkFallback,
+	effectivePatternScale,
 	inkForHueColor,
 	PATTERN_NONE,
+	PATTERN_SCALE_RENDER_MIN,
+	resolveDefaultPatternForMark,
 	resolvePatternForMark,
 } from "./patterns"
+import { polygonPatternView } from "./resolveLayerColor"
 
 describe("resolvePatternForMark", () => {
 	it("returns a pattern spec for categories without an override", () => {
@@ -45,6 +49,80 @@ describe("resolvePatternForMark", () => {
 describe("PATTERN_NONE", () => {
 	it('is the literal string "none"', () => {
 		expect(PATTERN_NONE).toBe("none")
+	})
+})
+
+describe("pattern scale", () => {
+	it("renders at ×1 with the pre-Scale id when the category has no stored scale", () => {
+		const r = resolvePatternForMark("A", 0, "#ff0000", {
+			...DEFAULT_PATTERN_CONFIG,
+		})
+		expect(r?.scale).toBe(1)
+		expect(r?.svgId).toBe("vc-pat-0-ff0000-0f172a")
+	})
+
+	it("carries the category's scale and bakes it into the def id", () => {
+		const r = resolvePatternForMark("A", 0, "#ff0000", {
+			...DEFAULT_PATTERN_CONFIG,
+			scales: { A: 2.5 },
+		})
+		expect(r?.scale).toBe(2.5)
+		expect(r?.svgId).toBe("vc-pat-0-ff0000-0f172a-x2p5")
+	})
+
+	it("ignores another category's scale", () => {
+		const r = resolvePatternForMark("B", 1, "#ff0000", {
+			...DEFAULT_PATTERN_CONFIG,
+			scales: { A: 2.5 },
+		})
+		expect(r?.scale).toBe(1)
+	})
+
+	it("floors a stored 0 at the render minimum and caps at the max", () => {
+		expect(effectivePatternScale(0)).toBe(PATTERN_SCALE_RENDER_MIN)
+		expect(effectivePatternScale(-3)).toBe(PATTERN_SCALE_RENDER_MIN)
+		expect(effectivePatternScale(99)).toBe(PATTERN_SCALE_MAX)
+		expect(effectivePatternScale(2)).toBe(2)
+		expect(effectivePatternScale(null)).toBe(1)
+		expect(effectivePatternScale(undefined)).toBe(1)
+		expect(effectivePatternScale(Number.NaN)).toBe(1)
+		expect(
+			resolvePatternForMark("A", 0, "#fff", {
+				...DEFAULT_PATTERN_CONFIG,
+				scales: { A: 0 },
+			})?.scale
+		).toBe(PATTERN_SCALE_RENDER_MIN)
+	})
+
+	it("resolveDefaultPatternForMark applies the default scale (null = ×1)", () => {
+		const r = resolveDefaultPatternForMark("#ffffff", 3, "#000000", 1.5)
+		expect(r?.paletteIdx).toBe(3)
+		expect(r?.inkColor).toBe("#000000")
+		expect(r?.scale).toBe(1.5)
+		expect(r?.svgId).toMatch(/-x1p5$/)
+		const unscaled = resolveDefaultPatternForMark("#ffffff", 3, "#000000", null)
+		expect(unscaled?.scale).toBe(1)
+		expect(unscaled?.svgId).toBe("vc-pat-3-ffffff-000000")
+	})
+
+	it("polygonPatternView re-points the scale maps at the polygon picks", () => {
+		const view = polygonPatternView({
+			pattern: {
+				...DEFAULT_PATTERN_CONFIG,
+				scales: { A: 2 },
+				defaultScale: 1.5,
+				polygonScales: { A: 3 },
+				defaultPolygonScale: 0.5,
+			},
+		})
+		expect(view.pattern.scales).toEqual({ A: 3 })
+		expect(view.pattern.defaultScale).toBe(0.5)
+		// Absent polygon picks → ×1, never the point-fill scales.
+		const bare = polygonPatternView({
+			pattern: { ...DEFAULT_PATTERN_CONFIG, scales: { A: 2 }, defaultScale: 2 },
+		})
+		expect(bare.pattern.scales).toEqual({})
+		expect(bare.pattern.defaultScale).toBeNull()
 	})
 })
 

@@ -1,6 +1,6 @@
 import { orderCategories } from "../../../lib/legendSections"
+import { PatternTile } from "../../../lib/patternDefs"
 import {
-	PATTERN_PALETTE,
 	patternCategoriesFor,
 	resolvePatternForMark,
 } from "../../../lib/patterns"
@@ -90,8 +90,7 @@ export const PatternLegend = ({
 						</EntryHoverWrap>
 					)
 				}
-				const { paletteIdx, inkColor, svgId } = resolved
-				const def = PATTERN_PALETTE[paletteIdx % PATTERN_PALETTE.length]
+				const { paletteIdx, inkColor, svgId, scale } = resolved
 				const patId = `legend-${svgId}`
 				return (
 					<EntryHoverWrap key={v} field={highlightField} value={v}>
@@ -105,22 +104,13 @@ export const PatternLegend = ({
 									opacity={defaultSwatchOpacity}
 								>
 									<defs>
-										<pattern
-											key={patId}
+										<PatternTile
 											id={patId}
-											patternUnits="userSpaceOnUse"
-											width={def.size}
-											height={def.size}
-										>
-											<rect
-												x={0}
-												y={0}
-												width={def.size}
-												height={def.size}
-												fill={bgColor}
-											/>
-											{def.render(inkColor)}
-										</pattern>
+											paletteIdx={paletteIdx}
+											bgColor={bgColor}
+											inkColor={inkColor}
+											scale={scale}
+										/>
 									</defs>
 									<rect
 										x={0}

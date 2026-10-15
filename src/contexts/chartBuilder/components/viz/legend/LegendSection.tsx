@@ -178,8 +178,13 @@ export const LegendSection = ({
 	const pinnedOrder = levelOrders[field]
 	// Slot sections title with the feature's name ("Rug" / "Density Curve") by
 	// default, not the field name — the section is "the rug, colored by <field>".
+	// One that other slot legends folded into (the rug AND the density curve
+	// colored alike by the field) describes the variable itself, so it titles
+	// with the field name like a combined section does.
 	const titleFallback =
-		section.kind === "slot" ? LEGEND_FRIENDLY_NAME[section.legendKey] : field
+		section.kind === "slot" && !section.coalesced?.length
+			? LEGEND_FRIENDLY_NAME[section.legendKey]
+			: field
 	// Three-state legend title: `undefined` = not customized → field/feature
 	// name; `""` = user cleared it → no header drawn; other = custom text.
 	const header = titleOverride === undefined ? titleFallback : titleOverride

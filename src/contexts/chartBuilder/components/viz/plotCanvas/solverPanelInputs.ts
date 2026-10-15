@@ -350,15 +350,20 @@ export const buildSolverPanelInputs = ({
 		if (nums.length < 2) return null
 		return { min: Math.min(...nums), max: Math.max(...nums) }
 	}
+	// The measure axis of bars / areas weighs by the extent its scale is
+	// built from (zero baseline, stack totals, histogram counts) — not the
+	// raw Length column, which a histogram doesn't even have.
 	const xQuantExtent = (
 		panelRows: Array<Record<string, unknown>>,
 	): { min: number; max: number } | null => {
+		if (measureAxis === "x") return measureExtent("x", panelRows)
 		if (!xField || !xType || !isQuant(xType)) return null
 		return extentOnAxis(panelRows, xField, xType)
 	}
 	const yQuantExtent = (
 		panelRows: Array<Record<string, unknown>>,
 	): { min: number; max: number } | null => {
+		if (measureAxis === "y") return measureExtent("y", panelRows)
 		if (!yField || !yType || !isQuant(yType)) return null
 		return extentOnAxis(panelRows, yField, yType)
 	}

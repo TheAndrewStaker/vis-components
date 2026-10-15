@@ -4,6 +4,10 @@ import { useAtom, useAtomValue } from "jotai"
 import {
 	DEFAULT_DASH_RANGE,
 	DEFAULT_PATTERN_CONFIG,
+	DEFAULT_PATTERN_SCALE,
+	PATTERN_SCALE_MAX,
+	PATTERN_SCALE_MIN,
+	PATTERN_SCALE_STEP,
 	type ConnectionConfig,
 	type LineDashPattern,
 	type PatternConfig,
@@ -27,6 +31,7 @@ import {
 	PATTERN_NONE,
 	PATTERN_PALETTE,
 } from "../../../lib/patterns"
+import { CATEGORICAL_HUE_PALETTE } from "../../../lib/scales"
 import { orderedLevels } from "../../../lib/smartSort"
 import {
 	connectionConfigFromTheme,
@@ -49,6 +54,8 @@ import { useThemeInkFallback } from "../../../store/useThemeInkFallback"
 
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { ColorInput } from "../../../../../components/ui/ColorInput"
+import { LABEL_COL } from "../../../../../components/ui/LabeledField"
+import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 
 import { StackModeRow } from "./StackModeRow"
@@ -372,10 +379,13 @@ export const PatternOptionsPanel = () => {
 		dashRangeChanged ||
 		gapFillChanged
 	const fillSubsectionChanged = patternFieldMapped
-		? nonEmptyMap(cfg.overrides) || nonEmptyMap(cfg.inkColors)
+		? nonEmptyMap(cfg.overrides) ||
+			nonEmptyMap(cfg.inkColors) ||
+			nonEmptyMap(cfg.scales)
 		: valueChanged(configs.defaultPattern, null) ||
 			valueChanged(configs.defaultPatternInk, theme.patternInkColor) ||
-			valueChanged(cfg.backgroundColor, theme.patternBackgroundColor)
+			valueChanged(cfg.backgroundColor, theme.patternBackgroundColor) ||
+			(cfg.defaultScale ?? null) !== null
 
 	const updateCfg = (next: Partial<PatternConfig>) => {
 		// Seed untouched fields from the THEME's pattern config (background
@@ -444,19 +454,90 @@ export const PatternOptionsPanel = () => {
 		const { [value]: _removed, ...rest } = polygonInkColors
 		updateCfg({ polygonInkColors: rest })
 	}
+	// PATTERN SCALE — the "Scale" box under each Color picker zooms that
+	// category's tile (×1 = the palette's native size). Sparse maps like
+	// `inkColors`: a blank box inherits ×1. Same shapes for the polygon fill.
+	const scales = cfg.scales ?? {}
+	const setCategoryScale = (value: string, scale: number) =>
+		updateCfg({ scales: { ...scales, [value]: scale } })
+	const resetCategoryScale = (value: string) => {
+		const { [value]: _removed, ...rest } = scales
+		updateCfg({ scales: rest })
+	}
+	const polygonScales = cfg.polygonScales ?? {}
+	const setPolygonScale = (value: string, scale: number) =>
+		updateCfg({ polygonScales: { ...polygonScales, [value]: scale } })
+	const resetPolygonScale = (value: string) => {
+		const { [value]: _removed, ...rest } = polygonScales
+		updateCfg({ polygonScales: rest })
+	}
+	/** The Scale number box: ×0 to ×4 in tenths (typed values clamp into the
+	 *  range), blank = the ×1 default, shown as the placeholder so the
+	 *  spinner's first step moves off ×1 rather than off 0. Emptying the box
+	 *  (or the category's Reset link) goes back to ×1. `context` names the
+	 *  row for assistive tech only ("Scale for north"), so every box has a
+	 *  distinct name. */
+	const scaleInput = (args: {
+		context?: string
+		labelClassName?: string
+		value: number | null
+		onChange: (next: number) => void
+		onClear: () => void
+	}) => (
+		<NumberInput
+			label={
+				args.context ? (
+					<>
+						Scale<span className="sr-only"> for {args.context}</span>
+					</>
+				) : (
+					"Scale"
+				)
+			}
+			labelClassName={args.labelClassName ?? "vc-muted"}
+			value={args.value}
+			onChange={args.onChange}
+			onClear={args.onClear}
+			min={PATTERN_SCALE_MIN}
+			max={PATTERN_SCALE_MAX}
+			step={PATTERN_SCALE_STEP}
+			clamp
+			placeholder={String(DEFAULT_PATTERN_SCALE)}
+		/>
+	)
 	const defaultPolygonIdx = cfg.defaultPolygonPattern ?? null
 	const polygonSubsectionChanged = patternFieldMapped
-		? nonEmptyMap(polygonOverrides) || nonEmptyMap(polygonInkColors)
+		? nonEmptyMap(polygonOverrides) ||
+			nonEmptyMap(polygonInkColors) ||
+			nonEmptyMap(polygonScales)
 		: defaultPolygonIdx !== null ||
-			(cfg.defaultPolygonPatternInk ?? null) !== null
+			(cfg.defaultPolygonPatternInk ?? null) !== null ||
+			(cfg.defaultPolygonScale ?? null) !== null
 
 	const previewBg =
 		cfg.backgroundColor ?? DEFAULT_PATTERN_CONFIG.backgroundColor
+	// With pattern sharing hue's field the marks' tile background IS the hue
+	// color, so the per-category chips preview on it (same lookup chain as
+	// `effectiveInkFor`: per-value hue override, then the palette slot).
+	const effectiveBgFor = (categoryIdx: number, value: string): string => {
+		if (!patternMatchesHue) return previewBg
+		// Same fallback as makeHueScale when the configs carry no palette.
+		const palette =
+			huePalette.palette && huePalette.palette.length > 0
+				? huePalette.palette
+				: CATEGORICAL_HUE_PALETTE
+		return (
+			hueOverrideColors?.[value] ??
+			palette[categoryIdx % palette.length] ??
+			previewBg
+		)
+	}
 
 	// No field mapped — show default pattern picker + ink color + background
 	if (!patternFieldMapped) {
 		const defaultPatternIdx = configs.defaultPattern ?? null
 		const defaultInk = configs.defaultPatternInk ?? DEFAULT_PATTERN_INK
+		const defaultScale = cfg.defaultScale ?? DEFAULT_PATTERN_SCALE
 		// Ink reset follows the pattern-color pairings the user configured in
 		// theme settings: each palette color can carry a paired pattern ink.
 		// Match the current Background against those palette colors (default
@@ -488,6 +569,7 @@ export const PatternOptionsPanel = () => {
 			setIdx: (next: number | null) =>
 				updateCfg({ defaultPolygonPattern: next }),
 			ink: polygonInk,
+			scale: cfg.defaultPolygonScale ?? DEFAULT_PATTERN_SCALE,
 			ariaName: "Polygon pattern option",
 		}
 		const renderDefaultSwatchRow = (
@@ -499,11 +581,14 @@ export const PatternOptionsPanel = () => {
 				activeIdx: number | null
 				setIdx: (next: number | null) => void
 				ink: string
+				/** Tile zoom previewed in the chips. */
+				scale: number
 				ariaName: string
 			} = {
 				activeIdx: defaultPatternIdx,
 				setIdx: setDefaultPattern,
 				ink: defaultInk,
+				scale: defaultScale,
 				ariaName: "Pattern option",
 			}
 		) => (
@@ -539,6 +624,7 @@ export const PatternOptionsPanel = () => {
 									selected={selected}
 									inkColor={target.ink}
 									bgColor={previewBg}
+									scale={target.scale}
 								/>
 							</button>
 						)
@@ -633,6 +719,14 @@ export const PatternOptionsPanel = () => {
 						placeholder={resetInk}
 					/>
 				)}
+				{defaultPatternIdx !== null &&
+					showFillRow &&
+					scaleInput({
+						labelClassName: LABEL_COL,
+						value: cfg.defaultScale ?? null,
+						onChange: (n) => updateCfg({ defaultScale: n }),
+						onClear: () => updateCfg({ defaultScale: null }),
+					})}
 				{showFillRow && (
 					<ColorRow
 						label="Background"
@@ -676,6 +770,14 @@ export const PatternOptionsPanel = () => {
 							placeholder={resetInk}
 						/>
 					)}
+					{defaultPolygonIdx !== null &&
+						scaleInput({
+							context: "polygon fill",
+							labelClassName: LABEL_COL,
+							value: cfg.defaultPolygonScale ?? null,
+							onChange: (n) => updateCfg({ defaultPolygonScale: n }),
+							onClear: () => updateCfg({ defaultPolygonScale: null }),
+						})}
 					{!showFillRow && (
 						<ColorRow
 							label="Background"
@@ -785,11 +887,18 @@ export const PatternOptionsPanel = () => {
 						}))
 						updateCfg({
 							backgroundColor: theme.patternBackgroundColor,
+							// Only cleared once set, so untouched saves don't grow a
+							// null key.
+							...(cfg.defaultScale != null ? { defaultScale: null } : {}),
 							// Filled-radar polygon defaults live on the pattern config;
 							// only touched where the Polygon fill section exists, so
 							// other charts' saves don't grow null keys.
 							...(radarPolygonFilled
-								? { defaultPolygonPattern: null, defaultPolygonPatternInk: null }
+								? {
+										defaultPolygonPattern: null,
+										defaultPolygonPatternInk: null,
+										defaultPolygonScale: null,
+									}
 								: {}),
 						})
 					}}
@@ -834,6 +943,8 @@ export const PatternOptionsPanel = () => {
 			dashActiveIdx,
 			ink,
 			hasInk: cfg.inkColors[v] !== undefined,
+			scale: scales[v] ?? null,
+			hasScale: scales[v] !== undefined,
 			hasPaletteOverride: fillOverride !== undefined,
 			hasDashOverride: dashOverride !== undefined,
 		}
@@ -847,6 +958,11 @@ export const PatternOptionsPanel = () => {
 			isNone: boolean
 			activeIdx: number
 			ink: string
+			/** Tile zoom previewed in the chips (×1 when unset). */
+			scale?: number | null
+			/** Chip background (the category's hue color when pattern shares
+			 *  hue's field); the panel's Background when unset. */
+			bg?: string
 			setIdx: (idx: number) => void
 			setNone: () => void
 			/** Accessible-name prefix for the row's buttons ("pattern" by
@@ -885,7 +1001,8 @@ export const PatternOptionsPanel = () => {
 								idx={idx}
 								selected={selected}
 								inkColor={args.ink}
-								bgColor={previewBg}
+								bgColor={args.bg ?? previewBg}
+								scale={args.scale ?? DEFAULT_PATTERN_SCALE}
 							/>
 						</button>
 					)
@@ -918,6 +1035,26 @@ export const PatternOptionsPanel = () => {
 			pickerLabel={`Pick palette ${target.ariaKind.toLowerCase()} color for ${v}`}
 		/>
 	)
+
+	/** The category's Scale box, directly under its Color picker. Blank =
+	 *  inherit ×1 (the map has no entry); typing writes the entry. */
+	const renderScalePicker = (
+		v: string,
+		scale: number | null,
+		target: {
+			set: (value: string, scale: number) => void
+			reset: (value: string) => void
+			/** Accessible-name context ("<category>" for point fills, "polygon
+			 *  fill <category>" for the Polygon-fill rows). */
+			context: string
+		} = { set: setCategoryScale, reset: resetCategoryScale, context: v }
+	) =>
+		scaleInput({
+			context: target.context,
+			value: scale,
+			onChange: (n) => target.set(v, n),
+			onClear: () => target.reset(v),
+		})
 
 	const categoryNameRow = (
 		v: string,
@@ -1005,10 +1142,11 @@ export const PatternOptionsPanel = () => {
 			<div key={v} className="flex flex-col gap-1 text-sm">
 				{categoryNameRow(
 					v,
-					s.hasPaletteOverride || s.hasInk,
+					s.hasPaletteOverride || s.hasInk || s.hasScale,
 					() => {
 						if (s.hasPaletteOverride) resetPaletteOverride(v)
 						if (s.hasInk) resetCategoryInk(v)
+						if (s.hasScale) resetCategoryScale(v)
 					},
 					display
 				)}
@@ -1018,10 +1156,13 @@ export const PatternOptionsPanel = () => {
 					isNone: s.fillIsNone,
 					activeIdx: s.fillActiveIdx,
 					ink: s.ink,
+					scale: s.scale,
+					bg: effectiveBgFor(i, v),
 					setIdx: (idx) => setPaletteOverride(v, idx),
 					setNone: () => setPaletteOverride(v, PATTERN_NONE),
 				})}
 				{renderColorPicker(v, s.ink, s.hasInk)}
+				{renderScalePicker(v, s.scale)}
 			</div>
 		)
 	}
@@ -1035,14 +1176,17 @@ export const PatternOptionsPanel = () => {
 		const activeIdx = typeof override === "number" ? override : -1
 		const hasInk = polygonInkColors[v] !== undefined
 		const ink = polygonInkColors[v] ?? effectiveInkFor(i, v)
+		const scale = polygonScales[v] ?? null
+		const hasScale = scale !== null
 		return (
 			<div key={v} className="flex flex-col gap-1 text-sm">
 				{categoryNameRow(
 					v,
-					override !== undefined || hasInk,
+					override !== undefined || hasInk || hasScale,
 					() => {
 						if (override !== undefined) resetPolygonOverride(v)
 						if (hasInk) resetPolygonInk(v)
+						if (hasScale) resetPolygonScale(v)
 					},
 					display
 				)}
@@ -1052,6 +1196,8 @@ export const PatternOptionsPanel = () => {
 					isNone,
 					activeIdx,
 					ink,
+					scale,
+					bg: effectiveBgFor(i, v),
 					setIdx: (idx) => setPolygonOverride(v, idx),
 					setNone: () => setPolygonOverride(v, PATTERN_NONE),
 					ariaKind: "polygon pattern",
@@ -1060,6 +1206,11 @@ export const PatternOptionsPanel = () => {
 					set: setPolygonInk,
 					reset: resetPolygonInk,
 					ariaKind: "Polygon pattern",
+				})}
+				{renderScalePicker(v, scale, {
+					set: setPolygonScale,
+					reset: resetPolygonScale,
+					context: `polygon fill ${v}`,
 				})}
 			</div>
 		)

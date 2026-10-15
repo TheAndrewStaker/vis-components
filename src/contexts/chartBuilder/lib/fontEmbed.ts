@@ -253,6 +253,17 @@ const faceRule = async (
 // Entry point
 // ---------------------------------------------------------------------------
 
+let warming: Promise<unknown> | null = null
+
+/** Fire-and-forget network embed run only for its side effect: face
+ * metadata + binaries land in IndexedDB. One warm-up at a time. */
+const warmFontCache = (svgText: string): void => {
+	if (warming) return
+	warming = embedFontsInSvg(svgText, { allowNetwork: true }).finally(() => {
+		warming = null
+	})
+}
+
 /** Inline the webfont faces a serialized chart SVG needs as data: URI
  * `@font-face` rules in a leading `<style>`. Families that aren't
  * Google-hosted (system stacks, Georgia, …) are untouched. With
@@ -269,14 +280,24 @@ export const embedFontsInSvg = async (
 		if (usage.families.size === 0) return svgText
 
 		const rules: string[] = []
+		let cacheMiss = false
 		for (const [lower, asWritten] of usage.families) {
 			const faces = await facesFor(lower, allowNetwork)
-			if (!faces) continue
+			if (!faces) {
+				if (lower in BUILTIN_WEBFONT_CSS) cacheMiss = true
+				continue
+			}
 			for (const face of selectFaces(faces, usage)) {
 				const rule = await faceRule(asWritten, face, allowNetwork)
 				if (rule) rules.push(rule)
+				else cacheMiss = true
 			}
 		}
+		// A cache-only pass that misses would keep missing forever: built-in
+		// presets only reach the cache through a network-allowed embed (an
+		// export). Warm it in the background so the next capture embeds the
+		// real face.
+		if (cacheMiss && !allowNetwork) warmFontCache(svgText)
 		if (rules.length === 0) return svgText
 
 		const doc = new DOMParser().parseFromString(svgText, "image/svg+xml")

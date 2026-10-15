@@ -56,6 +56,14 @@ type Registry = {
 	datasetIds: ReadonlySet<string>
 	themeIds: ReadonlySet<string>
 	adopted: Set<string>
+	/** The subset of `adopted` that durable storage was SEEN to hold (via
+	 *  {@link adoptPersistedSeedIds}), as opposed to rows promoted this
+	 *  session whose write may still be in flight. A durable seed dataset
+	 *  can have moved on (a new version uploaded), and its stored body may
+	 *  live where the persisted map handed to `overlayDatasets` doesn't look
+	 *  (IndexedDB, not the legacy blob) — so the bundled body must not be
+	 *  served for it at all, or it shadows the user's real one. */
+	durable: Set<string>
 }
 
 let registry: Registry | null = null
@@ -79,6 +87,7 @@ export const installExampleOverlay = (
 		datasetIds,
 		themeIds,
 		adopted: new Set<string>(),
+		durable: new Set<string>(),
 	}
 	adoptPersistedSeedIds(alreadyPersisted)
 }
@@ -102,6 +111,7 @@ export const adoptPersistedSeedIds = (ids: Iterable<string>): void => {
 			reg.themeIds.has(id)
 		) {
 			reg.adopted.add(id)
+			reg.durable.add(id)
 		}
 	}
 }
@@ -150,23 +160,39 @@ export const overlayFolders = (persisted: Folder[]): Folder[] =>
 export const overlayThemes = (persisted: SavedTheme[]): SavedTheme[] =>
 	registry === null ? persisted : overlayList(persisted, registry.content.themes)
 
+/** The bundled datasets still served from memory: every seed dataset except
+ *  those durable storage holds (see `Registry.durable`). */
+const servedSeedDatasets = (reg: Registry): Record<string, Dataset> => {
+	const seeded = reg.content.datasets
+	if (reg.durable.size === 0) return seeded
+	const served: Record<string, Dataset> = {}
+	for (const [id, dataset] of Object.entries(seeded)) {
+		if (!reg.durable.has(id)) served[id] = dataset
+	}
+	return served
+}
+
 /** Seed datasets are readable in memory without ever reaching IndexedDB.
- *  Persisted rows win on an id clash — an adopted (copied) dataset has moved
- *  on and its stored copy is the live one. */
+ *  Persisted rows win on an id clash, and a seed id storage already holds is
+ *  never overlaid — that dataset has moved on and its stored copy is the
+ *  live one, even when `persisted` (e.g. an emptied legacy blob) lacks it. */
 export const overlayDatasets = (
 	persisted: Record<string, Dataset>
 ): Record<string, Dataset> => {
 	if (registry === null) return persisted
-	const seeded = registry.content.datasets
+	const seeded = servedSeedDatasets(registry)
 	if (Object.keys(seeded).length === 0) return persisted
 	return { ...seeded, ...persisted }
 }
 
 /** One seeded dataset by id, or null. Seed rows live only in memory, so the
  *  per-dataset body reader has to consult the registry before concluding a
- *  dataset is missing. */
+ *  dataset is missing. Null for a seed id storage holds: the stored body is
+ *  the one to read. */
 export const seedDataset = (id: string): Dataset | null =>
-	registry?.content.datasets[id] ?? null
+	registry === null || registry.durable.has(id)
+		? null
+		: (registry.content.datasets[id] ?? null)
 
 /** Seeded datasets joined into a metadata index, mirroring `overlayDatasets`
  *  for the row-free read path. Persisted rows win on an id clash. */
@@ -174,7 +200,7 @@ export const overlayDatasetIndex = (
 	persisted: Record<string, DatasetMeta>
 ): Record<string, DatasetMeta> => {
 	if (registry === null) return persisted
-	const seeded = registry.content.datasets
+	const seeded = servedSeedDatasets(registry)
 	if (Object.keys(seeded).length === 0) return persisted
 	return { ...datasetIndexFrom(seeded), ...persisted }
 }

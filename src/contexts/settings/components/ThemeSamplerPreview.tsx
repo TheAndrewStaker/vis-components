@@ -2,6 +2,7 @@ import { lab } from "d3-color"
 import { useId, useMemo } from "react"
 
 import type { TextFontConfig } from "../../chartBuilder/lib/labelsConfig"
+import { PatternTile } from "../../chartBuilder/lib/patternDefs"
 import { PATTERN_PALETTE } from "../../chartBuilder/lib/patterns"
 import type { Theme } from "../../chartBuilder/lib/types"
 import {
@@ -204,16 +205,13 @@ export const ThemeSamplerPreview = ({
 					</linearGradient>
 				))}
 				{tiles.map(({ def, background, ink }, i) => (
-					<pattern
+					<PatternTile
 						key={def.id}
 						id={patternId(i)}
-						patternUnits="userSpaceOnUse"
-						width={def.size}
-						height={def.size}
-					>
-						<rect width={def.size} height={def.size} fill={background} />
-						{def.render(ink)}
-					</pattern>
+						paletteIdx={i}
+						bgColor={background}
+						inkColor={ink}
+					/>
 				))}
 			</defs>
 

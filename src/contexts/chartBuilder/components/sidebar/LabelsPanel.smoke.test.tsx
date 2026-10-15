@@ -98,15 +98,16 @@ const renderPanel = (Probe?: () => React.ReactElement) =>
 	)
 
 // ---------------------------------------------------------------------------
-// "Panel titles" row
+// "Facet titles (panel)" subsection
 // ---------------------------------------------------------------------------
 
-/** "Panel titles" row: hide-empty compacted grids draw a per-panel title
- *  band, styled by the `facetPanelTitle` font slot. The row is config-gated
+/** "Facet titles (panel)" subsection: hide-empty compacted grids draw a
+ *  per-panel title band, styled by the `facetPanelTitle` font slot. It is
+ *  config-gated
  *  on `channelConfigs.facet.hideEmptyPanels` (matching the "Hide empty
  *  panels" checkbox) AND only exists in the grid-split arm (both facet
  *  channels mapped) — these tests pin both gates plus the write path. */
-describe("LabelsPanel — Panel titles row (hide-empty per-panel styling)", () => {
+describe("LabelsPanel — Facet titles (panel) subsection (hide-empty per-panel styling)", () => {
 	afterEach(cleanup)
 
 	// Probe that mirrors the facetPanelTitle override color out of the atom so
@@ -121,27 +122,29 @@ describe("LabelsPanel — Panel titles row (hide-empty per-panel styling)", () =
 		)
 	}
 
-	it("renders a textless 'Panel titles' row when both facet channels are mapped and hideEmptyPanels is on", () => {
+	it("splits into row / column / panel subsections when both facet channels are mapped and hideEmptyPanels is on", () => {
 		seedStorage({ encodings: gridEncodings(), hideEmptyPanels: true })
 		const { container } = renderPanel()
-		expandSection(container, "Facet titles")
 
-		// Grid-split keeps each facet target as its own collapsible row (label +
-		// chevron, no dead "Auto" input) since there are several to style.
-		expect(rowToggle(container, "Panel titles")).not.toBeNull()
-		expect(
-			container.querySelector('input[aria-label="Panel titles (automatic)"]')
-		).toBeNull()
+		// Grid-split replaces the single "Facet titles" subsection with one
+		// sibling subsection per header strip.
+		expect(sectionHeader(container, "Facet titles")).toBeNull()
+		expect(sectionHeader(container, "Facet titles (row)")).not.toBeNull()
+		expect(sectionHeader(container, "Facet titles (column)")).not.toBeNull()
+		expect(sectionHeader(container, "Facet titles (panel)")).not.toBeNull()
+
+		// Each subsection's styling controls render inline once opened.
+		expandSection(container, "Facet titles (panel)")
+		expect(container.querySelector('input[type="color"]')).not.toBeNull()
 	})
 
-	it("hides the row when hideEmptyPanels is off (Column/Row titles still present)", () => {
+	it("omits the panel subsection when hideEmptyPanels is off (row/column still present)", () => {
 		seedStorage({ encodings: gridEncodings(), hideEmptyPanels: false })
 		const { container } = renderPanel()
-		expandSection(container, "Facet titles")
 
-		expect(rowToggle(container, "Panel titles")).toBeNull()
-		expect(rowToggle(container, "Column titles")).not.toBeNull()
-		expect(rowToggle(container, "Row titles")).not.toBeNull()
+		expect(sectionHeader(container, "Facet titles (panel)")).toBeNull()
+		expect(sectionHeader(container, "Facet titles (row)")).not.toBeNull()
+		expect(sectionHeader(container, "Facet titles (column)")).not.toBeNull()
 	})
 
 	it("hides the row when only one facet channel is mapped, even with hideEmptyPanels on", () => {
@@ -152,26 +155,24 @@ describe("LabelsPanel — Panel titles row (hide-empty per-panel styling)", () =
 		const { container } = renderPanel()
 		expandSection(container, "Facet titles")
 
-		expect(rowToggle(container, "Panel titles")).toBeNull()
+		expect(sectionHeader(container, "Facet titles (panel)")).toBeNull()
 		// Single-axis facet has one automatic title, so its styling controls are
 		// shown inline (no per-row chevron) — the font editor's color swatch is
 		// present straight away once the subsection is open.
 		expect(container.querySelector('input[type="color"]')).not.toBeNull()
 	})
 
-	it("setting a color via the row's font editor writes fontOverrides.facetPanelTitle", () => {
+	it("setting a color in the panel subsection writes fontOverrides.facetPanelTitle", () => {
 		seedStorage({ encodings: gridEncodings(), hideEmptyPanels: true })
 		const { container } = renderPanel(AtomProbe)
-		expandSection(container, "Facet titles")
 		const probe = container.querySelector<HTMLElement>(
 			'[data-testid="probe"]'
 		)!
 		expect(probe.dataset.panelColor).toBe("")
 
-		// Open the row's disclosure — Headless UI unmounts closed panels, so
-		// the font editor isn't in the DOM until then. Only this one panel is
-		// open, so its color swatch is the only one on the page.
-		fireEvent.click(rowToggle(container, "Panel titles")!)
+		// Only this one subsection is open, so its color swatch is the only
+		// one on the page.
+		expandSection(container, "Facet titles (panel)")
 		const swatch = container.querySelector<HTMLInputElement>(
 			'input[type="color"]'
 		)
@@ -187,15 +188,15 @@ describe("LabelsPanel — Panel titles row (hide-empty per-panel styling)", () =
 // Collapsible subsections
 // ---------------------------------------------------------------------------
 
-/** The Labels panel groups its rows into four CollapsibleSubsections —
- *  Primary / Axis / Facet / Legend titles — all collapsed by default, with
+/** The Labels panel groups its rows into CollapsibleSubsections —
+ *  Primary / Axis / Facet (split row / column in a grid) / Legend titles — all collapsed by default, with
  *  the header changed-dot lighting only for STYLING deviations (font
  *  override / non-center alignment / offset), never for typed title text. */
 describe("LabelsPanel — collapsible subsections", () => {
 	afterEach(cleanup)
 
-	// Both facet channels + a legend channel (hue) active → all four
-	// subsections render.
+	// Both facet channels + a legend channel (hue) active → every
+	// subsection renders (facet titles split into row / column).
 	const fullEncodings = (): Encodings => ({
 		...gridEncodings(),
 		hue: { field: "category" },
@@ -204,11 +205,12 @@ describe("LabelsPanel — collapsible subsections", () => {
 	const SECTION_TITLES = [
 		"Primary titles",
 		"Axis titles",
-		"Facet titles",
+		"Facet titles (row)",
+		"Facet titles (column)",
 		"Legend titles",
 	]
 
-	it("renders all four subsection headers collapsed by default", () => {
+	it("renders every subsection header collapsed by default", () => {
 		seedStorage({ encodings: fullEncodings() })
 		const { container } = renderPanel()
 
@@ -223,7 +225,7 @@ describe("LabelsPanel — collapsible subsections", () => {
 			container.querySelector('textarea[placeholder="Untitled chart"]')
 		).toBeNull()
 		expect(rowToggle(container, "X-axis title")).toBeNull()
-		expect(rowToggle(container, "Column titles")).toBeNull()
+		expect(container.querySelector('input[type="color"]')).toBeNull()
 		expect(rowToggle(container, "Color legend")).toBeNull()
 	})
 
@@ -266,7 +268,8 @@ describe("LabelsPanel — collapsible subsections", () => {
 
 		expect(headerDot(container, "Primary titles")).not.toBeNull()
 		expect(headerDot(container, "Axis titles")).toBeNull()
-		expect(headerDot(container, "Facet titles")).toBeNull()
+		expect(headerDot(container, "Facet titles (row)")).toBeNull()
+		expect(headerDot(container, "Facet titles (column)")).toBeNull()
 		expect(headerDot(container, "Legend titles")).toBeNull()
 	})
 

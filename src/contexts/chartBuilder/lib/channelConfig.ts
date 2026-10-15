@@ -768,6 +768,28 @@ export type OpacitySlotConfig = {
 
 export type OpacitySlots = Partial<Record<OpacitySlotKey, OpacitySlotConfig>>
 
+/** Keys for the per-part saturation / brightness targets surfaced as
+ * subheaders in those menus. Fill is NOT a slot — it reuses the overall
+ * `saturation` / `brightness` encoding + `defaultSaturation` /
+ * `defaultBrightness`. */
+export type ModulationSlotKey = "outline" | "line"
+
+/** One saturation / brightness target's state. Levels are anchored like
+ * `SaturationConfig` (0.5 = the part's color untouched). `level: null` = off
+ * (no modulation — the default, so visuals saved before slots existed render
+ * unchanged). When `field` is set, `range` (min/max + per-category overrides)
+ * drives a per-row level instead. Absolute: a part's modulation comes solely
+ * from its slot, independent of the Fill. */
+export type ModulationSlotConfig = {
+	field: string | null
+	level: number | null
+	range?: SaturationConfig
+}
+
+export type ModulationSlots = Partial<
+	Record<ModulationSlotKey, ModulationSlotConfig>
+>
+
 /** A user-defined mark glyph: a short text string (1–3 characters, emoji
  * OK — tinted by the mark's fill color like a symbol path) or an uploaded
  * image (stored as a small data URL, rendered as-is — fill / outline /
@@ -898,6 +920,19 @@ export type PatternConfig = {
 	/** Ink for `defaultPolygonPattern`; null/absent = the theme's pattern
 	 * ink (`ChannelConfigs.defaultPatternInk`). */
 	defaultPolygonPatternInk?: string | null
+	/** PATTERN SCALE — zoom on the pattern tile, per point-fill category
+	 * (×1 = the palette's native tile; ×2 draws the dots / stripes twice as
+	 * big and twice as far apart). The Pattern menu's "Scale" box under each
+	 * category's Color picker writes these, within
+	 * [PATTERN_SCALE_MIN, PATTERN_SCALE_MAX] by PATTERN_SCALE_STEP. Sparse:
+	 * a missing category renders at ×1. */
+	scales?: Record<string, number>
+	/** Scale for the no-variable default pattern
+	 * (`ChannelConfigs.defaultPattern`); null/absent = ×1. */
+	defaultScale?: number | null
+	/** The polygon-fill twins of `scales` / `defaultScale` (filled radar). */
+	polygonScales?: Record<string, number>
+	defaultPolygonScale?: number | null
 }
 export const DEFAULT_PATTERN_CONFIG: PatternConfig = {
 	overrides: {},
@@ -907,6 +942,16 @@ export const DEFAULT_PATTERN_CONFIG: PatternConfig = {
 	backgroundColor: "#e2e8f0",
 	stackMode: "stack",
 }
+
+/** Range of the Pattern menu's "Scale" box (`PatternConfig.scales` et al.):
+ *  ×0 through ×4 in tenths. The renderer floors a stored 0 at
+ *  `PATTERN_SCALE_RENDER_MIN` (`effectivePatternScale` in `./patterns`) —
+ *  an SVG pattern tile of zero size paints nothing, which would make the
+ *  marks vanish rather than show a very fine texture. */
+export const PATTERN_SCALE_MIN = 0
+export const PATTERN_SCALE_MAX = 4
+export const PATTERN_SCALE_STEP = 0.1
+export const DEFAULT_PATTERN_SCALE = 1
 
 export type LengthConfig = {
 	minLength: number
@@ -1065,12 +1110,22 @@ export type ConnectionConfig = {
 	 *  and the per-category fallback when `thicknessByValue` has no entry for
 	 *  a group. */
 	thickness: number
-	/** Per-line thickness overrides (px), keyed by the connection field's
-	 *  value (the hue value in area mode, matching `dashPatterns`). A missing
-	 *  key falls back to `thickness`, so an empty / absent map renders exactly
-	 *  like a single global thickness — no separate "mode" flag is stored; the
-	 *  "Vary by" dropdown derives its position from whether this map is
-	 *  populated. Optional so visuals saved before it existed load unchanged. */
+	/** "Vary by" variable for per-line thickness. When set, each line's
+	 *  thickness is looked up in `thicknessByValue` by its representative
+	 *  row's value for this field (the same first-row convention the line
+	 *  color slot uses), so thickness can follow any categorical variable
+	 *  that is constant within a line — not only the connection field.
+	 *  null / absent = the legacy keying: `thicknessByValue` is keyed by the
+	 *  connection value (the hue value in area mode). A field that no longer
+	 *  exists renders as single level. */
+	thicknessField?: string | null
+	/** Per-line thickness overrides (px), keyed by the stringified value of
+	 *  `thicknessField` when set, else by the connection field's value (the
+	 *  hue value in area mode, matching `dashPatterns`). A missing key falls
+	 *  back to `thickness`, so an empty / absent map renders exactly like a
+	 *  single global thickness — no separate "mode" flag is stored; the
+	 *  "Vary by" dropdown derives its position from `thicknessField` or, for
+	 *  visuals saved before it existed, from whether this map is populated. */
 	thicknessByValue?: Record<string, number>
 	/** In areas mode only: `"area"` fills the region below each layer down
 	 * to the baseline (or the layer below it when stacked); `"line"` renders
@@ -1694,6 +1749,12 @@ export type ChannelConfigs = Partial<{
 	 * Sparse — an absent slot means the part renders at its registry
 	 * `defaultLevel`. */
 	opacitySlots: OpacitySlots
+	/** Per-part saturation targets (outline / line) beyond the Fill, which
+	 * reuses the `saturation` encoding. Sparse — an absent slot means that
+	 * part isn't modulated. Surfaced as subheaders in the Saturation menu. */
+	saturationSlots: ModulationSlots
+	/** Brightness counterpart of `saturationSlots`. */
+	brightnessSlots: ModulationSlots
 }>
 
 export const EMPTY_CHANNEL_CONFIGS: ChannelConfigs = {}

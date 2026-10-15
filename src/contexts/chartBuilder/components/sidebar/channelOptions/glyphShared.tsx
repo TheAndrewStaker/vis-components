@@ -1,5 +1,5 @@
 import { DASH_CYCLE, dashArrayFor } from "../../../lib/dashPatterns"
-import { PATTERN_PALETTE } from "../../../lib/patterns"
+import { PatternTile } from "../../../lib/patternDefs"
 import {
 	CHIP_BG,
 	CHIP_INK,
@@ -54,6 +54,9 @@ export const LineDashGlyph = ({
 	selected: boolean
 	inkColor?: string
 	bgColor?: string
+	/** Accepted so the dash glyph is interchangeable with `PatternGlyph` in
+	 *  the swatch rows; dashes have no tile to zoom. */
+	scale?: number | null
 }) => {
 	const pattern = DASH_CYCLE[idx % DASH_CYCLE.length] ?? "solid"
 	const strokeDashArray = dashArrayFor(pattern) ?? undefined
@@ -85,27 +88,31 @@ export const PatternGlyph = ({
 	selected,
 	inkColor: inkColorProp,
 	bgColor = CHIP_BG,
+	scale,
 }: {
 	idx: number
 	selected: boolean
 	inkColor?: string
 	bgColor?: string
+	/** Tile zoom previewed in the chip (the category's Scale pick); ×1 when
+	 *  unset — so the chips show the pattern as the marks will draw it. */
+	scale?: number | null
 }) => {
-	const def = PATTERN_PALETTE[idx % PATTERN_PALETTE.length]
 	const inkColor = inkColorProp ?? (selected ? CHIP_INK_SELECTED : CHIP_INK)
-	const uniqueId = `glyph-${def.id}-${selected ? "sel" : "off"}-${inkColor.replaceAll(/[^a-zA-Z0-9]/g, "")}`
+	// Background is part of the id: chips differing only in background (per-
+	// category hue colors) would otherwise share one def and all paint the
+	// first chip's background.
+	const uniqueId = `glyph-pat-${idx}-${selected ? "sel" : "off"}-${inkColor.replaceAll(/[^a-zA-Z0-9]/g, "")}-${bgColor.replaceAll(/[^a-zA-Z0-9]/g, "")}-x${String(scale ?? 1).replace(".", "p")}`
 	return (
 		<svg width={PREVIEW_SIZE} height={PREVIEW_SIZE} aria-hidden="true">
 			<defs>
-				<pattern
+				<PatternTile
 					id={uniqueId}
-					patternUnits="userSpaceOnUse"
-					width={def.size}
-					height={def.size}
-				>
-					<rect width={def.size} height={def.size} fill={bgColor} />
-					{def.render(inkColor)}
-				</pattern>
+					paletteIdx={idx}
+					bgColor={bgColor}
+					inkColor={inkColor}
+					scale={scale}
+				/>
 			</defs>
 			<rect
 				x={0}

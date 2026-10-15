@@ -50,7 +50,11 @@ import {
 	type ExampleOverlayContent,
 } from "./exampleOverlay"
 import {
+	loadDatasetAsync,
+	loadDatasetIndexAsync,
+	loadDatasets,
 	loadDatasetsAsync,
+	loadDatasetVersionAsync,
 	loadFolders,
 	loadThemes,
 	loadVisuals,
@@ -320,6 +324,34 @@ describe("a library that already holds the seed durably", () => {
 		await saveDatasetsAsync(await loadDatasetsAsync())
 		expect(storedVisuals()?.map((v) => v.name)).toEqual(["Renamed"])
 		expect(storedDatasetIds()).toEqual(["ds-seed"])
+	})
+
+	it("serves the stored body, not the bundled one, once the dataset has moved on", async () => {
+		// The user adopted the seed dataset and uploaded a second version. It
+		// lives in IndexedDB only — the legacy localStorage blob is empty — so
+		// the sync bootstrap's "persisted wins" merge has nothing to win with.
+		const seed = makeDataset("ds-seed")
+		const moved: Dataset = {
+			...seed,
+			fields: [...seed.fields, { name: "b", inferredType: "categorical" }],
+			versions: [
+				...seed.versions,
+				{ id: "ds-seed-v2", filename: "v2.csv", rows: [{ a: "1", b: "x" }], createdAt: 1 },
+			],
+			latestVersionId: "ds-seed-v2",
+		}
+		await saveDatasetsAsync({ "ds-seed": moved })
+
+		installExampleOverlay(content(), ["ds-seed"])
+
+		expect(loadDatasets()["ds-seed"]).toBeUndefined()
+		expect((await loadDatasetAsync("ds-seed"))?.latestVersionId).toBe("ds-seed-v2")
+		expect(await loadDatasetVersionAsync("ds-seed", "ds-seed-v2")).toEqual([
+			{ a: "1", b: "x" },
+		])
+		expect((await loadDatasetIndexAsync())["ds-seed"]?.latestVersionId).toBe(
+			"ds-seed-v2"
+		)
 	})
 })
 

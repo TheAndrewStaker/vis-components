@@ -9,6 +9,7 @@ import { ptToPx } from "../../../lib/fontUnit"
 import { resolvePatternDefForItem } from "../../../lib/buildPatternDefs"
 import { effectiveType } from "../../../lib/fieldType"
 import { resolveMarkAesthetics } from "../../../lib/resolveMarkAesthetics"
+import { slotModulationResolver } from "../../../lib/resolveLayerColor"
 import {
 	applyHueScale,
 	applyPositionScale,
@@ -258,6 +259,13 @@ export const buildMarks = ({
 	const angleScale = aestheticScales.angle?.scale ?? null
 
 	const patternBgFallback = channelConfigs.pattern?.backgroundColor ?? "#e2e8f0"
+	// Outline saturation / brightness — its own slot, independent of the
+	// fill's modulation (identity when neither slot is set).
+	const modulateOutline = slotModulationResolver(
+		"outline",
+		channelConfigs,
+		aestheticScales
+	)
 
 	const xName = encodings.x?.field as string
 	const yName = encodings.y?.field as string
@@ -361,7 +369,7 @@ export const buildMarks = ({
 						row[outlineHue.name]
 					)
 				: null
-			const { fill: shapeFill, stroke: shapeStroke } = resolveShapeColors({
+			const { fill: shapeFill, stroke: baseStroke } = resolveShapeColors({
 				hueFill: fill,
 				shapeCategoryValue: shapeKey,
 				shapeConfig: channelConfigs.shape,
@@ -371,6 +379,7 @@ export const buildMarks = ({
 				outlineScaleColor,
 				outlineRuleColor,
 			})
+			const shapeStroke = modulateOutline(baseStroke, row)
 
 			// Line endpoints (centered on anchor at (cx, cy))
 			let line: { x1: number; y1: number; x2: number; y2: number } | null = null

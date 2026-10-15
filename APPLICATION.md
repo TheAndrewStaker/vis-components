@@ -1149,6 +1149,17 @@ Behavior depends on chart context:
 - **No connection mapped** (bar / area / scatter): SVG fill patterns
   (six pattern shapes). Per-value pattern picker. Ink and background
   color controls, defaulting to the Pattern section of the theme.
+  A **Scale** box under each Color picker zooms that category's tile
+  (×0–×4 by 0.1; blank = ×1). Dots and stripes swell by the full
+  factor while their spacing grows a little less (tile side ∝
+  scale^0.85 — `PatternDef.spacingExponent`), so zoomed-in dots don't
+  drift apart as fast as they grow; the crosshatch and checker magnify
+  uniformly. Stored sparsely in `pattern.scales[category]` (`pattern.defaultScale`
+  for the no-variable default pattern; `polygonScales` /
+  `defaultPolygonScale` for the radar polygon fill) and baked into the
+  `<pattern>` def's id, so the legend and the Pattern menu's chips
+  render the same zoom as the marks. A stored 0 draws at ×0.1 — a
+  zero-size SVG tile paints nothing, which would make the marks vanish.
   With no pattern variable mapped, the panel's **Default pattern**
   picker (`defaultPattern` + its ink) fills EVERY mark — scatter
   points, bars, area layers, and pie wedges alike (the pattern tile's

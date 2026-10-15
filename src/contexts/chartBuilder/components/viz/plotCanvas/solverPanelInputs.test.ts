@@ -238,6 +238,33 @@ describe("buildSolverPanelInputs", () => {
 		expect(grouped[0].yLabels).toContain("60")
 	})
 
+	// "Size row heights by unit range" on a faceted vertical bar weighs each
+	// row by its measure-axis extent (zero baseline included), not the raw
+	// Length column's min–max.
+	it("weighs size-by-unit rows by the bar measure extent", () => {
+		const e = emptyEncodings()
+		e.x = { field: "cat" }
+		e.length = { field: "val" }
+		e.facetRow = { field: "g" }
+		const inputs = build({
+			rows: [
+				{ cat: "a", val: "10", g: "g1" },
+				{ cat: "b", val: "20", g: "g1" },
+				{ cat: "a", val: "30", g: "g2" },
+				{ cat: "b", val: "40", g: "g2" },
+			],
+			encodings: e,
+			mode: BarsXMode,
+			isFaceted: true,
+			facetCfg: {
+				...DEFAULT_FACET_CONFIG,
+				shareY: "none",
+				proportionalSizingY: "unit",
+			},
+		})
+		expect(inputs.map((p) => p.yWeight)).toEqual([20, 40])
+	})
+
 	it("samples the count axis of a histogram, which has no field of its own", () => {
 		const e = emptyEncodings()
 		e.x = { field: "val" }

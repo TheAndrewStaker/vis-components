@@ -1778,29 +1778,30 @@ const DensityCurveControls = ({
 	onChangeFill: (b: boolean) => void
 }) => (
 	<>
-		<NumberInput
-			label="Smoothing"
-			labelClassName={LABEL_COL}
-			value={bandwidthScale}
-			min={0.1}
-			max={5}
-			step={0.1}
-			clamp
-			onChange={onChangeBandwidth}
-			inputClassName="w-20"
-		/>
-		<div className="flex items-center gap-2 text-sm">
-			<LabelSpacer />
-			<label className="flex items-center gap-2">
-				<input
-					type="checkbox"
-					checked={fill}
-					onChange={(e) => onChangeFill(e.target.checked)}
-					className="h-3 w-3"
-				/>
-				<span className="vc-muted">Fill under curve</span>
-			</label>
-		</div>
+		<label className="flex items-center gap-2 text-sm">
+			<span className={LABEL_COL}>Smoothing</span>
+			<input
+				type="range"
+				min={0.1}
+				max={5}
+				step={0.1}
+				value={bandwidthScale}
+				onChange={(e) => onChangeBandwidth(Number(e.target.value))}
+				className="min-w-0 flex-1"
+			/>
+			<span className="w-10 text-right text-sm vc-muted">
+				{bandwidthScale.toFixed(1)}×
+			</span>
+		</label>
+		<label className="flex items-center gap-2 text-sm">
+			<input
+				type="checkbox"
+				checked={fill}
+				onChange={(e) => onChangeFill(e.target.checked)}
+				className="h-3 w-3"
+			/>
+			<span className="vc-muted">Fill under curve</span>
+		</label>
 		<p className="vc-help">
 			Smoothing scales the kernel bandwidth — higher is smoother. Set the curve
 			color under <strong>Color</strong> → <strong>Density curve</strong>.

@@ -13,7 +13,7 @@ import {
 	resolveFacetPanels,
 } from "../../../lib/resolveFacetPanels"
 import { useChartModeDef } from "../../../store/useChartModeDef"
-import { axisRangeIsContinuous } from "../../../lib/axisFields"
+import { axisFieldsFor, axisRangeIsContinuous } from "../../../lib/axisFields"
 import {
 	facetAxisMapping,
 	type FacetAxisMapping,
@@ -225,19 +225,29 @@ const FacetAxisSubsection = ({
 	const axisField = axisChannel
 		? encodings[axisChannel]?.field ?? null
 		: null
-	const axisType =
-		axisField && dataset ? effectiveType(dataset, axisField, overrides) : null
-	// Range editors gate on the field the axis ACTUALLY reads (Length for
-	// a bar's measure axis, which `axisField` above — the raw position
-	// encoding — misses). The sizing toggles below keep the raw gate: the
-	// solver's unit-range weights read the position field, so "size by
-	// unit range" would be inert on a measure axis.
+	// Range editors AND the sizing toggles gate on the field the axis
+	// ACTUALLY reads (Length for a bar's measure axis, which `axisField`
+	// above — the raw position encoding — misses); the solver's unit-range
+	// weights read the same measure extent.
 	const axisIsContinuous = axisRangeIsContinuous(
 		mode,
 		axisChannel === "x" ? "x" : "y",
 		encodings,
 		dataset ? (f: string) => effectiveType(dataset, f, overrides) : null,
 	)
+	const drawnAxisField =
+		axisChannel === "x" || axisChannel === "y"
+			? axisFieldsFor(mode, encodings)[
+					axisChannel === "x" ? "xField" : "yField"
+				]
+			: axisField
+	const drawnAxisType =
+		drawnAxisField && dataset
+			? effectiveType(dataset, drawnAxisField, overrides)
+			: null
+	const axisType: FieldType | null = axisIsContinuous
+		? "quantitative"
+		: drawnAxisType
 
 	const share = migrateShareValue(cfg[spec.shareKey])
 	const size = migrateProportionalSizing(

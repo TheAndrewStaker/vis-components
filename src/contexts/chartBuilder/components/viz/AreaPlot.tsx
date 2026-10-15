@@ -1123,13 +1123,16 @@ const buildAreas = ({
 		// layers. `effStroke` covers both the line-mode stroke and the area
 		// edge; the area fill and point markers read `mh.fill` directly.
 		const effStroke = mh.outline ?? mh.fill ?? layerStroke
-		// Per-layer thickness: a per-value override (keyed by the hue value,
+		// Per-layer thickness: a per-value override (keyed by the Vary-by
+		// field's value off the layer's group row, else by the hue value,
 		// matching the stroke/dash per-value maps) when set, else the single
 		// `thickness`.
 		const layerThickness = resolveConnectionThickness({
 			groupKey: hueValue,
 			thickness,
 			byValue: channelConfigs.connection?.thicknessByValue,
+			field: channelConfigs.connection?.thicknessField ?? null,
+			row: slotRow,
 		})
 		const effThickness = mh.outline
 			? Math.max(layerThickness, mh.outlineWidth)

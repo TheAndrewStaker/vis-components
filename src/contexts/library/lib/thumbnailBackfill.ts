@@ -179,7 +179,9 @@ const captureVisualOffscreen = async (
 			if (svgText !== null && svgText === lastSvgText) {
 				matchingPolls++
 				if (matchingPolls >= STABLE_POLLS) {
-					const thumbnail = await thumbnailFromChartSvgText(svgText)
+					const thumbnail = await thumbnailFromChartSvgText(svgText, {
+						allowNetwork: true,
+					})
 					if (thumbnail) return thumbnail
 					// Rasterization failed on a stable frame — keep polling; a
 					// later pass may produce loadable markup.
@@ -194,7 +196,9 @@ const captureVisualOffscreen = async (
 		if (signal?.aborted) return null
 		// Deadline hit without stability — the chart may be animating or the
 		// machine is slow. A last-known frame beats "No preview".
-		return lastSvgText ? await thumbnailFromChartSvgText(lastSvgText) : null
+		return lastSvgText
+			? await thumbnailFromChartSvgText(lastSvgText, { allowNetwork: true })
+			: null
 	} catch {
 		return null
 	} finally {

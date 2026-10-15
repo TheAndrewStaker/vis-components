@@ -13,7 +13,7 @@ import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { useChartModeDef } from "../../../store/useChartModeDef"
-import { axisRangeIsContinuous } from "../../../lib/axisFields"
+import { axisFieldsFor, axisRangeIsContinuous } from "../../../lib/axisFields"
 import { isPieModeId } from "../../../lib/chartModes/families"
 import { facetAxisMapping } from "../../../lib/facetAxisMapping"
 import { effectiveType } from "../../../lib/fieldType"
@@ -111,28 +111,31 @@ export const FacetOptionsPanel = () => {
 	// Resolved axis types drive the "size by …" copy: continuous axis →
 	// "unit range"; categorical / ordinal → "category count". Unmapped or
 	// unknown → hide the toggle entirely (no meaningful weight to apply).
-	const colAxisField = axisMap.colAxis
-		? encodings[axisMap.colAxis]?.field ?? null
-		: null
-	const colAxisType =
-		colAxisField && dataset
-			? effectiveType(dataset, colAxisField, overrides)
-			: null
-	const colAxisIsCategorical =
-		colAxisType === "categorical" || colAxisType === "ordinal"
-	const colAxisIsContinuous =
-		colAxisType === "quantitative" || colAxisType === "temporal"
-	const rowAxisField = axisMap.rowAxis
-		? encodings[axisMap.rowAxis]?.field ?? null
-		: null
-	const rowAxisType =
-		rowAxisField && dataset
-			? effectiveType(dataset, rowAxisField, overrides)
-			: null
-	const rowAxisIsCategorical =
-		rowAxisType === "categorical" || rowAxisType === "ordinal"
-	const rowAxisIsContinuous =
-		rowAxisType === "quantitative" || rowAxisType === "temporal"
+	// Mode-aware like the solver's weights: a bar's measure axis reads
+	// Length (or a histogram count), not its raw position channel.
+	const axisKind = (
+		channel: string | null,
+	): "categorical" | "continuous" | null => {
+		if (!channel || !dataset) return null
+		const getType = (f: string) => effectiveType(dataset, f, overrides)
+		let field = encodings[channel as keyof typeof encodings]?.field ?? null
+		if (channel === "x" || channel === "y") {
+			if (axisRangeIsContinuous(mode, channel, encodings, getType))
+				return "continuous"
+			const fields = axisFieldsFor(mode, encodings)
+			field = channel === "x" ? fields.xField : fields.yField
+		}
+		const type = field ? getType(field) : null
+		if (type === "categorical" || type === "ordinal") return "categorical"
+		if (type === "quantitative" || type === "temporal") return "continuous"
+		return null
+	}
+	const colKind = axisKind(axisMap.colAxis)
+	const rowKind = axisKind(axisMap.rowAxis)
+	const colAxisIsCategorical = colKind === "categorical"
+	const colAxisIsContinuous = colKind === "continuous"
+	const rowAxisIsCategorical = rowKind === "categorical"
+	const rowAxisIsContinuous = rowKind === "continuous"
 
 	const sizeX = migrateProportionalSizing(
 		cfg.proportionalSizingX,
@@ -192,9 +195,7 @@ export const FacetOptionsPanel = () => {
 	// axes — categorical / ordinal axes have no meaningful min/max bounds.
 	// The gate keys off the field the axis ACTUALLY reads (Length for a
 	// vertical bar's y axis; always continuous on the measure axis), not
-	// the raw position encoding `rowAxisIsContinuous` reads above — that
-	// one still governs the sizing toggles, whose unit-range weights read
-	// the position field in the solver and would be inert on a measure axis.
+	// the raw position encoding — the same gate the sizing toggles use.
 	// `axisRangeIsContinuous` is trait-driven (an axis the mode doesn't draw
 	// is never continuous), so a mode-id allowlist in front of it would only
 	// subtract — it did, silently dropping hexbin's editors.

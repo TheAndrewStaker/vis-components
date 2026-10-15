@@ -141,7 +141,13 @@ export const renderConnectionLines = (
 	 *  actually drawn; everywhere else the hover reports the line's
 	 *  connection value alone (and nothing at all when that variable isn't
 	 *  among the Fields shown). */
-	pointsOnly = false
+	pointsOnly = false,
+	/** Line saturation / brightness (`slotModulationResolver("line", …)`),
+	 *  applied to each line's resolved stroke off its representative row.
+	 *  Omitted = no modulation. */
+	modulateLine: (color: string, row: Record<string, unknown>) => string = (
+		color
+	) => color
 ) => {
 	const connectionField = encodings.connection?.field ?? null
 	if (!connectionField) return null
@@ -160,7 +166,8 @@ export const renderConnectionLines = (
 	const rangeMaxPx = dashRange?.enabled ? rangeBoundaryPx(dashRange.max) : null
 	const rangeActive =
 		dashRange?.enabled === true && (rangeMinPx !== null || rangeMaxPx !== null)
-	// Per-line thickness overrides (keyed by connection group value). Empty /
+	// Per-line thickness overrides (keyed by the Vary-by field's value off the
+	// series' representative row, else by connection group value). Empty /
 	// absent → every line uses the single `cfg.thickness`, byte-identical to
 	// before. Resolved per group inside the flatMap below.
 	const thicknessByValue = cfg.thicknessByValue
@@ -292,6 +299,11 @@ export const renderConnectionLines = (
 				groupKey: groupValue,
 				thickness: cfg.thickness,
 				byValue: thicknessByValue,
+				// "Vary by" a non-connection field resolves off the series'
+				// representative row — the same first-row convention the line
+				// color slot (`slotRow` below) uses.
+				field: cfg.thicknessField ?? null,
+				row: sorted[0]?.row ?? { [connectionField]: groupValue },
 			})
 			if (setHovered) {
 				// Fallback tooltip fields, used only when the pointer can't be
@@ -401,17 +413,21 @@ export const renderConnectionLines = (
 			// fallback chain runs per-value override → theme line palette →
 			// global stroke override → theme connection color (a real single
 			// color, NOT the point fill).
-			const stroke = resolveConnectionStroke({
-				groupKey: groupValue,
-				lineColors,
-				linePalette: cfg.linePalette ?? null,
-				paletteIdx: groupKeys.indexOf(groupValue),
-				strokeColor: cfg.strokeColor ?? null,
-				fallback: connectionColor,
-				lineSlotCfg: channelConfigs.colorSlots?.line,
-				lineSlot,
-				slotRow: sorted[0]?.row ?? { [connectionField]: groupValue },
-			})
+			const slotRow = sorted[0]?.row ?? { [connectionField]: groupValue }
+			const stroke = modulateLine(
+				resolveConnectionStroke({
+					groupKey: groupValue,
+					lineColors,
+					linePalette: cfg.linePalette ?? null,
+					paletteIdx: groupKeys.indexOf(groupValue),
+					strokeColor: cfg.strokeColor ?? null,
+					fallback: connectionColor,
+					lineSlotCfg: channelConfigs.colorSlots?.line,
+					lineSlot,
+					slotRow,
+				}),
+				slotRow
+			)
 			// Legend / mark-hover highlight for this SERIES, resolved off its
 			// representative row — the same first-row convention `stroke` and
 			// the dash-gap hue sampling already use (the hovered field is a

@@ -71,7 +71,7 @@ export const CollapsibleSubsection = ({
 			</div>
 			{open &&
 				(boxed ? (
-					<div className="flex flex-col gap-2 rounded-md bg-white p-2 dark:bg-stone-900">
+					<div className="vc-subsection-card flex flex-col gap-2 rounded-md p-2">
 						{children}
 					</div>
 				) : (

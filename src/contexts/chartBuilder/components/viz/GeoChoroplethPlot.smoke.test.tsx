@@ -210,11 +210,10 @@ describe("GeoChoroplethPlot (states choropleth)", () => {
 		expect(fills.length).toBe(4)
 	})
 
-	it("a focus region fills non-data regions even with showNoDataRegions off", async () => {
-		// Reported bug: focusing a region left the non-data land blank. Focusing
-		// implies "show this area as a filled map", so non-data regions take the
-		// no-data fill regardless of the showNoDataRegions toggle (explicitly
-		// off here). The four matched states stay scale-colored.
+	it("a focus region honors showNoDataRegions off (draws ONLY matched regions)", async () => {
+		// Reported bug: data for one state with the toggle off still drew the
+		// whole US once a focus was set (dragging promotes to "custom"). The
+		// toggle wins under any focus: only the four matched states draw.
 		seed(
 			[
 				{ state: "CA", rate: "1" },
@@ -225,20 +224,13 @@ describe("GeoChoroplethPlot (states choropleth)", () => {
 			{ focusRegion: "northAmerica", showNoDataRegions: false }
 		)
 		const { container } = mount()
-		// Many more than the 4 matched states draw now (the rest of the states
-		// in no-data fill; no backdrop countries — the projection is auto).
 		await waitFor(() => {
-			expect(
-				container.querySelectorAll("path").length
-			).toBeGreaterThanOrEqual(50)
+			expect(container.querySelectorAll("path").length).toBe(4)
 		})
 		const fills = [...container.querySelectorAll("path")].map((p) =>
 			p.getAttribute("fill")
 		)
-		expect(fills).toContain(DEFAULT_MAP_CONFIG.noDataFill)
-		expect(
-			fills.some((f) => f !== null && f !== DEFAULT_MAP_CONFIG.noDataFill)
-		).toBe(true)
+		expect(fills).not.toContain(DEFAULT_MAP_CONFIG.noDataFill)
 		// A NAMED region is interactive too — users can drag/zoom to fine-tune
 		// it (the gesture promotes it to a custom viewport). So the interactive
 		// group + capture rect are present, not just in "custom" mode.

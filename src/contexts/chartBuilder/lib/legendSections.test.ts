@@ -7,10 +7,12 @@ import { PiesMode } from "./chartModes/pies"
 import { ScatterMode } from "./chartModes/scatter"
 import {
 	DEFAULT_AXIS_CONFIG,
+	DEFAULT_CATEGORICAL_HUE_CONFIG,
 	DEFAULT_CONNECTION_CONFIG,
 	DEFAULT_DISTRIBUTION_OVERLAY_CONFIG,
 	DEFAULT_HISTOGRAM_CONFIG,
 	type ChannelConfigs,
+	type ColorSlotConfig,
 } from "./channelConfig"
 import {
 	DEFAULT_LABELS_CONFIG,
@@ -596,6 +598,134 @@ describe("planLegendSections — color-slot sections", () => {
 				},
 			}),
 		).toBeNull()
+	})
+})
+
+describe("planLegendSections — slot legends fold into a same-field legend", () => {
+	// A density display (filled curve + rug) with EVERY part colored by
+	// `region`, on the chart's palette — the "one variable colors everything"
+	// setup that used to draw a Color, a Rug AND a Density curve legend.
+	const distributionOn: ChannelConfigs["x"] = {
+		...DEFAULT_AXIS_CONFIG,
+		histogram: { ...DEFAULT_HISTOGRAM_CONFIG, showRug: true, densityFill: true },
+		distributionOverlay: {
+			...DEFAULT_DISTRIBUTION_OVERLAY_CONFIG,
+			showDensityCurve: true,
+		},
+	}
+	const slot = (patch: Partial<ColorSlotConfig> = {}): ColorSlotConfig => ({
+		field: "region",
+		singleColor: "#000000",
+		...patch,
+	})
+	const allByRegion: ChannelConfigs = {
+		x: distributionOn,
+		colorSlots: {
+			rug: slot(),
+			densityCurveFill: slot(),
+			densityCurveStroke: slot(),
+		},
+	}
+	const colorByRegion = enc({ x: "score", hue: "region" })
+	const HUE_SECTION = {
+		kind: "combined",
+		channels: ["hue"],
+		field: "region",
+		type: "categorical",
+	}
+	const RUG_SECTION = { kind: "slot", legendKey: "rug", slotKey: "rug", field: "region" }
+
+	it("rug + density curve colored like the Color legend collapse into it", () => {
+		const p = plan({ encodings: colorByRegion, configs: allByRegion })
+		expect(p?.sections.map(describeSection)).toEqual([HUE_SECTION])
+		expect(p?.coalescedSlots).toEqual(["rug", "densityCurve"])
+	})
+
+	it("without a Color mapping the slots merge into one legend that names the field", () => {
+		const sections = sectionsOf({ encodings: enc({ x: "score" }), configs: allByRegion })
+		expect(sections.map(describeSection)).toEqual([RUG_SECTION])
+		expect(sections[0]?.kind === "slot" && sections[0].coalesced).toEqual([
+			"densityCurve",
+		])
+	})
+
+	it("a slot on its own palette keeps its legend — it says something the other doesn't", () => {
+		const sections = sectionsOf({
+			encodings: colorByRegion,
+			configs: {
+				...allByRegion,
+				colorSlots: {
+					...allByRegion.colorSlots,
+					rug: slot({ palette: ["#111111", "#222222", "#333333"] }),
+				},
+			},
+		})
+		expect(sections.map(describeSection)).toEqual([HUE_SECTION, RUG_SECTION])
+	})
+
+	it("a per-value color override on the slot keeps it apart too", () => {
+		const sections = sectionsOf({
+			encodings: colorByRegion,
+			configs: {
+				...allByRegion,
+				colorSlots: {
+					...allByRegion.colorSlots,
+					rug: slot({
+						hue: { ...DEFAULT_CATEGORICAL_HUE_CONFIG, colors: { North: "#ff0000" } },
+					}),
+				},
+			},
+		})
+		expect(sections.map(describeSection)).toEqual([HUE_SECTION, RUG_SECTION])
+	})
+
+	it("a density outline on another palette keeps the density legend (its swatches carry that outline)", () => {
+		const sections = sectionsOf({
+			encodings: colorByRegion,
+			configs: {
+				...allByRegion,
+				colorSlots: {
+					...allByRegion.colorSlots,
+					densityCurveStroke: slot({ palette: ["#111111", "#222222", "#333333"] }),
+				},
+			},
+		})
+		expect(sections.map(describeSection)).toEqual([
+			HUE_SECTION,
+			{
+				kind: "slot",
+				legendKey: "densityCurve",
+				slotKey: "densityCurveStroke",
+				field: "region",
+			},
+		])
+	})
+
+	it("gradient (quantitative) legends never fold", () => {
+		const sections = sectionsOf({
+			encodings: enc({ x: "weight", hue: "score" }),
+			configs: { x: distributionOn, colorSlots: { rug: slot({ field: "score" }) } },
+		})
+		expect(sections.map(describeSection)).toEqual([
+			{ kind: "combined", channels: ["hue"], field: "score", type: "quantitative" },
+			{ kind: "slot", legendKey: "rug", slotKey: "rug", field: "score" },
+		])
+	})
+
+	it("a distinct title on the slot legend keeps it separate; combining off keeps every legend", () => {
+		const titled = sectionsOf({
+			encodings: colorByRegion,
+			configs: allByRegion,
+			labels: labelsCfg({ legendTitles: { rug: "Observations" } }),
+		})
+		// The density curve (untitled) still folds into the Color legend.
+		expect(titled.map(describeSection)).toEqual([HUE_SECTION, RUG_SECTION])
+		const split = sectionsOf({
+			encodings: colorByRegion,
+			configs: allByRegion,
+			legendCfg: legendCfg({ combineSameVariable: false }),
+		})
+		expect(split.map((s) => describeSection(s).kind)).toEqual(["combined", "slot", "slot"])
 	})
 })
 

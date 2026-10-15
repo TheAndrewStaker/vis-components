@@ -41,6 +41,7 @@ import {
 import {
 	currentChannelConfigsAtom,
 	currentEncodingsAtom,
+	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
 	currentLabelsAtom,
 	type AtomValueType,
@@ -49,6 +50,8 @@ import {
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
 import { effectiveType } from "../../../lib/fieldType"
 import { parseValue } from "../../../lib/scales"
+import { orderedLevels } from "../../../lib/smartSort"
+import type { FieldType } from "../../../lib/types"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { LABEL_COL, LabelSpacer } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
@@ -64,6 +67,14 @@ import {
 } from "./AxisOptionsPanel"
 import { Select } from "../../../../../components/ui/Select"
 
+/** Field types the line-thickness "Vary by" dropdown offers (besides the
+ *  connection field itself, which is always listed): discrete variables get
+ *  one thickness input per level, so continuous ones stand down. */
+const THICKNESS_VARY_BY_TYPES: ReadonlySet<FieldType> = new Set<FieldType>([
+	"categorical",
+	"ordinal",
+])
+
 /** Sidebar panel for the Connection encoding (the line that joins points
  *  sharing a connection-encoding value).
  *
@@ -78,6 +89,7 @@ export const ConnectionOptionsPanel = () => {
 	const [encodings, setEncodings] = useAtom(currentEncodingsAtom)
 	const theme = useCurrentTheme()
 	const fieldOverrides = useAtomValue(currentFieldOverridesAtom)
+	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
 	const dataset = useCurrentDatasetView()
 	// Associates the "ID column" label with its select (htmlFor/id).
 	const hierarchyIdSelectId = useId()
@@ -182,34 +194,60 @@ export const ConnectionOptionsPanel = () => {
 
 	// Line-thickness "Vary by" state. Only scatter connection lines and radar
 	// polygons group by the connection value (area layers group by hue), so
-	// per-connection-category thickness is offered in those two modes only.
-	// The dropdown's position is DERIVED — no separate mode flag is stored:
-	// a populated `thicknessByValue` map IS "vary by", an empty / absent one
-	// IS "single level" (an empty map also renders byte-identically to a
-	// single thickness, so nothing is lost).
-	const thicknessByValue = configs.connection?.thicknessByValue
-	const thicknessVarying = !!thicknessByValue && Object.keys(thicknessByValue).length > 0
+	// per-level thickness is offered in those two modes only. The dropdown
+	// lists the connection field plus every categorical / ordinal variable:
+	// a line's thickness is looked up off its representative row (the same
+	// first-row convention the line color slot uses), so any variable that
+	// is constant within a line works — not only the one the lines are
+	// grouped by.
+	//
+	// The dropdown's position is DERIVED: `thicknessField` names the variable
+	// when one was picked here; visuals saved before it existed carry only a
+	// populated `thicknessByValue` map, which means "vary by the connection
+	// field". An empty / absent map with no field IS "— none —" (an empty map
+	// also renders byte-identically to a single thickness, so nothing is
+	// lost). A stored field that's gone from the data set renders as single
+	// level (the resolver finds no matching cells), so the dropdown reads
+	// that way.
 	const supportsThicknessVaryBy =
 		!!connectionFieldName && (isScatterMode || isRadarMode)
-	// Distinct connection-field values, in first-seen order — the categories
-	// the per-value inputs enumerate. Parsed through the field's effective
-	// type so numeric/temporal keys match what the renderers key on.
-	const connectionValues =
-		supportsThicknessVaryBy && dataset && connectionFieldName
-			? [
-					...new Set(
-						dataset.rows
-							.map((r) =>
-								parseValue(
-									r[connectionFieldName],
-									effectiveType(dataset, connectionFieldName, fieldOverrides)
-								)
-							)
-							.filter((v) => v !== null)
-							.map(String)
-					),
-				]
-			: []
+	const typeOf = (name: string): FieldType =>
+		dataset ? effectiveType(dataset, name, fieldOverrides) : "categorical"
+	const thicknessByValue = configs.connection?.thicknessByValue
+	const storedThicknessField = configs.connection?.thicknessField ?? null
+	const thicknessField: string | null = storedThicknessField
+		? dataset?.fields.some((f) => f.name === storedThicknessField)
+			? storedThicknessField
+			: null
+		: thicknessByValue && Object.keys(thicknessByValue).length > 0
+			? connectionFieldName
+			: null
+	const thicknessVarying = thicknessField !== null
+	const thicknessVaryByFields = (dataset?.fields ?? [])
+		.map((f) => f.name)
+		.filter(
+			(name) =>
+				name === connectionFieldName ||
+				name === thicknessField ||
+				THICKNESS_VARY_BY_TYPES.has(typeOf(name))
+		)
+	// Distinct levels of a field, in the Fields panel's pinned order — the
+	// categories the per-value inputs enumerate. Parsed through the field's
+	// effective type so numeric/temporal keys match what the renderers key on.
+	const levelsOf = (name: string): string[] => {
+		if (!dataset) return []
+		const type = typeOf(name)
+		const values = [
+			...new Set(
+				dataset.rows
+					.map((r) => parseValue(r[name], type))
+					.filter((v) => v !== null)
+					.map(String)
+			),
+		]
+		return orderedLevels(values, type, levelOrders[name]).map((l) => l.value)
+	}
+	const thicknessLevels = thicknessField ? levelsOf(thicknessField) : []
 
 	// Per-control "changed vs default" flags, driving the subsection dots + the
 	// bold-purple labels (compared the same way as the top-level dot).
@@ -261,19 +299,18 @@ export const ConnectionOptionsPanel = () => {
 		updateCfg({ flowTargetField: connectionFieldName })
 	}
 
-	// Flip between single thickness and per-connection-category thickness.
-	// Selecting "vary by" SEEDS every category at the current single value
-	// (so the map is non-empty — which is what makes the dropdown read as
-	// "field" — yet renders identically until a value is edited); selecting
-	// "single level" clears the map.
-	const setThicknessVaryBy = (varyBy: boolean) => {
-		if (!varyBy) {
-			updateCfg({ thicknessByValue: {} })
+	// Pick the "Vary by" variable (or "— none —"). Picking a variable SEEDS
+	// every level at the current single value (so the map is non-empty, yet
+	// renders identically until a value is edited) and records the field;
+	// "— none —" clears both.
+	const setThicknessVaryBy = (next: string) => {
+		if (next === "") {
+			updateCfg({ thicknessField: null, thicknessByValue: {} })
 			return
 		}
 		const seeded: Record<string, number> = {}
-		for (const v of connectionValues) seeded[v] = cfg.thickness
-		updateCfg({ thicknessByValue: seeded })
+		for (const v of levelsOf(next)) seeded[v] = cfg.thickness
+		updateCfg({ thicknessField: next, thicknessByValue: seeded })
 	}
 	const setThicknessFor = (value: string, n: number) => {
 		if (n < 0) return
@@ -284,9 +321,10 @@ export const ConnectionOptionsPanel = () => {
 			},
 		})
 	}
-	// Per-row "reset" returns the category to the single fallback WITHOUT
-	// removing its key, so the map stays populated and the mode stays "vary
-	// by" (removing the last key would silently snap back to single level).
+	// Per-row "reset" returns the level to the single fallback WITHOUT
+	// removing its key, so a legacy (field-less) map stays populated and the
+	// mode stays "vary by" (removing its last key would silently snap back to
+	// single level).
 	const resetThicknessFor = (value: string) =>
 		updateCfg({
 			thicknessByValue: {
@@ -326,24 +364,24 @@ export const ConnectionOptionsPanel = () => {
 	// Shared line-thickness control — lives inside the "Line properties"
 	// subsection in every mode that draws connection lines. When the mode
 	// groups lines by the connection value (scatter / radar), a "Vary by"
-	// dropdown lets the thickness differ per category.
+	// dropdown lets the thickness differ per level of a chosen variable.
 	const lineThicknessRow = supportsThicknessVaryBy ? (
 		<div className="flex flex-col gap-2">
 			<SelectInput
 				label="Vary by"
 				labelClassName={LABEL_COL}
 				changed={thicknessVarying}
-				value={thicknessVarying ? "field" : "single"}
+				value={thicknessField ?? ""}
 				options={[
-					{ value: "single", label: "— none —" },
-					{ value: "field", label: connectionFieldName ?? "Connection" },
+					{ value: "", label: "— none —" },
+					...thicknessVaryByFields.map((name) => ({ value: name, label: name })),
 				]}
-				onChange={(v) => setThicknessVaryBy(v === "field")}
+				onChange={setThicknessVaryBy}
 				selectClassName="flex-1"
 			/>
 			{thicknessVarying ? (
 				<div className="flex flex-col gap-1.5">
-					{connectionValues.map((v) => {
+					{thicknessLevels.map((v) => {
 						const rowValue =
 							configs.connection?.thicknessByValue?.[v] ?? cfg.thickness
 						return (
@@ -370,9 +408,9 @@ export const ConnectionOptionsPanel = () => {
 							</div>
 						)
 					})}
-					{connectionValues.length === 0 && (
+					{thicknessLevels.length === 0 && (
 						<p className="vc-help">
-							No {connectionFieldName} values in the data yet.
+							No {thicknessField} values in the data yet.
 						</p>
 					)}
 				</div>

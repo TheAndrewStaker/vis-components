@@ -1,7 +1,12 @@
 import { useMemo } from "react"
 import { useAtomValue } from "jotai"
-import type { ColorSlotKey, OpacitySlotKey } from "../lib/channelConfig"
+import type {
+	ColorSlotKey,
+	ModulationSlotKey,
+	OpacitySlotKey,
+} from "../lib/channelConfig"
 import { COLOR_SLOT_REGISTRY } from "../lib/colorSlots"
+import { MODULATION_SLOT_REGISTRY } from "../lib/modulationSlots"
 import { OPACITY_SLOT_REGISTRY } from "../lib/opacitySlots"
 import { effectiveType } from "../lib/fieldType"
 import { resolveLegendDomain } from "../lib/legendBreaks"
@@ -82,12 +87,22 @@ export type AestheticScales = {
 	opacitySlots: Partial<
 		Record<OpacitySlotKey, { scale: UnitScale; field: AestheticFieldInfo } | null>
 	>
+	/** Saturation / brightness scales for the per-part modulation slots
+	 * (outline / line). Present only when that slot maps a field; renderers
+	 * fall back to the slot's static level (or no modulation) otherwise.
+	 * Optional so fixture scales in tests don't have to supply them. */
+	saturationSlots?: ModulationSlotScales
+	brightnessSlots?: ModulationSlotScales
 	/** Cross-palette pattern-ink table for the current theme (hex → paired
 	 * ink, see `buildThemeInkFallback`). Rides here because every pattern
 	 * resolution site already receives the scales bundle; optional so tests
 	 * building fixture scales don't have to supply one. */
 	themeInkFallback?: ThemeInkFallback
 }
+
+export type ModulationSlotScales = Partial<
+	Record<ModulationSlotKey, { scale: UnitScale; field: AestheticFieldInfo } | null>
+>
 
 const NULL_SCALES: AestheticScales = {
 	hue: null,
@@ -237,6 +252,30 @@ export const useAestheticScales = (): AestheticScales => {
 			}
 		}
 
+		// Saturation / brightness slots, same shape: a scale per mapped slot.
+		const buildModulationSlots = (
+			key: "saturationSlots" | "brightnessSlots"
+		): ModulationSlotScales => {
+			const out: ModulationSlotScales = {}
+			const makeScale =
+				key === "saturationSlots" ? makeSaturationScale : makeBrightnessScale
+			for (const def of MODULATION_SLOT_REGISTRY) {
+				const slotCfg = channelConfigs[key]?.[def.key]
+				const field = slotCfg?.field ?? null
+				if (!field) continue
+				const type = effectiveType(dataset, field, overrides)
+				out[def.key] = {
+					scale: makeScale(
+						rows.map((r) => r[field]),
+						type,
+						slotCfg?.range
+					),
+					field: { name: field, type },
+				}
+			}
+			return out
+		}
+
 		return {
 			hue: hue
 				? {
@@ -355,6 +394,8 @@ export const useAestheticScales = (): AestheticScales => {
 				: null,
 			colorSlots,
 			opacitySlots: opacitySlotsScales,
+			saturationSlots: buildModulationSlots("saturationSlots"),
+			brightnessSlots: buildModulationSlots("brightnessSlots"),
 			themeInkFallback,
 		}
 	}, [

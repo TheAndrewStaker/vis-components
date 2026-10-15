@@ -18,7 +18,10 @@ vi.mock("./plotCanvas/measureText", () => ({
 }))
 import {
 	EMPTY_CHANNEL_CONFIGS,
+	DEFAULT_AXIS_CONFIG,
 	DEFAULT_CATEGORICAL_HUE_CONFIG,
+	DEFAULT_DISTRIBUTION_OVERLAY_CONFIG,
+	DEFAULT_HISTOGRAM_CONFIG,
 	DEFAULT_PATTERN_CONFIG,
 	DEFAULT_SHAPE_CONFIG,
 } from "../../lib/channelConfig"
@@ -2765,5 +2768,98 @@ describe("Legend — Legend text", () => {
 		) as HTMLElement
 		expect(body.style.fontFamily).toContain("Georgia")
 		expect(d3Rgb(body.style.color).formatHex()).toBe("#ff0000")
+	})
+})
+
+describe("Legend — rug + density curve colored by the Color field", () => {
+	// Full-Legend mount: the slot sections and the pass that folds them into
+	// a same-field legend live in the planner, so this needs the dataset /
+	// encodings scaffolding (same shape as the hexbin block above).
+	const DATASET_ID = "ds-density-slots-legend-test"
+	const buildDataset = (): Dataset =>
+		buildDatasetFixture({
+			id: DATASET_ID,
+			name: "groups",
+			filename: "groups.csv",
+			fields: [
+				{ name: "group", inferredType: "categorical" },
+				{ name: "value", inferredType: "quantitative" },
+			],
+			rows: [
+				{ group: "A", value: "1" },
+				{ group: "B", value: "5" },
+				{ group: "C", value: "9" },
+			],
+		})
+	const byGroup = { field: "group", singleColor: "#000000" }
+
+	const mountLegend = (opts: { colorByGroup: boolean }) => {
+		const store = installInMemoryLocalStorage()
+		const encodings = {
+			...emptyEncodings(),
+			x: { field: "value" },
+			...(opts.colorByGroup ? { hue: { field: "group" } } : {}),
+		}
+		// A filled density curve with a rug, every part colored by `group`.
+		const channelConfigs = {
+			...EMPTY_CHANNEL_CONFIGS,
+			x: {
+				...DEFAULT_AXIS_CONFIG,
+				histogram: { ...DEFAULT_HISTOGRAM_CONFIG, showRug: true, densityFill: true },
+				distributionOverlay: {
+					...DEFAULT_DISTRIBUTION_OVERLAY_CONFIG,
+					showDensityCurve: true,
+				},
+			},
+			colorSlots: {
+				rug: byGroup,
+				densityCurveFill: byGroup,
+				densityCurveStroke: byGroup,
+			},
+		}
+		/* eslint-disable @th/use-wrapped-json-functions */
+		store.set(
+			"vis-components:datasets",
+			JSON.stringify({ [DATASET_ID]: buildDataset() })
+		)
+		store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
+		store.set("vis-components:previewVersionId", JSON.stringify(null))
+		store.set("vis-components:currentEncodings", JSON.stringify(encodings))
+		store.set(
+			"vis-components:currentChannelConfigs",
+			JSON.stringify(channelConfigs)
+		)
+		/* eslint-enable @th/use-wrapped-json-functions */
+		const init = (snap: TestStore) => {
+			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
+			snap.set(currentDatasetIdAtom, DATASET_ID)
+			snap.set(previewVersionIdAtom, null)
+			snap.set(currentEncodingsAtom, encodings)
+			snap.set(currentChannelConfigsAtom, channelConfigs)
+			snap.set(currentLabelsAtom, DEFAULT_LABELS_CONFIG)
+			snap.set(currentFieldOverridesAtom, {})
+			snap.set(currentFieldLevelOrdersAtom, {})
+		}
+		return render(
+			<TestProvider initializeState={init}>
+				<Legend />
+			</TestProvider>
+		)
+	}
+	const sectionTitles = (container: HTMLElement) =>
+		[...container.querySelectorAll("div.font-medium")].map((el) => el.textContent)
+
+	it("draws ONE legend titled by the field — not a Rug and a Density curve legend beside it", () => {
+		const { container } = mountLegend({ colorByGroup: true })
+		expect(sectionTitles(container)).toEqual(["group"])
+		expect(container.textContent).not.toContain("Rug")
+		expect(container.textContent).not.toContain("Density curve")
+	})
+
+	it("without a Color mapping the two slot legends still read as one, titled by the field", () => {
+		const { container } = mountLegend({ colorByGroup: false })
+		expect(sectionTitles(container)).toEqual(["group"])
+		// Every category is listed exactly once — one swatch row each.
+		expect(container.querySelectorAll(".vc-swatch-cell")).toHaveLength(3)
 	})
 })

@@ -1,10 +1,8 @@
-import { useSetAtom } from "jotai"
-import { duplicateVisual } from "../../chartBuilder/lib/duplicateVisual"
-import { visualsAtom } from "../../chartBuilder/store/atoms"
-
 type Props = {
 	visualId: string
 	visualName: string
+	/** Opens the destination picker; the page does the actual copy. */
+	onDuplicate: (visualId: string) => void
 }
 
 const CopyIcon = () => (
@@ -21,28 +19,25 @@ const CopyIcon = () => (
 )
 
 /**
- * Hover-over-tile button that drops an independent copy of a visual into the
- * library. Non-destructive, so it acts immediately without a confirmation
- * modal (unlike delete).
+ * Hover-over-tile button that asks where to put an independent copy of a
+ * visual (the picker defaults to the original's folder).
  */
-export const DuplicateVisualButton = ({ visualId, visualName }: Props) => {
-	const setVisuals = useSetAtom(visualsAtom)
-
+export const DuplicateVisualButton = ({
+	visualId,
+	visualName,
+	onDuplicate,
+}: Props) => {
 	const onClick = (e: React.MouseEvent) => {
 		e.preventDefault()
 		e.stopPropagation()
-		setVisuals((prev) => {
-			const original = prev.find((v) => v.id === visualId)
-			if (!original) return prev
-			return [duplicateVisual(original), ...prev]
-		})
+		onDuplicate(visualId)
 	}
 
 	return (
 		<button
 			type="button"
 			onClick={onClick}
-			title="Duplicate visualization"
+			title="Duplicate visualization…"
 			aria-label={`Duplicate ${visualName}`}
 			className="flex h-6 w-6 items-center justify-center rounded bg-white/90 shadow-sm ring-1 ring-stone-200 hover:bg-stone-100 hover:text-stone-700 dark:bg-stone-800/90 dark:ring-stone-700 dark:hover:bg-stone-700 dark:hover:text-stone-200 vc-muted"
 		>

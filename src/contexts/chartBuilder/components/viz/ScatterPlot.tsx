@@ -16,6 +16,7 @@ import { effectiveType } from "../../lib/fieldType"
 import { resolveTextFont, resolveTitleFont } from "../../lib/labelsConfig"
 import {
 	resolveSlotColor,
+	slotModulationResolver,
 	slotOpacityResolver,
 } from "../../lib/resolveLayerColor"
 import { resolveMarkAesthetics } from "../../lib/resolveMarkAesthetics"
@@ -735,7 +736,8 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 					legendHighlight,
 					publishHover,
 					markedIndices,
-					tooltipPointsOnly
+					tooltipPointsOnly,
+					slotModulationResolver("line", channelConfigs, aestheticScales)
 				)}
 				{renderMarkPaths({
 					marks: sortByDrawOrder(

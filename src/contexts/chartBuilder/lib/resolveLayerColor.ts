@@ -6,18 +6,22 @@ import {
 	type ChannelConfigs,
 	type ColorSlotConfig,
 	type ColorSlotKey,
+	type ModulationSlotConfig,
+	type ModulationSlotKey,
 	type OpacitySlotConfig,
 	type OpacitySlotKey,
 } from "./channelConfig"
+import { modulationSlotEdited } from "./modulationSlots"
 import type { PatternDefSpec } from "./patternDefs"
 import {
 	DEFAULT_PATTERN_INK,
 	inkForHueColor,
 	inkPaletteForHue,
+	resolveDefaultPatternForMark,
 	resolvePatternForMark,
 } from "./patterns"
 import { OPACITY_SLOT_DEFS } from "./opacitySlots"
-import { applyHueScale, modulateColor } from "./scales"
+import { applyHueScale, modulateColor, type UnitScale } from "./scales"
 import { resolveRuleColor } from "./textColorRules"
 
 /** Subset of `Slice.groupValues` (or equivalent per-row aesthetic map)
@@ -248,21 +252,23 @@ export const resolvePatternDefForItem = (
 		// the field-mapped path above).
 		const bgColor = hueG ? item.fill : patternBgFallback
 		const inkColor = channelConfigs.defaultPatternInk ?? DEFAULT_PATTERN_INK
-		return resolvePatternForMark("__default__", 0, bgColor, {
-			...DEFAULT_PATTERN_CONFIG,
-			overrides: { __default__: channelConfigs.defaultPattern },
-			inkColors: { __default__: inkColor },
-		})
+		return resolveDefaultPatternForMark(
+			bgColor,
+			channelConfigs.defaultPattern,
+			inkColor,
+			channelConfigs.pattern?.defaultScale
+		)
 	}
 
 	return null
 }
 
 /** Channel configs re-pointed at the RADAR POLYGON FILL pattern state
- *  (`PatternConfig.polygonOverrides` / `polygonInkColors` /
- *  `defaultPolygonPattern` / `defaultPolygonPatternInk`) so the ordinary
- *  per-mark resolver reads the polygon's separate picks in place of the
- *  point-fill ones. Palettes, background, and sat/bri stay shared. */
+ *  (`PatternConfig.polygonOverrides` / `polygonInkColors` / `polygonScales`
+ *  / `defaultPolygonPattern` / `defaultPolygonPatternInk` /
+ *  `defaultPolygonScale`) so the ordinary per-mark resolver reads the
+ *  polygon's separate picks in place of the point-fill ones. Palettes,
+ *  background, and sat/bri stay shared. */
 export const polygonPatternView = (
 	configs: Partial<Pick<ChannelConfigs, "pattern" | "defaultPatternInk">>
 ): { pattern: PatternConfig; defaultPattern: number | null; defaultPatternInk: string } => {
@@ -273,6 +279,8 @@ export const polygonPatternView = (
 			...pat,
 			overrides: pat?.polygonOverrides ?? {},
 			inkColors: pat?.polygonInkColors ?? {},
+			scales: pat?.polygonScales ?? {},
+			defaultScale: pat?.defaultPolygonScale ?? null,
 		},
 		defaultPattern: pat?.defaultPolygonPattern ?? null,
 		defaultPatternInk:
@@ -461,4 +469,42 @@ export const slotOpacityResolver = (
 	const slot = aestheticScales.opacitySlots[key] ?? null
 	const fallback = OPACITY_SLOT_DEFS[key].defaultLevel
 	return (row) => resolveSlotOpacity(slot, slotCfg, row, fallback)
+}
+
+/** One part's saturation or brightness level for a row: the slot's field
+ *  scale when mapped and resolvable, else its static `level`, else `null`
+ *  (no modulation — the slot's untouched state). Mirrors `resolveSlotOpacity`. */
+const resolveSlotModulation = (
+	slot: { scale: UnitScale; field: { name: string } } | null | undefined,
+	slotCfg: ModulationSlotConfig | undefined,
+	row: Record<string, unknown>
+): number | null => {
+	if (slot && slotCfg?.field) {
+		const v = slot.scale(row[slot.field.name] as never)
+		if (v != null) return v
+	}
+	return slotCfg?.level ?? null
+}
+
+/** Build a per-row color modulator for one mark part (outline / line) from
+ *  its Saturation and Brightness slots. Returns `(color, row) => color`;
+ *  identity when neither slot is set, so untouched charts render unchanged.
+ *  `"none"` (a hollow override) passes through. */
+export const slotModulationResolver = (
+	key: ModulationSlotKey,
+	channelConfigs: ChannelConfigs,
+	aestheticScales: AestheticScales
+): ((color: string, row: Record<string, unknown>) => string) => {
+	const satCfg = channelConfigs.saturationSlots?.[key]
+	const briCfg = channelConfigs.brightnessSlots?.[key]
+	if (!modulationSlotEdited(satCfg) && !modulationSlotEdited(briCfg))
+		return (color) => color
+	const satSlot = aestheticScales.saturationSlots?.[key]
+	const briSlot = aestheticScales.brightnessSlots?.[key]
+	return (color, row) => {
+		if (color === "none") return color
+		const sat = resolveSlotModulation(satSlot, satCfg, row)
+		const bri = resolveSlotModulation(briSlot, briCfg, row)
+		return sat === null && bri === null ? color : modulateColor(color, sat, bri)
+	}
 }

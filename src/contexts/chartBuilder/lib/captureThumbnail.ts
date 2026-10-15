@@ -578,12 +578,21 @@ const rasterizeSvg = (svgDataUrl: string): Promise<string | null> =>
  *  URL. Exposed for the thumbnail backfill, which polls `serializeChartSvg`
  *  until the output stabilizes and then needs to rasterize that exact frame
  *  (re-serializing could catch the next layout pass). Webfont faces embed
- *  from the local cache only (`allowNetwork: false`) — a thumbnail autosave
- *  must never wait on Google Fonts; uncached faces just fall back. */
+ *  from the local cache only by default — a thumbnail autosave must never
+ *  wait on Google Fonts; uncached faces fall back (and warm the cache for
+ *  next time). The background backfill passes `allowNetwork: true` so its
+ *  captures always get the real face. */
 export const thumbnailFromChartSvgText = async (
-	svgText: string
+	svgText: string,
+	opts: { allowNetwork?: boolean } = {}
 ): Promise<string | null> =>
-	rasterizeSvg(toDataUrl(await embedFontsInSvg(svgText, { allowNetwork: false })))
+	rasterizeSvg(
+		toDataUrl(
+			await embedFontsInSvg(svgText, {
+				allowNetwork: opts.allowNetwork ?? false,
+			})
+		)
+	)
 
 /** Capture the chart rendered in `doc` as a small PNG data URL for use as a
  *  library thumbnail. Returns `null` if no chart is rendered or

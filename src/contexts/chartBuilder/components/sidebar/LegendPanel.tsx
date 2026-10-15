@@ -53,6 +53,7 @@ import {
 	parseBreaksInput,
 	resolveLegendBreaks,
 } from "../../lib/legendBreaks"
+import { planLegendSections } from "../../lib/legendSections"
 import { isHierarchyModeId, packedSourceOf } from "../../lib/packedMeasure"
 import { DEFAULT_PATTERN_INK } from "../../lib/patterns"
 import {
@@ -433,6 +434,27 @@ export const LegendPanel = () => {
 	const densityCurveLegendMapped =
 		!!densityCurveGroupField(configs) && densityCurveOn(configs)
 
+	// Slot legends the renderer folds into another legend on their field (a
+	// rug / density curve colored exactly like the Color legend — see the
+	// coalescing pass in planLegendSections). Mirrored here so the panel
+	// doesn't offer swatch controls for a section that isn't drawn. Same
+	// inputs the Legend hands the planner; the inside offsets only place the
+	// box and don't change which sections exist.
+	const coalescedSlots: readonly LegendChannel[] =
+		dataset && (rugLegendMapped || densityCurveLegendMapped)
+			? (planLegendSections({
+					encodings,
+					configs,
+					dataset,
+					overrides,
+					labels,
+					legendCfg: { ...merged, hidden: effHidden },
+					modeDef,
+					insideExtras: { top: 0, right: 0, bottom: 0, left: 0 },
+					levelOrders,
+				})?.coalescedSlots ?? [])
+			: []
+
 	// When every mapped legend channel is hidden via the "Legends shown"
 	// toggles, the legend won't render at all — so the position / border /
 	// background controls below have nothing to act on. Collapse the
@@ -542,7 +564,10 @@ export const LegendPanel = () => {
 	const rugType =
 		rugField && dataset ? effectiveType(dataset, rugField, overrides) : undefined
 	const rugRendersSwatches =
-		rugLegendMapped && !effHidden.rug && rendersSwatches(rugType)
+		rugLegendMapped &&
+		!effHidden.rug &&
+		!coalescedSlots.includes("rug") &&
+		rendersSwatches(rugType)
 	const combineLegendSections = merged.combineSameVariable !== false
 	// Group channels that can lead a swatch-drawing section, in the
 	// renderer's GROUP_CHANNELS order.
@@ -739,14 +764,21 @@ export const LegendPanel = () => {
 			].join(" · ")
 		: LEGEND_FRIENDLY_NAME.shape
 	// The combine toggle only makes sense when ≥2 legend channels actually
-	// share a field; otherwise there's nothing to combine.
+	// share a field; otherwise there's nothing to combine. The rug and
+	// density-curve slot legends count too — they fold into a same-field
+	// Color legend (or into each other) under the same toggle.
 	const sharedVariableExists = (() => {
 		const byField = new Map<string, number>()
+		const count = (f: string | null | undefined) => {
+			if (f) byField.set(f, (byField.get(f) ?? 0) + 1)
+		}
 		for (const ch of mappedLegendChannels) {
 			if (effHidden[ch as LegendChannel]) continue
-			const f = encodings[ch]?.field
-			if (!f) continue
-			byField.set(f, (byField.get(f) ?? 0) + 1)
+			count(encodings[ch]?.field)
+		}
+		if (rugLegendMapped && !effHidden.rug) count(configs.colorSlots?.rug?.field)
+		if (densityCurveLegendMapped && !effHidden.densityCurve) {
+			count(densityCurveGroupField(configs))
 		}
 		for (const n of byField.values()) if (n >= 2) return true
 		return false

@@ -800,11 +800,14 @@ const buildPolygons = <P extends LocalPoint>(
 			sorted[0]?.row ?? { [connectionField]: key }
 		)
 		// Per-series polygon thickness — a per-category override (keyed by the
+		// Vary-by field's value off the representative row, else by the
 		// series/connection value) when set, else the single `cfg.thickness`.
 		const lineThickness = resolveConnectionThickness({
 			groupKey: key,
 			thickness: cfg.thickness,
 			byValue: cfg.thicknessByValue,
+			field: cfg.thicknessField ?? null,
+			row: sorted[0]?.row ?? { [connectionField]: key },
 		})
 		series.push({
 			key,

@@ -13,7 +13,7 @@ import {
 	type LegendSwatchShape,
 	resolveGradientBarStyle,
 } from "../../../lib/labelsConfig"
-import { PATTERN_PALETTE } from "../../../lib/patterns"
+import { PatternTile } from "../../../lib/patternDefs"
 import { symbolPath } from "../../../lib/scales"
 import {
 	currentRenderedGradientBarLengthAtom,
@@ -470,7 +470,16 @@ export const ComposedSwatch = ({
 }: {
 	color: string
 	opacity: number
-	pattern: { bg: string; ink: string; paletteIdx: number; svgId: string } | null
+	/** Pattern overlay for the swatch. `scale` is the tile zoom (the
+	 *  category's Scale pick, ×1 when absent) — the legend tiles at the same
+	 *  zoom as the marks. */
+	pattern: {
+		bg: string
+		ink: string
+		paletteIdx: number
+		svgId: string
+		scale?: number
+	} | null
 	shape?: {
 		idx: number
 		/** Resolved glyph for `idx` (built-in symbol OR the chart's custom
@@ -537,9 +546,6 @@ export const ComposedSwatch = ({
 			shape?.idx ?? (typeof swatchShape === "number" ? swatchShape : 0)
 		const pointGlyph: ResolvedGlyph =
 			shape?.glyph ?? { kind: "symbol", idx: shapeIdx }
-		const def = pattern
-			? PATTERN_PALETTE[pattern.paletteIdx % PATTERN_PALETTE.length]
-			: null
 		const patId = pattern ? `legend-combined-${pattern.svgId}` : null
 		const shapeFill = pattern
 			? `url(#${patId})`
@@ -554,21 +560,15 @@ export const ComposedSwatch = ({
 				style={{ opacity }}
 				aria-hidden="true"
 			>
-				{pattern && def && patId && (
+				{pattern && patId && (
 					<defs>
-						<pattern
+						<PatternTile
 							id={patId}
-							patternUnits="userSpaceOnUse"
-							width={def.size}
-							height={def.size}
-						>
-							<rect
-								width={def.size}
-								height={def.size}
-								fill={pattern.bg}
-							/>
-							{def.render(pattern.ink)}
-						</pattern>
+							paletteIdx={pattern.paletteIdx}
+							bgColor={pattern.bg}
+							inkColor={pattern.ink}
+							scale={pattern.scale}
+						/>
 					</defs>
 				)}
 				<line
@@ -645,9 +645,6 @@ export const ComposedSwatch = ({
 		// picked a glyph for the color swatches. Draw the symbol filled with
 		// the swatch color — or a pattern overlay when a pattern channel
 		// shares the field, so the composed visual is preserved.
-		const def = pattern
-			? PATTERN_PALETTE[pattern.paletteIdx % PATTERN_PALETTE.length]
-			: null
 		const patId = pattern ? `legend-combined-${pattern.svgId}` : null
 		const fill = pattern && patId ? `url(#${patId})` : color
 		const r = swatchSize ?? 5
@@ -661,17 +658,15 @@ export const ComposedSwatch = ({
 				className="flex-shrink-0"
 				style={{ opacity }}
 			>
-				{pattern && def && patId && (
+				{pattern && patId && (
 					<defs>
-						<pattern
+						<PatternTile
 							id={patId}
-							patternUnits="userSpaceOnUse"
-							width={def.size}
-							height={def.size}
-						>
-							<rect width={def.size} height={def.size} fill={pattern.bg} />
-							{def.render(pattern.ink)}
-						</pattern>
+							paletteIdx={pattern.paletteIdx}
+							bgColor={pattern.bg}
+							inkColor={pattern.ink}
+							scale={pattern.scale}
+						/>
 					</defs>
 				)}
 				{swatchShape === "line" ? (
@@ -696,7 +691,6 @@ export const ComposedSwatch = ({
 		)
 	}
 	if (pattern) {
-		const def = PATTERN_PALETTE[pattern.paletteIdx % PATTERN_PALETTE.length]
 		const patId = `legend-combined-${pattern.svgId}`
 		return (
 			<svg
@@ -707,15 +701,13 @@ export const ComposedSwatch = ({
 				aria-hidden="true"
 			>
 				<defs>
-					<pattern
+					<PatternTile
 						id={patId}
-						patternUnits="userSpaceOnUse"
-						width={def.size}
-						height={def.size}
-					>
-						<rect width={def.size} height={def.size} fill={pattern.bg} />
-						{def.render(pattern.ink)}
-					</pattern>
+						paletteIdx={pattern.paletteIdx}
+						bgColor={pattern.bg}
+						inkColor={pattern.ink}
+						scale={pattern.scale}
+					/>
 				</defs>
 				<rect
 					width={w}

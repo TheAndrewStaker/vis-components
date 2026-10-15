@@ -41,11 +41,11 @@ import {
 	type BackfillProgress,
 } from "../lib/thumbnailBackfill"
 import { useAutoRefreshThumbnails } from "../hooks/useAutoRefreshThumbnails"
-import { BulkMoveModal } from "./BulkMoveModal"
 import { DeleteVisualButton } from "./DeleteVisualButton"
 import { DownloadVisualsButton } from "./DownloadVisualsButton"
 import { DuplicateVisualButton } from "./DuplicateVisualButton"
 import { UNFILED_FOLDER_ID } from "../lib/folderSubtree"
+import { FolderPickerModal } from "./FolderPickerModal"
 import { FolderTree } from "./FolderTree"
 import { MoveToFolderButton } from "./MoveToFolderButton"
 import {
@@ -135,12 +135,28 @@ export const LibraryPage = () => {
 		new Set()
 	)
 	const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
+	// Visuals awaiting a destination in the Duplicate picker — one id from a
+	// tile's button, or the whole selection from the bulk bar.
+	const [duplicateRequest, setDuplicateRequest] = useState<{
+		ids: string[]
+		fromSelection: boolean
+	} | null>(null)
 
 	const toggleVisualSelected = (visualId: string) => {
 		setSelectedVisualIds((prev) => {
 			const next = new Set(prev)
 			if (next.has(visualId)) next.delete(visualId)
 			else next.add(visualId)
+			return next
+		})
+	}
+	const setVisualsSelected = (visualIds: string[], selected: boolean) => {
+		setSelectedVisualIds((prev) => {
+			const next = new Set(prev)
+			for (const id of visualIds) {
+				if (selected) next.add(id)
+				else next.delete(id)
+			}
 			return next
 		})
 	}
@@ -302,15 +318,30 @@ export const LibraryPage = () => {
 		clearSelection()
 	}
 
-	const onBulkDuplicate = () => {
+	const onDuplicateTo = (folderId: string | null) => {
+		if (!duplicateRequest) return
+		const ids = new Set(duplicateRequest.ids)
 		setVisuals((prev) => {
+			const now = Date.now()
 			const copies = prev
-				.filter((v) => selectedVisualIds.has(v.id))
-				.map((v) => duplicateVisual(v))
+				.filter((v) => ids.has(v.id))
+				.map((v) => duplicateVisual(v, now, folderId))
 			return [...copies, ...prev]
 		})
-		clearSelection()
+		// A tile's copy leaves whatever else is selected alone.
+		if (duplicateRequest.fromSelection) clearSelection()
+		setDuplicateRequest(null)
 	}
+	// Pre-pick the sources' shared folder, so confirming straight away keeps
+	// the copy beside its original.
+	const duplicateSourceFolders = new Set(
+		visuals
+			.filter((v) => duplicateRequest?.ids.includes(v.id))
+			.map((v) => v.folderId ?? null)
+	)
+	const duplicateInitialTarget =
+		duplicateSourceFolders.size === 1 ? [...duplicateSourceFolders][0] : null
+	const duplicateCount = duplicateRequest?.ids.length ?? 0
 
 	const onBulkDelete = () => {
 		// Straight to the Trash, no confirm: restoring is one click there, and
@@ -516,8 +547,16 @@ export const LibraryPage = () => {
 								<Button compact onClick={() => setBulkMoveOpen(true)}>
 									Move…
 								</Button>
-								<Button compact onClick={onBulkDuplicate}>
-									Duplicate
+								<Button
+									compact
+									onClick={() =>
+										setDuplicateRequest({
+											ids: [...selectedVisualIds],
+											fromSelection: true,
+										})
+									}
+								>
+									Duplicate…
 								</Button>
 								<DownloadVisualsButton selected={selectedVisuals} />
 								<Button
@@ -540,6 +579,7 @@ export const LibraryPage = () => {
 							onSort={onSort}
 							selectedVisualIds={selectedVisualIds}
 							onToggleVisual={toggleVisualSelected}
+							onSetVisualsSelected={setVisualsSelected}
 							onToggleAllVisible={toggleAllVisible}
 						/>
 					) : gridRows.length === 0 ? (
@@ -683,6 +723,12 @@ export const LibraryPage = () => {
 										<DuplicateVisualButton
 											visualId={d.visual.id}
 											visualName={d.visual.name}
+											onDuplicate={(id) =>
+												setDuplicateRequest({
+													ids: [id],
+													fromSelection: false,
+												})
+											}
 										/>
 										<DeleteVisualButton
 											visualId={d.visual.id}
@@ -696,11 +742,20 @@ export const LibraryPage = () => {
 					)}
 				</div>
 			</div>
-			<BulkMoveModal
+			<FolderPickerModal
 				open={bulkMoveOpen}
-				count={selectedCount}
+				title={`Move ${selectedCount} visualization${selectedCount === 1 ? "" : "s"}`}
+				confirmLabel="Move"
 				onCancel={() => setBulkMoveOpen(false)}
 				onConfirm={onBulkMove}
+			/>
+			<FolderPickerModal
+				open={duplicateRequest !== null}
+				title={`Duplicate ${duplicateCount} visualization${duplicateCount === 1 ? "" : "s"}`}
+				confirmLabel="Duplicate"
+				initialTarget={duplicateInitialTarget}
+				onCancel={() => setDuplicateRequest(null)}
+				onConfirm={onDuplicateTo}
 			/>
 			{/* Floating trash can, bottom-right: what Delete moves visuals into. */}
 			<TrashButton />

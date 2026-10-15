@@ -90,16 +90,10 @@ export const GeoChoroplethPlot = (props: GeoChoroplethPlotProps = {}) => {
 		// Default behavior: every region draws — one NOT in the dataset (no
 		// matched row) fills with the no-data color, exactly like a matched row
 		// whose measure value is null. Turning `showNoDataRegions` OFF omits
-		// unmatched regions entirely, drawing only regions with data.
-		//
-		// A focus region implies "show this area as a filled map", so it also
-		// fills non-data regions with the no-data color — both the own level's
-		// gaps (e.g. non-data US states) and, on a world-countries map, the
-		// focused continent's other countries (which the world backdrop doesn't
-		// cover at the countries level). Without this the focused viewport shows
-		// blank land wherever the data doesn't reach.
-		const fillNoDataRegions =
-			mapConfig.showNoDataRegions || mapConfig.focusRegion !== "auto"
+		// unmatched regions entirely, drawing only regions with data. The toggle
+		// is honored under any focus region too — a focused/custom viewport with
+		// the toggle off shows only the data regions (e.g. just Washington).
+		const fillNoDataRegions = mapConfig.showNoDataRegions
 
 		return geo.renderInteractiveRoot(
 			ctx,

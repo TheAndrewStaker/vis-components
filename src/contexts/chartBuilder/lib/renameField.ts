@@ -2,6 +2,7 @@ import type {
 	ChannelConfigs,
 	ColorSlotConfig,
 	DataLabelsConfig,
+	ModulationSlotConfig,
 	OpacitySlotConfig,
 } from "./channelConfig"
 import type { AnnotationsConfig } from "./annotationsConfig"
@@ -244,7 +245,7 @@ export type FieldNameConfigs = {
 	derivedVariablesConfig?: DerivedVariablesConfig
 }
 
-const renameSlotField = <S extends ColorSlotConfig | OpacitySlotConfig>(
+const renameSlotField = <S extends ColorSlotConfig | OpacitySlotConfig | ModulationSlotConfig>(
 	slot: S,
 	oldName: string,
 	newName: string
@@ -252,7 +253,7 @@ const renameSlotField = <S extends ColorSlotConfig | OpacitySlotConfig>(
 
 /** Rename the value-key in a slot's per-value map when the slot itself is
  * driven by `drivingField` (melted-rename case). */
-const renameSlotValues = <S extends ColorSlotConfig | OpacitySlotConfig>(
+const renameSlotValues = <S extends ColorSlotConfig | OpacitySlotConfig | ModulationSlotConfig>(
 	slot: S,
 	drivingField: string,
 	oldName: string,
@@ -268,6 +269,11 @@ const renameSlotValues = <S extends ColorSlotConfig | OpacitySlotConfig>(
 		const overrides = renameKey(slot.opacity.overrides, oldName, newName)
 		if (overrides !== slot.opacity.overrides)
 			return { ...slot, opacity: { ...slot.opacity, overrides } }
+	}
+	if ("range" in slot && slot.range?.overrides) {
+		const overrides = renameKey(slot.range.overrides, oldName, newName)
+		if (overrides !== slot.range.overrides)
+			return { ...slot, range: { ...slot.range, overrides } }
 	}
 	return slot
 }
@@ -353,6 +359,10 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 						cc.connection.flowTargetField === oldName
 							? newName
 							: cc.connection.flowTargetField,
+					thicknessField:
+						cc.connection.thicknessField === oldName
+							? newName
+							: cc.connection.thicknessField,
 				})
 			: cc.connection,
 		drawOrder:
@@ -365,6 +375,12 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 		opacitySlots: mapRecordValues(slotsAsRecord(cc.opacitySlots), (s) =>
 			renameSlotField(s, oldName, newName)
 		) as ChannelConfigs["opacitySlots"],
+		saturationSlots: mapRecordValues(slotsAsRecord(cc.saturationSlots), (s) =>
+			renameSlotField(s, oldName, newName)
+		) as ChannelConfigs["saturationSlots"],
+		brightnessSlots: mapRecordValues(slotsAsRecord(cc.brightnessSlots), (s) =>
+			renameSlotField(s, oldName, newName)
+		) as ChannelConfigs["brightnessSlots"],
 	})
 
 	const dlc = state.dataLabelsConfig
@@ -576,6 +592,18 @@ const renameMeltedValueRefs = <T extends FieldNameConfigs>(
 						inkColors:
 							renameKey(cc.pattern.inkColors, oldName, newName) ??
 							cc.pattern.inkColors,
+						scales: renameKey(cc.pattern.scales, oldName, newName),
+						polygonOverrides: renameKey(
+							cc.pattern.polygonOverrides,
+							oldName,
+							newName
+						),
+						polygonInkColors: renameKey(
+							cc.pattern.polygonInkColors,
+							oldName,
+							newName
+						),
+						polygonScales: renameKey(cc.pattern.polygonScales, oldName, newName),
 					})
 				: cc.pattern,
 		shape:
@@ -592,25 +620,35 @@ const renameMeltedValueRefs = <T extends FieldNameConfigs>(
 						),
 					})
 				: cc.shape,
-		connection:
-			drives(enc.connection) && cc.connection
-				? patched(cc.connection, {
-						lineColors:
-							renameKey(cc.connection.lineColors, oldName, newName) ??
-							cc.connection.lineColors,
-						thicknessByValue: renameKey(
-							cc.connection.thicknessByValue,
-							oldName,
-							newName
-						),
-						dashPatterns:
-							renameKey(cc.connection.dashPatterns, oldName, newName) ??
-							cc.connection.dashPatterns,
-						dashAlternateColors:
-							renameKey(cc.connection.dashAlternateColors, oldName, newName) ??
-							cc.connection.dashAlternateColors,
-					})
-				: cc.connection,
+		connection: cc.connection
+			? patched(cc.connection, {
+					...(drives(enc.connection)
+						? {
+								lineColors:
+									renameKey(cc.connection.lineColors, oldName, newName) ??
+									cc.connection.lineColors,
+								dashPatterns:
+									renameKey(cc.connection.dashPatterns, oldName, newName) ??
+									cc.connection.dashPatterns,
+								dashAlternateColors:
+									renameKey(cc.connection.dashAlternateColors, oldName, newName) ??
+									cc.connection.dashAlternateColors,
+							}
+						: {}),
+					// The thickness map is keyed by the Vary-by field's values when
+					// one is set, else by the connection field's — whichever drives
+					// it decides whether this melted rename touches its keys.
+					...((cc.connection.thicknessField ?? enc.connection?.field) === variableName
+						? {
+								thicknessByValue: renameKey(
+									cc.connection.thicknessByValue,
+									oldName,
+									newName
+								),
+							}
+						: {}),
+				})
+			: cc.connection,
 		text:
 			drives(enc.text) && cc.text
 				? patched(cc.text, {
@@ -672,6 +710,12 @@ const renameMeltedValueRefs = <T extends FieldNameConfigs>(
 		opacitySlots: mapRecordValues(slotsAsRecord(cc.opacitySlots), (s) =>
 			renameSlotValues(s, variableName, oldName, newName)
 		) as ChannelConfigs["opacitySlots"],
+		saturationSlots: mapRecordValues(slotsAsRecord(cc.saturationSlots), (s) =>
+			renameSlotValues(s, variableName, oldName, newName)
+		) as ChannelConfigs["saturationSlots"],
+		brightnessSlots: mapRecordValues(slotsAsRecord(cc.brightnessSlots), (s) =>
+			renameSlotValues(s, variableName, oldName, newName)
+		) as ChannelConfigs["brightnessSlots"],
 	})
 
 	const anyFacetDriven =

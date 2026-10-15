@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router"
+import { useRef } from "react"
 
 import type {
 	DecoratedRow,
@@ -15,6 +16,12 @@ const formatDate = (ts: number): string => {
 	})
 }
 
+// Row keys: instance rows use their instance id; unexported rows use the
+// visual id with a prefix to avoid collisions when both an instance and a
+// (hypothetical) unexported row coexist.
+const rowKey = (row: DecoratedRow): string =>
+	row.kind === "instance" ? row.instance.id : `unexported:${row.visual.id}`
+
 type Props = {
 	rows: DecoratedRow[]
 	sortField: SortField
@@ -24,6 +31,9 @@ type Props = {
 	 * (table is row-per-instance); they check/uncheck together. */
 	selectedVisualIds: Set<string>
 	onToggleVisual: (visualId: string) => void
+	/** Set every listed visual to one selection state — used by
+	 * shift-click range selection. */
+	onSetVisualsSelected: (visualIds: string[], selected: boolean) => void
 	/** Toggle: if all visible visuals are selected, clear them; otherwise
 	 * add every visible visual to the selection. */
 	onToggleAllVisible: () => void
@@ -125,8 +135,13 @@ export const VisualsTable = ({
 	onSort,
 	selectedVisualIds,
 	onToggleVisual,
+	onSetVisualsSelected,
 	onToggleAllVisible,
 }: Props) => {
+	// Row key of the last checkbox clicked: the anchor a shift-click
+	// extends from. Keyed by row (not index) so it survives re-sorting;
+	// a stale key just falls back to a single toggle.
+	const anchorKeyRef = useRef<string | null>(null)
 	if (rows.length === 0) {
 		return (
 			<div className="flex flex-col items-center gap-4 rounded-card border border-dashed border-stone-300 bg-white px-8 py-20 text-center dark:border-stone-700 dark:bg-stone-800">
@@ -217,14 +232,7 @@ export const VisualsTable = ({
 				</thead>
 				<tbody>
 					{rows.map((row) => {
-						// Row keys: instance rows use their instance id; unexported
-						// rows use the visual id with a prefix to avoid collisions
-						// when both an instance and a (hypothetical) unexported row
-						// coexist.
-						const key =
-							row.kind === "instance"
-								? row.instance.id
-								: `unexported:${row.visual.id}`
+						const key = rowKey(row)
 						const isSelected = selectedVisualIds.has(row.visual.id)
 						return (
 							<tr
@@ -239,7 +247,31 @@ export const VisualsTable = ({
 									<input
 										type="checkbox"
 										checked={isSelected}
-										onChange={() => onToggleVisual(row.visual.id)}
+										onMouseDown={(e) => {
+											// Keep shift-click from also selecting page text.
+											if (e.shiftKey) e.preventDefault()
+										}}
+										onChange={(e) => {
+											const shift = (e.nativeEvent as MouseEvent).shiftKey
+											const anchorIndex = rows.findIndex(
+												(r) => rowKey(r) === anchorKeyRef.current
+											)
+											if (shift && anchorIndex !== -1) {
+												const index = rows.indexOf(row)
+												const [from, to] =
+													anchorIndex < index
+														? [anchorIndex, index]
+														: [index, anchorIndex]
+												// The whole range takes the clicked box's new state.
+												onSetVisualsSelected(
+													rows.slice(from, to + 1).map((r) => r.visual.id),
+													!isSelected
+												)
+											} else {
+												onToggleVisual(row.visual.id)
+											}
+											anchorKeyRef.current = key
+										}}
 										aria-label={`Select ${row.visual.name}`}
 										className="h-4 w-4 cursor-pointer"
 									/>
