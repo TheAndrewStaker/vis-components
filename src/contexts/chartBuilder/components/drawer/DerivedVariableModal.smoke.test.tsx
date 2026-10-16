@@ -43,31 +43,32 @@ const ROWS = [
 	{ region: "East", sales: "9" },
 ]
 
-const buildDataset = (): Dataset =>
+const buildDataset = (rows = ROWS): Dataset =>
 	buildDatasetFixture({
 		id: ID,
 		name: "derived",
 		filename: "derived.csv",
 		fields: FIELDS,
-		rows: ROWS,
+		rows,
 	})
 
 const mount = (
 	editor: null | { mode: "new" } | { mode: "edit"; id: string },
-	config: DerivedVariablesConfig = DEFAULT_DERIVED_VARIABLES_CONFIG
+	config: DerivedVariablesConfig = DEFAULT_DERIVED_VARIABLES_CONFIG,
+	rows = ROWS
 ) => {
 	// Atom storage effects re-load from localStorage on init and would reset a
 	// snapshot-only seed to defaults, so the fixture goes into BOTH.
 	const store = installInMemoryLocalStorage()
 	/* eslint-disable @th/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => store.set(k, JSON.stringify(v))
-	set("vis-components:datasets", { [ID]: buildDataset() })
+	set("vis-components:datasets", { [ID]: buildDataset(rows) })
 	set("vis-components:currentDatasetId", ID)
 	set("vis-components:previewVersionId", null)
 	set("vis-components:currentDerivedVariables", { _v: 1, data: config })
 	/* eslint-enable @th/use-wrapped-json-functions */
 	const init = (snap: TestStore) => {
-		snap.set(loadedDatasetsAtom, { [ID]: buildDataset() })
+		snap.set(loadedDatasetsAtom, { [ID]: buildDataset(rows) })
 		snap.set(currentDatasetIdAtom, ID)
 		snap.set(previewVersionIdAtom, null)
 		snap.set(currentDerivedVariablesAtom, config)
@@ -221,7 +222,12 @@ describe("DerivedVariableModal", () => {
 		fireEvent.change(left, { target: { value: "{region}" } })
 		const select = utils.getByLabelText("Rule 1 right side") as HTMLSelectElement
 		expect(select.tagName).toBe("SELECT")
-		expect([...select.options].map((o) => o.value)).toEqual(["", "West", "East"])
+		expect([...select.options].map((o) => o.textContent)).toEqual([
+			"Choose a value…",
+			"West",
+			"East",
+			"Formula…",
+		])
 		fireEvent.change(select, { target: { value: "East" } })
 		fireEvent.change(utils.getByLabelText("Rule 1 output"), {
 			target: { value: "yes" },
@@ -241,29 +247,168 @@ describe("DerivedVariableModal", () => {
 		expect(right.value).toBe("{sales}")
 	})
 
+	it("lists (blank) among the levels of a column with empty cells, as the blank test", () => {
+		const utils = mount({ mode: "new" }, DEFAULT_DERIVED_VARIABLES_CONFIG, [
+			...ROWS,
+			{ region: "", sales: "3" },
+		])
+		fireEvent.click(utils.getByRole("radio", { name: "If / else" }))
+		fireEvent.change(utils.getByLabelText("Rule 1 left side"), {
+			target: { value: "{region}" },
+		})
+		const select = utils.getByLabelText("Rule 1 right side") as HTMLSelectElement
+		expect([...select.options].map((o) => o.textContent)).toEqual([
+			"Choose a value…",
+			"West",
+			"East",
+			"(blank)",
+			"Formula…",
+		])
+		// The blank level is stored as the empty text literal and stays
+		// selected in the list.
+		fireEvent.change(select, { target: { value: `""` } })
+		expect(
+			(utils.getByLabelText("Rule 1 right side") as HTMLSelectElement).value
+		).toBe(`""`)
+		fireEvent.change(utils.getByLabelText("Rule 1 output"), {
+			target: { value: "missing" },
+		})
+		fireEvent.change(utils.getByLabelText("Otherwise output"), {
+			target: { value: "present" },
+		})
+		// Preview: West, East → present; the blank row → missing.
+		expect(utils.getByText("missing")).toBeTruthy()
+		expect(utils.getAllByText("present").length).toBe(2)
+		expect(
+			(utils.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+				.disabled
+		).toBe(false)
+	})
+
+	it("Formula… in the value list folds the row into a condition box with the level quoted", () => {
+		const utils = mount({ mode: "new" })
+		fireEvent.click(utils.getByRole("radio", { name: "If / else" }))
+		fireEvent.change(utils.getByLabelText("Rule 1 left side"), {
+			target: { value: "{region}" },
+		})
+		const select = utils.getByLabelText("Rule 1 right side") as HTMLSelectElement
+		fireEvent.change(select, { target: { value: "East" } })
+		const formulaValue =
+			[...select.options].find((o) => o.textContent === "Formula…")?.value ?? ""
+		fireEvent.change(select, { target: { value: formulaValue } })
+		// The chosen level arrives written the way a formula needs it.
+		const condition = utils.getByLabelText("Rule 1 condition") as HTMLInputElement
+		expect(condition.value).toBe('{region} == "East"')
+		expect(utils.queryByLabelText("Rule 1 right side")).toBeNull()
+		fireEvent.change(condition, {
+			target: { value: '{region} == "East" OR {sales} > 100' },
+		})
+		fireEvent.blur(condition)
+		expect(utils.getByLabelText("Rule 1 condition")).toBeTruthy()
+		fireEvent.change(utils.getByLabelText("Rule 1 output"), {
+			target: { value: "yes" },
+		})
+		fireEvent.change(utils.getByLabelText("Otherwise output"), {
+			target: { value: "no" },
+		})
+		// Preview: East → yes, West → no.
+		expect(utils.getByText("yes")).toBeTruthy()
+		expect(utils.getByText("no")).toBeTruthy()
+	})
+
+	it("a right box being typed in holds as a text box until it loses focus", () => {
+		const utils = mount({ mode: "new" })
+		fireEvent.click(utils.getByRole("radio", { name: "If / else" }))
+		fireEvent.change(utils.getByLabelText("Rule 1 left side"), {
+			target: { value: "{region}" },
+		})
+		// A chip click on the list swaps in a text box holding the variable.
+		fireEvent.focus(utils.getByLabelText("Rule 1 right side"))
+		fireEvent.click(utils.getByRole("button", { name: "sales" }))
+		const right = utils.getByLabelText("Rule 1 right side") as HTMLInputElement
+		expect(right.tagName).toBe("INPUT")
+		fireEvent.focus(right)
+		// While it's focused, a value that happens to be a level doesn't snap
+		// it back to the list…
+		fireEvent.change(right, { target: { value: "West" } })
+		expect(utils.getByLabelText("Rule 1 right side").tagName).toBe("INPUT")
+		// …leaving the box does, with that level selected.
+		fireEvent.blur(right)
+		const back = utils.getByLabelText("Rule 1 right side") as HTMLSelectElement
+		expect(back.tagName).toBe("SELECT")
+		expect(back.value).toBe("West")
+	})
+
 	it("offers only = and ≠ for a lone categorical variable, all six otherwise", () => {
 		const utils = mount({ mode: "new" })
 		fireEvent.click(utils.getByRole("radio", { name: "If / else" }))
 		const left = utils.getByLabelText("Rule 1 left side")
 		const ops = () =>
 			[...(utils.getByLabelText("Rule 1 comparison") as HTMLSelectElement).options].map(
-				(o) => o.value
+				(o) => o.textContent
 			)
 		fireEvent.change(left, { target: { value: "{sales}" } })
-		expect(ops()).toEqual(["==", "!=", ">", "<", ">=", "<="])
+		expect(ops()).toEqual(["=", "≠", ">", "<", "≥", "≤", "Formula…"])
 		fireEvent.change(utils.getByLabelText("Rule 1 comparison"), {
 			target: { value: ">" },
 		})
 		// A calculation keeps every comparator and an open right side.
 		fireEvent.change(left, { target: { value: "{sales} / 2" } })
-		expect(ops()).toEqual(["==", "!=", ">", "<", ">=", "<="])
+		expect(ops()).toEqual(["=", "≠", ">", "<", "≥", "≤", "Formula…"])
 		expect(utils.getByLabelText("Rule 1 right side").tagName).toBe("INPUT")
 		// A lone category: two comparators, and the stale ">" reads as "=".
 		fireEvent.change(left, { target: { value: "{region}" } })
-		expect(ops()).toEqual(["==", "!="])
+		expect(ops()).toEqual(["=", "≠", "Formula…"])
 		expect(
 			(utils.getByLabelText("Rule 1 comparison") as HTMLSelectElement).value
 		).toBe("==")
+	})
+
+	it("Formula… folds a row into one condition box for AND / OR; a single comparison unfolds on blur", () => {
+		const utils = mount({ mode: "new" })
+		fireEvent.click(utils.getByRole("radio", { name: "If / else" }))
+		fireEvent.change(utils.getByLabelText("Rule 1 left side"), {
+			target: { value: "{sales}" },
+		})
+		fireEvent.change(utils.getByLabelText("Rule 1 comparison"), {
+			target: { value: ">" },
+		})
+		fireEvent.change(utils.getByLabelText("Rule 1 right side"), {
+			target: { value: "5" },
+		})
+		const select = utils.getByLabelText("Rule 1 comparison") as HTMLSelectElement
+		const formulaValue =
+			[...select.options].find((o) => o.textContent === "Formula…")?.value ?? ""
+		fireEvent.change(select, { target: { value: formulaValue } })
+		// The three boxes become one, holding what they composed to.
+		const condition = utils.getByLabelText("Rule 1 condition") as HTMLInputElement
+		expect(condition.value).toBe("{sales} > 5")
+		expect(utils.queryByLabelText("Rule 1 left side")).toBeNull()
+		fireEvent.change(condition, {
+			target: { value: '{sales} > 5 AND {region} == "West"' },
+		})
+		fireEvent.blur(condition)
+		expect(utils.getByLabelText("Rule 1 condition")).toBeTruthy()
+		fireEvent.change(utils.getByLabelText("Rule 1 output"), {
+			target: { value: "yes" },
+		})
+		fireEvent.change(utils.getByLabelText("Otherwise output"), {
+			target: { value: "no" },
+		})
+		// Preview: West/10 → yes, East/9 → no.
+		expect(utils.getByText("yes")).toBeTruthy()
+		expect(utils.getByText("no")).toBeTruthy()
+		// Reduced to a single comparison and left, the row is three boxes again.
+		fireEvent.change(utils.getByLabelText("Rule 1 condition"), {
+			target: { value: '{region} == "West"' },
+		})
+		fireEvent.blur(utils.getByLabelText("Rule 1 condition"))
+		expect(
+			(utils.getByLabelText("Rule 1 left side") as HTMLInputElement).value
+		).toBe("{region}")
+		const right = utils.getByLabelText("Rule 1 right side") as HTMLSelectElement
+		expect(right.tagName).toBe("SELECT")
+		expect(right.value).toBe("West")
 	})
 
 	it("splits a stored comparison into the boxes and keeps AND / OR rules as text", () => {

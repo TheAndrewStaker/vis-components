@@ -4,6 +4,7 @@ import {
 	type FacetLabelInput,
 	type SolverInput,
 	type SolverPanelInput,
+	type VerticalAlignment,
 } from "./facetLayoutSolver"
 import { estimateLongestLineWidth } from "./estimateMargins"
 import { BASE_MARGIN, POLAR_MARGIN } from "./plotLayout"
@@ -1575,6 +1576,151 @@ describe("solveFacetLayout — pixel-precise panel size overrides", () => {
 		}
 	})
 
+	it("panelHeightOverride + negative gap (ridgeline) sizes the canvas to the overlapped stack, not rows × panel", () => {
+		// 4 × 242px panels pulled together by a −191px gap stack into far less
+		// than four full panels. In fit mode with room in the container the
+		// canvas must stay at the container — no scroll viewport. The floor
+		// used to be rows × (panel + full x-axis chrome) with the gap clamped
+		// to 0, which grew the canvas to ~2× the figure: scrollbars plus a
+		// band of empty canvas under the last ridge.
+		const spec = solveFacetLayout(
+			baseline({
+				containerWidth: 1000,
+				containerHeight: 700,
+				rows: 4,
+				cols: 1,
+				panels: makePanels(4, 1),
+				shareX: true,
+				gapY: -191,
+				panelHeightOverride: 242,
+				minPanelPx: 0,
+			}),
+		)
+		expect(spec.scroll).toBeNull()
+		expect(spec.canvas.height).toBeCloseTo(700, 3)
+		for (const p of spec.panels) {
+			expect(p.inner.height).toBeCloseTo(242, 3)
+		}
+	})
+
+	it("panelHeightOverride: a canvas that must grow ends at the laid-out grid's far edge", () => {
+		// No chart / axis titles in the baseline, so the outer reserves are 0
+		// and the canvas should be exactly the grid's extent — the last cell's
+		// bottom edge — whether the rows overlap (ridgeline) or sit apart.
+		// Interior rows under shareX carry a 4px spine reserve, not the full
+		// x-axis band, so an estimate built from the bottom row's chrome
+		// would leave empty canvas under the figure.
+		for (const gapY of [-191, 0, 20]) {
+			const spec = solveFacetLayout(
+				baseline({
+					containerWidth: 800,
+					containerHeight: 200,
+					rows: 4,
+					cols: 1,
+					panels: makePanels(4, 1),
+					shareX: true,
+					gapY,
+					panelHeightOverride: 242,
+					minPanelPx: 0,
+				}),
+			)
+			expect(spec.scroll).not.toBeNull()
+			const farEdge = Math.max(
+				...spec.panels.map((p) => p.cell.y + p.cell.height),
+			)
+			expect(spec.canvas.height).toBeCloseTo(farEdge, 3)
+		}
+	})
+
+	describe("row titles under ridgeline overlap", () => {
+		// A 4-row ridgeline: 242px panels, −191px gap, so each row's plot
+		// rect overlaps its neighbours and only the ~71px slice above its
+		// own baseline is its alone. Row titles align within that slice.
+		const ridge = (verticalAlign?: VerticalAlignment, gapY = -191) =>
+			solveFacetLayout(
+				baseline({
+					containerWidth: 1000,
+					containerHeight: 700,
+					rows: 4,
+					cols: 1,
+					panels: makePanels(4, 1),
+					shareX: true,
+					gapY,
+					panelHeightOverride: 242,
+					minPanelPx: 0,
+					rowHeaders: ["A", "B", "C", "D"].map((text) => ({
+						text,
+						fontSize: 14,
+						align: "center" as const,
+						verticalAlign,
+					})),
+				}),
+			)
+		const baselineOf = (spec: ReturnType<typeof solveFacetLayout>, row: number) => {
+			const p = spec.panels.find((pp) => pp.row === row)!
+			return p.inner.y + p.inner.height
+		}
+
+		it("default (middle) sits in the row's own slice, above its baseline and below the ridge above", () => {
+			const spec = ridge()
+			const step = baselineOf(spec, 1) - baselineOf(spec, 0)
+			expect(step).toBeGreaterThan(0)
+			expect(step).toBeLessThan(242)
+			spec.rowHeaders.forEach((h, row) => {
+				const own = baselineOf(spec, row)
+				expect(h.y).toBeCloseTo(own - step / 2, 3)
+				if (row > 0) expect(h.y).toBeGreaterThan(baselineOf(spec, row - 1))
+				expect(h.verticalAnchor).toBe("middle")
+			})
+		})
+
+		it("bottom sits on the ridge's baseline; top hangs just under the ridge above", () => {
+			const bottom = ridge("bottom")
+			bottom.rowHeaders.forEach((h, row) => {
+				expect(h.y).toBeCloseTo(baselineOf(bottom, row), 3)
+				expect(h.verticalAnchor).toBe("bottom")
+			})
+			const top = ridge("top")
+			const step = baselineOf(top, 1) - baselineOf(top, 0)
+			top.rowHeaders.forEach((h, row) => {
+				expect(h.y).toBeCloseTo(baselineOf(top, row) - step, 3)
+				expect(h.verticalAnchor).toBe("top")
+			})
+		})
+
+		it("a gap that leaves the plot rects apart keeps the full-rect placement", () => {
+			const spec = ridge(undefined, 20)
+			spec.rowHeaders.forEach((h, row) => {
+				const p = spec.panels.find((pp) => pp.row === row)!
+				expect(h.y).toBeCloseTo(p.inner.y + p.inner.height / 2, 3)
+				expect(h.verticalAnchor).toBe("middle")
+			})
+		})
+	})
+
+	it("panelWidthOverride: a canvas that must grow ends at the laid-out grid's right edge", () => {
+		for (const gapX of [-120, 0, 30]) {
+			const spec = solveFacetLayout(
+				baseline({
+					containerWidth: 300,
+					containerHeight: 600,
+					rows: 1,
+					cols: 4,
+					panels: makePanels(1, 4),
+					shareY: true,
+					gapX,
+					panelWidthOverride: 200,
+					minPanelPx: 0,
+				}),
+			)
+			expect(spec.scroll).not.toBeNull()
+			const farEdge = Math.max(
+				...spec.panels.map((p) => p.cell.x + p.cell.width),
+			)
+			expect(spec.canvas.width).toBeCloseTo(farEdge, 3)
+		}
+	})
+
 	it("canvas grows + emits scroll when override > container", () => {
 		// 4 cols × 500px wide = 2000+ chrome, but container is only 800.
 		// Canvas should grow; scroll wrapper appears.
@@ -2623,5 +2769,206 @@ describe("solveFacetLayout — per-panel sizing within a row / column", () => {
 		)
 		const [a, b] = spec.panels
 		expect(b!.inner.height).toBe(a!.inner.height)
+	})
+})
+
+/** LAYOUT.md §7 — multi-line titles grow UP. Each extra line adds one 1.2em
+ *  line step to the title's band; the rect's `y` is the BOTTOM line, which
+ *  keeps the single line's distance to whatever sits below it (subtitle,
+ *  plot, panel), and the earlier lines stack into the added room above.
+ *  Fit mode keeps the canvas, so the plot gives up the extra lines. */
+describe("solveFacetLayout — multi-line titles grow up", () => {
+	const tt = { text: "Title", fontSize: 20, align: "center" as const }
+	const st = { text: "Sub", fontSize: 14, align: "center" as const }
+	const step = 1.2 * 20
+
+	it("a two-line chart title grows the top band by one line step; its bottom line keeps the plot distance", () => {
+		const one = solveFacetLayout(baseline({ chartTitle: tt }))
+		const two = solveFacetLayout(
+			baseline({ chartTitle: { ...tt, text: "Title\nline two" } })
+		)
+		expect(two.title?.growUp).toBe(true)
+		expect(two.title!.height).toBeCloseTo(one.title!.height + step)
+		expect(two.title!.y).toBeCloseTo(one.title!.y + step)
+		expect(two.panels[0].inner.y).toBeCloseTo(one.panels[0].inner.y + step)
+		expect(two.panels[0].inner.y - two.title!.y).toBeCloseTo(
+			one.panels[0].inner.y - one.title!.y
+		)
+		expect(two.panels[0].inner.height).toBeCloseTo(
+			one.panels[0].inner.height - step
+		)
+		// The FIRST line (one step above the bottom line) clears the top
+		// buffer plus its ascender.
+		expect(two.title!.y - step).toBeGreaterThanOrEqual(10 + 0.8 * 20)
+	})
+
+	it("a two-line title pushes the subtitle down by its extra line, keeping their spacing", () => {
+		const base = solveFacetLayout(baseline({ chartTitle: tt, chartSubtitle: st }))
+		const twoT = solveFacetLayout(
+			baseline({ chartTitle: { ...tt, text: "T\nT" }, chartSubtitle: st })
+		)
+		expect(twoT.subtitle!.y).toBeCloseTo(base.subtitle!.y + step)
+		expect(twoT.subtitle!.y - twoT.title!.y).toBeCloseTo(
+			base.subtitle!.y - base.title!.y
+		)
+	})
+
+	it("a two-line subtitle grows its own band, leaves the title alone, and keeps the plot distance", () => {
+		const subStep = 1.2 * 14
+		const base = solveFacetLayout(baseline({ chartTitle: tt, chartSubtitle: st }))
+		const twoS = solveFacetLayout(
+			baseline({ chartTitle: tt, chartSubtitle: { ...st, text: "S\nS" } })
+		)
+		expect(twoS.subtitle?.growUp).toBe(true)
+		expect(twoS.title!.y).toBeCloseTo(base.title!.y)
+		expect(twoS.subtitle!.y).toBeCloseTo(base.subtitle!.y + subStep)
+		expect(twoS.subtitle!.height).toBeCloseTo(base.subtitle!.height + subStep)
+		expect(twoS.panels[0].inner.y).toBeCloseTo(base.panels[0].inner.y + subStep)
+		expect(twoS.panels[0].inner.y - twoS.subtitle!.y).toBeCloseTo(
+			base.panels[0].inner.y - base.subtitle!.y
+		)
+	})
+
+	it("a two-line facet label grows every panel's band and bottom-anchors the label", () => {
+		const grid = { rows: 1, cols: 2, panels: makePanels(1, 2) }
+		const one = solveFacetLayout(baseline(grid))
+		const two = solveFacetLayout(
+			baseline({ ...grid, facetLabel: { ...FACET_LABEL, lines: 2 } })
+		)
+		const labelStep = 1.2 * FACET_LABEL.fontSize
+		for (const [i, p] of two.panels.entries()) {
+			const q = one.panels[i]
+			expect(p.facetLabel?.growUp).toBe(true)
+			expect(p.facetLabel!.height).toBeCloseTo(q.facetLabel!.height + labelStep)
+			// The bottom line keeps its distance to the panel's plot top...
+			expect(p.inner.y - p.facetLabel!.y).toBeCloseTo(q.inner.y - q.facetLabel!.y)
+			// ...and sits one step lower in the cell, in the grown band.
+			expect(p.facetLabel!.y - p.cell.y).toBeCloseTo(
+				q.facetLabel!.y - q.cell.y + labelStep
+			)
+		}
+	})
+
+	it("single-line titles are unchanged by the grow-up convention", () => {
+		const spec = solveFacetLayout(
+			baseline({ chartTitle: tt, chartSubtitle: st, facetLabel: FACET_LABEL })
+		)
+		expect(spec.title!.y).toBeCloseTo(Math.max(0.7 * 36, 10 + 0.8 * 20))
+		expect(spec.subtitle!.y).toBeCloseTo(36 + 0.75 * 22)
+		expect(spec.panels[0].facetLabel!.y - spec.panels[0].cell.y).toBeCloseTo(
+			0.75 * FACET_LABEL.height
+		)
+	})
+})
+
+describe("solveFacetLayout — chart title keep-in-view (horizontal)", () => {
+	const tt = { text: "Title", fontSize: 18, align: "center" as const }
+	const plotSpan = (spec: ReturnType<typeof solveFacetLayout>) => {
+		const p = spec.panels[0]
+		return { left: p.inner.x, right: p.inner.x + p.inner.width }
+	}
+	const BUFFER = 10
+
+	it("an unmeasured title keeps its aligned anchor, overhang or not", () => {
+		const spec = solveFacetLayout(
+			baseline({ chartTitle: tt, titleOverhang: { left: 0, right: 500 } })
+		)
+		const { left, right } = plotSpan(spec)
+		expect(spec.title?.x).toBeCloseTo((left + right) / 2)
+	})
+
+	it("a measured title that fits is not moved", () => {
+		const spec = solveFacetLayout(
+			baseline({ chartTitle: { ...tt, textWidth: 100 } })
+		)
+		const { left, right } = plotSpan(spec)
+		expect(spec.title?.x).toBeCloseTo((left + right) / 2)
+	})
+
+	it("a centered title wider than the canvas slides into a right-legend overhang, keeping the buffer on the left", () => {
+		const textWidth = 900
+		const spec = solveFacetLayout(
+			baseline({
+				chartTitle: { ...tt, textWidth },
+				titleOverhang: { left: 0, right: 400 },
+			})
+		)
+		expect(spec.title!.x - textWidth / 2).toBeCloseTo(BUFFER)
+		expect(spec.title!.x + textWidth / 2).toBeLessThanOrEqual(800 + 400 - BUFFER)
+	})
+
+	it("a right-aligned title uses a left-legend overhang WITHOUT moving when it fits there", () => {
+		const textWidth = 900
+		const spec = solveFacetLayout(
+			baseline({
+				chartTitle: { ...tt, align: "right", textWidth },
+				titleOverhang: { left: 400, right: 0 },
+			})
+		)
+		const { right } = plotSpan(spec)
+		expect(spec.title!.x).toBeCloseTo(right)
+		expect(spec.title!.x - textWidth).toBeGreaterThanOrEqual(-400 + BUFFER)
+	})
+
+	it("without overhang a left-aligned title slides LEFT only as far as it needs, never past the buffer", () => {
+		// Wider than plotLeft (76) → canvas edge − buffer, so it must slide.
+		const textWidth = 750
+		const spec = solveFacetLayout(
+			baseline({ chartTitle: { ...tt, align: "left", textWidth } })
+		)
+		expect(spec.title!.x + textWidth).toBeCloseTo(800 - BUFFER)
+		expect(spec.title!.x).toBeGreaterThanOrEqual(BUFFER)
+	})
+
+	it("a left-aligned title wider than the whole figure keeps its START in view", () => {
+		const spec = solveFacetLayout(
+			baseline({ chartTitle: { ...tt, align: "left", textWidth: 2000 } })
+		)
+		expect(spec.title!.x).toBeCloseTo(BUFFER)
+	})
+
+	it("a centered title wider than the whole figure centers on the figure", () => {
+		const spec = solveFacetLayout(
+			baseline({
+				chartTitle: { ...tt, textWidth: 2000 },
+				titleOverhang: { left: 0, right: 200 },
+			})
+		)
+		expect(spec.title!.x).toBeCloseTo((BUFFER + (800 + 200 - BUFFER)) / 2)
+	})
+
+	it("the subtitle is kept in view the same way", () => {
+		const textWidth = 900
+		const spec = solveFacetLayout(
+			baseline({
+				chartTitle: tt,
+				chartSubtitle: {
+					text: "Sub",
+					fontSize: 14,
+					align: "center",
+					textWidth,
+				},
+				titleOverhang: { left: 0, right: 400 },
+			})
+		)
+		expect(spec.subtitle!.x - textWidth / 2).toBeCloseTo(BUFFER)
+	})
+
+	it("scroll mode ignores the overhang (the scroll box clips at the container)", () => {
+		const textWidth = 700
+		const spec = solveFacetLayout(
+			baseline({
+				cols: 3,
+				panels: makePanels(1, 3),
+				panelWidthOverride: 500,
+				chartTitle: { ...tt, align: "left", textWidth },
+				titleOverhang: { left: 0, right: 400 },
+			})
+		)
+		expect(spec.scroll).not.toBeNull()
+		// Fits the (grown) canvas where it is: anchored at the plot's left.
+		const { left } = plotSpan(spec)
+		expect(spec.title!.x).toBeCloseTo(left)
+		expect(spec.title!.x + textWidth).toBeLessThanOrEqual(spec.canvas.width - BUFFER)
 	})
 })

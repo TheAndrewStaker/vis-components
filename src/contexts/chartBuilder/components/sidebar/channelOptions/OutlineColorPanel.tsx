@@ -255,9 +255,9 @@ const OutlineColorRulesRow = ({
 				</button>
 				<p className="vc-help">
 					Tested against the outline variable&apos;s value; first match wins and
-					overrides the palette. Use <code>{">"}</code>, <code>{"<"}</code>,{" "}
-					<code>{">="}</code>, <code>{"<="}</code>, <code>==</code>, or{" "}
-					<code>!=</code> followed by a number.
+					overrides the palette. <code>{">"}</code>, <code>{"<"}</code>,{" "}
+					<code>{">="}</code>, and <code>{"<="}</code> compare numbers;{" "}
+					<code>==</code> and <code>!=</code> also match text.
 				</p>
 			</div>
 		</CollapsibleSubsection>

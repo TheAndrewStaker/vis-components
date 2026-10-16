@@ -4,7 +4,8 @@ import { renderMultilineTspans, type TextPrefix } from "../../../lib/multilineTe
 export const TITLE_FILL_FALLBACK = "fill-stone-700 dark:fill-stone-300"
 
 /** Render a TextRect as an SVG <text> at its spec coordinates. Handles
- *  rotation (-90 for rotated y-titles) and multi-line text. */
+ *  rotation (-90 for rotated y-titles) and multi-line text, which stacks UP
+ *  from the last line when the rect is flagged `growUp`. */
 export const SharedText = ({
 	rect,
 	text,
@@ -57,8 +58,13 @@ export const SharedText = ({
 			textDecoration={underline ? "underline" : undefined}
 			fill={fill}
 			className={fill ? undefined : TITLE_FILL_FALLBACK}
+			pointerEvents="none"
 		>
-			{renderMultilineTspans(text, rect.x, prefix ? { prefix } : undefined)}
+			{renderMultilineTspans(text, rect.x, {
+				prefix,
+				growUp: rect.growUp,
+				fontSize,
+			})}
 		</text>
 	)
 }

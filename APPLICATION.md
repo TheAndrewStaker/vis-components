@@ -248,14 +248,20 @@ a blanked box saves as), then one of three **functions**:
   (`{A} + {B}`), keeps all six and an open right box. With at most
   200 distinct levels, that same lone-category case makes the right
   box a **dropdown of the column's levels** (discovery order, blank
-  "Choose a value…" first) instead of a text box, so a level can't
+  "Choose a value…" first; a column with empty cells also lists
+  "(blank)", stored as the empty text literal `""`) instead of a
+  text box, so a level can't
   be misspelled. The dropdown shows only while the right value is
   empty or one of the levels; clicking a variable button while the
   dropdown is focused swaps a text box back in holding that token
   (variable-vs-variable comparisons), and a stored right value
   that's no longer a level keeps the text box. Comparison semantics: `==`/`!=` compare numerically
   when both sides read as numbers and as strings otherwise; ordering
-  is numeric-only; blank cells never match. Outputs — the per-rule
+  is numeric-only; blank cells never match — except the blank test,
+  the empty text literal `""`: `{A} == ""` is true for a blank cell
+  (or a formula that came out blank) and `{A} != ""` for a filled
+  one, while `{A} != "West"` stays false for a blank A, since blank
+  is no value at all rather than "a value that isn't West". Outputs — the per-rule
   value and the "Otherwise" fallback alike — are templates in the
   Combine-text grammar: tokens naming a present column substitute
   that row's cell (so "otherwise keep `{B}`" passes B through),
@@ -614,11 +620,33 @@ Missing data on the choropleth: a region with no usable measure value
 paints with the **no-data fill** color (Maps section), whether the
 region is entirely absent from the dataset (no row joins) or its row's
 measure cell is blank/NA — both read as "no data" and look identical.
-"Fill regions with no data" is ON by default; turning it off draws
-only regions that join to a data row (a matched-but-blank row still
-draws, in the no-data fill). A focus region always fills no-data land
-regardless of the toggle, so a focused viewport never shows blank
-gaps.
+"Fill regions with no data" is ON by default; turning it off omits
+every region that would paint as no-data — regions absent from the
+dataset AND matched rows whose measure is blank/NA alike (a row whose
+own pattern-channel category paints it still draws: that's an
+encoding, not missing data; with no measure mapped there is no
+"missing data", so every joined region draws). One predicate,
+`matchedRowIsNoData` in `lib/geo/geoMarkStyle.ts`, decides "paints as
+no-data" for the fill, the skip, and the auto frame below, so they
+can't disagree. The toggle is honored under any focus too, so a
+focused viewport with the toggle off shows just the data regions.
+
+**Framing follows what's drawn.** "Whole map (auto)", the Focus
+default, fits the projection to the level's whole geometry while every
+region draws, and to just the regions drawn once the toggle is off —
+joined AND carrying a usable value, so a Washington-only county
+dataset, or a whole-US template with values only for Washington,
+fills the panel with Washington instead of sitting in the corner of an
+otherwise empty US. There is no
+"one region" special case: two states frame two states, fifty frame
+the US. The matched set is resolved over the whole dataset, so every
+panel of a facet grid shares one frame; when nothing joins, auto falls
+back to the whole geometry. Switching to Custom (and "Reset view")
+seeds from that same data frame, padded a little, so Custom starts
+from the view on screen (`useAutoFitViewport`); a short note under the
+Focus control says the map is framing just the data regions and how to
+get the whole map back. Only the choropleth's toggle affects framing —
+the bubble and dot maps always frame the whole geometry.
 
 The **world-countries backdrop** (neighboring countries drawn in the
 no-data fill behind a non-world geography level) appears only when the
@@ -626,7 +654,11 @@ user's CHOSEN projection is a world projection (Natural Earth or
 Mercator). Focusing — a named region or Custom (drag to center) —
 internally forces a world projection so Albers USA can pan, but that
 never adds the backdrop: an Albers-USA states map custom-zoomed stays
-US-only (no Canada appearing).
+US-only (no Canada appearing). The backdrop is no-data paint, so each
+map gates it on its own no-data toggle: the choropleth hides it when
+"Fill regions with no data" is off (a Washington county map under
+Mercator shows no purple Canada), the bubble and dot maps when "Show
+basemap" is off.
 
 An optional **no-data pattern** (chip picker under the no-data fill,
 sharing the pattern channel's palette, plus an ink color that appears
@@ -2619,6 +2651,30 @@ title, and facet/legend titles. Each title has:
   changed dot. A prefix with an empty title still renders (the title
   band exists for typed text OR an active prefix).
 
+**Multi-line titles grow up.** Shift+Enter breaks a title into lines.
+The chart title, subtitle and facet panel titles keep their BOTTOM
+line where a single line would sit — the same distance from the
+subtitle / plot / panel below it — and stack the earlier lines above,
+reserving one line of room per extra line at the top (the plot gives
+up that room in Fit mode; the canvas grows in Scroll mode). Legend
+titles follow the same rule: a right / left legend lifts by the extra
+lines so its entries and the title's bottom line stay put (a bottom
+legend already grows upward; a top legend has nothing above it to grow
+into, and an inside legend is pinned by its coordinates, so those keep
+flowing down). X- and y-axis titles are unchanged. See LAYOUT.md §7.
+
+**Long chart titles stay in view.** A chart title or subtitle longer
+than the plot is not cut off at the plot's edge. Beside a left / right
+legend it runs on over the blank band above the legend — the legend
+column is title room — and when it would still leave the figure it
+slides just far enough to stay in view: a centered title wider than the
+plot shifts toward the legend's side, a left-aligned one slides left
+only when it would run off the right, and one wider than the whole
+figure keeps its aligned edge in view. Alignment is untouched whenever
+the text fits where it is, and a Shift+Enter line break is still the
+way to make a long title wrap. Exports carry the title the same way.
+See LAYOUT.md §7.
+
 The alignment control positions each title against the PANEL's plot
 span, never the canvas — so left-aligning parks the text at the plot's
 edge, not the image's. For the y-axis title its meaning depends on the
@@ -2715,7 +2771,10 @@ asking for wrapping.) A wrapped entry keeps its swatch on the label's
 FIRST line — centered on that line, whatever the swatch's height — not
 floating at the vertical middle of the whole wrapped block; single-line
 entries look exactly as they always have. Image export reproduces each
-wrapped line and the swatch placement.
+wrapped line and the swatch placement. A section TITLE that wraps
+(Shift+Enter, or a fixed width narrower than the text) grows UP: a
+right / left legend lifts by the extra lines so the title's bottom line
+and the entries stay where a single-line title puts them (§7).
 
 **Orientation and Legend columns are independent controls, and each
 owns exactly one axis of the layout.** Orientation (Stacked /
@@ -3096,7 +3155,12 @@ has:
     value axis on either side — the pie variants, maps, and the
     structure layouts — disable Values mode (there is no scale a data
     coordinate could resolve against). Numeric axes
-    use the linear/time scale; categorical/string-ordinal axes
+    use the linear scale. A date axis presents the same date box as
+    the axis's Scale range bounds (type `YYYY-MM-DD` or pick from its
+    month / year calendar) and stores the coordinate as epoch ms at
+    local midnight, which the time scale places directly — the
+    percent ↔ values toggle computes the same unit, so a converted
+    position shows up as the date it fell on. Categorical/string-ordinal axes
     present a category dropdown and the rectangle spans between the
     selected categories' centers — the same positions line-segment
     endpoints land on.
@@ -3114,11 +3178,46 @@ has:
 center (x, y) and a radius, with the same Percent / Values coordinate
 toggle. A circle always renders as a true on-screen circle;
 `radiusAxis` selects which axis the radius is measured against in
-Values mode (a data-unit radius against a categorical axis can't be
-placed and renders nothing). **Line segments**
+Values mode. When that axis has data units (quantitative or
+numeric-ordinal) the radius counts in them. When it has none —
+categorical, string-ordinal, or temporal, so e.g. a tile chart with a
+category on both axes — there is no axis unit a radius could count in,
+so the radius box grows a **px / %** toggle beside it (`radiusUnit`):
+a fixed on-screen px size, or a fraction of that axis's plot extent
+(the same number Percent mode reads; the default, so a circle toggled
+from Percent to Values keeps its size). Switching px ↔ % converts the
+stored number so the circle holds its size, and "Adjust by" converts
+against whichever unit is active. Circles share the rectangle's
+fill/border/layer styling controls. **Line segments**
 (`lib/lineSegmentAnnotationGeometry.ts`) run between two endpoints,
-each in Percent or Values coordinates. Both share the rectangle's
-fill/border/layer styling controls.
+each in Percent or Values coordinates (the Position inputs call them
+left / bottom and right / top). Their **Line properties** subsection
+holds the stroke — color, thickness, opacity, dash — and then the
+line's ends:
+
+- **Line cap**: Round or Square. Square is a flush end exactly at the
+  endpoint (SVG's butt cap — the same mapping the Connection and
+  segment line caps use, and what every line drew before the option
+  existed, so lines saved without the field keep their look); Round
+  adds a half-circle past each endpoint.
+- **Add arrowhead**: a checkbox that reveals the head's **Style**
+  chips — Triangle, Stealth (notched), Open (a stroked chevron),
+  Diamond, Circle — and a **Scale** multiplier. The head sits at the
+  right / top endpoint, pointing along the segment. It is sized from
+  the line thickness (one unit = the thickness, floored at 1px; the
+  head is 4 units long and 4 wide, × scale), so thickening the line
+  grows its head and the scale stays a proportion rather than a stale
+  pixel count. The line's own stroke stops at the head's base (at the
+  notch for Stealth; at the tip under an Open chevron), backed off by a
+  round cap's overhang, and the line's opacity is applied to the line
+  and head as one group, so a semi-transparent arrow never darkens
+  where the two overlap. The head is explicit `<path>` geometry rather than
+  an SVG `<marker>` — PowerPoint's SVG import drops markers — so it
+  clips, scales, and exports exactly like the line, and the edge
+  reserve (below) counts it. All of this is
+  `lib/arrowheadGeometry.ts`; the cap and arrowhead fields are
+  per-annotation (not theme-seeded) and reset against
+  `DEFAULT_LINE_END_STYLE`.
 
 **Text annotations** (`lib/textAnnotationGeometry.ts`) are plain text
 drawn on the chart rather than a shape that contains text. They carry
@@ -3263,7 +3362,8 @@ Theme settings:
   corner radius for the text annotation's background box — its own
   section, so text can default to no box while shapes stay filled;
   and color / thickness /
-  opacity / dash for line annotations. The dash controls are the same
+  opacity / dash for line annotations (a line's cap and arrowhead are
+  per-annotation, not themed). The dash controls are the same
   None / swatch / Custom button rows the annotation editors use. Existing annotations keep the
   style they were authored with (re-theming never restyles them); the
   Annotations panel's reset links compare against and restore these

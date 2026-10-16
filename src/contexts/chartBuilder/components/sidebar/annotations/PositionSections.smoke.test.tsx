@@ -228,3 +228,89 @@ describe("annotation Position — Pixels unit", () => {
 		})
 	})
 })
+
+/** Local midnight on a calendar day — the instant the date box stores. */
+const local = (y: number, m: number, d: number) => new Date(y, m, d).getTime()
+
+/** A two-year date axis, Jan 1 2020 → Jan 1 2022. */
+const DATE_AXIS: AxisInfo = {
+	field: "when",
+	type: "temporal",
+	categories: null,
+	dataMin: local(2020, 0, 1),
+	dataMax: local(2022, 0, 1),
+}
+
+describe("annotation Position — Values unit on a date axis", () => {
+	it("gives the date axis a date box and leaves the other axis a number input", () => {
+		const onChange = vi.fn()
+		mount(
+			<EdgePositionSection
+				coords={{
+					...newRectangle("r1"),
+					coordSystem: "values",
+					xMin: local(2020, 5, 1),
+					xMax: local(2021, 5, 1),
+					yMin: 10,
+					yMax: 20,
+				}}
+				onChange={onChange}
+				xAxis={DATE_AXIS}
+				yAxis={AXIS}
+				zOrder="front"
+				onZOrderChange={() => {}}
+			/>
+		)
+		expandPosition()
+		const left = screen.getByLabelText<HTMLInputElement>("left")
+		const right = screen.getByLabelText<HTMLInputElement>("right")
+		expect(left.value).toBe("2020-06-01")
+		expect(right.value).toBe("2021-06-01")
+		// Each date box has its own calendar button; the y axis keeps a
+		// plain number input.
+		expect(screen.getAllByRole("button", { name: "Pick a date" })).toHaveLength(2)
+		expect(screen.getByLabelText<HTMLInputElement>("bottom").value).toBe("10")
+
+		// A typed date stores epoch ms at local midnight — the unit the
+		// renderer's time scale places directly.
+		fireEvent.change(left, { target: { value: "2020-09-15" } })
+		fireEvent.keyDown(left, { key: "Enter" })
+		expect(onChange).toHaveBeenCalledWith({ xMin: local(2020, 8, 15) })
+
+		// Blanking the box leaves the coordinate alone.
+		fireEvent.change(right, { target: { value: "" } })
+		fireEvent.blur(right)
+		expect(onChange).toHaveBeenCalledTimes(1)
+	})
+
+	it("switching Percent → Values on a date axis lands on a date and shows it as one", () => {
+		const onChange = vi.fn()
+		const store = createStore()
+		store.set(currentRenderedPanelInnerDimsAtom, { widthPx: 400, heightPx: 200 })
+		const start = { ...newTextAnnotation("t1"), x: 0.5, y: 0.5 }
+		const ui = (coords: typeof start) => (
+			<Provider store={store}>
+				<PointPositionSection
+					coords={coords}
+					onChange={onChange}
+					xAxis={DATE_AXIS}
+					yAxis={AXIS}
+					zOrder="front"
+					onZOrderChange={() => {}}
+				/>
+			</Provider>
+		)
+		const { rerender } = render(ui(start))
+		expandPosition()
+		select("Adjust by", "values")
+		const patch = onChange.mock.calls[0]?.[0] as { coordSystem: string; x: number; y: number }
+		expect(patch.coordSystem).toBe("values")
+		// Halfway along the axis is noon on Dec 31 2020, as ms...
+		expect(patch.x).toBeCloseTo((local(2020, 0, 1) + local(2022, 0, 1)) / 2, -4)
+		expect(patch.y).toBe(50)
+		// ...which the date box shows as the day it fell on.
+		rerender(ui({ ...start, ...patch, coordSystem: "values" }))
+		expect(screen.getByLabelText<HTMLInputElement>("x").value).toBe("2020-12-31")
+		expect(screen.getByLabelText<HTMLInputElement>("y").value).toBe("50")
+	})
+})

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { convertCoord, convertRadius, type AxisInfo } from "./axisInfo"
+import {
+	convertCoord,
+	convertRadius,
+	convertRadiusUnit,
+	hasDataUnits,
+	type AxisInfo,
+} from "./axisInfo"
 
 /** The sidebar's unit toggle: switching "Adjust by" rewrites the stored
  *  numbers so the annotation stays put. Pixels count from the plot's
@@ -78,12 +84,74 @@ describe("convertCoord", () => {
 
 describe("convertRadius", () => {
 	it("scales a fraction of the radius axis to px and back", () => {
-		expect(convertRadius(0.2, "percent", "pixels", axis, 400)).toBe(80)
-		expect(convertRadius(80, "pixels", "percent", axis, 400)).toBeCloseTo(0.2)
+		expect(convertRadius(0.2, "percent", "pixels", axis, 400, "percent")).toBe(80)
+		expect(convertRadius(80, "pixels", "percent", axis, 400, "percent")).toBeCloseTo(0.2)
 		// 10 data units of a 50-unit axis over 400px = 80px.
-		expect(convertRadius(10, "values", "pixels", axis, 400)).toBe(80)
+		expect(convertRadius(10, "values", "pixels", axis, 400, "percent")).toBe(80)
 		// Both pixel corners share the on-screen radius.
-		expect(convertRadius(80, "pixels", "pixelsBottomLeft", axis, 400)).toBe(80)
-		expect(convertRadius(0.2, "percent", "pixelsBottomLeft", axis, 400)).toBe(80)
+		expect(convertRadius(80, "pixels", "pixelsBottomLeft", axis, 400, "percent")).toBe(80)
+		expect(convertRadius(0.2, "percent", "pixelsBottomLeft", axis, 400, "percent")).toBe(80)
+	})
+
+	/** A categorical (or string-ordinal / temporal) radius axis has no data
+	 *  units, so a values-mode radius is in the circle's own `radiusUnit`
+	 *  instead — px or a fraction of the axis extent — and the "Adjust by"
+	 *  toggle converts against THAT unit so the circle keeps its size. */
+	describe("radius axis without data units", () => {
+		const cat: AxisInfo = {
+			field: "group",
+			type: "categorical",
+			categories: ["a", "b", "c"],
+			dataMin: null,
+			dataMax: null,
+		}
+		const temporal: AxisInfo = {
+			field: "when",
+			type: "temporal",
+			categories: null,
+			dataMin: 0,
+			dataMax: 86_400_000,
+		}
+
+		it("tells the two kinds of axis apart", () => {
+			expect(hasDataUnits(axis)).toBe(true)
+			expect(hasDataUnits(cat)).toBe(false)
+			expect(hasDataUnits(temporal)).toBe(false)
+			// Numeric ordinal (no category list) counts in data units;
+			// string ordinal (a category list) doesn't.
+			expect(hasDataUnits({ ...axis, type: "ordinal" })).toBe(true)
+			expect(hasDataUnits({ ...cat, type: "ordinal" })).toBe(false)
+		})
+
+		it("percent ↔ values keeps the fraction when the unit is percent", () => {
+			expect(convertRadius(0.2, "percent", "values", cat, 400, "percent")).toBe(0.2)
+			expect(convertRadius(0.2, "values", "percent", cat, 400, "percent")).toBe(0.2)
+			// A temporal axis is NOT lerped into milliseconds.
+			expect(convertRadius(0.2, "percent", "values", temporal, 400, "percent")).toBe(0.2)
+		})
+
+		it("percent ↔ values converts through the extent when the unit is px", () => {
+			expect(convertRadius(0.2, "percent", "values", cat, 400, "px")).toBe(80)
+			expect(convertRadius(80, "values", "percent", cat, 400, "px")).toBeCloseTo(0.2)
+		})
+
+		it("values ↔ pixels respects the unit", () => {
+			expect(convertRadius(80, "values", "pixels", cat, 400, "px")).toBe(80)
+			expect(convertRadius(0.2, "values", "pixels", cat, 400, "percent")).toBe(80)
+			expect(convertRadius(80, "pixels", "values", cat, 400, "px")).toBe(80)
+			expect(convertRadius(80, "pixels", "values", cat, 400, "percent")).toBeCloseTo(0.2)
+		})
+	})
+})
+
+describe("convertRadiusUnit", () => {
+	it("converts between px and a fraction of the extent, and back", () => {
+		expect(convertRadiusUnit(0.2, "percent", "px", 400)).toBe(80)
+		expect(convertRadiusUnit(80, "px", "percent", 400)).toBeCloseTo(0.2)
+		expect(convertRadiusUnit(80, "px", "px", 400)).toBe(80)
+	})
+
+	it("leaves the number alone before the plot has rendered", () => {
+		expect(convertRadiusUnit(0.2, "percent", "px", null)).toBe(0.2)
 	})
 })

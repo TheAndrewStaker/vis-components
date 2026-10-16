@@ -9,6 +9,7 @@ import {
 	buildGeoPatternDefs,
 	buildRegionStyleResolvers,
 	geoPatternFill,
+	matchedRowIsNoData,
 	resolveGeoFill,
 	resolveGeoOutlineColor,
 	resolveGeoPatternDef,
@@ -498,5 +499,93 @@ describe("buildRegionStyleResolvers with brightness mapped", () => {
 			channelConfigs: EMPTY_CHANNEL_CONFIGS,
 		})
 		expect(resolvers.fillFor(feature("31"))).toBe("#nodata")
+	})
+})
+
+describe("matchedRowIsNoData", () => {
+	// The one predicate behind the choropleth's "Fill regions with no data"
+	// skip and the auto frame's notion of what's drawn (reported: toggling
+	// the fill off left blank-value regions gray).
+	it("is false when no measure is mapped — no measure is not missing data", () => {
+		expect(
+			matchedRowIsNoData({ cat: "" }, null, EMPTY_SCALES, EMPTY_CHANNEL_CONFIGS)
+		).toBe(false)
+	})
+
+	it("is false for a row whose measure resolves", () => {
+		const hue = hueOver(["A", "B"])
+		expect(
+			matchedRowIsNoData(
+				{ cat: "A" },
+				hue!.field,
+				scalesOf({ hue }),
+				EMPTY_CHANNEL_CONFIGS
+			)
+		).toBe(false)
+	})
+
+	it("is true for a blank measure cell (hue) and an unparseable one (opacity)", () => {
+		const hue = hueOver(["A", "B"])
+		expect(
+			matchedRowIsNoData(
+				{ cat: "" },
+				hue!.field,
+				scalesOf({ hue }),
+				EMPTY_CHANNEL_CONFIGS
+			)
+		).toBe(true)
+		const opacity = opacityOver([1, 2, 3])
+		expect(
+			matchedRowIsNoData(
+				{ n: "N/A" },
+				opacity!.field,
+				scalesOf({ opacity }),
+				EMPTY_CHANNEL_CONFIGS
+			)
+		).toBe(true)
+	})
+
+	it("is false when the row's own pattern-channel category paints it", () => {
+		// Blank hue measure, but a pattern category of its own: that's an
+		// encoding, not missing data.
+		const scales = scalesOf({ ...patternScales(false), hue: hueOver(["A"]) })
+		expect(
+			matchedRowIsNoData(
+				{ cat: "", p: "A" },
+				scales.hue!.field,
+				scales,
+				EMPTY_CHANNEL_CONFIGS
+			)
+		).toBe(false)
+	})
+
+	it("agrees with buildRegionStyleResolvers' noDataFor for matched rows", () => {
+		const hue = hueOver(["A"])
+		const scales = scalesOf({ hue })
+		const rows = new Map<string, Record<string, unknown>>([
+			["06", { cat: "A" }],
+			["48", { cat: "" }],
+		])
+		const resolvers = buildRegionStyleResolvers({
+			featureToRow: rows,
+			noDataFill: "#nodata",
+			measureField: hue!.field,
+			baseOutlineColor: "#base",
+			outlineHue: null,
+			outlineColorRules: undefined,
+			aestheticScales: scales,
+			channelConfigs: EMPTY_CHANNEL_CONFIGS,
+		})
+		const feature = (id: string): Feature => ({
+			type: "Feature",
+			id,
+			properties: {},
+			geometry: { type: "Point", coordinates: [0, 0] },
+		})
+		for (const [id, row] of rows) {
+			expect(resolvers.noDataFor(feature(id))).toBe(
+				matchedRowIsNoData(row, hue!.field, scales, EMPTY_CHANNEL_CONFIGS)
+			)
+		}
 	})
 })

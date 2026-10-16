@@ -283,6 +283,50 @@ export type RegionStyleResolvers = {
 	noDataFor: (feature: Feature) => boolean
 }
 
+/** One resolution of a MATCHED row's region paint: the measure-driven fill
+ *  (`resolveGeoFill`), the paint actually drawn (that fill, or the row's own
+ *  pattern-channel ref), and whether it lands on the no-data paint. Shared by
+ *  `buildRegionStyleResolvers` and `matchedRowIsNoData` so "paints as
+ *  no-data" is decided in exactly one place. */
+const resolveRowPaint = (
+	baseFill: string,
+	row: Record<string, unknown>,
+	measureField: AestheticFieldInfo | null,
+	aestheticScales: AestheticScales,
+	channelConfigs: ChannelConfigs
+): { paint: string; noData: boolean } => {
+	const { fill, measureMissing, preModulationHue, satUnit, briUnit } =
+		resolveGeoFill(baseFill, row, measureField, aestheticScales, channelConfigs)
+	const paint = geoPatternFill(row, fill, aestheticScales, channelConfigs, {
+		preModulationHue,
+		satUnit,
+		briUnit,
+	})
+	// The row's own pattern-channel paint (an encoding) wins; otherwise a
+	// blank/NA measure renders like an unmatched region.
+	return { paint, noData: paint === fill && measureMissing }
+}
+
+/**
+ * Whether a MATCHED row paints as no-data: its mapped measure didn't resolve
+ * (blank / NA cell) and no pattern-channel category of its own paints it
+ * instead. False when no measure is mapped at all (every region is "no
+ * measure" there, not "missing data"). The single predicate behind
+ * `noDataFor`, the choropleth's "Fill regions with no data" skip, and the
+ * auto frame's notion of what's drawn (useGeoMapScaffold /
+ * useAutoFitViewport), so the three can never disagree.
+ */
+export const matchedRowIsNoData = (
+	row: Record<string, unknown>,
+	measureField: AestheticFieldInfo | null,
+	aestheticScales: AestheticScales,
+	channelConfigs: ChannelConfigs
+): boolean =>
+	// The base fill can't affect the verdict (a resolved measure replaces it;
+	// an unresolved one flags measureMissing either way), so any color will do.
+	resolveRowPaint("#000000", row, measureField, aestheticScales, channelConfigs)
+		.noData
+
 /**
  * Build the per-feature region style resolvers shared by GeoChoroplethPlot
  * (its interactive region paths) and GeoSymbolPlot (its non-interactive
@@ -332,31 +376,20 @@ export const buildRegionStyleResolvers = ({
 	const noDataPaint = noDataPatternDef
 		? `url(#${noDataPatternDef.svgId})`
 		: noDataFill
-	/** One resolution of a MATCHED row's region paint: what it draws with, plus
-	 *  whether that landed on the no-data paint (so `fillFor` and `noDataFor`
-	 *  can't drift apart). */
+	/** A MATCHED row's region paint (see `resolveRowPaint`), with the no-data
+	 *  verdict swapped for this map's no-data paint — so `fillFor` and
+	 *  `noDataFor` can't drift apart. */
 	const paintOf = (
 		row: Record<string, unknown>
 	): { paint: string; noData: boolean } => {
-		const { fill, measureMissing, preModulationHue, satUnit, briUnit } =
-			resolveGeoFill(
-				noDataFill,
-				row,
-				measureField,
-				aestheticScales,
-				channelConfigs
-			)
-		const paint = geoPatternFill(row, fill, aestheticScales, channelConfigs, {
-			preModulationHue,
-			satUnit,
-			briUnit,
-		})
-		// The row's own pattern-channel paint (an encoding) wins; otherwise a
-		// blank/NA measure renders like an unmatched region.
-		if (paint !== fill) return { paint, noData: false }
-		return measureMissing
-			? { paint: noDataPaint, noData: true }
-			: { paint: fill, noData: false }
+		const { paint, noData } = resolveRowPaint(
+			noDataFill,
+			row,
+			measureField,
+			aestheticScales,
+			channelConfigs
+		)
+		return noData ? { paint: noDataPaint, noData: true } : { paint, noData: false }
 	}
 	return {
 		fillFor: (feature) => {

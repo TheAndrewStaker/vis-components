@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import useMeasure from "react-use-measure"
 import { useAtomValue, useSetAtom } from "jotai"
 import type { CanvasMargins } from "../../lib/channelConfig"
+import type { TitleOverhang } from "../../lib/facetLayoutSolver"
 import {
 	inkSlack,
 	MARGIN_MAX_PASSES,
@@ -65,7 +66,13 @@ const SpinnerIcon = () => (
 	</svg>
 )
 
-export const ChartBody = () => {
+export const ChartBody = ({
+	titleOverhang,
+}: {
+	/** Room beside the chart area (the legend column) the chart title /
+	 *  subtitle may paint into — measured by ChartCanvasBody; see PlotCanvas. */
+	titleOverhang?: TitleOverhang
+} = {}) => {
 	const dataset = useCurrentDatasetView()
 	const status = useCurrentDatasetStatus()
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
@@ -130,10 +137,10 @@ export const ChartBody = () => {
 	}
 	// PlotCanvas handles BOTH faceted and single-panel cases — single is
 	// just a 1×1 facet grid.
-	if (!bgStyle) return <PlotCanvas />
+	if (!bgStyle) return <PlotCanvas titleOverhang={titleOverhang} />
 	return (
 		<div className="h-full w-full" style={bgStyle}>
-			<PlotCanvas />
+			<PlotCanvas titleOverhang={titleOverhang} />
 		</div>
 	)
 }
@@ -292,6 +299,33 @@ const ChartCanvasBody = ({
 
 	const pos = legendCfg.position
 
+	// Chart title / subtitle overhang: beside a left / right legend the band
+	// above the legend is blank, and PlotCanvas lets those two texts paint
+	// past the SVG box into it (LAYOUT.md §7). The room is MEASURED, not
+	// derived from the legend's sizing rules: the column is whatever the flex
+	// row gave the legend (content width, fixed width, multi-column cap,
+	// margins), so row − chart area is exact. Layout sizes (`offsetSize`),
+	// like PlotCanvas's own bounds; the figure-slack pull below is paint-only
+	// and never changes them. The hooks run unconditionally; only a side
+	// legend reports any room, and the inside layout never reads it.
+	const [rowRef, rowBounds] = useMeasure({ offsetSize: true })
+	const [chartRef, chartBounds] = useMeasure({ offsetSize: true })
+	const legendColumn =
+		(pos === "left" || pos === "right") &&
+		rowBounds.width > 0 &&
+		chartBounds.width > 0
+			? Math.max(0, rowBounds.width - chartBounds.width)
+			: 0
+	// The SVG sits inside the chart area's own `p-3`, so that pad is room too.
+	const overhang = legendColumn > 0 ? CHART_PAD + legendColumn : 0
+	const titleOverhang = useMemo<TitleOverhang>(
+		() => ({
+			left: pos === "left" ? overhang : 0,
+			right: pos === "right" ? overhang : 0,
+		}),
+		[pos, overhang],
+	)
+
 	if (pos === "inside") {
 		return <InsideLegendLayout legendCfg={legendCfg} bgStyle={bgStyle} />
 	}
@@ -304,11 +338,12 @@ const ChartCanvasBody = ({
 		// (the plot area sans legend) to size the split-legend "chart" iframe,
 		// so the snippet inherits the on-screen chart dimensions.
 		<div
+			ref={chartRef}
 			className="min-h-0 min-w-0 flex-1 p-3"
 			key="chart"
 			data-editor-chart-plot
 		>
-			<ChartBody />
+			<ChartBody titleOverhang={titleOverhang} />
 		</div>
 	)
 	// Fixed aspect ratio: the figure is centered in the chart area, so the
@@ -345,7 +380,11 @@ const ChartCanvasBody = ({
 	)
 
 	return (
-		<div className={`flex h-full w-full ${flexDirection}`} style={bgStyle}>
+		<div
+			ref={rowRef}
+			className={`flex h-full w-full ${flexDirection}`}
+			style={bgStyle}
+		>
 			{legendFirst ? legend : chart}
 			{legendFirst ? chart : legend}
 		</div>

@@ -445,9 +445,10 @@ const TextColorRulesRow = ({
 			{stored.length > 0 && (
 				<>
 					<p className="vc-help">
-						First matching rule wins. Use <code>{">"}</code>,{" "}
-						<code>{"<"}</code>, <code>{">="}</code>, <code>{"<="}</code>,{" "}
-						<code>==</code>, or <code>!=</code> followed by a number.
+						First matching rule wins. <code>{">"}</code>, <code>{"<"}</code>,{" "}
+						<code>{">="}</code>, and <code>{"<="}</code> compare numbers;{" "}
+						<code>==</code> and <code>!=</code> also match text, e.g.{" "}
+						<code>== Melon</code>.
 					</p>
 					{help && <p className="vc-help">{help}</p>}
 				</>

@@ -10,7 +10,10 @@ import type { ChartRendererBaseProps } from "../../lib/chartRendererProps"
 import { geographic } from "./coords/geographic"
 import type { GeoScales } from "../../lib/coords/types"
 import { regionViewport, viewportGeoJson } from "../../lib/geo/focusRegion"
-import { DEFAULT_OUTLINE_COLOR } from "../../lib/geo/geoMarkStyle"
+import {
+	DEFAULT_OUTLINE_COLOR,
+	matchedRowIsNoData,
+} from "../../lib/geo/geoMarkStyle"
 import { resolveGeoProjection } from "../../lib/geo/geoProjection"
 import { featureId, type GeometryBundle } from "../../lib/geo/loadGeometry"
 import { buildOpenSpacePredicate } from "../../lib/geo/openSpace"
@@ -63,6 +66,9 @@ import { useMapPanZoom } from "./useMapPanZoom"
 /** Hover state carries the matched data row plus the pointer's viewport
  *  coordinates so the shared `HoverTooltip` can portal-render itself anywhere
  *  on screen. Unlike scatter there's no mark index — geo marks don't dim. */
+/** Stable empty-rows identity for the dataset-wide fit join (see below). */
+const EMPTY_ROWS: Array<Record<string, unknown>> = []
+
 type HoverState = {
 	row: Record<string, unknown>
 	clientX: number
@@ -123,8 +129,10 @@ export type GeoMapScaffold = {
 	) => ReactNode
 	/** Non-interactive world-countries backdrop behind the regions/marks. Null
 	 *  unless the resolved projection is world-capable AND the level isn't
-	 *  already "countries" (and the countries geometry has loaded). Renderers
-	 *  with a basemap toggle add their own `mapConfig.showBasemap` gate. */
+	 *  already "countries" (and the countries geometry has loaded). It is
+	 *  no-data paint, so each renderer gates it on its own no-data toggle: the
+	 *  bubble / dot maps on `mapConfig.showBasemap`, the choropleth on
+	 *  `showNoDataRegions`. */
 	renderWorldBackdrop: (path: GeoScales["path"]) => ReactNode
 	/** The Data Labels layer for maps: one label per region matched by the
 	 *  labels' `geography` channel, centered on the region's centroid (which
@@ -185,6 +193,17 @@ export const useGeoMapScaffold = (
 		 *  choropleth and bubble map need this; the lat/long dot map has no
 		 *  region join (positions come straight from the data's lon/lat). */
 		joinRegions?: boolean
+		/** When this returns true for the current config, the renderer draws ONLY
+		 *  the regions with data — joined, and not painted as no-data (the
+		 *  choropleth with "Fill regions with no data" off; see
+		 *  matchedRowIsNoData). "Whole map (auto)" then frames just those regions
+		 *  instead of the level's whole geometry — a Washington-only dataset
+		 *  fills the panel with Washington rather than sitting in the corner of an
+		 *  otherwise empty US. Resolved over the WHOLE dataset (not a facet
+		 *  panel's rows) so every panel of a facet grid shares one frame; falls
+		 *  back to the whole geometry when nothing is drawn. Inert without
+		 *  `joinRegions`. */
+		fitToMatchedRegions?: (mapConfig: MapConfig) => boolean
 	}
 ): GeoMapScaffold => {
 	const joinRegions = options?.joinRegions ?? true
@@ -322,6 +341,26 @@ export const useGeoMapScaffold = (
 		mapConfig.keyType
 	)
 
+	// "Whole map (auto)" frames what's drawn. When the renderer omits unmatched
+	// regions (see `fitToMatchedRegions`), the fit target is the matched
+	// features, joined over the WHOLE dataset so facet panels share one frame
+	// (a per-panel join would give each panel its own zoom). The extra join
+	// only runs while the option is on (null field → empty map, no work);
+	// unfaceted it reuses the chart rows, so it's one memoized
+	// resolveGeography over the dataset's values. Stable row identity matters:
+	// a fresh `[]` per render would churn the memo, then the fit collection,
+	// then the coord cache (rebuilding the projection every render).
+	const fitToMatched =
+		joinRegions && (options?.fitToMatchedRegions?.(mapConfig) ?? false)
+	const fitJoin = useGeoJoin(
+		bundle,
+		fitToMatched ? regionField : null,
+		props.rowsOverride === undefined
+			? rowsForChart
+			: (dataset?.rows ?? EMPTY_ROWS),
+		mapConfig.keyType
+	)
+
 	// A no-data region belongs to no category, so it fades with the rest rather
 	// than ever lighting up. Guarded on the hovered field being a column of this
 	// chart's data (within one visual it always is — the legend and the marks
@@ -426,17 +465,46 @@ export const useGeoMapScaffold = (
 	}
 
 	// Fit the projection to the level's whole feature collection so every
-	// region lands in the panel even when only a few are data-matched. When
-	// geometry hasn't resolved yet this is an empty collection (no marks draw).
-	// Memoized on the bundle: the collection's IDENTITY keys the coord cache
-	// below, so it must only change when the geometry actually does.
-	const fitTo: FeatureCollection = useMemo(
-		() => ({
+	// region lands in the panel even when only a few are data-matched — unless
+	// the renderer draws only the matched regions (`fitToMatched`), in which
+	// case frame those: the user is looking at their data, not at the empty
+	// rest of the geography. Nothing matched (or geometry not resolved yet)
+	// falls back to the whole collection (empty while loading — no marks draw).
+	// Memoized on its inputs: the collection's IDENTITY keys the coord cache
+	// below, so it must only change when the fit target actually does.
+	const fitTo: FeatureCollection = useMemo(() => {
+		const all = bundle?.features ?? []
+		// "Drawn" = joined AND not painted as no-data: the renderer skips a
+		// blank/NA measure exactly like an unjoined region (matchedRowIsNoData),
+		// so a whole-US template with values only for Washington still frames
+		// Washington.
+		const drawn =
+			fitToMatched && fitJoin.size > 0
+				? all.filter((f) => {
+						const row = fitJoin.get(featureId(f))
+						return (
+							row !== undefined &&
+							!matchedRowIsNoData(
+								row,
+								measureField,
+								aestheticScales,
+								channelConfigs
+							)
+						)
+					})
+				: []
+		return {
 			type: "FeatureCollection",
-			features: bundle?.features ?? [],
-		}),
-		[bundle]
-	)
+			features: drawn.length > 0 ? drawn : all,
+		}
+	}, [
+		bundle,
+		fitToMatched,
+		fitJoin,
+		measureField,
+		aestheticScales,
+		channelConfigs,
+	])
 
 	// When a focus is active, fit the projection to its box instead of the
 	// loaded geometry — pans + zooms the map there. `pan.viewport` is the live

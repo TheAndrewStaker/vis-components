@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import { DEFAULT_OPACITY } from "../../lib/channelConfig"
 import { isFlowModeId } from "../../lib/packedMeasure"
@@ -39,6 +39,7 @@ import {
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
 import { LegendSection } from "./legend/LegendSection"
 import { LegendColumns } from "./legend/swatches"
+import { liftLegendBox, measureLegendTitleGrowth } from "./legend/titleGrowth"
 import { measureMaxLabelWidth } from "./plotCanvas/measureText"
 import { useFontsVersion } from "./plotCanvas/useFontsVersion"
 
@@ -149,6 +150,19 @@ export const Legend = ({
 		const px = el.offsetWidth
 		if (px > 0) setRenderedWidth(Math.round(px))
 	})
+	// Wrapped section titles grow UP: the box lifts by the titles' extra
+	// height (`measureLegendTitleGrowth`) so their bottom lines and the
+	// entries hold the positions a single-line title gives them. A layout
+	// effect, so the lift paints in the same frame as the wrap; no deps for
+	// the same reason as the width measure above — the titles' rendered
+	// height changes with text, fonts, fixed width and columns, so every
+	// commit re-measures.
+	const [titleGrowth, setTitleGrowth] = useState(0)
+	// eslint-disable-next-line react-hooks/exhaustive-deps -- measures the DOM after every commit; React skips the re-render when the measured value is unchanged, so the setter can't chain
+	useLayoutEffect(() => {
+		const el = innerRef.current
+		setTitleGrowth(el ? measureLegendTitleGrowth(el) : 0)
+	})
 	// The width budget below measures label / title text with canvas
 	// `measureText`. Before a webfont arrives that measures the FALLBACK
 	// face, which is often narrower than the real one — the column then
@@ -212,6 +226,11 @@ export const Legend = ({
 		entryColumns,
 		alignSwatchColumn,
 	} = plan
+	const liftedOuterStyle = liftLegendBox(
+		outerStyle,
+		legendCfg.position,
+		titleGrowth,
+	)
 
 	return (
 		// data-legend-root: image export walks this subtree to recreate the
@@ -220,7 +239,9 @@ export const Legend = ({
 			ref={insideMeasureRef}
 			data-legend-root
 			className={outerClass}
-			style={pullStyle ? { ...outerStyle, ...pullStyle } : outerStyle}
+			style={
+				pullStyle ? { ...liftedOuterStyle, ...pullStyle } : liftedOuterStyle
+			}
 		>
 			<div ref={innerRef} className={innerClass} style={innerStyle}>
 				{(() => {

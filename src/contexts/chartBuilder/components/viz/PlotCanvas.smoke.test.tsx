@@ -716,12 +716,13 @@ describe("PlotCanvas (flag ON) — legacy smoke-test invariants on SVG model", (
 		// testable in jsdom without depending on exact pixel arithmetic.
 		seedWithLayout({ rows: 3, cols: 1, gapY: -20 })
 		const { container } = mountChartCanvas()
-		// Each panel's facet label is an SVG <text>. Find them in panel
+		// Each panel's facet label is an SVG <text> inside its [data-facet-label]
+		// group (drawn after the marks, so it is NOT the panel's first <text>). Find them in panel
 		// order (data-panel-key groups), extract their y attribute.
 		const panels = [...container.querySelectorAll("[data-panel-key]")]
 		expect(panels.length).toBe(3)
 		const labelYs = panels.map((p) => {
-			const text = p.querySelector("text")
+			const text = p.querySelector("[data-facet-label] text")
 			return Number(text?.getAttribute("y") ?? "NaN")
 		})
 		// Successive labels must DECREASE in spacing under negative gap:
@@ -954,5 +955,52 @@ describe("PlotCanvas — tri-state shareX / shareY", () => {
 		// They MUST differ — otherwise perGroup collapses into all.
 		expect(allCounts.every((c) => c.xCount === 8)).toBe(true)
 		expect(perGroupCounts.every((c) => c.xCount === 4)).toBe(true)
+	})
+})
+
+/** The chart title / subtitle may run past the SVG's edge (into the blank
+ *  band over a left / right legend — LAYOUT.md §7): the SVG is
+ *  `overflow="visible"`, everything else is wrapped in a clip to the SVG's
+ *  own rect, and those two texts are drawn outside that clip. */
+describe("PlotCanvas — chart title escapes the canvas clip", () => {
+	it("draws the chart title and subtitle outside the canvas clip group, with overflow visible", () => {
+		seed({
+			faceted: false,
+			labels: {
+				title: "A long title",
+				subtitle: "A subtitle",
+				xAxisTitle: "x axis",
+			},
+		})
+		const { container } = mountChartCanvas()
+		const svg = container.querySelector("svg#vc-scatter-svg")!
+		expect(svg.getAttribute("overflow")).toBe("visible")
+		const children = [...svg.children]
+		const clipGroup = children.find(
+			(el) => el.localName === "g" && el.hasAttribute("clip-path")
+		)!
+		expect(clipGroup).toBeDefined()
+		expect(clipGroup.hasAttribute("data-canvas-clip")).toBe(true)
+		// The clip is the SVG's own rect.
+		const clipId = clipGroup.getAttribute("clip-path")!.slice(5, -1)
+		const clipRect = svg.querySelector("clipPath rect")!
+		expect(svg.querySelector("clipPath")!.getAttribute("id")).toBe(clipId)
+		expect(clipRect.getAttribute("width")).toBe(svg.getAttribute("width"))
+		expect(clipRect.getAttribute("height")).toBe(svg.getAttribute("height"))
+		// Panels and axis titles are inside the clip …
+		expect(clipGroup.querySelector("[data-panel]")).not.toBeNull()
+		expect(
+			[...clipGroup.querySelectorAll("text")].some(
+				(t) => (t.textContent ?? "").trim() === "x axis"
+			)
+		).toBe(true)
+		// … the chart title and subtitle are direct children, after it.
+		const directTexts = children
+			.filter((el) => el.localName === "text")
+			.map((el) => (el.textContent ?? "").trim())
+		expect(directTexts).toEqual(["A long title", "A subtitle"])
+		expect(children.indexOf(clipGroup)).toBeLessThan(
+			children.findIndex((el) => el.localName === "text")
+		)
 	})
 })

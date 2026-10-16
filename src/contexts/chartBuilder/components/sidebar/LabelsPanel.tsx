@@ -13,6 +13,8 @@ import {
 	LEGEND_CHANNELS,
 	LEGEND_FRIENDLY_NAME,
 	legendFontKey,
+	resolveLegendHidden,
+	type EncodingLegendChannel,
 	type FontConfig,
 	type LabelAlignment,
 	type LabelFontKey,
@@ -23,6 +25,13 @@ import {
 } from "../../lib/labelsConfig"
 import { axisFieldsFor } from "../../lib/axisFields"
 import { isFlowModeId } from "../../lib/chartModes/families"
+import { effectiveType } from "../../lib/fieldType"
+import { resolveHistogramMeasure } from "../../lib/histogramMeasure"
+import {
+	isHierarchyModeId,
+	PACKED_DERIVED_LABELS,
+	packedSourceOf,
+} from "../../lib/packedMeasure"
 import { resolveFacetPanels } from "../../lib/resolveFacetPanels"
 import { resolveTextPickerPalette } from "../../lib/themeConfig"
 import {
@@ -72,6 +81,16 @@ const secondaryInheritWeight = (t: TitlesFontConfig): number =>
 	t.secondaryWeight ?? t.weight ?? SECONDARY_TITLE_DEFAULT_WEIGHT
 const legendInheritWeight = (t: TitlesFontConfig): number =>
 	t.legendWeight ?? t.weight ?? SECONDARY_TITLE_DEFAULT_WEIGHT
+
+/** Effective inherited family / color for the secondary (axis + facet) title
+ * tier — the theme's per-slot value (Settings → Text → Axis titles) first,
+ * then the shared title value. Mirrors resolveTitleFont's fallback chain so
+ * the Family select's "(inherit)" entry and the color swatch name what the
+ * renderer actually draws. */
+const secondaryInheritFamily = (t: TitlesFontConfig): string =>
+	t.secondaryFamily ?? t.family
+const secondaryInheritColor = (t: TitlesFontConfig): string =>
+	t.secondaryColor ?? t.color
 
 // ---------------------------------------------------------------------------
 // Panel
@@ -208,13 +227,54 @@ export const LabelsPanel = () => {
 		}))
 	}
 
+	const modeDef = useChartModeDef()
+	const fieldOverrides = useAtomValue(currentFieldOverridesAtom)
+	const dataset = useCurrentDatasetView()
+	// Legends with no backing FIELD: a tree mode's Fill color varied by the
+	// derived Top-level group / Nesting depth (sunburst / treemap / packed
+	// circles), and a histogram's Fill color / opacity varied by the bins'
+	// Count / Density. The renderer draws each as a section keyed on its
+	// channel (so `legendTitles.hue` etc. title it just like a field-backed
+	// legend), yet `encodings[ch].field` is null — so they need listing here
+	// explicitly or the user gets no title row for the legend they can see.
+	// Gated like LegendPanel's "Legends shown" toggles and legendSections'
+	// section builders; the value is the default title the row's placeholder
+	// shows (the derived label the legend otherwise headers with).
+	const derivedLegendLabels: Partial<Record<EncodingLegendChannel, string>> = {}
+	const derivedHueSource = isHierarchyModeId(modeDef.id)
+		? packedSourceOf(encodings.hue)
+		: null
+	if (derivedHueSource && encodings.connection?.field) {
+		derivedLegendLabels.hue = PACKED_DERIVED_LABELS[derivedHueSource]
+	}
+	const histMeasure = dataset
+		? resolveHistogramMeasure(
+				encodings,
+				(n) => effectiveType(dataset, n, fieldOverrides),
+				channelConfigs
+			)
+		: null
+	if (histMeasure) {
+		for (const ch of ["hue", "opacity"] as const) {
+			const source = encodings[ch]?.measureSource
+			if (source === "count" || source === "density") {
+				derivedLegendLabels[ch] = source === "density" ? "Density" : "Count"
+			}
+		}
+	}
 	// Hide legend-title rows for channels the chart mode itself suppresses
 	// (length in bars/areas — redundant with the measure axis; angle in
-	// pies — same). The chart never draws those legends, so offering a
-	// title field for them is misleading.
-	const modeDef = useChartModeDef()
+	// pies — same), and for legends switched off under "Legends shown" —
+	// by the user, or by the mode's default (Size starts off in the tree /
+	// flow modes). The chart never draws those legends, so offering a title
+	// field for them is misleading: typing into it changes nothing visible.
+	const effectiveHidden = resolveLegendHidden(
+		legendCfg.hidden ?? {},
+		modeDef.legend
+	)
 	const activeLegendChannels = LEGEND_CHANNELS.filter((ch) => {
-		if (!encodings[ch]?.field) return false
+		if (!encodings[ch]?.field && !derivedLegendLabels[ch]) return false
+		if (effectiveHidden[ch]) return false
 		if (ch === "length" && modeDef.legend.hideLengthInThisMode) return false
 		if (ch === "angle" && modeDef.legend.hideAngleInThisMode) return false
 		return true
@@ -295,9 +355,7 @@ export const LabelsPanel = () => {
 	// "Color by facet" swatch rows enumerate the facet values through the same
 	// resolver PlotCanvas renders against, so the rows match the drawn titles
 	// (ordering included) exactly.
-	const fieldOverrides = useAtomValue(currentFieldOverridesAtom)
 	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
-	const dataset = useCurrentDatasetView()
 	const facetPanelCfg = useMemo<FacetConfig>(
 		() => ({ ...DEFAULT_FACET_CONFIG, ...channelConfigs.facet }),
 		[channelConfigs.facet]
@@ -455,7 +513,8 @@ export const LabelsPanel = () => {
 				? facetRowVals
 				: facetColVals
 	const facetTitleBaseColor =
-		overrides.facetTitle?.color ?? labels.baseFont.titles.color
+		overrides.facetTitle?.color ??
+		secondaryInheritColor(labels.baseFont.titles)
 	const legendChanged = activeLegendChannels.some((ch) =>
 		keyChanged(legendFontKey(ch))
 	)
@@ -562,9 +621,9 @@ export const LabelsPanel = () => {
 				alignment={titleAlignments.xAxisTitle}
 				onAlignment={(a) => setAlignment("xAxisTitle", a)}
 				placeholder={xTitleFallback || "field name"}
-				baseColor={labels.baseFont.titles.color}
+				baseColor={secondaryInheritColor(labels.baseFont.titles)}
 				baseSize={labels.baseFont.titles.secondarySize}
-				baseFamily={labels.baseFont.titles.family}
+				baseFamily={secondaryInheritFamily(labels.baseFont.titles)}
 				baseWeight={secondaryInheritWeight(labels.baseFont.titles)}
 				extraActive={!!labels.titleOffsets?.xAxisTitle}
 				extraControls={
@@ -584,9 +643,9 @@ export const LabelsPanel = () => {
 				alignment={titleAlignments.yAxisTitle}
 				onAlignment={(a) => setAlignment("yAxisTitle", a)}
 				placeholder={yTitleFallback || "field name"}
-				baseColor={labels.baseFont.titles.color}
+				baseColor={secondaryInheritColor(labels.baseFont.titles)}
 				baseSize={labels.baseFont.titles.secondarySize}
-				baseFamily={labels.baseFont.titles.family}
+				baseFamily={secondaryInheritFamily(labels.baseFont.titles)}
 				baseWeight={secondaryInheritWeight(labels.baseFont.titles)}
 				extraActive={
 					!!labels.yAxisTitleHorizontal ||
@@ -675,14 +734,16 @@ export const LabelsPanel = () => {
 							angle={titleAngles.facetRowTitle}
 							onAngle={(deg) => setAngle("facetRowTitle", deg)}
 							baseColor={
-								overrides.facetTitle?.color ?? labels.baseFont.titles.color
+								overrides.facetTitle?.color ??
+								secondaryInheritColor(labels.baseFont.titles)
 							}
 							baseSize={
 								overrides.facetTitle?.size ??
 								labels.baseFont.titles.secondarySize
 							}
 							baseFamily={
-								overrides.facetTitle?.family ?? labels.baseFont.titles.family
+								overrides.facetTitle?.family ??
+								secondaryInheritFamily(labels.baseFont.titles)
 							}
 							baseWeight={
 								overrides.facetTitle?.weight ??
@@ -713,14 +774,16 @@ export const LabelsPanel = () => {
 							angle={titleAngles.facetColTitle}
 							onAngle={(deg) => setAngle("facetColTitle", deg)}
 							baseColor={
-								overrides.facetTitle?.color ?? labels.baseFont.titles.color
+								overrides.facetTitle?.color ??
+								secondaryInheritColor(labels.baseFont.titles)
 							}
 							baseSize={
 								overrides.facetTitle?.size ??
 								labels.baseFont.titles.secondarySize
 							}
 							baseFamily={
-								overrides.facetTitle?.family ?? labels.baseFont.titles.family
+								overrides.facetTitle?.family ??
+								secondaryInheritFamily(labels.baseFont.titles)
 							}
 							baseWeight={
 								overrides.facetTitle?.weight ??
@@ -752,7 +815,8 @@ export const LabelsPanel = () => {
 								angle={titleAngles.facetPanelTitle}
 								onAngle={(deg) => setAngle("facetPanelTitle", deg)}
 								baseColor={
-									overrides.facetTitle?.color ?? labels.baseFont.titles.color
+									overrides.facetTitle?.color ??
+									secondaryInheritColor(labels.baseFont.titles)
 								}
 								baseSize={
 									overrides.facetTitle?.size ??
@@ -760,7 +824,7 @@ export const LabelsPanel = () => {
 								}
 								baseFamily={
 									overrides.facetTitle?.family ??
-									labels.baseFont.titles.family
+									secondaryInheritFamily(labels.baseFont.titles)
 								}
 								baseWeight={
 									overrides.facetTitle?.weight ??
@@ -796,9 +860,9 @@ export const LabelsPanel = () => {
 						}
 						angle={titleAngles.facetTitle}
 						onAngle={(deg) => setAngle("facetTitle", deg)}
-						baseColor={labels.baseFont.titles.color}
+						baseColor={secondaryInheritColor(labels.baseFont.titles)}
 						baseSize={labels.baseFont.titles.secondarySize}
-						baseFamily={labels.baseFont.titles.family}
+						baseFamily={secondaryInheritFamily(labels.baseFont.titles)}
 						baseWeight={secondaryInheritWeight(labels.baseFont.titles)}
 						afterColor={facetColorControls(facetFlatVals, facetTitleBaseColor)}
 						hideColor={colorByFacetOn}
@@ -843,7 +907,11 @@ export const LabelsPanel = () => {
 								alignment={titleAlignments[aKey]}
 								onAlignment={(a) => keys.forEach((k) => setAlignment(k, a))}
 								baseAlignment={labels.baseFont.titles.legendAlignment}
-								placeholder={encodings[group[0]].field ?? ""}
+								placeholder={
+									encodings[group[0]].field ??
+									derivedLegendLabels[group[0]] ??
+									""
+								}
 								baseColor={
 									labels.baseFont.titles.legendColor ??
 									labels.baseFont.titles.color

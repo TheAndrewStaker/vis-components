@@ -24,9 +24,13 @@ import {
 import { lineCount } from "./multilineText"
 import {
 	BASE_MARGIN,
+	extraLinesPx,
 	POLAR_MARGIN,
+	subtitleBand,
 	subtitleReserve,
+	TITLE_LINE_STEP_EM,
 	TITLE_RESERVE,
+	titleBand,
 	titleReserve,
 } from "./plotLayout"
 
@@ -69,6 +73,12 @@ export type TextRect = {
 	readonly rotation: 0 | -90
 	readonly width: number
 	readonly height: number
+	/** Multi-line text stacks its extra lines ABOVE `y` — which is then the
+	 *  LAST line's baseline — instead of below it. Set on the chart title,
+	 *  subtitle and facet panel labels, whose bands grow upward so a wrapped
+	 *  title's bottom line stays where a single line would be (LAYOUT.md §7);
+	 *  axis titles keep the first-line convention. */
+	readonly growUp?: boolean
 }
 
 export type SharedTitleInput = {
@@ -81,6 +91,11 @@ export type SharedTitleInput = {
 	 *  the plot adjusts to keep neighbors from overlapping. */
 	readonly offsetX?: number
 	readonly offsetY?: number
+	/** Widest rendered line, px — canvas-measured by the caller, the chart
+	 *  title's prefix run included. The chart title and subtitle use it to
+	 *  stay in view horizontally (`clampTitleAnchorX`); the axis titles ignore
+	 *  it. Omitted / 0 = unmeasured: the anchor is used as aligned. */
+	readonly textWidth?: number
 	/** Vertical placement within the reserved band / strip. Only the row-header
 	 *  strip honors this today (it positions the title at the top / center /
 	 *  bottom of the row's plot rect). Omit = "middle" (legacy centering). */
@@ -101,6 +116,11 @@ export type FacetLabelInput = {
 	 *  formula. */
 	readonly height: number
 	readonly align: Alignment
+	/** Line count of the tallest panel label (`\n`-separated). The band grows
+	 *  by one line step per extra line and every label's BOTTOM line sits at
+	 *  the single-line position, so a wrapped label grows up into the added
+	 *  room rather than down into the panel. Omit = 1. */
+	readonly lines?: number
 }
 
 export type SolverPanelInput = {
@@ -154,6 +174,15 @@ export type SolverInput = {
 	readonly chartSubtitle?: SharedTitleInput
 	readonly xTitle?: SharedTitleInput
 	readonly yTitle?: SharedYTitleInput
+
+	/** Room past the canvas's left / right edge (px) that the chart title and
+	 *  subtitle may paint into: the column beside a left / right edge legend,
+	 *  which is blank above the plot's top edge. PlotCanvas lets exactly those
+	 *  two texts escape the SVG box (LAYOUT.md §7), so a title wider than the
+	 *  plot flows over the legend instead of clipping at the canvas edge.
+	 *  Omitted = 0 / 0. Ignored in scroll mode, whose box clips at the
+	 *  container. */
+	readonly titleOverhang?: TitleOverhang
 
 	/** Tick-label "Adjust position" nudges (screen px: +x right, +y down).
 	 *  The nudge moves ONLY the tick labels (see Axes.tsx `labelDx`/
@@ -365,15 +394,18 @@ const yTitleOuterBand = (input: SolverInput): number => {
 
 /** Clamp a baseline-anchored text's y coordinate so its bounding box
  *  (ascender + descender) doesn't cross the viewport edge with buffer.
- *  Used by chart title / subtitle / x-title. */
+ *  Used by chart title / subtitle / x-title. `extraAbove` is the height of
+ *  the lines a `growUp` block stacks above `y` (its last line), so the
+ *  block's FIRST line is what stays clear of the top edge. */
 const clampBaselineY = (
 	y: number,
 	fontSize: number,
 	canvasH: number,
+	extraAbove: number = 0,
 ): number => {
 	const ascender = fontSize * 0.8
 	const descender = fontSize * 0.2
-	const minY = VIEWPORT_BUFFER_PX + ascender
+	const minY = VIEWPORT_BUFFER_PX + ascender + extraAbove
 	const maxY = canvasH - VIEWPORT_BUFFER_PX - descender
 	// Guard against degenerate (very small) canvases where minY > maxY.
 	if (minY > maxY) return Math.max(0, (minY + maxY) / 2)
@@ -409,8 +441,42 @@ const clampHorizontalYTitleX = (
 	return Math.max(minX, Math.min(maxX, anchorX))
 }
 
-/** Line-to-line step used by `renderMultilineTspans` (dy="1.2em"). */
-const TITLE_LINE_STEP_EM = 1.2
+/** Room past the canvas's left / right edge the chart title and subtitle
+ *  may paint into — see `SolverInput.titleOverhang`. */
+export type TitleOverhang = { readonly left: number; readonly right: number }
+
+export const NO_TITLE_OVERHANG: TitleOverhang = { left: 0, right: 0 }
+
+/** Keep a chart-level title (chart title / subtitle) in view horizontally.
+ *  The text's extent follows from its anchor side and widest line; the
+ *  figure it must fit is the canvas plus `overhang` past each edge (the
+ *  blank band over a left / right legend). The anchor moves only as far
+ *  as the text needs, so alignment is untouched whenever the text already
+ *  fits — and text wider than the whole figure keeps its anchor side in
+ *  view: a left-aligned title still starts at the buffer, a right-aligned
+ *  one still ends at it, a centered one centers on the figure. */
+const clampTitleAnchorX = (
+	anchorX: number,
+	textAnchor: TextAnchorSpec,
+	textWidth: number,
+	canvasW: number,
+	overhang: TitleOverhang,
+): number => {
+	const leftExtent =
+		textAnchor === "start" ? 0 : textAnchor === "end" ? textWidth : textWidth / 2
+	const rightExtent = textWidth - leftExtent
+	const minX = VIEWPORT_BUFFER_PX - overhang.left + leftExtent
+	const maxX = canvasW + overhang.right - VIEWPORT_BUFFER_PX - rightExtent
+	if (minX > maxX) {
+		return textAnchor === "start"
+			? minX
+			: textAnchor === "end"
+				? maxX
+				: (minX + maxX) / 2
+	}
+	return Math.max(minX, Math.min(maxX, anchorX))
+}
+
 /** Baseline-to-visual-center, as a fraction of font size (about half a cap
  *  height). Lifts a centered title so its ink, not its baseline, centers. */
 const TITLE_CAP_CENTER_RATIO = 0.35
@@ -615,11 +681,22 @@ const computeOuterReserves = (
 	bottomFloor: number = 0,
 	leftFloor: number = 0,
 ) => {
+	// Multi-line titles grow UP (LAYOUT.md §7): each extra line adds one
+	// line step to the band, the bottom line keeps the single line's
+	// distance to what sits below it, and the earlier lines fill the added
+	// room above. `*LinesGrow` is that added room; the title.y / subtitle.y
+	// formulas push the bottom line down by it.
+	const titleLinesGrow = input.chartTitle
+		? extraLinesPx(input.chartTitle.text, input.chartTitle.fontSize)
+		: 0
 	const titleHeight = input.chartTitle
-		? titleReserve(input.chartTitle.fontSize)
+		? titleBand(input.chartTitle.text, input.chartTitle.fontSize)
+		: 0
+	const subtitleLinesGrow = input.chartSubtitle
+		? extraLinesPx(input.chartSubtitle.text, input.chartSubtitle.fontSize)
 		: 0
 	const subtitleHeight = input.chartSubtitle
-		? subtitleReserve(input.chartSubtitle.fontSize)
+		? subtitleBand(input.chartSubtitle.text, input.chartSubtitle.fontSize)
 		: 0
 	const xTitleLines = input.xTitle ? lineCount(input.xTitle.text) : 0
 	// Multiplier 1.4 matches the line-box height the browser actually
@@ -730,6 +807,8 @@ const computeOuterReserves = (
 		right: labelReserve.right,
 		titleHeight,
 		subtitleHeight,
+		titleLinesGrow,
+		subtitleLinesGrow,
 		xTitleHeight,
 		xTitleLines,
 		titleAwayGrow,
@@ -924,6 +1003,24 @@ const cellYForRow = (
 	return y
 }
 
+/** Extent of a run of cells measured from the grid origin to the farthest
+ *  cell edge, with the SIGNED gap — the span the laid-out grid will really
+ *  cover on that axis. A negative gap (ridgeline) pulls later cells back
+ *  toward the origin; at extreme overlap they pass it, which the far-edge
+ *  measure ignores (that spill is handled by the top / left grow). */
+const gridFarEdge = (
+	sizes: readonly number[],
+	gap: number,
+	originOf: (index: number, sizes: readonly number[], gap: number) => number
+): number => {
+	let farEdge = 0
+	for (let i = 0; i < sizes.length; i++) {
+		const edge = originOf(i, sizes, gap) + (sizes[i] ?? 0)
+		if (edge > farEdge) farEdge = edge
+	}
+	return farEdge
+}
+
 /** Estimate the natural canvas dims demanded by proportional sizing or
  *  the NONPROPORTIONAL_MIN_PX floor. Used to drive scroll emission. */
 const estimateNaturalDims = (
@@ -932,7 +1029,10 @@ const estimateNaturalDims = (
 	leftFloor: number,
 	bottomFloor: number,
 	facetLabelHeight: number,
-	cellMargin: CellMargin
+	cellMargin: CellMargin,
+	edges: ReturnType<typeof computeEdgePositions>,
+	interiorBottomChromePerRow: readonly number[],
+	interiorLeftChromePerCol: readonly number[]
 ): { width: number; height: number } => {
 	const cols = input.cols
 	const rows = input.rows
@@ -977,20 +1077,6 @@ const estimateNaturalDims = (
 	const fitMode = minPanelPx === 0
 	const widthOverride = input.panelWidthOverride
 	const heightOverride = input.panelHeightOverride
-	const overrideCellW =
-		widthOverride != null && widthOverride > 0
-			? widthOverride + horizChrome
-			: 0
-	const overrideCellH =
-		heightOverride != null && heightOverride > 0
-			? heightOverride + vertChrome
-			: 0
-	// Use the real gap (including negative) so ridgeline mode doesn't
-	// over-grow the canvas. With gapY=-40 and 3 rows of 200px cells, the
-	// last cell's BOTTOM sits at 3*200 + 2*-40 = 520, not 600. Using
-	// `max(0, gap)` would overestimate by 80px → canvas exceeds container
-	// → scrollbar appears even though the ridgeline visually fits.
-	//
 	// When the gap is NEGATIVE (ridgeline), the user has explicitly opted
 	// into overlap; cells should compress to fit the container rather
 	// than enforcing minPanelPx and emitting scroll. Suppress the natural
@@ -1006,13 +1092,54 @@ const estimateNaturalDims = (
 	// When the user has specified pixel-precise panel dimensions, the
 	// canvas MUST grow to honor them (even in fit mode). Take the
 	// override-driven grid as a separate floor and use the larger.
+	//
+	// The floor is the grid the solver will actually lay out, measured from
+	// the grid origin to the farthest cell edge: the exact per-row / per-col
+	// chrome (`cellMargins` — an interior row under shareX carries a 4px
+	// spine reserve, not the full x-axis band) and the SIGNED gap, so a
+	// ridgeline's overlapped rows pull the far edge back instead of stacking
+	// as if the gap were 0. Sizing it as `rows × (override + full chrome)`
+	// grew the canvas past the figure — scrollbars plus a band of empty
+	// canvas under the last row (user-reported Oct 2026). Any spill ABOVE /
+	// LEFT of the origin at extreme overlap is `ridgelineTopGrow` /
+	// `ridgelineLeftGrow`'s job, so the far-edge measure alone is right here.
+	const margins = (row: number, col: number) =>
+		cellMargins(
+			row,
+			col,
+			rows,
+			cols,
+			input.shareX,
+			input.shareY,
+			facetLabelHeight,
+			leftFloor,
+			bottomFloor,
+			interiorBottomChromePerRow,
+			interiorLeftChromePerCol,
+			edges,
+			cellMargin
+		)
 	const gridFromOverrideW =
-		overrideCellW > 0
-			? cols * overrideCellW + (cols - 1) * Math.max(0, input.gapX)
+		widthOverride != null && widthOverride > 0
+			? (() => {
+					const widths: number[] = []
+					for (let c = 0; c < cols; c++) {
+						const m = margins(0, c)
+						widths.push(widthOverride + m.left + m.right)
+					}
+					return gridFarEdge(widths, input.gapX, cellXForCol)
+				})()
 			: 0
 	const gridFromOverrideH =
-		overrideCellH > 0
-			? rows * overrideCellH + (rows - 1) * Math.max(0, input.gapY)
+		heightOverride != null && heightOverride > 0
+			? (() => {
+					const heights: number[] = []
+					for (let r = 0; r < rows; r++) {
+						const m = margins(r, 0)
+						heights.push(heightOverride + m.top + m.bottom)
+					}
+					return gridFarEdge(heights, input.gapY, cellYForRow)
+				})()
 			: 0
 	const finalGridW = Math.max(naturalGridW, gridFromOverrideW)
 	const finalGridH = Math.max(naturalGridH, gridFromOverrideH)
@@ -1044,7 +1171,17 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 					minPanelPx: 0,
 				}
 			: rawInput
-	const facetLabelHeight = input.facetLabel?.height ?? 0
+	// Per-panel facet-label band: the single-line band the caller pinned,
+	// grown by one line step per extra line of the tallest panel label so a
+	// wrapped label grows UP into the band rather than down into the panel
+	// (every label's bottom line sits at the single-line position).
+	const facetBandSingle = input.facetLabel?.height ?? 0
+	const facetLabelLinesGrow = input.facetLabel
+		? TITLE_LINE_STEP_EM *
+			input.facetLabel.fontSize *
+			Math.max(0, (input.facetLabel.lines ?? 1) - 1)
+		: 0
+	const facetLabelHeight = facetBandSingle + facetLabelLinesGrow
 	const yTitleHorizontal = input.yTitle?.horizontal ?? false
 	const yTitleText = input.yTitle?.text ?? ""
 	const yTitleFontSize = input.yTitle?.fontSize ?? 0
@@ -1430,7 +1567,10 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 		leftFloor,
 		bottomFloor,
 		facetLabelHeight,
-		cellMargin
+		cellMargin,
+		edges,
+		interiorBottomChromePerRow,
+		interiorLeftChromePerCol
 	)
 	// `let` so we can grow these for ridgeline-overflow later (after we
 	// know how far above the natural top reserve the cumulative cells
@@ -1770,14 +1910,18 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 			height: innerH,
 		}
 		// Wrap-mode per-panel label sits in the reserved band at the cell
-		// top. For polar (radar / pie) the centered circular mark floats in
+		// top: its BOTTOM line a quarter of the single-line band above the
+		// band's bottom edge (the single-line spot, 0.75 × band from the
+		// top), earlier lines stacking up into the band's grown room.
+		// For polar (radar / pie) the centered circular mark floats in
 		// the vertical middle of a tall panel, leaving the top-pinned label
 		// stranded far above it (user-reported June 2026). Pull the label
 		// down to hug the mark's top edge — but never ABOVE its natural band
 		// position (clamp), so densely-packed multi-row wraps are unaffected.
 		// Follows a shortened panel's top edge (yDrop) so the label stays
 		// attached to its panel rather than the row's tallest one.
-		const naturalFacetLabelY = cellY + yDrop + facetLabelHeight * 0.75
+		const naturalFacetLabelY =
+			cellY + yDrop + facetLabelHeight - facetBandSingle * 0.25
 		const facetLabelY = isPolarMode
 			? Math.max(
 					naturalFacetLabelY,
@@ -1799,6 +1943,7 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 					rotation: 0,
 					width: inner.width,
 					height: facetLabelHeight,
+					growUp: true,
 				}
 			: null
 		return {
@@ -1859,46 +2004,72 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 	// Each top title cancels its OWN away-direction offset (negative Y)
 	// so it stays at its natural on-canvas position; only the plot moves.
 	// Toward-the-plot offsets (positive Y) shift the title down as-is.
+	// Chart-level titles keep their aligned anchor unless the text would
+	// leave the figure; then they slide just far enough to stay in view —
+	// into the legend band past the canvas edge when there is one
+	// (`titleOverhang`). Scroll mode has no such band: its box clips at the
+	// container, so the overhang only counts when the canvas fits.
+	const titleOverhang = scroll
+		? NO_TITLE_OVERHANG
+		: (input.titleOverhang ?? NO_TITLE_OVERHANG)
+	const titleAnchorX = (t: SharedTitleInput, offsetX: number): number => {
+		const x = xForAlignment(t.align, plotLeft, plotRight) + offsetX
+		return t.textWidth
+			? clampTitleAnchorX(
+					x,
+					textAnchorFor(t.align),
+					t.textWidth,
+					canvasW,
+					titleOverhang,
+				)
+			: x
+	}
 	const title: TextRect | null = input.chartTitle
 		? {
-				x:
-					xForAlignment(input.chartTitle.align, plotLeft, plotRight) +
-					titleOffsetX,
+				x: titleAnchorX(input.chartTitle, titleOffsetX),
+				// `y` is the BOTTOM line: the single line's natural baseline
+				// pushed down by the room the extra lines reserved above it, so
+				// it keeps the single line's distance to the subtitle / plot and
+				// the earlier lines stack up into that room.
 				y: clampBaselineY(
 					titleReserve(input.chartTitle.fontSize) * 0.7 +
+						outerReserves.titleLinesGrow +
 						titleOffsetY +
 						outerReserves.titleAwayGrow,
 					input.chartTitle.fontSize,
 					canvasH,
+					outerReserves.titleLinesGrow,
 				),
 				textAnchor: textAnchorFor(input.chartTitle.align),
 				rotation: 0,
 				width: plotRight - plotLeft,
 				height: outerReserves.titleHeight,
+				growUp: true,
 			}
 		: null
 	const subtitle: TextRect | null = input.chartSubtitle
 		? {
-				x:
-					xForAlignment(input.chartSubtitle.align, plotLeft, plotRight) +
-					subOffsetX,
+				x: titleAnchorX(input.chartSubtitle, subOffsetX),
 				y: clampBaselineY(
-					// The subtitle hangs below the title band — font-derived when a
-					// title is present, the fixed reserve otherwise (matching
-					// computeOuterReserves' 0-height band for a missing title).
-					(input.chartTitle
-						? titleReserve(input.chartTitle.fontSize)
-						: TITLE_RESERVE) +
+					// The subtitle hangs below the title band — font-derived (and
+					// grown for the title's extra lines) when a title is present,
+					// the fixed reserve otherwise (matching computeOuterReserves'
+					// 0-height band for a missing title). Bottom line, like the
+					// title: pushed down by its own extra lines' room.
+					(input.chartTitle ? outerReserves.titleHeight : TITLE_RESERVE) +
 						subtitleReserve(input.chartSubtitle.fontSize) * 0.75 +
+						outerReserves.subtitleLinesGrow +
 						subOffsetY +
 						outerReserves.subtitleAwayGrow,
 					input.chartSubtitle.fontSize,
 					canvasH,
+					outerReserves.subtitleLinesGrow,
 				),
 				textAnchor: textAnchorFor(input.chartSubtitle.align),
 				rotation: 0,
 				width: plotRight - plotLeft,
 				height: outerReserves.subtitleHeight,
+				growUp: true,
 			}
 		: null
 	// xTitleGap and yTitleGap already computed at the top of this function
@@ -2154,14 +2325,49 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 			)
 			const nYLabels = pIn?.yLabels.length ?? 0
 			const yInset = nYLabels > 0 ? p.inner.height / (2 * nYLabels) : 0
+			// Ridgeline overlap (LAYOUT.md §10): with a negative gap the rows'
+			// plot rects stack over one another, so most of a row's rect is
+			// also the rect of the ridges behind and in front of it — a title
+			// placed against that full rect lands inside a neighbour's ridge
+			// (user-reported Oct 2026: the titles bunched at the top of the
+			// stack while the ridges sat lower). The only band that is this
+			// row's alone is the slice between the previous ridge's baseline
+			// and its own, so top / middle / bottom align the title's line
+			// box within that slice instead: bottom sits ON the baseline (the
+			// classic ridgeline label), top hangs just under the ridge above.
+			// The first row borrows the step below it so every row reads the
+			// same. Only when the plot rects really overlap (the step is
+			// shorter than the rect); at extreme overlap the rows reverse and
+			// the slice is meaningless, so the full-rect placement stays.
+			const baselineOf = (pp: SolverPanelOutput) => pp.inner.y + pp.inner.height
+			const baseline = baselineOf(p)
+			const prevRow = panels.find((pp) => pp.row === rowIdx - 1)
+			const nextRow = panels.find((pp) => pp.row === rowIdx + 1)
+			const ridgeStep = prevRow
+				? baseline - baselineOf(prevRow)
+				: nextRow
+					? baselineOf(nextRow) - baseline
+					: 0
+			const ridgeSlice =
+				input.gapY < 0 && ridgeStep > 0 && ridgeStep < p.inner.height
+					? ridgeStep
+					: null
 			const innerCenterY =
-				vAlign === "top"
-					? p.inner.y + yInset
-					: vAlign === "bottom"
-						? p.inner.y + p.inner.height - yInset
-						: p.inner.y + p.inner.height / 2
-			// Always centred, matching the y-tick labels' baseline.
-			const vAnchor: VerticalAlignment = "middle"
+				ridgeSlice != null
+					? vAlign === "top"
+						? baseline - ridgeSlice
+						: vAlign === "bottom"
+							? baseline
+							: baseline - ridgeSlice / 2
+					: vAlign === "top"
+						? p.inner.y + yInset
+						: vAlign === "bottom"
+							? p.inner.y + p.inner.height - yInset
+							: p.inner.y + p.inner.height / 2
+			// Centred, matching the y-tick labels' baseline — except inside a
+			// ridgeline slice, where the line box is flush with the slice edge
+			// it was aligned to (hanging under the top, sitting on the baseline).
+			const vAnchor: VerticalAlignment = ridgeSlice != null ? vAlign : "middle"
 			// Follow the aspect-ratio-centered grid (figureSlack shift).
 			const stripRowRight = outerReserves.left + figureSlackX / 2
 			const stripCenterX = stripRowRight - stripRowWidth / 2

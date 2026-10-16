@@ -124,3 +124,40 @@ describe("computeLineSegmentPixels — values mode", () => {
 		expect(geo?.y1).toBe(150) // 50 + 200*(1-0.5)
 	})
 })
+
+describe("computeLineSegmentPixels — values mode on a date axis", () => {
+	it("places epoch-ms endpoints where the time scale puts those dates", () => {
+		// The sidebar's date box stores epoch ms; the renderer must read the
+		// number as an instant, not stringify it into an Invalid Date.
+		const xScale = makePositionScale(
+			["2020-01-01", "2020-12-31"],
+			"temporal",
+			[100, 500]
+		)
+		const yScale = makePositionScale(["0", "100"], "quantitative", [250, 50])
+		const ctx = {
+			xScale,
+			yScale,
+			xType: "temporal" as const,
+			yType: "quantitative" as const,
+		}
+		const from = Date.UTC(2020, 2, 1)
+		const to = Date.UTC(2020, 8, 1)
+		const line = {
+			...newLineSegment("l1"),
+			coordSystem: "values" as const,
+			xMin: from,
+			yMin: 50,
+			xMax: to,
+			yMax: 50,
+		}
+		const geo = computeLineSegmentPixels(line, inner, ctx)
+		const at = (ms: number) =>
+			(xScale as unknown as (d: Date) => number)(new Date(ms))
+		expect(geo).not.toBeNull()
+		expect(geo?.x1).toBe(at(from))
+		expect(geo?.x2).toBe(at(to))
+		expect(geo?.x2).toBeGreaterThan(geo?.x1 ?? Infinity)
+		expect(geo?.y1).toBe(150)
+	})
+})

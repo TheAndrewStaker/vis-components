@@ -146,6 +146,11 @@ export const PackedCirclesPlot = (props: PackedCirclesPlotProps = {}) => {
 			if (!isLeaf) {
 				const containerPattern = patternFor(node, style)
 				if (containerPattern) patternDefs.push(containerPattern)
+				// Containers are hoverable marks too: the band of a circle its
+				// children don't cover IS the container, and the children (drawn
+				// later, on top) take the pointer wherever they overlap it. A
+				// row-backed container gets the row tooltip; an implicit one
+				// just highlights.
 				circles.push(
 					<circle
 						key={d.key}
@@ -162,7 +167,7 @@ export const PackedCirclesPlot = (props: PackedCirclesPlotProps = {}) => {
 						fillOpacity={style ? style.opacity : undefined}
 						stroke={stroke}
 						strokeWidth={strokeWidth}
-						pointerEvents="none"
+						onMouseEnter={scaffold.hoverLeaf(d.row ?? null, node)}
 					/>
 				)
 				// Container label. Two placements, per the Data Labels panel's

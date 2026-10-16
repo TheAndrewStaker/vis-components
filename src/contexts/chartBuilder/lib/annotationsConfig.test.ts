@@ -4,6 +4,7 @@ import {
 	DEFAULT_ANNOTATIONS_CONFIG,
 	DEFAULT_BOX_ANNOTATION_STYLE,
 	DEFAULT_LINE_ANNOTATION_STYLE,
+	DEFAULT_LINE_END_STYLE,
 	DEFAULT_RECTANGLE_TEXT,
 	DEFAULT_TEXT_ANNOTATION_STYLE,
 	newCircle,
@@ -110,6 +111,18 @@ describe("annotation factory invariants", () => {
 		expect(newCircle("c1").borderDasharray).toBeNull()
 		expect(newTextAnnotation("t1").borderDasharray).toBeNull()
 		expect(newLineSegment("l1").lineDasharray).toBeNull()
+	})
+
+	it("seeds a flush cap and no arrowhead on a new line — the look lines always had", () => {
+		// Explicit fields (not absent ones) so the editor's controls bind to a
+		// value; the renderer reads absent fields through the same constant.
+		expect(newLineSegment("l1")).toMatchObject(DEFAULT_LINE_END_STYLE)
+		expect(DEFAULT_LINE_END_STYLE).toEqual({
+			lineCap: "square",
+			arrowhead: false,
+			arrowheadStyle: "triangle",
+			arrowheadScale: 1,
+		})
 	})
 
 	it("defaults every factory to percent coordinates", () => {

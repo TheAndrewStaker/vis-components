@@ -19,9 +19,10 @@ export type TextPrefix = {
  *
  * Splits on literal `\n` so users can break a title into multiple lines from
  * the LabelsPanel textbox. Each line is anchored at the same `x` so the
- * tspans stack vertically; subsequent lines drop by `dy` em-units. Empty
- * lines render a single space so they still contribute vertical space (an
- * empty `<tspan>` would collapse).
+ * tspans stack vertically; subsequent lines drop by `dy` em-units (or, with
+ * `growUp`, the first line is lifted so the LAST line lands on the anchor).
+ * Empty lines render a single space so they still contribute vertical space
+ * (an empty `<tspan>` would collapse).
  *
  * Caller controls the wrapping `<text>`'s textAnchor / fontSize / fill — the
  * tspans inherit those attributes. */
@@ -45,12 +46,29 @@ export const renderMultilineTspans = (
 		 *  deliberately has neither, so it continues the prefix's chunk and
 		 *  the chunk's anchor covers both. */
 		prefix?: TextPrefix
+		/** Stack the extra lines ABOVE the anchor instead of below it: the LAST
+		 *  line sits at the `<text>`'s y and each earlier line rises one 1.2em
+		 *  step, so a wrapped title grows up and its bottom line stays where a
+		 *  single line would be (chart title, subtitle, facet panel labels —
+		 *  LAYOUT.md §7). Pass `fontSize` with it whenever a `prefix` may be
+		 *  present: the first line's lift rides the prefix tspan, where an em
+		 *  value would scale by the PREFIX font rather than the title's. */
+		growUp?: boolean
+		/** Resolved font size (px) of the lines, for a px-exact `growUp` lift. */
+		fontSize?: number
 	}
 ): ReactNode[] => {
 	const lines = text.split("\n")
-	const firstDy = opts?.verticallyCentered
-		? `${-0.6 * (lines.length - 1)}em`
-		: 0
+	const extraLines = lines.length - 1
+	const firstDy = opts?.growUp
+		? extraLines === 0
+			? 0
+			: opts.fontSize != null
+				? -1.2 * opts.fontSize * extraLines
+				: `${-1.2 * extraLines}em`
+		: opts?.verticallyCentered
+			? `${-0.6 * extraLines}em`
+			: 0
 	const prefix = opts?.prefix
 	return lines.flatMap((line, i) => {
 		const content = line.length > 0 ? line : " "

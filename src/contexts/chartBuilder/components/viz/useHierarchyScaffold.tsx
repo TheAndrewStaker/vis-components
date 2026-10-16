@@ -70,6 +70,7 @@ import {
 	rowHighlight,
 	useLegendHighlight,
 	useMarkHoverHighlight,
+	unmatchedHighlight,
 	NEUTRAL_HIGHLIGHT,
 	type MarkHighlight,
 } from "../../store/useLegendHighlight"
@@ -219,14 +220,29 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 	const highlightField = hueSource
 		? hierarchyHighlightField(hueSource)
 		: (aestheticScales.hue?.field.name ?? null)
-	/** How one node should render under the current hover. Derived colors
-	 *  compare the node's own group / depth (so CONTAINERS recede with their
-	 *  group too — with a derived color they're painted marks, not a wash);
-	 *  a hue field defers to the row, which leaves rowless containers
-	 *  untouched. Neutral when the hovered entry belongs to some other
-	 *  field — this chart isn't colored by it, so nothing should change. */
+	/** How one node should render under the current hover.
+	 *  - A DIRECT mark hover (the entry carries a node key) emphasizes that
+	 *    one node alone — not its group, not even its own children — and
+	 *    fades everything else. In a nested chart the series is already a
+	 *    contiguous region on screen, so lighting the whole group would
+	 *    paint over the very circle the pointer is on and tell the user
+	 *    nothing; a container's children are their own marks, and the
+	 *    pointer is on the container's uncovered band, not on them.
+	 *  - A LEGEND hover highlights the series. Derived colors compare the
+	 *    node's own group / depth (so CONTAINERS recede with their group
+	 *    too — with a derived color they're painted marks, not a wash); a
+	 *    hue field defers to the row, which leaves rowless containers
+	 *    untouched.
+	 *  Neutral when the hovered entry belongs to some other field — this
+	 *  chart isn't colored by it, so nothing should change. */
 	const nodeHighlight = (node: HierarchyLayoutNode): MarkHighlight => {
 		if (!legendHighlight) return NEUTRAL_HIGHLIGHT
+		if (legendHighlight.node !== undefined) {
+			if (legendHighlight.field !== highlightField) return NEUTRAL_HIGHLIGHT
+			return node.data.key === legendHighlight.node
+				? legendHighlight.resolve(legendHighlight.value)
+				: unmatchedHighlight(legendHighlight)
+		}
 		if (hueSource) {
 			return legendHighlight.field === highlightField
 				? legendHighlight.resolve(hierarchyDerivedValueOf(hueSource, node))
@@ -234,9 +250,9 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 		}
 		return rowHighlight(legendHighlight, node.data.row ?? {})
 	}
-	// Reverse direction: hovering a mark highlights its whole series exactly
-	// like hovering the matching legend entry would (the cartesian renderers'
-	// behavior, which the nested charts had been missing).
+	// Reverse direction: hovering a mark publishes its series (so the legend
+	// entry lights up, as on the cartesian renderers) together with the
+	// node's own key, which is what the marks here key on.
 	const markHover = useMarkHoverHighlight(highlightField)
 
 	// STABLE derived-scale domains, from the FULL dataset in tree order —
@@ -351,6 +367,20 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 					.map((v) => Number(v))
 					.filter((n) => Number.isFinite(n))
 			: []
+	/** The raw value behind a node's label — the leaf's Value cell when one
+	 * is mapped (and the row has it), else the node's name. Feeds BOTH
+	 * Data Labels conditional-rule features (position and text color),
+	 * which compare against the backing value rather than its formatted
+	 * display form; sharing it keeps `== Melon` meaning the same thing in
+	 * both editors. */
+	const labelBackingValue = (
+		node: HierarchyLayoutNode,
+		isLeaf: boolean
+	): unknown => {
+		const d = node.data
+		if (isLeaf && labelValueField && d.row) return d.row[labelValueField]
+		return d.label || undefined
+	}
 	const labelStyle = {
 		cfg: dataLabelsCfg,
 		/** A node's label text. Leaves show the mapped value field's row
@@ -369,24 +399,20 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 			}
 			return d.label || null
 		},
-		/** The raw value behind `textFor` — the leaf's Value cell when one
-		 * is mapped (and the row has it), else the node's name. Feeds the
-		 * Data Labels conditional rules (position / text-color), which
-		 * compare against the backing value rather than its formatted
-		 * display form. */
-		valueFor: (node: HierarchyLayoutNode, isLeaf: boolean): unknown => {
-			const d = node.data
-			if (isLeaf && labelValueField && d.row) return d.row[labelValueField]
-			return d.label || undefined
-		},
+		/** The raw value behind `textFor` (see `labelBackingValue`). */
+		valueFor: labelBackingValue,
 		/** A node's label fill via the Data Labels precedence chain. The
 		 * derived sources resolve from tree position (so implicit
 		 * containers color too); the field path needs a row — rowless
-		 * nodes take the single fallback color. */
+		 * nodes skip the override / palette stages. Conditional rules test
+		 * the label's backing value for EVERY node, so `== Melon` can
+		 * single out a container by the name it displays. */
 		fillFor: (node: HierarchyLayoutNode): string => {
 			const row = node.data.row
-			const labelValue =
-				labelValueField && row ? row[labelValueField] : undefined
+			const labelValue = labelBackingValue(
+				node,
+				node.data.children.length === 0
+			)
 			if (labelHueSource) {
 				const value =
 					labelHueSource === "rootGroup"
@@ -404,8 +430,7 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 					labelValue
 				)
 			}
-			if (!row) return dataLabelsCfg.color
-			const hueValue = labelHueField ? row[labelHueField] : undefined
+			const hueValue = labelHueField && row ? row[labelHueField] : undefined
 			const hueColor =
 				labelHueScale && hueValue !== undefined
 					? (applyHueScale(labelHueScale, hueValue, labelHueFieldType) ??
@@ -468,9 +493,9 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 		markHover.leave()
 	}
 	/** Standard leaf hover: id / parent / value / hue fields from the row,
-	 *  plus (given the node) the series publish that highlights everything
-	 *  sharing its color. A null row means an implicit container — no
-	 *  tooltip to show, but still a group to highlight. */
+	 *  plus (given the node) the highlight publish — the node's series for
+	 *  the legend, its key for the marks. A null row means an implicit
+	 *  container — no tooltip to show, but still a node to highlight. */
 	const hoverLeaf =
 		(row: Record<string, unknown> | null, node?: HierarchyLayoutNode) =>
 		(e: React.MouseEvent) => {
@@ -485,15 +510,22 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 				if (hueField && hueField !== parentField && hueField !== idField)
 					fields.push({ name: hueField, value: row[hueField] })
 				setHovered({ clientX: e.clientX, clientY: e.clientY, fields })
+			} else {
+				// Implicit container (no row): nothing to show, and the tooltip
+				// of the leaf the pointer just left must not linger over it.
+				setHovered(null)
 			}
-			if (node)
-				markHover.enter(
-					hueSource
-						? hierarchyDerivedValueOf(hueSource, node)
-						: aestheticScales.hue && row
-							? row[aestheticScales.hue.field.name]
-							: undefined
-				)
+			if (node) {
+				const series = hueSource
+					? hierarchyDerivedValueOf(hueSource, node)
+					: aestheticScales.hue && row
+						? row[aestheticScales.hue.field.name]
+						: undefined
+				// A node outside every series (a root-level anonymous leaf, an
+				// implicit container under a hue FIELD) keys on itself so the
+				// hover still lands — no legend entry lights up for it.
+				markHover.enter(series ?? node.data.key, node.data.key)
+			}
 		}
 
 	/** Build the per-node style resolvers. The derived scales' domains are
@@ -683,10 +715,9 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 						: null) ??
 				channelConfigs.defaultOpacity ??
 				DEFAULT_OPACITY
-			// Legend-hover highlight: recolor / fade a leaf per the hovered
-			// legend entry. Containers (no row) resolve to the neutral result, so
-			// they never change. (Outline isn't applied here — hierarchy cells
-			// share edges, so a per-cell outline would read as noise.)
+			// Hover highlight: recolor / fade the mark per the hovered legend
+			// entry or hovered node (see `nodeHighlight`). The outline half of
+			// the highlight is applied by `markStroke`, which owns the stroke.
 			const mh = nodeHighlight(node)
 			const opacity = baseOpacity * mh.opacityMul
 			if (mh.fill) fill = mh.fill
@@ -770,11 +801,17 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 		 * container) resolves through the SAME outline chain: `outlineHue`
 		 * mapping when the node has a row to look it up from, otherwise the
 		 * user's single outline color, always at the user's outline width
-		 * (0 hides borders entirely). No hidden container rim. */
+		 * (0 hides borders entirely). No hidden container rim. The hover
+		 * "Outline hovered elements" option wins over all of it for the
+		 * hovered node, as on every other mark type — a packed circle has
+		 * its own rim, and a hovered treemap tile / sunburst arc reads fine
+		 * with one emphasized edge. */
 		const markStroke = (
 			node: HierarchyLayoutNode,
 			style: HierarchyMarkStyle | null
 		): { stroke: string; strokeWidth: number } => {
+			const mh = nodeHighlight(node)
+			if (mh.outline) return { stroke: mh.outline, strokeWidth: mh.outlineWidth }
 			const row = node.data.row
 			return {
 				stroke:

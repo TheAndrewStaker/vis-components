@@ -267,7 +267,11 @@ export const LegendSection = ({
 		// the title against the top of a gradient bar.
 		<div className="flex flex-col gap-2.5" style={{ alignItems }}>
 			{header !== "" && (
+				// data-legend-title: `Legend` measures these blocks to lift a
+				// top-anchored legend by the height its wrapped titles add
+				// (`measureLegendTitleGrowth`), so a title grows up, not down.
 				<div
+					data-legend-title
 					className="font-medium"
 					style={{
 						fontSize: titleFont.size,

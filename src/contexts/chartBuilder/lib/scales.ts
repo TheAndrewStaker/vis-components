@@ -115,7 +115,12 @@ export const parseValue = (raw: unknown, type: FieldType): ParsedValue => {
 		return Number.isFinite(n) ? n : null
 	}
 	if (type === "temporal") {
-		const d = new Date(s)
+		// A NUMBER is epoch ms — the unit every computed temporal value in the
+		// app carries (annotation coordinates, domain pins, custom breaks). Data
+		// cells are always strings (`rows: Record<string, string>`), so a bare
+		// year never arrives here as a number. Stringifying first would make
+		// `new Date("1577836800000")`, an Invalid Date, and drop the value.
+		const d = typeof raw === "number" ? new Date(raw) : new Date(s)
 		return Number.isNaN(d.getTime()) ? null : d
 	}
 	// ordinal: try numeric, else string

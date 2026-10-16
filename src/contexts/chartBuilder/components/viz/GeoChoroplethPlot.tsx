@@ -22,7 +22,12 @@ type GeoChoroplethPlotProps = ChartRendererBaseProps
  * only the region-drawing loop and its no-data gating.
  */
 export const GeoChoroplethPlot = (props: GeoChoroplethPlotProps = {}) => {
-	const geo = useGeoMapScaffold(props)
+	const geo = useGeoMapScaffold(props, {
+		// With "Fill regions with no data" off only the matched regions draw, so
+		// "Whole map (auto)" frames those rather than the whole geography (see
+		// useGeoMapScaffold).
+		fitToMatchedRegions: (mc) => !mc.showNoDataRegions,
+	})
 	const { mapConfig, channelConfigs } = geo
 
 	// Optional no-data pattern overlay (unmatched / blank-measure regions).
@@ -89,16 +94,24 @@ export const GeoChoroplethPlot = (props: GeoChoroplethPlotProps = {}) => {
 
 		// Default behavior: every region draws — one NOT in the dataset (no
 		// matched row) fills with the no-data color, exactly like a matched row
-		// whose measure value is null. Turning `showNoDataRegions` OFF omits
-		// unmatched regions entirely, drawing only regions with data. The toggle
-		// is honored under any focus region too — a focused/custom viewport with
-		// the toggle off shows only the data regions (e.g. just Washington).
+		// whose measure value is blank/NA. Turning `showNoDataRegions` OFF omits
+		// every region that would paint as no-data — unmatched regions AND
+		// matched-but-blank rows alike (`regionStyle.noDataFor`; a row's own
+		// pattern-channel paint still draws) — so only regions with data draw.
+		// The toggle is honored under any focus region too — a focused/custom
+		// viewport with the toggle off shows only the data regions (e.g. just
+		// Washington).
 		const fillNoDataRegions = mapConfig.showNoDataRegions
 
 		return geo.renderInteractiveRoot(
 			ctx,
 			<>
-				{geo.renderWorldBackdrop(path)}
+				{/* The world-countries backdrop (neighboring countries under a
+				    world projection) is no-data paint too — Canada above a
+				    Washington map — so it follows the same toggle: off means
+				    nothing without data is drawn. (The bubble / dot maps gate it
+				    on their "Show basemap" toggle instead.) */}
+				{fillNoDataRegions ? geo.renderWorldBackdrop(path) : null}
 				<g onMouseLeave={geo.clearHover}>
 					{bundle.features.map((feature: Feature) => {
 						const d = path(feature)
@@ -109,7 +122,7 @@ export const GeoChoroplethPlot = (props: GeoChoroplethPlotProps = {}) => {
 						// opacity) is mapped. The tooltip uses it directly; the style
 						// resolvers only consult it when a measure is mapped.
 						const row = geo.featureToRow.get(id)
-						if (!row && !fillNoDataRegions) return null
+						if (!fillNoDataRegions && regionStyle.noDataFor(feature)) return null
 						// Only matched regions get a tooltip — hovering a no-data
 						// region (no row) leaves the hover state untouched, like
 						// hovering empty space.

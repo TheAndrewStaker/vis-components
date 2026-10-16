@@ -23,9 +23,9 @@ export type RectangleAnnotation = {
 	/** Horizontal extent. In `"percent"` coordSystem these are 0–1
 	 *  numbers (plot-area-normalized — xMin=0 hugs the y-axis spine,
 	 *  xMax=1 hugs the right edge). In `"values"` coordSystem they're
-	 *  raw axis values: numbers for quantitative/temporal/numeric-ordinal
-	 *  axes, strings for categorical/string-ordinal axes. The renderer
-	 *  feeds them through the chart's position scale. */
+	 *  raw axis values: numbers for quantitative/numeric-ordinal axes (epoch
+	 *  ms on a temporal axis), strings for categorical/string-ordinal axes.
+	 *  The renderer feeds them through the chart's position scale. */
 	xMin: number | string
 	xMax: number | string
 	/** Vertical extent. Same number-vs-string rules as `xMin/xMax`. In
@@ -138,6 +138,43 @@ export const DEFAULT_LINE_ANNOTATION_STYLE = {
 	lineDasharray: null as string | null,
 }
 
+/** How a line-segment annotation's stroke ends. `"square"` is a flush end
+ *  exactly at the endpoint (SVG's butt cap — the look every line had before
+ *  the option existed, and what the Connection / segment line caps call
+ *  "square" too); `"round"` adds a half-circle past each endpoint. */
+export type LineCapStyle = "round" | "square"
+
+/** The head drawn at a line annotation's END point (the right / top
+ *  endpoint, B) when `arrowhead` is on. Filled shapes: `triangle`, the
+ *  notched `stealth`, `diamond`, `circle`; `open` is a stroked chevron in the
+ *  line's own stroke. Geometry in `lib/arrowheadGeometry.ts`. */
+export type ArrowheadStyle = "triangle" | "stealth" | "open" | "diamond" | "circle"
+
+/** Picker order for the arrowhead styles. */
+export const ARROWHEAD_STYLES: readonly ArrowheadStyle[] = [
+	"triangle",
+	"stealth",
+	"open",
+	"diamond",
+	"circle",
+]
+
+/** Built-in seed for the line segment's END styling — cap and arrowhead.
+ *  Not theme-driven (a theme sets the stroke; whether a line is an arrow is
+ *  per-annotation), so the editor resets against this constant and the
+ *  renderer reads it behind lines saved before the fields existed: a flush
+ *  cap and no arrowhead, i.e. exactly what those lines always drew. */
+export const DEFAULT_LINE_END_STYLE = {
+	lineCap: "square" as LineCapStyle,
+	arrowhead: false,
+	arrowheadStyle: "triangle" as ArrowheadStyle,
+	/** Multiplier on the thickness-derived head size (1 = default size). */
+	arrowheadScale: 1,
+}
+
+/** The line segment's cap + arrowhead styling. */
+export type LineEndStyle = typeof DEFAULT_LINE_END_STYLE
+
 /** The style fields rectangles and circles share (fill + border). */
 export type BoxAnnotationStyle = typeof DEFAULT_BOX_ANNOTATION_STYLE
 
@@ -188,8 +225,9 @@ export type TextAnnotation = {
 	name: string
 	/** Anchor x. In `"percent"` coordSystem a 0–1 plot-area-normalized number
 	 *  (0 hugs the y-axis spine, 1 the right edge). In `"values"` a raw axis
-	 *  value — number for quantitative/temporal/numeric-ordinal, string for
-	 *  categorical — fed through the chart's x position scale. In the pixel
+	 *  value — number for quantitative/numeric-ordinal (epoch ms for
+	 *  temporal), string for categorical — fed through the chart's x position
+	 *  scale. In the pixel
 	 *  systems, whole px RIGHT of the corner's edge (the plot's left edge for
 	 *  the left-hand corners, its right edge for the right-hand ones, where
 	 *  negative = inside the plot). */
@@ -232,6 +270,15 @@ export type TextAnnotation = {
 	facetKeys?: string[] | null
 }
 
+/** The axis-free units a circle's radius can be read in when its radius
+ *  axis has no data units — see `CircleAnnotation.radiusUnit`. */
+export type RadiusUnit = "percent" | "px"
+
+/** `radiusUnit` with the absent-field default applied — one place for the
+ *  renderer and the sidebar to agree on it. */
+export const radiusUnitOf = (c: Pick<CircleAnnotation, "radiusUnit">): RadiusUnit =>
+	c.radiusUnit ?? "percent"
+
 /** A user-defined circle drawn on top of (or behind) the plot. Always
  *  renders as a TRUE on-screen circle; `radiusAxis` only selects which axis
  *  the radius is measured against (since x and y usually have different
@@ -246,21 +293,29 @@ export type CircleAnnotation = {
 	 *  (plot-area-normalized — x: 0 hugs the y-axis spine, 1 the right edge;
 	 *  y: 0 hugs the BOTTOM spine, 1 the top — the renderer flips to SVG's
 	 *  top-down system). In `"values"` coordSystem they're raw axis values
-	 *  (numbers for quantitative/temporal/numeric-ordinal, strings for
-	 *  categorical), fed through the chart's position scales. */
+	 *  (numbers for quantitative/numeric-ordinal, epoch ms for temporal,
+	 *  strings for categorical), fed through the chart's position scales. */
 	centerX: number | string
 	centerY: number | string
 	/** Radius magnitude. In `"percent"` mode it's a fraction (0–1) of the
 	 *  `radiusAxis` axis's pixel extent. In `"values"` mode it's a count of
-	 *  data units along `radiusAxis`, projected through that axis's scale.
-	 *  A data-unit radius is only meaningful on a continuous (quantitative /
-	 *  numeric-ordinal) axis; on categorical/temporal axes the circle is
-	 *  skipped at render time. In the pixel modes it's the on-screen radius
-	 *  in px (no axis involved). */
+	 *  data units along `radiusAxis`, projected through that axis's scale —
+	 *  when that axis HAS data units (quantitative / numeric-ordinal). A
+	 *  categorical, string-ordinal, or temporal radius axis has no unit a
+	 *  radius could count in, so there the number is read in `radiusUnit`
+	 *  instead: a fraction of the axis's pixel extent (same number as
+	 *  percent mode) or on-screen px. In the pixel modes it's the on-screen
+	 *  radius in px (no axis involved). */
 	radius: number
 	/** Which axis the radius is measured against (its pixel extent in percent
 	 *  mode, its scale in values mode). */
 	radiusAxis: "x" | "y"
+	/** How `radius` is read in `"values"` mode when `radiusAxis` has no data
+	 *  units (see `radius`). Absent = `"percent"`, so a circle toggled from
+	 *  percent to values keeps its size, and circles saved before the field
+	 *  existed render instead of vanishing. Ignored whenever the radius axis
+	 *  has data units and in the percent / pixel coord systems. */
+	radiusUnit?: RadiusUnit
 	backgroundColor: string
 	/** 0..1 fill alpha applied on top of the fill color. */
 	backgroundOpacity: number
@@ -308,6 +363,15 @@ export type LineSegmentAnnotation = {
 	lineDash: LineDashPattern
 	/** Custom dasharray override — see `RectangleAnnotation.borderDasharray`. */
 	lineDasharray?: string | null
+	/** Stroke end shape. Absent (lines saved before the option) reads as
+	 *  `DEFAULT_LINE_END_STYLE.lineCap` — the flush end they always had. */
+	lineCap?: LineCapStyle
+	/** Draw an arrowhead at endpoint B (xMax, yMax). Absent = none. */
+	arrowhead?: boolean
+	/** Which head to draw when `arrowhead` is on. */
+	arrowheadStyle?: ArrowheadStyle
+	/** Multiplier on the head's thickness-derived size; 1 = default. */
+	arrowheadScale?: number
 	/** "behind" draws the line UNDER the chart marks; "front" draws ABOVE
 	 *  them (the usual choice for a reference / trend line). */
 	zOrder: "behind" | "front"
@@ -373,6 +437,7 @@ export const newLineSegment = (
 	yMax: 0.7,
 	zOrder: "front",
 	coordSystem: "percent",
+	...DEFAULT_LINE_END_STYLE,
 	...DEFAULT_LINE_ANNOTATION_STYLE,
 	...style,
 })
@@ -392,6 +457,7 @@ export const newCircle = (
 	centerY: 0.5,
 	radius: 0.2,
 	radiusAxis: "x",
+	radiusUnit: "percent",
 	zOrder: "behind",
 	coordSystem: "percent",
 	...DEFAULT_BOX_ANNOTATION_STYLE,

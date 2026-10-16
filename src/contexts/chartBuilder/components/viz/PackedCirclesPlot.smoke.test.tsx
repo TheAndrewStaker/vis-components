@@ -607,6 +607,31 @@ describe("PackedCirclesPlot — Data Labels drive label text / color / size", ()
 		)
 	})
 
+	it("equality rules match the label's TEXT — a container's name, or a leaf's when no value field is mapped", () => {
+		const { container } = mountPacked({
+			withConnection: true,
+			dataLabelsConfig: {
+				textColorRules: [
+					{ condition: "== Pome", color: "#00ff00" },
+					{ condition: '== "Lemon"', color: "#0000ff" },
+				],
+			},
+		})
+		// Pome is an implicit container (no row, no value cell): the rule
+		// still sees the name it displays. Lemon is a leaf showing its name;
+		// quotes around the operand are optional. Every other label keeps
+		// the default color.
+		expect(labelByText(container, "Pome")?.getAttribute("fill")).toBe("#00ff00")
+		expect(labelByText(container, "Lemon")?.getAttribute("fill")).toBe("#0000ff")
+		const others = [...container.querySelectorAll("text")].filter(
+			(t) => t.textContent !== "Pome" && t.textContent !== "Lemon"
+		)
+		expect(others.length).toBeGreaterThan(0)
+		others.forEach((t) =>
+			expect(t.getAttribute("fill")).toBe(DEFAULT_DATA_LABELS_CONFIG.color)
+		)
+	})
+
 	it("hue field + Data Labels palette colors leaf labels by category", () => {
 		const palette = ["#101010", "#202020", "#303030", "#404040"]
 		const { container } = mountPacked({

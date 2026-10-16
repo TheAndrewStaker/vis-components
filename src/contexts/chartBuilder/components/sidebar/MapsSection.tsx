@@ -22,6 +22,7 @@ import {
 	type CoordSystemKind,
 	type FocusRegion,
 	type GeographyLevel,
+	type GeoViewport,
 	type MapConfig,
 	type ProjectionName,
 	type RegionKeyType,
@@ -32,6 +33,7 @@ import { PATTERN_PALETTE } from "../../lib/patterns"
 import { swatchChipClass } from "./channelOptions/glyphShared"
 import { currentMapConfigAtom } from "../../store/atoms"
 import { useChartModeDef } from "../../store/useChartModeDef"
+import { useAutoFitViewport } from "../../store/useAutoFitViewport"
 import { useEffectiveGeographyLevel } from "../../store/useEffectiveGeographyLevel"
 import { useGeoOutsideCount } from "../../store/useGeoOutsideCount"
 import { useGeoResolution } from "../../store/useGeoResolution"
@@ -232,6 +234,19 @@ export const MapsSection = () => {
 	const update = (next: Partial<MapConfig>) =>
 		setMapConfig((prev) => ({ ...prev, ...next }))
 
+	// Where "Whole map (auto)" is framing right now, when that's just the
+	// data-bearing regions: the choropleth with "Fill regions with no data" off
+	// draws only matched regions, so auto frames those (the same rule the
+	// renderer applies via useGeoMapScaffold's `fitToMatchedRegions`). Null
+	// whenever auto frames the whole geometry. Seeds Custom / "Reset view" so
+	// they start from the view on screen rather than jumping to the level
+	// default, and gates the explanatory note under the Focus control.
+	const autoFitViewport = useAutoFitViewport(
+		modeId === "geo-choropleth" && !mapConfig.showNoDataRegions
+	)
+	const autoViewport = (): GeoViewport =>
+		autoFitViewport ?? levelDefaultViewport(mapConfig.geographyLevel)
+
 	// Changing the Focus dropdown. Switching to "Custom" seeds the draggable
 	// viewport "from the current view" — the active region's box, or a sensible
 	// default for the geography level — but only the first time (so re-selecting
@@ -242,16 +257,16 @@ export const MapsSection = () => {
 			const seed =
 				prev !== "auto" && prev !== "custom"
 					? regionViewport(prev)
-					: levelDefaultViewport(mapConfig.geographyLevel)
+					: autoViewport()
 			update({ focusRegion: next, customViewport: seed })
 		} else {
 			update({ focusRegion: next })
 		}
 	}
 
-	// "Reset view" for custom focus: re-seed from the geography-level default.
-	const resetCustomView = () =>
-		update({ customViewport: levelDefaultViewport(mapConfig.geographyLevel) })
+	// "Reset view" for custom focus: re-seed from what auto would show (the
+	// data frame when only data regions draw, else the level default).
+	const resetCustomView = () => update({ customViewport: autoViewport() })
 
 	// "Fill regions with no data" is a choropleth-only concern (filling unjoined
 	// polygons). "Show basemap" is a bubble/symbol-map concern (drawing the
@@ -422,6 +437,11 @@ export const MapsSection = () => {
 								scroll to fine-tune the view. Uses a world projection
 								(Mercator if chosen, otherwise Natural Earth).
 							</p>
+						) : autoFitViewport !== null ? (
+							<p className="vc-help">
+								Framing just the regions with data. Turn on &quot;Fill
+								regions with no data&quot; to show the whole map.
+							</p>
 						) : null}
 						<SelectInput
 							label="Region key"
@@ -482,9 +502,10 @@ export const MapsSection = () => {
 										}
 									/>
 									<p className="vc-help">
-										When on, regions with no matching data are filled
-										with the no-data color; when off, only regions
-										with data are drawn.
+										When on, regions with no data (missing from the
+										dataset, or a blank value) are filled with the
+										no-data color; when off, they aren&apos;t drawn at
+										all.
 									</p>
 								</div>
 							</div>

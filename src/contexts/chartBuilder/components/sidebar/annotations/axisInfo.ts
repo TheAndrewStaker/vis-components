@@ -6,6 +6,8 @@ import {
 	pixelToPercentY,
 	type AnnotationCoordSystem,
 } from "../../../lib/annotationPixels"
+import type { RadiusUnit } from "../../../lib/annotationsConfig"
+import { parseLocalDate } from "../../../lib/localDate"
 import type { FieldType } from "../../../lib/types"
 
 /** Resolved per-axis info used by the panel to pick number-input vs.
@@ -43,6 +45,13 @@ export const toNumber = (v: number | string): number => {
 	const n = Number(v)
 	return Number.isFinite(n) ? n : 0
 }
+
+/** A stored value-mode coordinate on a temporal axis as epoch ms. Numbers
+ *  already are (the date box and the percent↔values toggle both write ms);
+ *  a string — a date typed into an older build, or hand-edited config —
+ *  parses as a local date. NaN when neither reads as a date. */
+export const temporalCoordMs = (v: number | string): number =>
+	typeof v === "number" ? v : parseLocalDate(v)
 
 /** Convert a stored percent coord (0–1) to a data-mode value using the
  *  axis info. Categorical axes pick the category at that position;
@@ -84,7 +93,12 @@ export const valueToPercent = (
 			: idx / (axis.categories.length - 1)
 	}
 	if (axis.dataMin !== null && axis.dataMax !== null) {
-		const num = typeof value === "number" ? value : Number(value)
+		const num =
+			axis.type === "temporal"
+				? temporalCoordMs(value)
+				: typeof value === "number"
+					? value
+					: Number(value)
 		if (!Number.isFinite(num)) return 0
 		if (axis.dataMax === axis.dataMin) return 0.5
 		return (num - axis.dataMin) / (axis.dataMax - axis.dataMin)
@@ -92,21 +106,49 @@ export const valueToPercent = (
 	return typeof value === "number" ? value : 0
 }
 
+/** Whether a values-mode radius measured against `axis` counts in data
+ *  units. True for quantitative and numeric-ordinal axes — the ones whose
+ *  position scale is linear, so `scale(center + radius)` means something.
+ *  Categorical / string-ordinal (a point scale) and temporal axes have no
+ *  unit a radius could count in; there the circle's own `radiusUnit`
+ *  applies. Mirrors the renderer's check in `circleAnnotationGeometry.ts`. */
+export const hasDataUnits = (axis: AxisInfo): boolean =>
+	axis.type === "quantitative" ||
+	(axis.type === "ordinal" && axis.categories === null)
+
 /** Convert a percent-mode radius (fraction of the radius-axis extent) to a
  *  data-unit radius along that axis. Falls back to the raw fraction when the
- *  axis has no numeric span (categorical / empty). */
+ *  axis has no data units, or no numeric span yet (empty data). */
 export const radiusToValues = (fraction: number, axis: AxisInfo): number => {
-	if (axis.dataMin === null || axis.dataMax === null) return fraction
+	if (!hasDataUnits(axis) || axis.dataMin === null || axis.dataMax === null)
+		return fraction
 	return cleanNumber(fraction * (axis.dataMax - axis.dataMin))
 }
 
 /** Inverse of `radiusToValues` — data-unit radius back to a 0–1 fraction of
  *  the axis extent so the percent box shows a sensible number after toggling. */
 export const radiusToPercent = (units: number, axis: AxisInfo): number => {
-	if (axis.dataMin === null || axis.dataMax === null) return units
+	if (!hasDataUnits(axis) || axis.dataMin === null || axis.dataMax === null)
+		return units
 	const span = axis.dataMax - axis.dataMin
 	if (span === 0) return 0
 	return cleanNumber(units / span)
+}
+
+/** Convert a radius between its two axis-free units — a fraction of the
+ *  radius axis's plot extent and on-screen px — so the px / % toggle beside
+ *  the radius box keeps the circle the same size. Leaves the number alone
+ *  before the first layout pass (no extent to convert against). */
+export const convertRadiusUnit = (
+	value: number,
+	from: RadiusUnit,
+	to: RadiusUnit,
+	extentPx: number | null,
+): number => {
+	if (from === to || extentPx === null || extentPx <= 0) return value
+	return to === "px"
+		? Math.round(value * extentPx)
+		: cleanNumber(value / extentPx)
 }
 
 /** Suggestion (placeholder) label for the Nth annotation of a kind:
@@ -182,25 +224,33 @@ export const convertCoord = (
 }
 
 /** `convertCoord` for a circle's radius: a fraction of the radius axis's
- *  extent (percent), data units along it (values), or on-screen px. */
+ *  extent (percent), data units along it (values), or on-screen px. When
+ *  the radius axis has no data units, a values-mode radius is in `unit`
+ *  (the circle's `radiusUnit`) instead — see `hasDataUnits`. */
 export const convertRadius = (
 	value: number,
 	from: AnnotationCoordSystem,
 	to: AnnotationCoordSystem,
 	axis: AxisInfo,
 	extentPx: number | null,
+	unit: RadiusUnit,
 ): number => {
 	if (from === to) return value
+	// The axis-free unit a values-mode radius is in on this axis; null when
+	// it counts in data units.
+	const valuesUnit: RadiusUnit | null = hasDataUnits(axis) ? null : unit
 	const fraction =
 		from === "values"
-			? radiusToPercent(value, axis)
+			? valuesUnit === null
+				? radiusToPercent(value, axis)
+				: convertRadiusUnit(value, valuesUnit, "percent", extentPx)
 			: isPixelSystem(from)
-				? extentPx !== null && extentPx > 0
-					? value / extentPx
-					: value
+				? convertRadiusUnit(value, "px", "percent", extentPx)
 				: value
-	if (to === "values") return radiusToValues(fraction, axis)
-	if (isPixelSystem(to))
-		return extentPx !== null ? Math.round(fraction * extentPx) : cleanNumber(fraction)
+	if (to === "values")
+		return valuesUnit === null
+			? radiusToValues(fraction, axis)
+			: convertRadiusUnit(fraction, "percent", valuesUnit, extentPx)
+	if (isPixelSystem(to)) return convertRadiusUnit(fraction, "percent", "px", extentPx)
 	return cleanNumber(fraction)
 }

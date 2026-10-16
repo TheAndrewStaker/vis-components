@@ -116,6 +116,11 @@ const probeRect = () => ({
 	borderThickness: 0,
 })
 
+/** The nearest clipping ancestor is the SVG's canvas clip — i.e. the
+ *  element is clipped by nothing tighter than the canvas itself. */
+const isCanvasClip = (el: Element | null): boolean =>
+	el !== null && el.hasAttribute("data-canvas-clip")
+
 describe("annotations outside the plot", () => {
 	it("draws a percent rectangle past the right edge unclipped, inside the canvas, and shrinks the plot for it", () => {
 		seed({ rectangles: [probeRect()] })
@@ -130,9 +135,15 @@ describe("annotations outside the plot", () => {
 		})
 		const { container } = mount()
 		const out = container.querySelector("[data-annotation='out']")!
-		// Not clipped: no clip-path on the annotation or any ancestor group.
-		expect(out.closest("[clip-path]")).toBeNull()
-		expect(container.querySelector("clipPath")).toBeNull()
+		// Not clipped to the panel: the only clip above the annotation is the
+		// SVG's own canvas clip (PlotCanvas wraps everything but the chart
+		// title / subtitle in it), and no other clipPath exists.
+		expect(isCanvasClip(out.closest("[clip-path]"))).toBe(true)
+		expect(
+			[...container.querySelectorAll("clipPath")].filter(
+				(c) => !c.hasAttribute("data-canvas-clip")
+			).length
+		).toBe(0)
 		// Fully inside the SVG canvas.
 		const svg = container.querySelector("svg")!
 		expect(num(out, "x") + num(out, "width")).toBeLessThanOrEqual(num(svg, "width"))
@@ -158,7 +169,7 @@ describe("annotations outside the plot", () => {
 		const { container } = mount()
 		const box = container.querySelector("[data-annotation-text-box='t']")!
 		expect(num(box, "y")).toBeGreaterThanOrEqual(0)
-		expect(box.closest("[clip-path]")).toBeNull()
+		expect(isCanvasClip(box.closest("[clip-path]"))).toBe(true)
 		const squeezed = plotOf(container)
 		// The grid moved down to make room — the plot starts lower and is
 		// shorter than without the annotation.
@@ -187,8 +198,10 @@ describe("annotations outside the plot", () => {
 		expect(container.querySelectorAll("[data-panel]").length).toBe(2)
 		const pct = container.querySelector("[data-annotation='pct']")!
 		const val = container.querySelector("[data-annotation='val']")!
-		expect(pct.closest("[clip-path]")).toBeNull()
-		expect(val.closest("[clip-path]")).not.toBeNull()
+		expect(isCanvasClip(pct.closest("[clip-path]"))).toBe(true)
+		const valClip = val.closest("[clip-path]")
+		expect(valClip).not.toBeNull()
+		expect(isCanvasClip(valClip)).toBe(false)
 		// The clip region is the panel's plot area, defined in the same layer.
 		const clip = val.closest('g[aria-hidden="true"]')!.querySelector("clipPath rect")
 		expect(clip).not.toBeNull()

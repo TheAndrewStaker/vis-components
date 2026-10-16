@@ -78,12 +78,32 @@ export const joinComparison = (
 	return { ok: true, condition: `${left.source} ${parts.op} ${right.source}` }
 }
 
+/** Three boxes → the text a single condition box starts with when a row is
+ * switched to "Formula…". Unlike `joinComparison` this never fails: a side
+ * that can't be read goes in as typed and a blank side is left out, so a
+ * half-filled "{A} >" row becomes "{A} >" for the user to finish. */
+export const comparisonText = (parts: ComparisonParts): string => {
+	const side = (text: string): string => {
+		const trimmed = text.trim()
+		if (trimmed === "") return ""
+		const source = operandSource(trimmed)
+		return source.ok ? source.source : trimmed
+	}
+	const left = side(parts.left)
+	const right = side(parts.right)
+	if (left === "" && right === "") return ""
+	return `${left} ${parts.op} ${right}`.trim()
+}
+
 /** A side's box text for a parsed operand: a plain string literal shows
  * unquoted (the way the user would type it), unless its bare text would
  * read as something else ("5", "{B}") — then the quotes stay so the round
- * trip keeps it a string. */
+ * trip keeps it a string. The blank literal keeps its quotes too: bare, it
+ * would read as an empty box. */
 const sideText = (e: Expr): string =>
-	e.kind === "str" && !parseExpression(e.value).ok ? e.value : exprToSource(e)
+	e.kind === "str" && e.value.trim() !== "" && !parseExpression(e.value).ok
+		? e.value
+		: exprToSource(e)
 
 /** Stored condition → three boxes, or `null` when the condition isn't a
  * single comparison (an older free-text rule with AND / OR, or one that
@@ -104,11 +124,13 @@ export const splitComparison = (condition: string): ComparisonParts | null => {
  * no dropdown — a list of thousands of IDs helps nobody. */
 export const MAX_LEVEL_OPTIONS = 200
 
-/** A lookup of a column's distinct non-blank levels (trimmed, discovery
- * order — matching the legend and the Fields panel) for the right-side
- * dropdown. `null` for a column that isn't categorical / ordinal, or holds
- * more than `max` levels. Scanned lazily, once per column: the editor calls
- * this on every keystroke, the data doesn't change under it. */
+/** A lookup of a column's distinct levels (trimmed, discovery order —
+ * matching the legend and the Fields panel) for the right-side dropdown.
+ * Blank is a level too when the column has blank cells (`""`, listed where
+ * the legend would skip it): the dropdown offers it as "(blank)". `null`
+ * for a column that isn't categorical / ordinal, or holds more than `max`
+ * levels. Scanned lazily, once per column: the editor calls this on every
+ * keystroke, the data doesn't change under it. */
 export const makeLevelLookup = (
 	rows: ReadonlyArray<Record<string, string>>,
 	typeOf: (fieldName: string) => FieldType,
@@ -123,8 +145,7 @@ export const makeLevelLookup = (
 		if (type === "categorical" || type === "ordinal") {
 			const seen = new Set<string>()
 			for (const row of rows) {
-				const cell = (row[fieldName] ?? "").trim()
-				if (cell !== "") seen.add(cell)
+				seen.add((row[fieldName] ?? "").trim())
 				if (seen.size > max) break
 			}
 			levels = seen.size > max ? null : [...seen]
@@ -133,3 +154,16 @@ export const makeLevelLookup = (
 		return levels
 	}
 }
+
+/** How the right box spells the blank level: the empty text literal, which
+ * `==` / `!=` evaluate as the blank test (see derivedExpression). */
+export const BLANK_LEVEL_SOURCE = '""'
+
+/** A level's right-box text — the blank level is written as `""`, every
+ * other level as its own text. */
+export const levelSource = (level: string): string =>
+	level === "" ? BLANK_LEVEL_SOURCE : level
+
+/** A level's dropdown label. */
+export const levelLabel = (level: string): string =>
+	level === "" ? "(blank)" : level

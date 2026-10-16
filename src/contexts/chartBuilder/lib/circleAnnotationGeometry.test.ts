@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { newCircle } from "./annotationsConfig"
+import { newCircle, radiusUnitOf } from "./annotationsConfig"
 import {
 	computeCirclePixels,
 	computePolarCirclePixels,
@@ -142,26 +142,81 @@ describe("computeCirclePixels — values mode", () => {
 		expect(geo?.r).toBeCloseTo(40, 5)
 	})
 
-	it("skips (returns null) when a values-mode radius can't be expressed on a categorical axis", () => {
-		const catScale = makePositionScale(["a", "b", "c"], "categorical", [
+	/** A categorical radius axis has no data units, so the circle's own
+	 *  `radiusUnit` says what the number means: a fraction of that axis's
+	 *  extent (the percent-mode reading, and the default) or on-screen px.
+	 *  The circle renders either way instead of vanishing. */
+	describe("radius axis without data units", () => {
+		const catScaleX = makePositionScale(["a", "b", "c"], "categorical", [
 			inner.x,
 			inner.x + inner.width,
 		])
-		const circle = {
+		const catScaleY = makePositionScale(["p", "q"], "categorical", [
+			inner.y + inner.height,
+			inner.y,
+		])
+		const bothCategorical = {
+			xScale: catScaleX,
+			yScale: catScaleY,
+			xType: "categorical" as const,
+			yType: "categorical" as const,
+		}
+		const base = {
 			...newCircle("c1"),
 			coordSystem: "values" as const,
 			centerX: "b",
-			centerY: 25,
-			radius: 1,
+			centerY: "q",
 			radiusAxis: "x" as const,
 		}
-		const geo = computeCirclePixels(circle, inner, {
-			xScale: catScale,
-			yScale,
-			xType: "categorical",
-			yType: "quantitative",
+
+		it("reads the radius as a fraction of the axis extent by default", () => {
+			expect(radiusUnitOf({})).toBe("percent")
+			const geo = computeCirclePixels(
+				{ ...base, radius: 0.25, radiusUnit: "percent" },
+				inner,
+				bothCategorical
+			)
+			// The center still lands on its category: "b" is the middle of three.
+			expect(geo?.cx).toBeCloseTo(300, 5)
+			// 0.25 × 400 (x extent)
+			expect(geo?.r).toBeCloseTo(100, 5)
 		})
-		expect(geo).toBeNull()
+
+		it("reads the radius as on-screen px when radiusUnit is px", () => {
+			const geo = computeCirclePixels(
+				{ ...base, radius: 37, radiusUnit: "px" },
+				inner,
+				bothCategorical
+			)
+			expect(geo?.r).toBe(37)
+		})
+
+		it("measures a percent radius against the y extent when radiusAxis=y", () => {
+			const geo = computeCirclePixels(
+				{ ...base, radius: 0.25, radiusAxis: "y", radiusUnit: "percent" },
+				inner,
+				bothCategorical
+			)
+			// 0.25 × 200 (y extent)
+			expect(geo?.r).toBeCloseTo(50, 5)
+		})
+
+		it("applies the unit only when the CHOSEN radius axis lacks data units", () => {
+			const mixed = {
+				xScale: catScaleX,
+				yScale,
+				xType: "categorical" as const,
+				yType: "quantitative" as const,
+			}
+			const circle = { ...base, centerY: 25, radius: 0.25, radiusUnit: "px" as const }
+			// Radius on the categorical x axis: 0.25 is on-screen px.
+			expect(computeCirclePixels(circle, inner, mixed)?.r).toBe(0.25)
+			// Same circle measured on the quantitative y axis: 0.25 data units
+			// at 4 px/unit — the unit is ignored.
+			expect(
+				computeCirclePixels({ ...circle, radiusAxis: "y" }, inner, mixed)?.r
+			).toBeCloseTo(1, 5)
+		})
 	})
 })
 

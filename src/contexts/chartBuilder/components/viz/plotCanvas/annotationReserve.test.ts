@@ -147,6 +147,31 @@ describe("measureAnnotationSpill", () => {
 		expect(thick.right - thin.right).toBeCloseTo(4)
 	})
 
+	it("includes a line's arrowhead in the spill", () => {
+		const { solve } = makeSolver()
+		const spec = solve({ left: 0, right: 0, top: 0, bottom: 0 })
+		// A 2px rule along the plot's top edge, pointing right.
+		const rule = {
+			...newLineSegment("l"),
+			xMin: 0,
+			xMax: 1,
+			yMin: 1,
+			yMax: 1,
+			lineThickness: 2,
+		}
+		const plain = spillOf(spec, { ...emptyAnnotations(), lineSegments: [rule] })
+		const arrow = spillOf(spec, {
+			...emptyAnnotations(),
+			lineSegments: [{ ...rule, arrowhead: true, arrowheadStyle: "triangle" }],
+		})
+		// The default-scale head on a 2px line is 8px wide: 4px above the
+		// line, against the bare stroke's 1px half-width.
+		expect(arrow.top - plain.top).toBeCloseTo(3)
+		// The tip IS the endpoint, so nothing reaches past it along the line —
+		// the bare stroke's cap half-width did.
+		expect(plain.right - arrow.right).toBeCloseTo(1)
+	})
+
 	it("measures a pixel-mode rectangle from its corner", () => {
 		const { solve } = makeSolver()
 		const spec = solve({ left: 0, right: 0, top: 0, bottom: 0 })

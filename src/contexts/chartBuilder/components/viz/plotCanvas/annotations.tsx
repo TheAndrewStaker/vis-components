@@ -7,6 +7,7 @@ import type {
 } from "../../../lib/annotationsConfig"
 import type { AnnotationCoordSystem } from "../../../lib/annotationPixels"
 import type { LineDashPattern } from "../../../lib/channelConfig"
+import { lineCapToSvg } from "../../../lib/arrowheadGeometry"
 import { dashArrayFor, sanitizeCustomDasharray } from "../../../lib/dashPatterns"
 import type { Rect } from "../../../lib/facetLayoutSolver"
 import { lineCount, renderMultilineTspans } from "../../../lib/multilineText"
@@ -280,21 +281,55 @@ export const AnnotationRects = ({
 						case "line": {
 							const l = a.anno
 							const dash = annotationDasharray(l.lineDasharray, l.lineDash)
+							const cap = lineCapToSvg(a.cap)
+							// The stroke stops at `a.end` — the far endpoint, or the
+							// arrowhead's base — and the head is explicit path geometry
+							// (no <marker>: PowerPoint's SVG import drops them). Both
+							// share the clip so a value-mode arrow on a facet grid
+							// can't poke its head into the next panel, and the line's
+							// opacity sits on the GROUP: where the line runs under an
+							// open chevron (or a round cap tucks under a head) the two
+							// then composite once instead of darkening at the overlap.
 							return (
-								<line
+								<g
 									key={l.id}
-									data-annotation-line={l.id}
-									data-annotation-coord={l.coordSystem}
 									clipPath={clipPath}
-									x1={a.x1}
-									y1={a.y1}
-									x2={a.x2}
-									y2={a.y2}
-									stroke={l.lineColor}
-									strokeWidth={l.lineThickness}
-									strokeOpacity={l.lineOpacity}
-									strokeDasharray={dash}
-								/>
+									opacity={l.lineOpacity < 1 ? l.lineOpacity : undefined}
+								>
+									<line
+										data-annotation-line={l.id}
+										data-annotation-coord={l.coordSystem}
+										x1={a.x1}
+										y1={a.y1}
+										x2={a.end.x}
+										y2={a.end.y}
+										stroke={l.lineColor}
+										strokeWidth={l.lineThickness}
+										strokeDasharray={dash}
+										strokeLinecap={cap}
+									/>
+									{a.arrowhead &&
+										(a.arrowhead.filled ? (
+											<path
+												data-annotation-arrowhead={l.id}
+												data-arrowhead-style={a.arrowhead.style}
+												d={a.arrowhead.d}
+												fill={l.lineColor}
+												stroke="none"
+											/>
+										) : (
+											<path
+												data-annotation-arrowhead={l.id}
+												data-arrowhead-style={a.arrowhead.style}
+												d={a.arrowhead.d}
+												fill="none"
+												stroke={l.lineColor}
+												strokeWidth={l.lineThickness}
+												strokeLinecap={cap}
+												strokeLinejoin={cap === "round" ? "round" : "miter"}
+											/>
+										))}
+								</g>
 							)
 						}
 						case "text":

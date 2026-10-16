@@ -1,6 +1,8 @@
+import { geoBounds } from "d3-geo"
 import type { Feature } from "geojson"
 
 import type { FocusRegion, GeographyLevel, GeoViewport } from "../mapConfig"
+import { clampViewport } from "./viewportMath"
 
 /** Human-readable labels for the Focus dropdown. */
 export const FOCUS_REGION_LABELS: Record<FocusRegion, string> = {
@@ -126,6 +128,31 @@ export const levelDefaultViewport = (
 		? { west: -170, south: -55, east: 180, north: 80 }
 		: // states / counties / zcta / auto → continental US (incl. a margin)
 			{ west: -128, south: 23, east: -66, north: 50 }
+
+/** The lon/lat viewport that frames a set of features — what "Whole map
+ *  (auto)" shows when only the data-bearing regions draw (see
+ *  useGeoMapScaffold's `fitToMatchedRegions`). Padded on every side (10% of
+ *  the span, at least 1°) because the Custom focus COVERS the plot rect and
+ *  so crops the box's looser axis — the regions must still start in view.
+ *  Null when there is nothing to frame, or when the features straddle the
+ *  antimeridian (Alaska's Aleutians put west > east): the box must stay a
+ *  simple west<east rectangle, so callers fall back to the level default. */
+export const featuresViewport = (features: Feature[]): GeoViewport | null => {
+	if (features.length === 0) return null
+	const [[west, south], [east, north]] = geoBounds({
+		type: "FeatureCollection",
+		features,
+	})
+	if (!(west < east) || !(south < north)) return null
+	const padLon = Math.max(1, (east - west) * 0.1)
+	const padLat = Math.max(1, (north - south) * 0.1)
+	return clampViewport({
+		west: west - padLon,
+		east: east + padLon,
+		south: south - padLat,
+		north: north + padLat,
+	})
+}
 
 /**
  * GeoJSON polygon covering a focus region's bounding box, suitable as a

@@ -752,9 +752,9 @@ export const FacetOptionsPanel = () => {
 									/>
 								)}
 								<p className="vc-help">
-									Leave blank to auto-size by Rows / Cols / proportional
-									settings. When set, the canvas grows and scrolls if needed to
-									honor the exact pixel dimensions.
+									Reset (or leave blank) to auto-size by Rows / Cols /
+									proportional settings. When set, the canvas grows and scrolls
+									if needed to honor the exact pixel dimensions.
 								</p>
 							</>
 						)

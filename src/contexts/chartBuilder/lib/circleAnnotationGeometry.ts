@@ -1,4 +1,4 @@
-import type { CircleAnnotation } from "./annotationsConfig"
+import { radiusUnitOf, type CircleAnnotation } from "./annotationsConfig"
 import {
 	isPixelSystem,
 	pixelToCanvasX,
@@ -9,7 +9,7 @@ import type { FieldType } from "./types"
 
 /** Pixel placement of a circle annotation, in the SVG coordinate system of
  *  the panel's inner rect. `null` means the circle can't be placed (e.g. a
- *  data-unit radius requested against a categorical axis). */
+ *  values-mode center the axis scale rejects). */
 export type CircleGeometry = {
 	cx: number
 	cy: number
@@ -37,7 +37,8 @@ const toNumber = (v: number | string): number => {
 /** A data-unit radius is only meaningful on a continuous axis (quantitative
  *  or numeric ordinal), where adding the radius to the center value and
  *  re-projecting yields a pixel span. Temporal/categorical axes have no
- *  natural "radius in units", so we skip those circles. */
+ *  natural "radius in units", so there the circle's own `radiusUnit`
+ *  (px, or a fraction of the axis's extent) applies instead. */
 const isContinuous = (type: FieldType | null): type is FieldType =>
 	type === "quantitative" || type === "ordinal"
 
@@ -51,9 +52,12 @@ const isContinuous = (type: FieldType | null): type is FieldType =>
  *  - `values` mode: center maps through the x/y position scales (exactly like
  *    rectangle corners). Radius is in data units along the chosen axis,
  *    converted via that axis's scale: |scale(center+radius) − scale(center)|.
- *    Each axis falls back to the percent placement independently when its
- *    scale/type is unavailable (e.g. a pie chart's missing axis), mirroring
- *    the rectangle renderer.
+ *    When that axis has no data units (categorical / string-ordinal /
+ *    temporal — or no scale at all) the radius is read in the circle's
+ *    `radiusUnit` instead: on-screen px, or a fraction of the axis's extent
+ *    exactly as percent mode reads it. Each center coordinate falls back to
+ *    the percent placement independently when its scale/type is unavailable
+ *    (e.g. a pie chart's missing axis), mirroring the rectangle renderer.
  *  - the pixel modes: center is whole px from the chosen corner of the
  *    plot (+x right, +y up) and the radius is the on-screen radius in px —
  *    see `lib/annotationPixels.ts`. */
@@ -93,28 +97,29 @@ export const computeCirclePixels = (
 	}
 
 	// Radius.
+	const extent = circle.radiusAxis === "x" ? inner.width : inner.height
 	let r: number
 	if (useValues) {
 		const scale = circle.radiusAxis === "x" ? ctx.xScale : ctx.yScale
 		const type = circle.radiusAxis === "x" ? ctx.xType : ctx.yType
 		const centerVal =
 			circle.radiusAxis === "x" ? circle.centerX : circle.centerY
-		if (
-			!scale ||
-			!isContinuous(type) ||
-			typeof centerVal !== "number" ||
-			!Number.isFinite(circle.radius)
-		) {
-			// Data-unit radius isn't expressible on this axis — skip the circle
-			// rather than draw a degenerate one.
-			return null
+		if (!Number.isFinite(circle.radius)) return null
+		if (scale && isContinuous(type) && typeof centerVal === "number") {
+			// Data units: project the center and center + radius through the
+			// axis and take the pixel span between them.
+			const a = applyPositionScale(scale, centerVal, type)
+			const b = applyPositionScale(scale, centerVal + circle.radius, type)
+			if (a === null || b === null) return null
+			r = Math.abs(b - a)
+		} else {
+			// No data units on this axis (categorical / string-ordinal /
+			// temporal, or no scale at all): the radius carries its own unit —
+			// on-screen px, or the same fraction of the axis's extent percent
+			// mode uses.
+			r = radiusUnitOf(circle) === "px" ? circle.radius : extent * circle.radius
 		}
-		const a = applyPositionScale(scale, centerVal, type)
-		const b = applyPositionScale(scale, centerVal + circle.radius, type)
-		if (a === null || b === null) return null
-		r = Math.abs(b - a)
 	} else {
-		const extent = circle.radiusAxis === "x" ? inner.width : inner.height
 		r = extent * toNumber(circle.radius)
 	}
 

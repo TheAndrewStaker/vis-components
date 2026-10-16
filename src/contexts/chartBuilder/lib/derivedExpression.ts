@@ -15,7 +15,9 @@
  * SEMANTICS mirror `firstMatchingRule`, though: ==/!= compare numerically
  * when both sides read as numbers and as strings otherwise, ordering
  * operators are numeric-only, and a blank cell never satisfies any
- * comparison. */
+ * comparison — with one addition: the empty text literal `""` names blank,
+ * so `{A} == ""` is the blank test (true for a blank cell) and `{A} != ""`
+ * its complement (true for a filled one). */
 
 export type ComparisonOp = ">" | "<" | ">=" | "<=" | "==" | "!="
 export type ArithmeticOp = "+" | "-" | "*" | "/"
@@ -294,6 +296,16 @@ const textReading = (v: ExprValue): string | null => {
 	return null
 }
 
+/** The empty text literal — `""`, or quotes around nothing but whitespace —
+ * is the grammar's name for a blank cell. */
+const isBlankLiteral = (e: Expr): boolean =>
+	e.kind === "str" && e.value.trim() === ""
+
+/** Whether a value is blank: a blank / missing cell, arithmetic that came
+ * out blank, or the empty text literal itself. */
+const isBlank = (v: ExprValue): boolean =>
+	v === null || (typeof v === "string" && v.trim() === "")
+
 /** Evaluate against one row of the dataset view (cells are strings). Field
  * references resolve to the row's cell; a blank or missing cell is `null`. */
 export const evaluateExpression = (
@@ -332,6 +344,17 @@ export const evaluateExpression = (
 		case "compare": {
 			const left = evaluateExpression(expr.left, row)
 			const right = evaluateExpression(expr.right, row)
+			// The blank test: `== ""` / `!= ""` ask whether the other side is
+			// blank. Only the literal asks it — `{A} != "West"` stays false for
+			// a blank A, because a blank cell is no value at all, not "a value
+			// that isn't West".
+			if (
+				(expr.op === "==" || expr.op === "!=") &&
+				(isBlankLiteral(expr.left) || isBlankLiteral(expr.right))
+			) {
+				const equal = isBlank(left) && isBlank(right)
+				return expr.op === "==" ? equal : !equal
+			}
 			if (left === null || right === null) return false
 			const leftNum = numReading(left)
 			const rightNum = numReading(right)

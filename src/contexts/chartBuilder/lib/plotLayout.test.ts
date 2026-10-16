@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest"
 
-import { BASE_MARGIN, computePlotLayout } from "./plotLayout"
+import {
+	BASE_MARGIN,
+	computePlotLayout,
+	extraLinesPx,
+	subtitleBand,
+	subtitleReserve,
+	titleBand,
+	titleReserve,
+} from "./plotLayout"
 
 /** Pin the height floor at just-above-margin-sum and verify that the
  *  inner plot area scales linearly with the input bounds.
@@ -55,5 +63,25 @@ describe("computePlotLayout — height floor", () => {
 		const layout = computePlotLayout({ width: 0, height: 0 }, false, false)
 		expect(layout.height).toBeGreaterThan(BASE_MARGIN.top + BASE_MARGIN.bottom)
 		expect(layout.inner.y1).toBeGreaterThan(layout.inner.y0)
+	})
+})
+
+/** Multi-line chart titles grow UP (LAYOUT.md §7): the band gains one
+ *  1.2em line step per line past the first, so the bottom line keeps the
+ *  single line's distance to what sits below and the earlier lines fill
+ *  the added room above it. The solver and the legend plan both size the
+ *  top bands from these helpers. */
+describe("multi-line title bands", () => {
+	it("extraLinesPx adds one 1.2em line step per line past the first", () => {
+		expect(extraLinesPx("one line", 20)).toBe(0)
+		expect(extraLinesPx("two\nlines", 20)).toBeCloseTo(24)
+		expect(extraLinesPx("a\nb\nc", 10)).toBeCloseTo(24)
+	})
+
+	it("titleBand / subtitleBand are the single-line reserve plus the extra lines", () => {
+		expect(titleBand("Title", 20)).toBe(titleReserve(20))
+		expect(titleBand("Title\nmore", 20)).toBeCloseTo(titleReserve(20) + 24)
+		expect(subtitleBand("Sub", 14)).toBe(subtitleReserve(14))
+		expect(subtitleBand("Sub\nmore", 14)).toBeCloseTo(subtitleReserve(14) + 16.8)
 	})
 })

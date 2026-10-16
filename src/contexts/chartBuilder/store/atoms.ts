@@ -1134,11 +1134,17 @@ export const blackAndWhiteModeAtom = atom<boolean>(false)
 /** The categorical legend entry the pointer is currently hovering, used to
  * highlight matching marks and dim the rest (the "hover over legend to
  * highlight visual elements" option). `field` is the encoded field NAME and
- * `value` its stringified category. Intentionally NOT persisted: transient
- * pointer state, cleared on mouse-leave. `null` = nothing hovered. */
-export const hoveredLegendEntryAtom = atom<{ field: string; value: string } | null>(
-	null
-)
+ * `value` its stringified category. `node`, set only by a DIRECT mark hover
+ * on a nested chart (packed circles / treemap / sunburst), is the hovered
+ * node's key: those charts then emphasize that one node instead of its whole
+ * series, while `field` / `value` still tell the legend which entry the node
+ * belongs to. Intentionally NOT persisted:
+ * transient pointer state, cleared on mouse-leave. `null` = nothing hovered. */
+export const hoveredLegendEntryAtom = atom<{
+	field: string
+	value: string
+	node?: string
+} | null>(null)
 
 export const currentVisualNameAtom = persistedAtom<string>(
 	loadCurrentVisualName,

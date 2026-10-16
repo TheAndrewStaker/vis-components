@@ -46,7 +46,7 @@ import {
 	resolveLegendChannelConfig,
 	resolveLegendDomain,
 } from "./legendBreaks"
-import { BASE_MARGIN, subtitleReserve, titleReserve } from "./plotLayout"
+import { BASE_MARGIN, subtitleBand, titleBand } from "./plotLayout"
 import {
 	applyAreaScale,
 	applyHueScale,
@@ -1201,17 +1201,22 @@ export const planLegendSections = ({
 	const CHART_PAD = 12
 	const hasTitle = !!labels.title
 	const hasSubtitle = !!labels.subtitle
+	// The bands grow for multi-line titles exactly as the solver's do
+	// (`titleBand` / `subtitleBand`), so a wrapped chart title still leaves
+	// the legend's top on the plot's top edge.
 	const plotTopOffset =
 		CHART_PAD +
 		BASE_MARGIN.top +
 		(hasTitle
-			? titleReserve(
+			? titleBand(
+					labels.title,
 					resolveTitleFont(labels.baseFont, "primary", labels.fontOverrides?.title)
 						.size
 				)
 			: 0) +
 		(hasSubtitle
-			? subtitleReserve(
+			? subtitleBand(
+					labels.subtitle,
 					resolveTitleFont(
 						labels.baseFont,
 						"subtitle",

@@ -20,6 +20,9 @@ import { Select } from "./Select"
  * or null for "blank".
  */
 export type DateInputProps = {
+	/** Id for the text box, so a caller's `<label htmlFor>` (e.g. through
+	 *  `LabeledField`) can target it. */
+	id?: string
 	value: number | null
 	onChange: (ms: number | null) => void
 	/** Layout utilities for the whole field (width etc.). */
@@ -44,6 +47,7 @@ const CalendarGlyph = () => (
 )
 
 export const DateInput = ({
+	id,
 	value,
 	onChange,
 	className,
@@ -164,6 +168,7 @@ export const DateInput = ({
 	return (
 		<div ref={wrapperRef} className={c("relative flex items-center", className)}>
 			<Input
+				id={id}
 				type="text"
 				inputMode="numeric"
 				value={text}

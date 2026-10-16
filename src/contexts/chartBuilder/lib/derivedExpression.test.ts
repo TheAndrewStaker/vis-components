@@ -97,6 +97,22 @@ describe("evaluate — comparisons", () => {
 		expect(value("{B} != 1", { B: "" })).toBe(false)
 		expect(value("{Missing} != 1", {})).toBe(false)
 	})
+
+	it('the empty text literal "" names blank: == is the blank test, != its complement', () => {
+		expect(value('{B} == ""', { B: "" })).toBe(true)
+		expect(value('{B} == ""', { B: "  " })).toBe(true)
+		expect(value('{Missing} == ""', {})).toBe(true)
+		expect(value('"" == {B}', { B: "" })).toBe(true)
+		expect(value('{B} == ""', { B: "x" })).toBe(false)
+		expect(value('{B} != ""', { B: "x" })).toBe(true)
+		expect(value('{B} != ""', { B: "" })).toBe(false)
+		// Arithmetic that came out blank is blank too.
+		expect(value('{B} + 1 == ""', { B: "" })).toBe(true)
+		// Only the literal asks: a blank cell still isn't "a value that isn't
+		// West", and ordering stays numeric-only.
+		expect(value('{B} != "West"', { B: "" })).toBe(false)
+		expect(value('{B} > ""', { B: "" })).toBe(false)
+	})
 })
 
 describe("evaluate — AND / OR", () => {

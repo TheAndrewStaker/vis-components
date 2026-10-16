@@ -312,7 +312,9 @@ export const GapInput = ({
 /** Panel width / height input ([[auto-input-step-from-displayed]]): the
  *  placeholder shows the solver-published auto dimension, and the first
  *  spinner click / arrow key steps from that DISPLAYED value rather than
- *  jumping to min (1). Blank commits null (= auto). */
+ *  jumping to min (1). Blank commits null (= auto). A "reset" link appears
+ *  while a value is set — same idiom as `GapInput` — so returning to auto
+ *  doesn't rely on the user discovering that an emptied field means auto. */
 export const PanelDimInput = ({
 	label,
 	value,
@@ -331,21 +333,28 @@ export const PanelDimInput = ({
 	// reads "auto"; `stepBase` keeps the first step sensible (200) instead
 	// of dropping to min.
 	return (
-		<NumberInput
-			label={label}
-			labelClassName={LABEL_COL}
-			className={className}
-			min={1}
-			step={1}
-			value={value ?? null}
-			placeholder={autoPx && autoPx > 0 ? String(Math.round(autoPx)) : "Auto"}
-			stepBase={200}
-			onChange={(n) => {
-				if (n > 0) onCommit(n)
-			}}
-			onClear={() => onCommit(null)}
-			suffix="px"
-		/>
+		<div className={cls("flex items-center gap-2 text-sm", className)}>
+			<NumberInput
+				label={label}
+				labelClassName={LABEL_COL}
+				min={1}
+				step={1}
+				value={value ?? null}
+				placeholder={autoPx && autoPx > 0 ? String(Math.round(autoPx)) : "Auto"}
+				stepBase={200}
+				onChange={(n) => {
+					if (n > 0) onCommit(n)
+				}}
+				onClear={() => onCommit(null)}
+				suffix="px"
+			/>
+			{value != null && (
+				<ResetLink
+					onClick={() => onCommit(null)}
+					ariaLabel={`Reset ${label.toLowerCase()}`}
+				/>
+			)}
+		</div>
 	)
 }
 

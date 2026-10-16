@@ -19,6 +19,7 @@ import {
 	type Encodings,
 } from "../../../lib/types"
 import { resolveFacetTitleStyles } from "./facetTitleStyles"
+import type { SolverPanelInput } from "../../../lib/facetLayoutSolver"
 import { NO_ANNOTATION_RESERVE } from "./annotationReserve"
 import { buildSolverInput } from "./solverSpec"
 
@@ -60,6 +61,7 @@ const build = ({
 	sharedYAxisTitle = "",
 	dataLabelOverflow = { left: 0, right: 0 },
 	captionReserve = 0,
+	panelInputs = [],
 }: {
 	encodings?: Encodings
 	panelData?: FacetPanels
@@ -72,6 +74,7 @@ const build = ({
 	sharedYAxisTitle?: string
 	dataLabelOverflow?: { left: number; right: number }
 	captionReserve?: number
+	panelInputs?: SolverPanelInput[]
 }) =>
 	buildSolverInput({
 		bounds: { width: 800, height: 600 },
@@ -81,7 +84,7 @@ const build = ({
 		panelData:
 			panelData ??
 			resolveFacetPanels(view(GRID_ROWS), encodings, {}, {}, facetCfg),
-		panelInputs: [],
+		panelInputs,
 		channelConfigs,
 		labels,
 		encodings,
@@ -199,7 +202,36 @@ describe("buildSolverInput", () => {
 			fontSize: size,
 			height: Math.max(20, Math.ceil(size * 1.4)),
 			align: "center",
+			lines: 1,
 		})
+	})
+
+	it("sizes the per-panel label band for the tallest multi-line panel label", () => {
+		const e = emptyEncodings()
+		e.x = { field: "cat" }
+		e.y = { field: "val" }
+		e.facet = { field: "r" }
+		const panel = (key: string): SolverPanelInput => ({
+			key,
+			row: 0,
+			col: 0,
+			xLabels: [],
+			yLabels: [],
+			xLabelAngleDeg: 0,
+			xLabelFontSize: 12,
+			yLabelFontSize: 12,
+			xWeight: 1,
+			yWeight: 1,
+		})
+		// Wrap mode shows the raw panel key, so a value with a line break is
+		// a two-line label; the band (per-cell chrome shared by every panel)
+		// sizes for the tallest one and grows UP from the single-line spot.
+		const input = build({
+			encodings: e,
+			isFaceted: true,
+			panelInputs: [panel("r1"), panel("North\nEast")],
+		})
+		expect(input.facetLabel?.lines).toBe(2)
 	})
 
 	it("honors explicit panel dims when faceted and sizing is off", () => {

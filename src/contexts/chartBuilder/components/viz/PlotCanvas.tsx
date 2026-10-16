@@ -1,5 +1,5 @@
 import { applyMirrorSign, resolveMirrorDirection } from "../../lib/mirrorAxis"
-import { useEffect, useMemo } from "react"
+import { useEffect, useId, useMemo } from "react"
 import useMeasure from "react-use-measure"
 import { useAtomValue, useSetAtom } from "jotai"
 import { axisFieldsFor, hasXAxis, hasYAxis } from "../../lib/axisFields"
@@ -16,6 +16,8 @@ import {
 	solveFacetLayout,
 	type FacetLayoutSpec,
 	type SolverPanelInput,
+	NO_TITLE_OVERHANG,
+	type TitleOverhang,
 } from "../../lib/facetLayoutSolver"
 import {
 	facetTitleColorOf,
@@ -57,7 +59,7 @@ import { computeDataLabelOverflow } from "./plotCanvas/dataLabelReserve"
 import { useFontsVersion } from "./plotCanvas/useFontsVersion"
 import { resolveFacetTitleStyles } from "./plotCanvas/facetTitleStyles"
 import { buildSolverPanelInputs } from "./plotCanvas/solverPanelInputs"
-import { buildSolverInput } from "./plotCanvas/solverSpec"
+import { buildSolverInput, panelLabelTextOf } from "./plotCanvas/solverSpec"
 import {
 	computeGroupMeasureMax,
 	computeGroupMeasureMin,
@@ -88,6 +90,7 @@ import {
 	type AnnotationReserve,
 } from "./plotCanvas/annotationReserve"
 import { FacetPanelContext } from "./plotCanvas/FacetPanelContext"
+import { measureScrollbarWidth } from "../../lib/scrollbarWidth"
 
 /** Unified single-SVG renderer for both single-panel and faceted charts.
  *
@@ -105,9 +108,19 @@ import { FacetPanelContext } from "./plotCanvas/FacetPanelContext"
  *  which folds margin estimation, gap math, and share-overlap into a
  *  single typed FacetLayoutSpec. */
 
-export const PlotCanvas = () => {
+export const PlotCanvas = ({
+	titleOverhang = NO_TITLE_OVERHANG,
+}: {
+	/** Room past the canvas's left / right edge the chart title / subtitle
+	 *  may paint into — the column beside a left / right edge legend, which
+	 *  ChartCanvas measures. The SVG lets exactly those two texts escape its
+	 *  box (see the canvas clip below); `SolverInput.titleOverhang`. */
+	titleOverhang?: TitleOverhang
+} = {}) => {
 	// Layout size, not the transformed rect — see ChartCanvas.
 	const [ref, bounds] = useMeasure({ offsetSize: true })
+	// Clip for everything but the chart title / subtitle (see the SVG below).
+	const canvasClipId = useId()
 	const dataset = useCurrentDatasetView()
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const overrides = useAtomValue(currentFieldOverridesAtom)
@@ -597,44 +610,69 @@ export const PlotCanvas = () => {
 	// solveWithAnnotationReserves re-solves until the spill is gone — one
 	// plain solve when the visual has no annotations.
 	const spec: FacetLayoutSpec = useMemo(() => {
-		const solve = (annotationReserve: AnnotationReserve) =>
-			solveFacetLayout(
-				buildSolverInput({
-					bounds,
-					isFaceted,
-					isPolar,
-					facetCfg,
-					panelData,
-					panelInputs,
-					channelConfigs,
-					labels,
-					encodings,
-					titleFont,
-					subtitleFont,
-					xAxisTitleFont,
-					yAxisTitleFont,
-					facetTitles,
-					sharedXAxisTitle,
-					sharedYAxisTitle,
-					dataLabelOverflow,
-					captionReserve,
-					annotationReserve,
+		const solveAt = (box: { width: number; height: number }): FacetLayoutSpec => {
+			const solve = (annotationReserve: AnnotationReserve) =>
+				solveFacetLayout(
+					buildSolverInput({
+						bounds: box,
+						isFaceted,
+						isPolar,
+						facetCfg,
+						panelData,
+						panelInputs,
+						channelConfigs,
+						labels,
+						encodings,
+						titleFont,
+						subtitleFont,
+						xAxisTitleFont,
+						yAxisTitleFont,
+						facetTitles,
+						sharedXAxisTitle,
+						sharedYAxisTitle,
+						dataLabelOverflow,
+						captionReserve,
+						annotationReserve,
+						titlePrefixFont,
+						titleOverhang,
+					}),
+				)
+			if (annotationScaleInputsByPanel.size === 0)
+				return solve(NO_ANNOTATION_RESERVE)
+			return solveWithAnnotationReserves(solve, (solved) =>
+				measureAnnotationSpill({
+					spec: solved,
+					annotations,
+					scaleInputsByPanel: annotationScaleInputsByPanel,
+					axisFields,
+					levelOrders,
+					isRadar,
 				}),
 			)
-		if (annotationScaleInputsByPanel.size === 0)
-			return solve(NO_ANNOTATION_RESERVE)
-		return solveWithAnnotationReserves(solve, (solved) =>
-			measureAnnotationSpill({
-				spec: solved,
-				annotations,
-				scaleInputsByPanel: annotationScaleInputsByPanel,
-				axisFields,
-				levelOrders,
-				isRadar,
-			}),
-		)
+		}
+		const full = solveAt(bounds)
+		// Scrollbar gutter. A canvas that overflows the container on ONE axis
+		// (a tall ridgeline with a pixel panel height, a wide many-column
+		// grid) scrolls inside a box the size of the container, and on a
+		// platform with classic scrollbars that bar takes its width out of
+		// the other axis — a canvas solved to the full container width then
+		// overflows by exactly the bar's width and grows a second, pointless
+		// scrollbar (user-reported Oct 2026). Re-solve with the gutter taken
+		// out of the non-scrolling axis so the figure fits beside the bar.
+		// Overlay scrollbars measure 0 and skip this; a canvas that overflows
+		// both ways needs both bars anyway.
+		const gutter = full.scroll ? measureScrollbarWidth() : 0
+		if (gutter > 0 && bounds.width > 0 && bounds.height > 0) {
+			const overflowsX = full.canvas.width > bounds.width
+			const overflowsY = full.canvas.height > bounds.height
+			if (overflowsY && !overflowsX)
+				return solveAt({ width: bounds.width - gutter, height: bounds.height })
+			if (overflowsX && !overflowsY)
+				return solveAt({ width: bounds.width, height: bounds.height - gutter })
+		}
+		return full
 	},
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- facet title aligns/offsets and facetRow/Col fields are pure derivations of labels.titleAlignments / labels.titleOffsets / encodings via panelData, which are already deps, so they can never go stale; the callback also forwards whole objects (labels, channelConfigs, facetCfg, bounds, facetTitles) to buildSolverInput, but the deps below list exactly the fields it reads
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- facet title aligns/offsets/vertical aligns and facetRow/Col fields are pure derivations of labels.titleAlignments / labels.titleOffsets / labels.titleVerticalAlignments / encodings via panelData, which are already deps, so they can never go stale; the callback also forwards whole objects (labels, channelConfigs, facetCfg, bounds, facetTitles) to buildSolverInput, but the deps below list exactly the fields it reads
 		[
 			bounds.width,
 			bounds.height,
@@ -647,9 +685,24 @@ export const PlotCanvas = () => {
 			// titleAlignmentOf also reads the theme-seeded base alignments.
 			labels.baseFont.titles,
 			labels.titleOffsets,
+			labels.titleVerticalAlignments,
 			labels.yAxisTitleHorizontal,
 			titleFont.size,
 			subtitleFont.size,
+			// The chart title / subtitle are canvas-measured (keep-in-view clamp),
+			// so their whole font matters, prefix font included.
+			titleFont.family,
+			titleFont.weight,
+			titleFont.italic,
+			subtitleFont.family,
+			subtitleFont.weight,
+			subtitleFont.italic,
+			titlePrefixFont.family,
+			titlePrefixFont.size,
+			titlePrefixFont.weight,
+			titlePrefixFont.italic,
+			titleOverhang.left,
+			titleOverhang.right,
 			xAxisTitleFont.size,
 			yAxisTitleFont.size,
 			facetTitleFont.size,
@@ -817,8 +870,382 @@ export const PlotCanvas = () => {
 			width={svgWidth}
 			height={svgHeight}
 			className="block"
+			overflow="visible"
 		>
-			{/* Shared titles (chart + axes) */}
+			{/* `overflow="visible"` lets the chart title / subtitle paint past
+			    the SVG box — into the blank band over a left / right legend
+			    (LAYOUT.md §7, `titleOverhang`). Everything else stays clipped
+			    to the canvas by the group below, exactly as the box clipped it
+			    before. An attribute, not a class, so the export clone keeps it
+			    (captureThumbnail nests this SVG in the composed figure). */}
+			<defs>
+				<clipPath id={canvasClipId} data-canvas-clip>
+					<rect x={0} y={0} width={svgWidth} height={svgHeight} />
+				</clipPath>
+			</defs>
+			{/* data-canvas-clip tells tests apart from a per-panel clip. */}
+			<g clipPath={`url(#${canvasClipId})`} data-canvas-clip>
+				{/* Per-panel marks + per-panel facet label */}
+				{spec.panels.map((p) => {
+					const rows = panelData.rowsByValue.get(p.key) ?? []
+					// Per-panel render inputs: share-aware scale-row sources, numeric
+					// domain overrides (incl. the measure-axis translation), and the
+					// polar R overrides + radius scale — see resolvePanelRenderInputs.
+					const {
+						panelFV,
+						xScaleRows,
+						yScaleRows,
+						xMinOverride,
+						xMaxOverride,
+						yMinOverride,
+						yMaxOverride,
+						measureMinOverride,
+						measureMaxOverride,
+						measurePinnedBounds,
+						rMinOverride,
+						rMaxOverride,
+						radiusScale,
+					} = resolvePanelRenderInputs({
+						p,
+						panelData,
+						isPolar,
+						shareXMode,
+						shareYMode,
+						allDatasetRows,
+						colRowsByColKey,
+						rowRowsByRowKey,
+						measureAxis,
+						axisFields,
+						channelConfigs,
+						facetCfg,
+						groupMeasureMaxByKey,
+						groupMeasureMinByKey,
+						panelRadiusScale,
+						mirrorActive,
+					})
+
+					const rendererProps: UniversalRendererProps = {
+						rowsOverride: rows,
+						inner: rectToInner(p.inner),
+						showXAxis: p.showXTicks,
+						showYAxis: p.showYTicks,
+						showXAxisTitle: false,
+						showYAxisTitle: false,
+						titleOverride: null,
+						subtitleOverride: null,
+						// In the new model, `inner` already accounts for margin
+						// estimates (the solver folded them in). Renderers using
+						// the inner-prop branch ignore extraMarginFloor, but we
+						// pass them anyway for defensive compatibility.
+						extraMarginFloorLeft: 0,
+						extraMarginFloorBottom: 0,
+						// Categorical ticks use d3's natural `padding(0.5)` (half-step
+						// insets: two categories at the quarter points, a lone
+						// category centered) — NOT the fixed-pixel edge pinning
+						// (`firstTickPxOffset`) faceted charts briefly used. The
+						// pinning squished the first tick against the axis spine and
+						// left one-category panels uncentered (user-reported July
+						// 2026), and the alignment it bought is already guaranteed:
+						// panels sharing an axis have identical domains AND identical
+						// panel widths (the solver keeps column widths / row heights
+						// uniform), so half-step positions align across the share
+						// group by construction.
+						// Per-axis scale-source overrides for renderers that
+						// support them (ScatterPlot, TilePlot). Combined
+						// override (`scalesRowsOverride`) is set only when BOTH
+						// axes use the same source (currently only when both
+						// are "all") so renderers without per-axis support
+						// (BarPlot, AreaPlot) pick it up. Under "perGroup", x
+						// and y sources differ per panel position so the
+						// combined override is intentionally left undefined.
+						scalesRowsOverrideX: xScaleRows,
+						scalesRowsOverrideY: yScaleRows,
+						scalesRowsOverride:
+							xScaleRows && yScaleRows && xScaleRows === yScaleRows
+								? xScaleRows
+								: undefined,
+						// Per-axis numeric domain overrides. Scatter consumes
+						// xMin/xMax/yMin/yMax directly; Bar/Area consume the
+						// translated measureMin/measureMax. Pie/Tile ignore
+						// both. Undefined → renderer auto-computes from data.
+						xMinOverride,
+						xMaxOverride,
+						yMinOverride,
+						yMaxOverride,
+						measureMinOverride,
+						measureMaxOverride,
+						measurePinnedBounds,
+						// Histogram measure-color global domain max (undefined
+						// unless a Count/Density color/opacity source is active).
+						measureColorMaxOverride,
+						// Polar-only: R-axis bounds + "size panels by unit"
+						// scaling. RadarPlot/PiePlot ignore these for non-
+						// polar inputs; cartesian renderers ignore them
+						// (they only read the cartesian min/max). Undefined
+						// preserves the renderer's auto behavior.
+						rMinOverride,
+						rMaxOverride,
+						radiusScale,
+					}
+					// Test-observable: row count actually fed to the
+					// scale-source for each axis. Falls back to the panel's
+					// own row count when no override applies (== "none" mode)
+					// so the attribute is always a usable number for
+					// assertions across all three modes.
+					const xScaleRowCount = (xScaleRows ?? rows).length
+					const yScaleRowCount = (yScaleRows ?? rows).length
+					// Value-mode annotations must build their position scale from the
+					// SAME inputs the renderer uses for this panel — share-aware row
+					// source, per-axis domain override, and facet tick-offset — so a
+					// data-unit rectangle tracks the marks instead of being derived
+					// from the panel's own (possibly narrower) extent. Mirror the
+					// renderer's measure-axis translation: bars-y/areas-y put the
+					// measure on the X pixel-axis; bars-x/areas-x put it on Y.
+					const annoXScaleRows = xScaleRows ?? rows
+					const annoYScaleRows = yScaleRows ?? rows
+					const annoXDomainOverride =
+						measureAxis === "x"
+							? { min: measureMinOverride, max: measureMaxOverride }
+							: { min: xMinOverride, max: xMaxOverride }
+					const annoYDomainOverride =
+						measureAxis === "y"
+							? { min: measureMinOverride, max: measureMaxOverride }
+							: { min: yMinOverride, max: yMaxOverride }
+					// Scope annotations to this panel — those whose `facetKeys`
+					// exclude this facet are dropped before either layer renders.
+					const panelRectangles = annotations.rectangles.filter((r) =>
+						annotationOnPanel(r, p.key),
+					)
+					const panelCircles = (annotations.circles ?? []).filter((c) =>
+						annotationOnPanel(c, p.key),
+					)
+					const panelLineSegments = (annotations.lineSegments ?? []).filter(
+						(l) => annotationOnPanel(l, p.key),
+					)
+					const panelTexts = (annotations.texts ?? []).filter((t) =>
+						annotationOnPanel(t, p.key),
+					)
+					// Per-panel title text — the same text the solver sized the
+					// label band for (see `panelLabelTextOf`).
+					const facetLabelText = panelLabelTextOf(panelData, p.key)
+					// Compact-grid panel titles are styled by the `facetPanelTitle`
+					// slot; wrap-mode panel titles keep the shared `facetTitle`.
+					const isCompactPanelLabel =
+						panelData.mode === "grid" && panelData.compact !== undefined
+					const panelLabelFont = isCompactPanelLabel
+						? facetPanelTitleFont
+						: facetTitleFont
+					const panelLabelOffset = isCompactPanelLabel
+						? facetPanelTitleOffset
+						: facetTitleOffset
+					const panelLabelAngle = isCompactPanelLabel
+						? facetPanelTitleAngle
+						: facetTitleAngle
+					// "Color by facet": per-value title colors keyed by the facet
+					// VALUE. Wrap panels key by the panel key (the facet value);
+					// compact-grid panel labels key by the value their label actually
+					// shows — the row value under a surviving column strip, the col
+					// value under a surviving row strip, either for the wrap-fallback
+					// "row · col" label (row wins when both have a color).
+					const compactStripKind =
+						panelData.mode === "grid" ? panelData.compact?.strip : undefined
+					const panelLabelColor = isCompactPanelLabel
+						? compactStripKind === "cols"
+							? facetTitleColorOf(labels, panelFV.rowValue)
+							: compactStripKind === "rows"
+								? facetTitleColorOf(labels, panelFV.colValue)
+								: (facetTitleColorOf(labels, panelFV.rowValue) ??
+									facetTitleColorOf(labels, panelFV.colValue))
+						: facetTitleColorOf(labels, p.key)
+					return (
+						<g
+							key={p.key}
+							data-panel={p.key}
+							data-panel-key={p.key}
+							data-x-scale-rows={xScaleRowCount}
+							data-y-scale-rows={yScaleRowCount}
+						>
+							<AnnotationRects
+								rectangles={panelRectangles}
+								circles={panelCircles}
+								lineSegments={panelLineSegments}
+								texts={panelTexts}
+								inner={p.inner}
+								layer="behind"
+								xScaleRows={annoXScaleRows}
+								yScaleRows={annoYScaleRows}
+								axisFields={axisFields}
+								xDomainOverride={annoXDomainOverride}
+								yDomainOverride={annoYDomainOverride}
+								levelOrders={levelOrders}
+								isRadar={isRadar}
+								radiusScale={radiusScale}
+								multiPanel={spec.panels.length > 1}
+							/>
+							{/* The Renderer reads from Jotai for everything else;
+							    inner + rowsOverride steer the per-panel render.
+							    Typed dispatch: Renderer is ComponentType<
+							    UniversalRendererProps>, so this call is checked
+							    against every registered renderer's contract. The
+							    panel key is provided by context so layers nested in
+							    any renderer (Data Labels' "Label all facets" scope)
+							    know which facet they draw in. */}
+							<FacetPanelContext.Provider value={p.key}>
+								<Renderer {...rendererProps} />
+							</FacetPanelContext.Provider>
+							<AnnotationRects
+								rectangles={panelRectangles}
+								circles={panelCircles}
+								lineSegments={panelLineSegments}
+								texts={panelTexts}
+								inner={p.inner}
+								layer="front"
+								xScaleRows={annoXScaleRows}
+								yScaleRows={annoYScaleRows}
+								axisFields={axisFields}
+								xDomainOverride={annoXDomainOverride}
+								yDomainOverride={annoYDomainOverride}
+								levelOrders={levelOrders}
+								isRadar={isRadar}
+								radiusScale={radiusScale}
+								multiPanel={spec.panels.length > 1}
+							/>
+							{/* Drawn AFTER the marks so a facet label nudged over the
+							    panel (Labels panel offset) paints on top of them. */}
+							{p.facetLabel && (
+								<g data-facet-label>
+									<SharedText
+										rect={
+											panelLabelOffset.x || panelLabelOffset.y
+												? {
+														...p.facetLabel,
+														x: p.facetLabel.x + panelLabelOffset.x,
+														y: p.facetLabel.y + panelLabelOffset.y,
+													}
+												: p.facetLabel
+										}
+										text={facetLabelText}
+										fontFamily={panelLabelFont.family}
+										fontSize={panelLabelFont.size}
+										fontWeight={500}
+										fill={panelLabelColor ?? panelLabelFont.color}
+										weight={panelLabelFont.weight}
+										italic={panelLabelFont.italic}
+										underline={panelLabelFont.underline}
+										angleDeg={panelLabelAngle}
+									/>
+								</g>
+							)}
+						</g>
+					)
+				})}
+				{/* Shared axis titles and facet header strips — drawn AFTER the
+				    panels so a title nudged into the plot area paints on top of
+				    the marks instead of behind opaque fills. SVG paints in
+				    document order. */}
+				{spec.xTitle && (
+					<SharedText
+						rect={spec.xTitle}
+						text={sharedXAxisTitle}
+						fontFamily={xAxisTitleFont.family}
+						fontSize={xAxisTitleFont.size}
+						fontWeight={500}
+						fill={xAxisTitleFont.color}
+						weight={xAxisTitleFont.weight}
+						italic={xAxisTitleFont.italic}
+						underline={xAxisTitleFont.underline}
+					/>
+				)}
+				{spec.yTitle && (
+					<SharedText
+						rect={spec.yTitle}
+						text={sharedYAxisTitle}
+						fontFamily={yAxisTitleFont.family}
+						fontSize={yAxisTitleFont.size}
+						fontWeight={500}
+						fill={yAxisTitleFont.color}
+						weight={yAxisTitleFont.weight}
+						italic={yAxisTitleFont.italic}
+						underline={yAxisTitleFont.underline}
+					/>
+				)}
+				{/* Grid-mode column / row header strips. Empty in wrap and
+				    single modes (solver returns empty arrays). The corner
+				    intersection between strips is intentionally blank — strips
+				    don't span it. */}
+				{spec.columnHeaders.map((h) => {
+					// "Color by facet": a per-value color wins over the strip's font
+					// color. Header text IS the facet value, so it doubles as the key.
+					const colHdrFill =
+						facetTitleColorOf(labels, h.text) ?? facetColTitleFont.color
+					return (
+						<text
+							key={`colhdr-${h.text}`}
+							data-column-header
+							pointerEvents="none"
+							x={h.x}
+							y={h.y}
+							textAnchor={h.textAnchor}
+							transform={
+								facetColTitleAngle
+									? `rotate(${facetColTitleAngle}, ${h.x}, ${h.y})`
+									: undefined
+							}
+							fontFamily={facetColTitleFont.family}
+							fontSize={facetColTitleFont.size}
+							fontWeight={facetColTitleFont.weight ?? 500}
+							fontStyle={facetColTitleFont.italic ? "italic" : undefined}
+							textDecoration={facetColTitleFont.underline ? "underline" : undefined}
+							fill={colHdrFill}
+							dominantBaseline="middle"
+							className={colHdrFill ? undefined : TITLE_FILL_FALLBACK}
+						>
+							{h.text}
+						</text>
+					)
+				})}
+				{spec.rowHeaders.map((h) => {
+					const rowHdrFill =
+						facetTitleColorOf(labels, h.text) ?? facetRowTitleFont.color
+					return (
+						<text
+							key={`rowhdr-${h.text}`}
+							data-row-header
+							pointerEvents="none"
+							x={h.x}
+							y={h.y}
+							textAnchor={h.textAnchor}
+							transform={
+								facetRowTitleAngle
+									? `rotate(${facetRowTitleAngle}, ${h.x}, ${h.y})`
+									: undefined
+							}
+							fontFamily={facetRowTitleFont.family}
+							fontSize={facetRowTitleFont.size}
+							fontWeight={facetRowTitleFont.weight ?? 500}
+							fontStyle={facetRowTitleFont.italic ? "italic" : undefined}
+							textDecoration={facetRowTitleFont.underline ? "underline" : undefined}
+							fill={rowHdrFill}
+							dominantBaseline={
+								h.verticalAnchor === "top"
+									? "hanging"
+									: h.verticalAnchor === "bottom"
+										? "auto"
+										: "middle"
+							}
+							className={rowHdrFill ? undefined : TITLE_FILL_FALLBACK}
+						>
+							{h.text}
+						</text>
+					)
+				})}
+				{captionLayout && (
+					<CaptionOverlay caption={caption} layout={captionLayout} />
+				)}
+			</g>
+			{/* The chart title and subtitle sit OUTSIDE the canvas clip, so
+			    they may run past the SVG's edge into the room `titleOverhang`
+			    measured — and still paint above everything else. */}
 			{spec.title && (
 				<SharedText
 					rect={spec.title}
@@ -856,360 +1283,6 @@ export const PlotCanvas = () => {
 					underline={subtitleFont.underline}
 				/>
 			)}
-			{spec.xTitle && (
-				<SharedText
-					rect={spec.xTitle}
-					text={sharedXAxisTitle}
-					fontFamily={xAxisTitleFont.family}
-					fontSize={xAxisTitleFont.size}
-					fontWeight={500}
-					fill={xAxisTitleFont.color}
-					weight={xAxisTitleFont.weight}
-					italic={xAxisTitleFont.italic}
-					underline={xAxisTitleFont.underline}
-				/>
-			)}
-			{spec.yTitle && (
-				<SharedText
-					rect={spec.yTitle}
-					text={sharedYAxisTitle}
-					fontFamily={yAxisTitleFont.family}
-					fontSize={yAxisTitleFont.size}
-					fontWeight={500}
-					fill={yAxisTitleFont.color}
-					weight={yAxisTitleFont.weight}
-					italic={yAxisTitleFont.italic}
-					underline={yAxisTitleFont.underline}
-				/>
-			)}
-			{/* Grid-mode column / row header strips. Empty in wrap and
-			    single modes (solver returns empty arrays). The corner
-			    intersection between strips is intentionally blank — strips
-			    don't span it. */}
-			{spec.columnHeaders.map((h) => {
-				// "Color by facet": a per-value color wins over the strip's font
-				// color. Header text IS the facet value, so it doubles as the key.
-				const colHdrFill =
-					facetTitleColorOf(labels, h.text) ?? facetColTitleFont.color
-				return (
-					<text
-						key={`colhdr-${h.text}`}
-						data-column-header
-						x={h.x}
-						y={h.y}
-						textAnchor={h.textAnchor}
-						transform={
-							facetColTitleAngle
-								? `rotate(${facetColTitleAngle}, ${h.x}, ${h.y})`
-								: undefined
-						}
-						fontFamily={facetColTitleFont.family}
-						fontSize={facetColTitleFont.size}
-						fontWeight={facetColTitleFont.weight ?? 500}
-						fontStyle={facetColTitleFont.italic ? "italic" : undefined}
-						textDecoration={facetColTitleFont.underline ? "underline" : undefined}
-						fill={colHdrFill}
-						dominantBaseline="middle"
-						className={colHdrFill ? undefined : TITLE_FILL_FALLBACK}
-					>
-						{h.text}
-					</text>
-				)
-			})}
-			{spec.rowHeaders.map((h) => {
-				const rowHdrFill =
-					facetTitleColorOf(labels, h.text) ?? facetRowTitleFont.color
-				return (
-					<text
-						key={`rowhdr-${h.text}`}
-						data-row-header
-						x={h.x}
-						y={h.y}
-						textAnchor={h.textAnchor}
-						transform={
-							facetRowTitleAngle
-								? `rotate(${facetRowTitleAngle}, ${h.x}, ${h.y})`
-								: undefined
-						}
-						fontFamily={facetRowTitleFont.family}
-						fontSize={facetRowTitleFont.size}
-						fontWeight={facetRowTitleFont.weight ?? 500}
-						fontStyle={facetRowTitleFont.italic ? "italic" : undefined}
-						textDecoration={facetRowTitleFont.underline ? "underline" : undefined}
-						fill={rowHdrFill}
-						dominantBaseline={
-							h.verticalAnchor === "top"
-								? "hanging"
-								: h.verticalAnchor === "bottom"
-									? "auto"
-									: "middle"
-						}
-						className={rowHdrFill ? undefined : TITLE_FILL_FALLBACK}
-					>
-						{h.text}
-					</text>
-				)
-			})}
-			{/* Per-panel marks + per-panel facet label */}
-			{spec.panels.map((p) => {
-				const rows = panelData.rowsByValue.get(p.key) ?? []
-				// Per-panel render inputs: share-aware scale-row sources, numeric
-				// domain overrides (incl. the measure-axis translation), and the
-				// polar R overrides + radius scale — see resolvePanelRenderInputs.
-				const {
-					panelFV,
-					xScaleRows,
-					yScaleRows,
-					xMinOverride,
-					xMaxOverride,
-					yMinOverride,
-					yMaxOverride,
-					measureMinOverride,
-					measureMaxOverride,
-					measurePinnedBounds,
-					rMinOverride,
-					rMaxOverride,
-					radiusScale,
-				} = resolvePanelRenderInputs({
-					p,
-					panelData,
-					isPolar,
-					shareXMode,
-					shareYMode,
-					allDatasetRows,
-					colRowsByColKey,
-					rowRowsByRowKey,
-					measureAxis,
-					axisFields,
-					channelConfigs,
-					facetCfg,
-					groupMeasureMaxByKey,
-					groupMeasureMinByKey,
-					panelRadiusScale,
-					mirrorActive,
-				})
-
-				const rendererProps: UniversalRendererProps = {
-					rowsOverride: rows,
-					inner: rectToInner(p.inner),
-					showXAxis: p.showXTicks,
-					showYAxis: p.showYTicks,
-					showXAxisTitle: false,
-					showYAxisTitle: false,
-					titleOverride: null,
-					subtitleOverride: null,
-					// In the new model, `inner` already accounts for margin
-					// estimates (the solver folded them in). Renderers using
-					// the inner-prop branch ignore extraMarginFloor, but we
-					// pass them anyway for defensive compatibility.
-					extraMarginFloorLeft: 0,
-					extraMarginFloorBottom: 0,
-					// Categorical ticks use d3's natural `padding(0.5)` (half-step
-					// insets: two categories at the quarter points, a lone
-					// category centered) — NOT the fixed-pixel edge pinning
-					// (`firstTickPxOffset`) faceted charts briefly used. The
-					// pinning squished the first tick against the axis spine and
-					// left one-category panels uncentered (user-reported July
-					// 2026), and the alignment it bought is already guaranteed:
-					// panels sharing an axis have identical domains AND identical
-					// panel widths (the solver keeps column widths / row heights
-					// uniform), so half-step positions align across the share
-					// group by construction.
-					// Per-axis scale-source overrides for renderers that
-					// support them (ScatterPlot, TilePlot). Combined
-					// override (`scalesRowsOverride`) is set only when BOTH
-					// axes use the same source (currently only when both
-					// are "all") so renderers without per-axis support
-					// (BarPlot, AreaPlot) pick it up. Under "perGroup", x
-					// and y sources differ per panel position so the
-					// combined override is intentionally left undefined.
-					scalesRowsOverrideX: xScaleRows,
-					scalesRowsOverrideY: yScaleRows,
-					scalesRowsOverride:
-						xScaleRows && yScaleRows && xScaleRows === yScaleRows
-							? xScaleRows
-							: undefined,
-					// Per-axis numeric domain overrides. Scatter consumes
-					// xMin/xMax/yMin/yMax directly; Bar/Area consume the
-					// translated measureMin/measureMax. Pie/Tile ignore
-					// both. Undefined → renderer auto-computes from data.
-					xMinOverride,
-					xMaxOverride,
-					yMinOverride,
-					yMaxOverride,
-					measureMinOverride,
-					measureMaxOverride,
-					measurePinnedBounds,
-					// Histogram measure-color global domain max (undefined
-					// unless a Count/Density color/opacity source is active).
-					measureColorMaxOverride,
-					// Polar-only: R-axis bounds + "size panels by unit"
-					// scaling. RadarPlot/PiePlot ignore these for non-
-					// polar inputs; cartesian renderers ignore them
-					// (they only read the cartesian min/max). Undefined
-					// preserves the renderer's auto behavior.
-					rMinOverride,
-					rMaxOverride,
-					radiusScale,
-				}
-				// Test-observable: row count actually fed to the
-				// scale-source for each axis. Falls back to the panel's
-				// own row count when no override applies (== "none" mode)
-				// so the attribute is always a usable number for
-				// assertions across all three modes.
-				const xScaleRowCount = (xScaleRows ?? rows).length
-				const yScaleRowCount = (yScaleRows ?? rows).length
-				// Value-mode annotations must build their position scale from the
-				// SAME inputs the renderer uses for this panel — share-aware row
-				// source, per-axis domain override, and facet tick-offset — so a
-				// data-unit rectangle tracks the marks instead of being derived
-				// from the panel's own (possibly narrower) extent. Mirror the
-				// renderer's measure-axis translation: bars-y/areas-y put the
-				// measure on the X pixel-axis; bars-x/areas-x put it on Y.
-				const annoXScaleRows = xScaleRows ?? rows
-				const annoYScaleRows = yScaleRows ?? rows
-				const annoXDomainOverride =
-					measureAxis === "x"
-						? { min: measureMinOverride, max: measureMaxOverride }
-						: { min: xMinOverride, max: xMaxOverride }
-				const annoYDomainOverride =
-					measureAxis === "y"
-						? { min: measureMinOverride, max: measureMaxOverride }
-						: { min: yMinOverride, max: yMaxOverride }
-				// Scope annotations to this panel — those whose `facetKeys`
-				// exclude this facet are dropped before either layer renders.
-				const panelRectangles = annotations.rectangles.filter((r) =>
-					annotationOnPanel(r, p.key),
-				)
-				const panelCircles = (annotations.circles ?? []).filter((c) =>
-					annotationOnPanel(c, p.key),
-				)
-				const panelLineSegments = (annotations.lineSegments ?? []).filter(
-					(l) => annotationOnPanel(l, p.key),
-				)
-				const panelTexts = (annotations.texts ?? []).filter((t) =>
-					annotationOnPanel(t, p.key),
-				)
-				// Per-panel title text. Compacted grid panels carry their
-				// compact label (row value / col value / "row · col"
-				// depending on which strip survived); wrap mode keeps the
-				// raw panel key as before.
-				const facetLabelText =
-					panelData.mode === "grid"
-						? panelData.compact?.panels[p.key]?.label ?? p.key
-						: p.key
-				// Compact-grid panel titles are styled by the `facetPanelTitle`
-				// slot; wrap-mode panel titles keep the shared `facetTitle`.
-				const isCompactPanelLabel =
-					panelData.mode === "grid" && panelData.compact !== undefined
-				const panelLabelFont = isCompactPanelLabel
-					? facetPanelTitleFont
-					: facetTitleFont
-				const panelLabelOffset = isCompactPanelLabel
-					? facetPanelTitleOffset
-					: facetTitleOffset
-				const panelLabelAngle = isCompactPanelLabel
-					? facetPanelTitleAngle
-					: facetTitleAngle
-				// "Color by facet": per-value title colors keyed by the facet
-				// VALUE. Wrap panels key by the panel key (the facet value);
-				// compact-grid panel labels key by the value their label actually
-				// shows — the row value under a surviving column strip, the col
-				// value under a surviving row strip, either for the wrap-fallback
-				// "row · col" label (row wins when both have a color).
-				const compactStripKind =
-					panelData.mode === "grid" ? panelData.compact?.strip : undefined
-				const panelLabelColor = isCompactPanelLabel
-					? compactStripKind === "cols"
-						? facetTitleColorOf(labels, panelFV.rowValue)
-						: compactStripKind === "rows"
-							? facetTitleColorOf(labels, panelFV.colValue)
-							: (facetTitleColorOf(labels, panelFV.rowValue) ??
-								facetTitleColorOf(labels, panelFV.colValue))
-					: facetTitleColorOf(labels, p.key)
-				return (
-					<g
-						key={p.key}
-						data-panel={p.key}
-						data-panel-key={p.key}
-						data-x-scale-rows={xScaleRowCount}
-						data-y-scale-rows={yScaleRowCount}
-					>
-						{p.facetLabel && (
-							<g data-facet-label>
-								<SharedText
-									rect={
-										panelLabelOffset.x || panelLabelOffset.y
-											? {
-													...p.facetLabel,
-													x: p.facetLabel.x + panelLabelOffset.x,
-													y: p.facetLabel.y + panelLabelOffset.y,
-												}
-											: p.facetLabel
-									}
-									text={facetLabelText}
-									fontFamily={panelLabelFont.family}
-									fontSize={panelLabelFont.size}
-									fontWeight={500}
-									fill={panelLabelColor ?? panelLabelFont.color}
-									weight={panelLabelFont.weight}
-									italic={panelLabelFont.italic}
-									underline={panelLabelFont.underline}
-									angleDeg={panelLabelAngle}
-								/>
-							</g>
-						)}
-						<AnnotationRects
-							rectangles={panelRectangles}
-							circles={panelCircles}
-							lineSegments={panelLineSegments}
-							texts={panelTexts}
-							inner={p.inner}
-							layer="behind"
-							xScaleRows={annoXScaleRows}
-							yScaleRows={annoYScaleRows}
-							axisFields={axisFields}
-							xDomainOverride={annoXDomainOverride}
-							yDomainOverride={annoYDomainOverride}
-							levelOrders={levelOrders}
-							isRadar={isRadar}
-							radiusScale={radiusScale}
-							multiPanel={spec.panels.length > 1}
-						/>
-						{/* The Renderer reads from Jotai for everything else;
-						    inner + rowsOverride steer the per-panel render.
-						    Typed dispatch: Renderer is ComponentType<
-						    UniversalRendererProps>, so this call is checked
-						    against every registered renderer's contract. The
-						    panel key is provided by context so layers nested in
-						    any renderer (Data Labels' "Label all facets" scope)
-						    know which facet they draw in. */}
-						<FacetPanelContext.Provider value={p.key}>
-							<Renderer {...rendererProps} />
-						</FacetPanelContext.Provider>
-						<AnnotationRects
-							rectangles={panelRectangles}
-							circles={panelCircles}
-							lineSegments={panelLineSegments}
-							texts={panelTexts}
-							inner={p.inner}
-							layer="front"
-							xScaleRows={annoXScaleRows}
-							yScaleRows={annoYScaleRows}
-							axisFields={axisFields}
-							xDomainOverride={annoXDomainOverride}
-							yDomainOverride={annoYDomainOverride}
-							levelOrders={levelOrders}
-							isRadar={isRadar}
-							radiusScale={radiusScale}
-							multiPanel={spec.panels.length > 1}
-						/>
-					</g>
-				)
-			})}
-			{captionLayout && (
-				<CaptionOverlay caption={caption} layout={captionLayout} />
-			)}
 		</svg>
 	)
 
@@ -1219,13 +1292,21 @@ export const PlotCanvas = () => {
 	// scrolls into view instead of bleeding out of the chart area.
 	const captionOverflows =
 		svgWidth > spec.canvas.width || svgHeight > spec.canvas.height
+	// The box is the CONTAINER, not the solved viewport: after the scrollbar-
+	// gutter re-solve the viewport is a gutter narrower than the container,
+	// and the bar belongs at the container's edge with the SVG beside it.
+	// Each axis scrolls only when the SVG really overflows it, so a canvas
+	// that is merely tall never shows a horizontal bar for the gutter.
+	const boxWidth = bounds.width || spec.scroll?.width || svgWidth
+	const boxHeight = bounds.height || spec.scroll?.height || svgHeight
 	const wrapped =
 		spec.scroll || captionOverflows ? (
 			<div
 				style={{
-					width: spec.scroll?.width ?? (bounds.width || svgWidth),
-					height: spec.scroll?.height ?? (bounds.height || svgHeight),
-					overflow: "auto",
+					width: boxWidth,
+					height: boxHeight,
+					overflowX: svgWidth > boxWidth ? "auto" : "hidden",
+					overflowY: svgHeight > boxHeight ? "auto" : "hidden",
 				}}
 			>
 				{svg}

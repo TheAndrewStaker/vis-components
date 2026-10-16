@@ -229,6 +229,29 @@ describe("FacetAxisOptionsPanel — both axes on both panels", () => {
 		fireEvent.keyDown(input, { key: "ArrowUp" })
 		expect(input.value).toBe("201")
 	})
+
+	it("panel height shows a reset link only while set; clicking it returns to auto", () => {
+		const utils = mount(
+			scatterEncodings(),
+			facetConfigs(),
+			<FacetRowOptionsPanel />,
+		)
+		expand(utils, /custom sizing/i)
+		// Auto (null) → no reset link to click.
+		expect(utils.queryByLabelText("Reset panel height")).toBeNull()
+
+		const input = utils.getByLabelText(/Panel height/) as HTMLInputElement
+		fireEvent.change(input, { target: { value: "300" } })
+		expect(input.value).toBe("300")
+		const reset = utils.getByLabelText("Reset panel height")
+		expect(reset).toBeTruthy()
+
+		// Reset commits null (= auto): the field empties, the placeholder shows
+		// through again, and the link disappears.
+		fireEvent.click(reset)
+		expect(input.value).toBe("")
+		expect(utils.queryByLabelText("Reset panel height")).toBeNull()
+	})
 })
 
 describe("FacetAxisOptionsPanel — preserved asymmetries", () => {

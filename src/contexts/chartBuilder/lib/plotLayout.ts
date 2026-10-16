@@ -1,3 +1,5 @@
+import { lineCount } from "./multilineText"
+
 export const BASE_MARGIN = { top: 16, right: 24, bottom: 64, left: 76 } as const
 /** Compact per-cell chrome for polar panels (radar / pie). Polar charts
  *  don't draw cartesian axes — the angle ticks and r-axis ticks sit
@@ -22,6 +24,27 @@ export const titleReserve = (titleFontPx: number): number =>
 	Math.max(TITLE_RESERVE, Math.ceil(titleFontPx * 1.4 + 8))
 export const subtitleReserve = (subtitleFontPx: number): number =>
 	Math.max(SUBTITLE_RESERVE, Math.ceil(subtitleFontPx * 1.4 + 2))
+
+/** Line-to-line step of a multi-line title: `renderMultilineTspans` drops
+ *  each line by dy="1.2em". */
+export const TITLE_LINE_STEP_EM = 1.2
+
+/** Height (px) the extra lines of a multi-line title add to its band — one
+ *  line step per line past the first, 0 for a single line. Multi-line
+ *  titles grow UP: the band grows by this much, the bottom line stays where
+ *  the single line would be relative to what sits below, and the earlier
+ *  lines stack into the added room above it (LAYOUT.md §7). */
+export const extraLinesPx = (text: string, fontPx: number): number =>
+	TITLE_LINE_STEP_EM * fontPx * Math.max(0, lineCount(text) - 1)
+
+/** Full band for the chart title / subtitle: the single-line reserve plus
+ *  room for every extra line. The solver reserves these at the canvas top
+ *  and `legendSections` mirrors them to align an outside legend with the
+ *  plot's top edge, so both read the same helper. */
+export const titleBand = (text: string, titleFontPx: number): number =>
+	titleReserve(titleFontPx) + extraLinesPx(text, titleFontPx)
+export const subtitleBand = (text: string, subtitleFontPx: number): number =>
+	subtitleReserve(subtitleFontPx) + extraLinesPx(text, subtitleFontPx)
 
 /** Sensible default plot rect for renderers used in isolation (e.g.,
  *  unit tests that mount BarPlot / ScatterPlot directly without going

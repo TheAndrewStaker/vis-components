@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { exprToSource, parseExpression } from "./derivedExpression"
 import {
+	comparisonText,
 	joinComparison,
+	levelLabel,
+	levelSource,
 	makeLevelLookup,
 	operandSource,
 	splitComparison,
@@ -120,6 +123,12 @@ describe("joinComparison / splitComparison", () => {
 	it("keeps quotes on a string that would otherwise read as something else", () => {
 		expect(splitComparison(`{A} == "5"`)?.right).toBe(`"5"`)
 		expect(splitComparison(`{A} == "{B}"`)?.right).toBe(`"{B}"`)
+		// The blank literal too — bare, it would read as an empty box.
+		expect(splitComparison(`{A} == ""`)?.right).toBe(`""`)
+		expect(joinComparison({ left: "{A}", op: "!=", right: `""` })).toEqual({
+			ok: true,
+			condition: `{A} != ""`,
+		})
 	})
 
 	it("round-trips through the editor's boxes", () => {
@@ -128,6 +137,7 @@ describe("joinComparison / splitComparison", () => {
 			"{Sales} > 100",
 			"(({A} - {B}) * 100) <= -3",
 			`{Name} != "O'Brien"`,
+			`{Region} == ""`,
 		]) {
 			const parts = splitComparison(condition)
 			expect(parts).not.toBeNull()
@@ -141,6 +151,19 @@ describe("joinComparison / splitComparison", () => {
 	})
 })
 
+describe("comparisonText", () => {
+	it("composes what the boxes hold; a blank side is left out, an unreadable one kept as typed", () => {
+		expect(comparisonText({ left: "{A}", op: "==", right: "West" })).toBe(
+			'{A} == "West"'
+		)
+		expect(comparisonText({ left: "{A}", op: ">", right: "" })).toBe("{A} >")
+		expect(comparisonText({ left: "{A} /", op: "==", right: "1" })).toBe(
+			"{A} / == 1"
+		)
+		expect(comparisonText({ left: "", op: "==", right: "" })).toBe("")
+	})
+})
+
 describe("makeLevelLookup", () => {
 	const rows = [
 		{ region: " West ", sales: "1" },
@@ -150,8 +173,19 @@ describe("makeLevelLookup", () => {
 	]
 	const typeOf = (f: string) => (f === "region" ? "categorical" : "quantitative")
 
-	it("lists trimmed distinct levels in discovery order, blanks skipped", () => {
-		expect(makeLevelLookup(rows, typeOf)("region")).toEqual(["West", "East"])
+	it("lists trimmed distinct levels in discovery order, blank included", () => {
+		expect(makeLevelLookup(rows, typeOf)("region")).toEqual(["West", "East", ""])
+		expect(makeLevelLookup(rows.slice(0, 2), typeOf)("region")).toEqual([
+			"West",
+			"East",
+		])
+	})
+
+	it("spells the blank level as the empty text literal, labelled (blank)", () => {
+		expect(levelSource("")).toBe(`""`)
+		expect(levelLabel("")).toBe("(blank)")
+		expect(levelSource("West")).toBe("West")
+		expect(levelLabel("West")).toBe("West")
 	})
 
 	it("offers nothing for a numeric column or past the cap", () => {

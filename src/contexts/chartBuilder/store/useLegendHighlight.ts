@@ -55,6 +55,9 @@ export type LegendHighlight = {
 	field: string
 	/** Stringified category value of the hovered entry. */
 	value: string
+	/** Key of the hovered NODE when the hover came from a mark of a nested
+	 * chart (see `hoveredLegendEntryAtom`); undefined for a legend hover. */
+	node?: string
 	/** Resolve how a mark carrying `value` for the hovered field should render
 	 * (opacity / recolor / outline), per the user's Hover appearance options. */
 	resolve: (value: unknown) => MarkHighlight
@@ -82,6 +85,7 @@ export const useLegendHighlight = (): LegendHighlight | null => {
 	return {
 		field: hovered.field,
 		value: hovered.value,
+		node: hovered.node,
 		resolve: (value: unknown): MarkHighlight => {
 			const matched = String(value) === hovered.value
 			if (matched) {
@@ -109,12 +113,14 @@ export const useLegendHighlight = (): LegendHighlight | null => {
  * legend entry (recolor / outline / fade all reuse the same atom + resolver).
  * `field` is the categorical field the marks are keyed on (typically the hue
  * field); pass `null` when no such field is mapped, and the handlers no-op.
- * Active only when "Show hover" is on and at least one appearance option
- * (recolor / outline / fade) is enabled, so plain tooltip hovering doesn't
- * recolor anything. */
+ * Nested charts also pass the hovered node's key as `node`, which narrows
+ * the emphasis from the series to that node (the legend still lights the
+ * series entry). Active only when "Show hover" is on and at least one
+ * appearance option (recolor / outline / fade) is enabled, so plain tooltip
+ * hovering doesn't recolor anything. */
 export const useMarkHoverHighlight = (
 	field: string | null | undefined
-): { enter: (value: unknown) => void; leave: () => void } => {
+): { enter: (value: unknown, node?: string) => void; leave: () => void } => {
 	const setHovered = useSetAtom(hoveredLegendEntryAtom)
 	const cfg = { ...DEFAULT_TOOLTIP_CONFIG, ...useAtomValue(currentTooltipConfigAtom) }
 	const active =
@@ -124,16 +130,22 @@ export const useMarkHoverHighlight = (
 			(cfg.hoverOutline ?? false) ||
 			(cfg.hoverFade ?? true))
 	return {
-		enter: (value: unknown) => {
+		enter: (value: unknown, node?: string) => {
 			if (active && value !== undefined && value !== null) {
-				const next = { field: field as string, value: String(value) }
+				const next =
+					node === undefined
+						? { field: field as string, value: String(value) }
+						: { field: field as string, value: String(value), node }
 				// Idempotent: re-publishing the entry that's already hovered
 				// returns the SAME object, so jotai skips the write and the
 				// whole chart doesn't re-render. Matters because hover handlers
 				// fire per mark (moving along one series) and, for lines, on
 				// every pointer move within the same line.
 				setHovered((prev) =>
-					prev && prev.field === next.field && prev.value === next.value
+					prev &&
+					prev.field === next.field &&
+					prev.value === next.value &&
+					prev.node === next.node
 						? prev
 						: next
 				)

@@ -30,7 +30,10 @@ coordinates.
 Canvas
 ├─ Outer reserves (around the whole grid)
 │  ├─ top:    chartTitle + subtitle + topGrow + extraTopMargin
-│  │            (topGrow = max(titleAwayGrow, subtitleAwayGrow) =
+│  │            (chartTitle / subtitle = titleBand / subtitleBand: the
+│  │             font-derived single-line reserve + 1.2em per extra line
+│  │             of a multi-line title — titles grow UP, see §7;
+│  │             topGrow = max(titleAwayGrow, subtitleAwayGrow) =
 │  │             max(0, -chartTitle.offsetY) / -subtitle.offsetY;
 │  │             extraTopMargin = annotation spill above the canvas)
 │  ├─ bottom: bottomGrow + extraBottomMargin
@@ -53,7 +56,7 @@ Canvas
 │  annotation inside the canvas: PlotCanvas solves once, lays every
 │  unclipped annotation out against the solved panels (the SAME
 │  `layoutPanelAnnotations` the renderer draws from, stroke half-width
-│  included, + ANNOTATION_RESERVE_PAD_PX), measures how far the outermost
+│  and a line's arrowhead included, + ANNOTATION_RESERVE_PAD_PX), measures how far the outermost
 │  edge spills past each canvas edge, and re-solves with that spill added
 │  to the four extra margins. A percent coordinate is a FRACTION of the
 │  plot the reserve shrinks (x = 130% sits 30% of the plot past its edge),
@@ -94,7 +97,9 @@ Canvas
 │       OR 1 under !proportionalSizing — shareX does NOT collapse rows)
 │
 └─ Per-cell chrome (subtracted from each cell to get inner plot rect)
-   ├─ top:    facetLabelBand (FACET_LABEL_HEIGHT_PX = 20) + BASE_MARGIN.top (16)
+   ├─ top:    facetLabelBand (FACET_LABEL_HEIGHT_PX = 20, + 1.2em per extra
+   │            line of the tallest multi-line panel label — §7)
+   │          + BASE_MARGIN.top (16)
    ├─ bottom: BASE_MARGIN.bottom (64) + bottomFloor
    │            For interior rows under shareX: SHARED_INTERIOR_AXIS_RESERVE (4)
    ├─ left:   BASE_MARGIN.left (76) + leftFloor
@@ -351,12 +356,13 @@ Practical consequences:
 ## 7. Title positioning
 
 ```
-chartTitle.y = TITLE_RESERVE × 0.7 + offsetY + titleAwayGrow
-                                              ^^^^^^^^^^^^^
-                                              cancels negative offsetY,
-                                              keeps title in view
+chartTitle.y = titleReserve × 0.7 + titleLinesGrow + offsetY + titleAwayGrow
+                                                              ^^^^^^^^^^^^^
+                                                              cancels negative offsetY,
+                                                              keeps title in view
 
-subtitle.y   = TITLE_RESERVE + SUBTITLE_RESERVE × 0.75 + offsetY + subtitleAwayGrow
+subtitle.y   = titleBand + subtitleReserve × 0.75 + subtitleLinesGrow
+               + offsetY + subtitleAwayGrow
 
 xTitle.y     = plotBottom + xTitleGap + min(0, offsetY)
                                         ^^^^^^^^^^^^^^^
@@ -367,6 +373,31 @@ yTitle.x     = plotLeft - yTitleGap + offsetX
                                       (negative offsetX → leftGrow + canvas adjust)
 ```
 
+**Multi-line titles grow up.** A chart title, subtitle or facet panel
+label with line breaks (Shift+Enter) reserves one line step
+(`TITLE_LINE_STEP_EM` = 1.2em) per extra line ON TOP of its single-line
+band (`titleBand` / `subtitleBand` in plotLayout.ts; the facet band
+grows for the tallest panel label via `FacetLabelInput.lines`, which
+`buildSolverInput` counts over every panel's label text). The rect's
+`y` is the BOTTOM line's baseline — the single line's natural spot
+pushed down by exactly that added room (`titleLinesGrow` /
+`subtitleLinesGrow`) — and the renderer stacks the earlier lines upward
+from it (`TextRect.growUp` → `renderMultilineTspans({ growUp })`, a px
+lift on the first tspan so a differently-sized prefix can't scale it).
+So the bottom line keeps the single line's distance to whatever sits
+below it (subtitle, plot, panel), every panel's label bottom-aligns in
+the shared band whatever its own line count, and the extra lines take
+their room from above: the plot shrinks in fit mode, the canvas grows
+in scroll mode. `clampBaselineY` receives the lift as `extraAbove` so
+the FIRST line is what stays inside the top buffer. The x / y axis
+titles keep the first-line convention (their bands already size by
+line count). `legendSections` mirrors the grown bands in its
+`plotTopOffset`, so an outside legend still lands on the plot's top
+edge under a two-line chart title — and a right / left legend whose
+own section title wraps lifts by the extra height
+(`measureLegendTitleGrowth` / `liftLegendBox`) so its entries and the
+title's bottom line stay put.
+
 The chart-title prefix ("FIGURE 5.") is NOT a solver concern: it renders
 as a styled `<tspan>` in the title's first text chunk (only the prefix
 tspan carries `x`/`dy`; the first title line's tspan has neither), so
@@ -374,6 +405,35 @@ the browser's `text-anchor` aligns prefix + title as one run at
 `chartTitle.x`. The band's height is unchanged — the prefix rides the
 first line — and `hasChartTitle` (text OR active prefix) is the single
 presence check the solver spec, `ChartCanvas` and the render gate share.
+
+**Chart titles stay in view horizontally.** The chart title and subtitle
+keep their aligned anchor (left / center / right of the plot span) as
+long as the text fits the FIGURE: the canvas plus `SolverInput.titleOverhang`,
+the room past the canvas's left / right edge that the column beside a
+left / right edge legend provides — blank above the plot's top edge,
+where the legend starts. `ChartCanvasBody` MEASURES that room (flex row
+width − chart area width, plus the chart area's own `CHART_PAD`; the
+legend's sizing rules never enter, so fixed widths and multi-column
+caps are covered) and hands it to PlotCanvas → `buildSolverInput`,
+which also canvas-measures each title's widest line
+(`measureTitleWidth`, the prefix run included) as
+`SharedTitleInput.textWidth`. `clampTitleAnchorX` then slides the anchor
+only as far as the text needs to keep `VIEWPORT_BUFFER_PX` from the
+figure's edges, so alignment is untouched whenever the text fits where
+it is; text wider than the whole figure keeps its anchor side in view
+(a left-aligned title still starts at the buffer, a right-aligned one
+still ends at it, a centered one centers on the figure). Unmeasured
+text (no canvas API — the unit tests) is never moved, and scroll mode
+ignores the overhang: its box clips at the container. The paint side:
+the plot SVG is `overflow="visible"` (an attribute, so the clone that
+`serializeEmbedCapture` nests in the exported figure keeps it),
+everything but these two texts is wrapped in a `<g clip-path>` to the
+SVG's own rect (`data-canvas-clip`) — the same clip the box used to
+apply, so maps, over-wide labels and the rest behave exactly as before
+— and the title / subtitle are drawn AFTER that group, so they may run
+past the SVG into the legend column and still paint on top. Top /
+bottom / inside legends and the split embed's chart part report no
+overhang; there the titles can only slide within the canvas.
 
 Where:
 
@@ -624,6 +684,23 @@ negative-gap math naturally REVERSES the panel-y order at extreme
 overlap (last data row ends up at top of stack); this is inherent to
 "cells shift cumulatively toward origin" semantics and is accepted
 as the visual cost of unbounded ridgeline support.
+
+**Row titles follow the ridge, not the rect** (Oct 2026, user-reported:
+the titles bunched at the top of the stack while the ridges sat
+lower). With overlapping rows, most of a row's plot rect is also the
+rect of the ridges behind and in front of it, so a title aligned to
+the full rect lands inside a neighbour's ridge. The only band that is
+one row's alone is the slice between the previous ridge's baseline and
+its own (`ridgeSlice` in the row-header placement — the baseline step,
+cell height + gap). Top / middle / bottom align the title's line box
+within that slice, and `verticalAnchor` follows the alignment so the
+text is flush with the slice edge: **bottom** sits ON the baseline (the
+classic ridgeline label), **top** hangs just under the ridge above,
+**middle** (default) floats in the row's own lane. The first row
+borrows the step below it so every row reads the same. Applies only
+when the plot rects really overlap (step shorter than the rect); at
+extreme overlap the rows reverse and the slice means nothing, so the
+full-rect placement stays. `offsetY` still nudges from there.
 ---
 
 ## 10b. Pixel-precise panel-size overrides
@@ -637,7 +714,17 @@ inputs in the Facet panel. When set:
   specified value, regardless of proportional weights or rows/cols.
 - The canvas grows to honor the override even in "Fit" mode. If the
   resulting canvas exceeds the container, the renderer wraps the SVG
-  in a scroll container.
+  in a scroll container. The floor is the grid the solver will really
+  lay out — each row's / column's own chrome via `cellMargins` (an
+  interior row under shareX carries the 4px spine reserve, not the
+  full x-axis band) placed with the SIGNED gap, measured from the grid
+  origin to the farthest cell edge (`gridFarEdge`). A ridgeline's
+  overlapped rows therefore pull the floor back instead of stacking as
+  if the gap were 0; spill above / left of the origin at extreme
+  overlap stays `ridgelineTopGrow`'s job (§10). The earlier
+  `rows × (override + full chrome)` estimate grew the canvas to about
+  twice a 4-row ridgeline — scrollbars plus a band of empty canvas
+  under the last ridge (user-reported Oct 2026).
 - Override wins over proportional sizing AND over equal-split.
 - Blank / `null` falls back to automatic distribution.
 - One exception: in the grid/share shapes where proportional sizing is
@@ -660,8 +747,17 @@ Flow:
    `innerHeights`) is `new Array(n).fill(override)` instead of the
    weight-based distribution.
 4. `estimateNaturalDims`: the override sets a floor for the natural
-   grid dimension, so `canvasW` / `canvasH` grow → scroll wrapper
-   appears when needed.
+   grid dimension (the laid-out grid's far edge, above), so `canvasW` /
+   `canvasH` grow → scroll wrapper appears when needed.
+5. Scrollbar gutter (PlotCanvas): a canvas that overflows on ONE axis
+   gets a scrollbar that, on a platform with classic scrollbars, takes
+   its width out of the other axis — so a canvas solved to the full
+   container width overflowed by exactly that width and grew a second,
+   useless bar. PlotCanvas measures the bar once
+   (`lib/scrollbarWidth.ts`; 0 for overlay scrollbars) and re-solves
+   with the gutter taken out of the non-scrolling axis. The wrapper is
+   sized to the container and scrolls each axis only when the SVG
+   really overflows it.
 
 Use cases:
 - Matching a print / export specification ("each panel must be exactly

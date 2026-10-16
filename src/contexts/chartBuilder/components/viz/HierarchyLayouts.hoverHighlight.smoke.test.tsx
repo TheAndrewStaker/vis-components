@@ -8,6 +8,7 @@ import { installInMemoryLocalStorage } from "../../../../testSupport/localStorag
 import { buildDataset as buildDatasetFixture } from "../../../../testSupport/fixtures"
 import { type ChannelConfigs } from "../../lib/channelConfig"
 import { DEFAULT_LABELS_CONFIG } from "../../lib/labelsConfig"
+import { hierarchyHighlightField } from "../../lib/packedMeasure"
 import { emptyEncodings, type Dataset } from "../../lib/types"
 import {
 	currentChannelConfigsAtom,
@@ -16,6 +17,7 @@ import {
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
 	currentLabelsAtom,
+	currentTooltipConfigAtom,
 	hoveredLegendEntryAtom,
 	loadedDatasetsAtom,
 	previewVersionIdAtom,
@@ -27,12 +29,15 @@ import { SunburstPlot } from "./SunburstPlot"
 import { TreemapPlot } from "./TreemapPlot"
 
 /** Hover highlight on the NESTED charts (packed circles / treemap /
- *  sunburst): hovering a mark highlights everything sharing its color and
- *  fades the rest, the same gesture the cartesian renderers have. These
- *  charts are usually colored by the DERIVED "Top-level group" source, which
- *  no dataset column carries — so the highlight keys on the node's own group
- *  rather than a row value, and a hover published for some unrelated field
- *  must leave the chart alone. */
+ *  sunburst). Two gestures, two scopes:
+ *  - hovering a MARK emphasizes that node alone and fades everything else —
+ *    the rest of its own group, and a container's own children. These
+ *    charts are usually colored by the DERIVED "Top-level group" source, and
+ *    a group is a contiguous region on screen, so highlighting the series
+ *    would paint over the very circle the pointer is on;
+ *  - hovering a LEGEND entry highlights the whole series, keyed on the
+ *    node's own group rather than a row value (no column carries it).
+ *  A hover published for some unrelated field must leave the chart alone. */
 
 const DATASET_ID = "ds-hier-hover"
 
@@ -66,8 +71,10 @@ const mount = (
 	opts: {
 		/** Color by a real column instead of the derived group source. */
 		hueField?: string
-		/** Pre-set hovered legend entry (for the unrelated-field guard). */
+		/** Pre-set hovered legend entry (legend-hover / unrelated-field cases). */
 		hovered?: { field: string; value: string }
+		/** Overrides for the Hover appearance options (outline / fade). */
+		hoverOptions?: Record<string, unknown>
 	} = {}
 ) => {
 	const store = installInMemoryLocalStorage()
@@ -105,6 +112,15 @@ const mount = (
 		snap.set(currentFieldOverridesAtom, {})
 		snap.set(currentFieldLevelOrdersAtom, {})
 		if (opts.hovered) snap.set(hoveredLegendEntryAtom, opts.hovered)
+		if (opts.hoverOptions)
+			snap.set(currentTooltipConfigAtom, {
+				enabled: true,
+				visibleFields: [],
+				customCss: "",
+				customHtml: "",
+				useCustomHtml: false,
+				...opts.hoverOptions,
+			})
 	}
 
 	const Plot =
@@ -135,26 +151,25 @@ const fillOpacity = (el: Element) => Number(el.getAttribute("fill-opacity"))
 
 /** Marks sharing a fill are one series — which is exactly what the derived
  *  group color encodes, so the fill is a usable series key in these tests. */
-const sameFillCount = (marks: Element[], mark: Element) =>
+const sameFill = (marks: Element[], mark: Element) =>
 	marks.filter((m) => m.getAttribute("fill") === mark.getAttribute("fill"))
-		.length
 
 afterEach(cleanup)
 
 describe.each<Layout>(["packed", "treemap", "sunburst"])(
-	"%s — hovering a mark highlights its group",
+	"%s — hovering a mark highlights that mark",
 	(layout) => {
-		it("fades every mark outside the hovered mark's group", async () => {
+		it("fades every other mark, the hovered mark's own group included", async () => {
 			const c = mount(layout)
 			const marks = marksOf(c, layout)
 			expect(marks.length).toBeGreaterThan(2)
-			// The LAST mark is always a leaf: packed circles paint container
-			// circles first and leave them non-interactive (pointer-events
-			// none), so a leaf is the hoverable mark there.
+			// The LAST mark is always a leaf: every layout emits its marks in
+			// breadth-first tree order, so the deepest leaf comes last.
 			const hoveredMark = marks[marks.length - 1]
-			const inGroup = sameFillCount(marks, hoveredMark)
-			// The fixture has 3 groups, so a group is a strict subset.
-			expect(inGroup).toBeLessThan(marks.length)
+			// Its group has company (in the treemap: a sibling leaf; elsewhere
+			// its painted ancestors too), so a series highlight would be
+			// distinguishable from a single-mark one.
+			expect(sameFill(marks, hoveredMark).length).toBeGreaterThan(1)
 			const before = marks.map(fillOpacity)
 
 			fireEvent.mouseEnter(hoveredMark)
@@ -162,18 +177,44 @@ describe.each<Layout>(["packed", "treemap", "sunburst"])(
 			await waitFor(() => {
 				const now = marksOf(c, layout).map(fillOpacity)
 				expect(now.filter((o, i) => o < before[i]).length).toBe(
-					marks.length - inGroup
+					marks.length - 1
 				)
 			})
-			// Faded marks drop by exactly the configured fade; the hovered
-			// group is untouched.
+			// Faded marks drop by exactly the configured fade; only the
+			// hovered mark is untouched.
 			const after = marksOf(c, layout)
 			after.forEach((m, i) => {
 				const expected =
-					m.getAttribute("fill") === hoveredMark.getAttribute("fill")
-						? before[i]
-						: before[i] * LEGEND_HIGHLIGHT_DIM
+					m === hoveredMark ? before[i] : before[i] * LEGEND_HIGHLIGHT_DIM
 				expect(fillOpacity(m)).toBeCloseTo(expected, 5)
+			})
+		})
+
+		it("outlines the hovered mark when 'Outline hovered elements' is on", async () => {
+			const c = mount(layout, {
+				hoverOptions: {
+					hoverOutline: true,
+					hoverOutlineColor: "#ff00ff",
+					hoverOutlineWidth: 3,
+					hoverFade: false,
+				},
+			})
+			const marks = marksOf(c, layout)
+			const hoveredMark = marks[marks.length - 1]
+			const strokesBefore = marks.map((m) => m.getAttribute("stroke"))
+			expect(strokesBefore[marks.length - 1]).not.toBe("#ff00ff")
+
+			fireEvent.mouseEnter(hoveredMark)
+
+			await waitFor(() => {
+				expect(hoveredMark.getAttribute("stroke")).toBe("#ff00ff")
+				expect(hoveredMark.getAttribute("stroke-width")).toBe("3")
+			})
+			// Every other mark keeps its own stroke — the emphasis is the
+			// hovered node's alone.
+			marksOf(c, layout).forEach((m, i) => {
+				if (m !== hoveredMark)
+					expect(m.getAttribute("stroke")).toBe(strokesBefore[i])
 			})
 		})
 
@@ -195,6 +236,30 @@ describe.each<Layout>(["packed", "treemap", "sunburst"])(
 			})
 		})
 
+		it("a legend hover still highlights the whole group", () => {
+			// The derived Color legend publishes the hierarchy sentinel field
+			// with the group name — no node key — so the series semantics
+			// apply: every mark in Melon (painted container, Watermelon, its
+			// two leaves) stays, everything else fades.
+			const plain = marksOf(mount(layout), layout).map(fillOpacity)
+			const c = mount(layout, {
+				hovered: { field: hierarchyHighlightField("rootGroup"), value: "Melon" },
+			})
+			const marks = marksOf(c, layout)
+			const lit = marks.filter((m, i) => fillOpacity(m) === plain[i])
+			expect(lit.length).toBeGreaterThan(1)
+			expect(lit.length).toBeLessThan(marks.length)
+			// The lit marks are exactly one series: they share a fill, and no
+			// faded mark has it.
+			const groupFill = lit[0].getAttribute("fill")
+			lit.forEach((m) => expect(m.getAttribute("fill")).toBe(groupFill))
+			marks.forEach((m, i) => {
+				if (lit.includes(m)) return
+				expect(m.getAttribute("fill")).not.toBe(groupFill)
+				expect(fillOpacity(m)).toBeCloseTo(plain[i] * LEGEND_HIGHLIGHT_DIM, 5)
+			})
+		})
+
 		it("ignores a hover published for an unrelated field", () => {
 			// `Parent` IS a column of these rows, but this chart is colored by
 			// the derived group source — a legend hover elsewhere on Parent
@@ -210,14 +275,53 @@ describe.each<Layout>(["packed", "treemap", "sunburst"])(
 	}
 )
 
+describe.each<Layout>(["packed", "sunburst"])(
+	"%s — hovering a container",
+	(layout) => {
+		it("highlights the container alone — its children fade with the rest", async () => {
+			// Containers are hoverable marks in these layouts (the treemap
+			// draws leaves only): the band of a circle / ring its children
+			// don't cover IS the container. The Melon group is the one series
+			// with FOUR marks (Melon, Watermelon, Mini, Seedless). Hovering
+			// each in turn — top-level group, mid-level container, either
+			// leaf — lights up exactly that mark: a container's children are
+			// their own marks and recede with everything else.
+			const c = mount(layout)
+			const marks = marksOf(c, layout)
+			const melon = marks.filter((m) => sameFill(marks, m).length === 4)
+			expect(melon.length).toBe(4)
+			const before = marks.map(fillOpacity)
+			const g = c.querySelector("g")!
+
+			for (const mark of melon) {
+				fireEvent.mouseEnter(mark)
+				await waitFor(() => {
+					expect(
+						marksOf(c, layout).filter((m, i) => fillOpacity(m) < before[i])
+							.length
+					).toBe(marks.length - 1)
+				})
+				expect(fillOpacity(mark)).toBeCloseTo(before[marks.indexOf(mark)], 5)
+				fireEvent.mouseLeave(g)
+				await waitFor(() => {
+					marksOf(c, layout).forEach((m, i) => {
+						expect(fillOpacity(m)).toBeCloseTo(before[i], 5)
+					})
+				})
+			}
+		})
+	}
+)
+
 describe("nested charts colored by a real field", () => {
-	it("hovering a treemap tile highlights its field value's marks", async () => {
+	it("hovering a treemap tile highlights that tile alone", async () => {
 		// Hue on `Parent`: leaves carry Pome / Citrus / Watermelon, so the
-		// highlight resolves through the ROW rather than the tree position.
+		// series resolves through the ROW rather than the tree position — but
+		// a direct hover still narrows to the hovered node.
 		const c = mount("treemap", { hueField: "Parent" })
 		const marks = marksOf(c, "treemap")
 		const hoveredMark = marks[marks.length - 1]
-		const inGroup = sameFillCount(marks, hoveredMark)
+		expect(sameFill(marks, hoveredMark).length).toBeGreaterThan(1)
 		const before = marks.map(fillOpacity)
 
 		fireEvent.mouseEnter(hoveredMark)
@@ -226,7 +330,22 @@ describe("nested charts colored by a real field", () => {
 			const faded = marksOf(c, "treemap").filter(
 				(m, i) => fillOpacity(m) < before[i]
 			)
-			expect(faded.length).toBe(marks.length - inGroup)
+			expect(faded.length).toBe(marks.length - 1)
 		})
+	})
+
+	it("a legend hover on the hue field highlights every tile with that value", () => {
+		const plain = marksOf(mount("treemap", { hueField: "Parent" }), "treemap").map(
+			fillOpacity
+		)
+		const c = mount("treemap", {
+			hueField: "Parent",
+			hovered: { field: "Parent", value: "Pome" },
+		})
+		const marks = marksOf(c, "treemap")
+		// Apple and Pear are the Pome tiles.
+		const lit = marks.filter((m, i) => fillOpacity(m) === plain[i])
+		expect(lit.length).toBe(2)
+		expect(marks.length - lit.length).toBe(3)
 	})
 })

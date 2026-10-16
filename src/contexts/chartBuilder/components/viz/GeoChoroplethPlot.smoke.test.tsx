@@ -43,7 +43,10 @@ const buildDataset = (
 
 const seed = (
 	rows?: Record<string, string>[],
-	mapConfigOverrides: Partial<typeof DEFAULT_MAP_CONFIG> = {}
+	mapConfigOverrides: Partial<typeof DEFAULT_MAP_CONFIG> = {},
+	/** The hue measure; null maps no measure at all (regions join, nothing
+	 *  colors them). */
+	hueField: string | null = "rate"
 ) => {
 	installInMemoryLocalStorage()
 	/* eslint-disable @th/use-wrapped-json-functions */
@@ -55,7 +58,7 @@ const seed = (
 	set("vis-components:currentEncodings", {
 		...emptyEncodings(),
 		connection: { field: "state" },
-		hue: { field: "rate" },
+		...(hueField === null ? {} : { hue: { field: hueField } }),
 	})
 	// Wrapped in the current-version envelope so overrides are taken literally
 	// — a bare (v0) object would run the full migration chain, whose v5→v6
@@ -139,6 +142,28 @@ const seedHuePlusBrightness = () => {
 	/* eslint-enable @th/use-wrapped-json-functions */
 }
 
+/** Projected extent of a set of `<path>`s, parsed from their `d` strings
+ *  (jsdom has no getBBox). d3-geo emits absolute M/L coordinate pairs. */
+const pathExtent = (paths: Element[]) => {
+	let x0 = Infinity
+	let y0 = Infinity
+	let x1 = -Infinity
+	let y1 = -Infinity
+	for (const p of paths) {
+		const nums =
+			(p.getAttribute("d") ?? "").match(/-?\d+(?:\.\d+)?(?:e[-+]?\d+)?/g) ?? []
+		for (let i = 0; i + 1 < nums.length; i += 2) {
+			const x = Number(nums[i])
+			const y = Number(nums[i + 1])
+			x0 = Math.min(x0, x)
+			x1 = Math.max(x1, x)
+			y0 = Math.min(y0, y)
+			y1 = Math.max(y1, y)
+		}
+	}
+	return { width: x1 - x0, height: y1 - y0 }
+}
+
 const mount = () =>
 	render(
 		<TestProvider>
@@ -208,6 +233,157 @@ describe("GeoChoroplethPlot (states choropleth)", () => {
 		// uses the no-data fill — every drawn region is scale-colored.
 		expect(fills).not.toContain(DEFAULT_MAP_CONFIG.noDataFill)
 		expect(fills.length).toBe(4)
+	})
+
+	it("auto framing fits the DRAWN regions when showNoDataRegions is off", async () => {
+		// A Washington-only dataset with the toggle off used to draw one small
+		// state in the corner of an otherwise empty US-sized frame. "Whole map
+		// (auto)" frames what's DRAWN, so the lone region fills the panel: its
+		// projected extent rivals the whole basemap's under the default fit
+		// (both fill the plot rect's binding axis). Before the change WA spanned
+		// well under a fifth of the US width.
+		seed([{ state: "WA", rate: "1" }], { showNoDataRegions: false })
+		const only = mount()
+		await waitFor(() => {
+			expect(only.container.querySelectorAll("path").length).toBe(1)
+		})
+		const wa = pathExtent([...only.container.querySelectorAll("path")])
+		cleanup()
+
+		seed([{ state: "WA", rate: "1" }], { showNoDataRegions: true })
+		const whole = mount()
+		await waitFor(() => {
+			expect(
+				whole.container.querySelectorAll("path").length
+			).toBeGreaterThanOrEqual(50)
+		})
+		const us = pathExtent([...whole.container.querySelectorAll("path")])
+
+		expect(wa.width).toBeGreaterThan(0)
+		expect(
+			Math.max(wa.width / us.width, wa.height / us.height)
+		).toBeGreaterThan(0.75)
+	})
+
+	it("auto framing falls back to the whole geometry when nothing joins", async () => {
+		// Toggle off but no row matches: nothing draws (as before), and the fit
+		// must not degenerate on an empty collection (no NaN projection / crash).
+		seed([{ state: "ZZ", rate: "1" }], { showNoDataRegions: false })
+		const { container, queryByText } = mount()
+		await waitFor(() => {
+			expect(queryByText(/Loading geography/)).toBeNull()
+		})
+		expect(container.querySelectorAll("path").length).toBe(0)
+	})
+
+	it("with showNoDataRegions off also omits joined rows whose measure is blank/NA", async () => {
+		// Reported: turning the toggle off left some regions gray. A row that
+		// JOINS but carries a blank / unparseable value paints as no-data, and
+		// "regions with no data" must include it — only the four valued states
+		// draw, none in the no-data fill.
+		seed(
+			[
+				{ state: "CA", rate: "1" },
+				{ state: "TX", rate: "2" },
+				{ state: "NY", rate: "3" },
+				{ state: "FL", rate: "4" },
+				{ state: "WA", rate: "" },
+				{ state: "OR", rate: "N/A" },
+			],
+			{ showNoDataRegions: false }
+		)
+		const { container } = mount()
+		await waitFor(() => {
+			expect(container.querySelectorAll("path").length).toBe(4)
+		})
+		const fills = [...container.querySelectorAll("path")].map((p) =>
+			p.getAttribute("fill")
+		)
+		expect(fills).not.toContain(DEFAULT_MAP_CONFIG.noDataFill)
+	})
+
+	it("with showNoDataRegions off and NO measure mapped, every joined region draws", async () => {
+		// No hue/opacity: there is no "missing data", only "no measure" — both
+		// joined regions draw (in the base fill) and nothing is omitted.
+		seed(
+			[
+				{ state: "CA", rate: "1" },
+				{ state: "TX", rate: "" },
+			],
+			{ showNoDataRegions: false },
+			null
+		)
+		const { container } = mount()
+		await waitFor(() => {
+			expect(container.querySelectorAll("path").length).toBe(2)
+		})
+	})
+
+	it("auto framing ignores joined rows painted as no-data", async () => {
+		// WA valued + CA blank with the toggle off: only WA draws, and the frame
+		// follows WA alone, not the WA+CA union — a whole-US template with
+		// values for one state must still frame that state.
+		seed(
+			[
+				{ state: "WA", rate: "1" },
+				{ state: "CA", rate: "" },
+			],
+			{ showNoDataRegions: false }
+		)
+		const only = mount()
+		await waitFor(() => {
+			expect(only.container.querySelectorAll("path").length).toBe(1)
+		})
+		const wa = pathExtent([...only.container.querySelectorAll("path")])
+		cleanup()
+
+		seed([{ state: "WA", rate: "1" }], { showNoDataRegions: true })
+		const whole = mount()
+		await waitFor(() => {
+			expect(
+				whole.container.querySelectorAll("path").length
+			).toBeGreaterThanOrEqual(50)
+		})
+		const us = pathExtent([...whole.container.querySelectorAll("path")])
+		expect(
+			Math.max(wa.width / us.width, wa.height / us.height)
+		).toBeGreaterThan(0.75)
+	})
+
+	it("with showNoDataRegions off, a world projection draws NO world backdrop", async () => {
+		// Reported: a Washington county map under Mercator with the toggle off
+		// still showed Canada in the no-data purple — the world-countries
+		// backdrop. It is no-data paint, so the toggle hides it too. First prove
+		// the backdrop DOES load here (toggle on: far more paths than the 56
+		// states), then flip the toggle: exactly the one data region draws, and
+		// the already-cached countries geometry never joins it.
+		seed([{ state: "WA", rate: "1" }], {
+			projection: "mercator",
+			showNoDataRegions: true,
+		})
+		const withBackdrop = mount()
+		await waitFor(() => {
+			expect(
+				withBackdrop.container.querySelectorAll("path").length
+			).toBeGreaterThan(56)
+		})
+		cleanup()
+
+		seed([{ state: "WA", rate: "1" }], {
+			projection: "mercator",
+			showNoDataRegions: false,
+		})
+		const { container } = mount()
+		await waitFor(() => {
+			expect(container.querySelectorAll("path").length).toBe(1)
+		})
+		// Give the (memoized, already-resolved) countries load every chance to
+		// land — nothing may appear.
+		await new Promise((r) => setTimeout(r, 200))
+		expect(container.querySelectorAll("path").length).toBe(1)
+		expect(container.querySelector("path")?.getAttribute("fill")).not.toBe(
+			DEFAULT_MAP_CONFIG.noDataFill
+		)
 	})
 
 	it("a focus region honors showNoDataRegions off (draws ONLY matched regions)", async () => {

@@ -11,8 +11,10 @@ import {
 import type {
 	SolverInput,
 	SolverPanelInput,
+	TitleOverhang,
 } from "../../../lib/facetLayoutSolver"
 import {
+	chartTitlePrefixOf,
 	hasChartTitle,
 	titleAlignmentOf,
 	type FontConfig,
@@ -22,7 +24,17 @@ import {
 import type { FacetPanels } from "../../../lib/resolveFacetPanels"
 import type { Encodings } from "../../../lib/types"
 import type { resolveFacetTitleStyles } from "./facetTitleStyles"
-import { measureMaxLabelWidth } from "./measureText"
+import { measureMaxLabelWidth, measureTitleWidth } from "./measureText"
+import { lineCount } from "../../../lib/multilineText"
+
+/** The text a panel's facet-label band shows. Compacted grid panels carry
+ *  their compact label (row value / col value / "row · col" depending on
+ *  which strip survived); wrap mode shows the raw panel key. Shared by the
+ *  renderer (PlotCanvas) and the band sizing below so they can't drift. */
+export const panelLabelTextOf = (panelData: FacetPanels, key: string): string =>
+	panelData.mode === "grid"
+		? (panelData.compact?.panels[key]?.label ?? key)
+		: key
 
 const FACET_LABEL_HEIGHT_PX = 20
 /** Polar facet-label band. Polar charts (radar / pie) don't carry x-axis
@@ -56,6 +68,8 @@ export const buildSolverInput = ({
 	dataLabelOverflow,
 	captionReserve,
 	annotationReserve,
+	titlePrefixFont,
+	titleOverhang,
 }: {
 	bounds: { width: number; height: number }
 	isFaceted: boolean
@@ -80,6 +94,14 @@ export const buildSolverInput = ({
 	 *  (and share its fit-mode clamp); bottom adds to the caption band; top
 	 *  is the only top-side reserve. */
 	annotationReserve: AnnotationReserve
+	/** Resolved font of the chart-title prefix run (`resolveTitlePrefixFont`),
+	 *  for measuring the title's first line; the prefix TEXT comes from
+	 *  `labels`. Omitted = the prefix measures in the title font. */
+	titlePrefixFont?: FontConfig
+	/** Room past the canvas edges the chart title / subtitle may paint into
+	 *  (the column beside a left / right legend) — `SolverInput.titleOverhang`.
+	 *  Omitted = none. */
+	titleOverhang?: TitleOverhang
 }): SolverInput => {
 	const {
 		facetTitleFont,
@@ -148,8 +170,17 @@ export const buildSolverInput = ({
 	// Per-panel facet-title band. Wrap mode always uses it; grid mode
 	// only under hide-empty compaction, where the compacted dimension's
 	// values move out of their strip into these per-panel bands.
+	// A label with explicit line breaks grows its band upward (one line step
+	// per extra line; every label's bottom line at the single-line position),
+	// and the band is per-cell chrome shared by every panel, so size it for
+	// the tallest label.
+	const facetLabelLines = Math.max(
+		1,
+		...panelInputs.map((p) => lineCount(panelLabelTextOf(panelData, p.key))),
+	)
 	const facetLabelInput = {
 		fontSize: facetTitleFont.size,
+		lines: facetLabelLines,
 		// Grow the band so a larger user-chosen font doesn't
 		// clip into the panel; small fonts keep the pinned
 		// default that defeats font-metric drift.
@@ -165,6 +196,7 @@ export const buildSolverInput = ({
 	// per-panel titles can diverge from the wrap-mode / strip styling.
 	const facetPanelLabelInput = {
 		fontSize: facetPanelTitleFont.size,
+		lines: facetLabelLines,
 		height: Math.max(
 			isPolar ? FACET_LABEL_HEIGHT_PX_POLAR : FACET_LABEL_HEIGHT_PX,
 			Math.ceil(facetPanelTitleFont.size * 1.4)
@@ -183,6 +215,13 @@ export const buildSolverInput = ({
 		compactStrip === undefined || compactStrip === "cols"
 	const rowStripSurvives =
 		compactStrip === undefined || compactStrip === "rows"
+	// The chart title's prefix run rides its first line in its own font, so
+	// the measured width below includes it (see measureTitleWidth).
+	const prefixText = chartTitlePrefixOf(labels)
+	const prefixRun =
+		prefixText !== null
+			? { text: prefixText, ...(titlePrefixFont ?? titleFont) }
+			: null
 	const input: SolverInput = {
 		containerWidth: bounds.width,
 		containerHeight: bounds.height,
@@ -198,6 +237,9 @@ export const buildSolverInput = ({
 					align: titleAlignmentOf(labels, "title"),
 					offsetX: labels.titleOffsets?.title?.x ?? 0,
 					offsetY: labels.titleOffsets?.title?.y ?? 0,
+					// Canvas-measured so the solver can keep the title in view
+					// horizontally (LAYOUT.md §7); 0 (no canvas) = unmeasured.
+					textWidth: measureTitleWidth(labels.title, titleFont, prefixRun),
 				}
 			: undefined,
 		chartSubtitle: labels.subtitle
@@ -207,8 +249,10 @@ export const buildSolverInput = ({
 					align: titleAlignmentOf(labels, "subtitle"),
 					offsetX: labels.titleOffsets?.subtitle?.x ?? 0,
 					offsetY: labels.titleOffsets?.subtitle?.y ?? 0,
+					textWidth: measureTitleWidth(labels.subtitle, subtitleFont),
 				}
 			: undefined,
+		titleOverhang,
 		xTitle: sharedXAxisTitle
 			? {
 					text: sharedXAxisTitle,

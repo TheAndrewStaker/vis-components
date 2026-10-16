@@ -1,4 +1,10 @@
-import { cleanup, render, screen, fireEvent } from "@testing-library/react"
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react"
 import { TestProvider } from "../../../../testSupport/TestProvider"
 import { installInMemoryLocalStorage } from "../../../../testSupport/localStorageShim"
 import { buildDataset as buildDatasetFixture } from "../../../../testSupport/fixtures"
@@ -75,6 +81,11 @@ const seedPointDataset = (rows: Record<string, string>[]) => {
 
 /** Encoding shorthands for the two geographic modes. */
 const CHOROPLETH_ENC = { connection: { field: "state" } }
+/** Choropleth with a hue measure: a blank cell is then "missing data". */
+const CHOROPLETH_HUE_ENC = {
+	connection: { field: "state" },
+	hue: { field: "rate" },
+}
 const SYMBOLS_ENC = {
 	connection: { field: "state" },
 	area: { field: "pop" },
@@ -413,5 +424,103 @@ describe("MapsSection", () => {
 		])
 		mount()
 		expect(screen.queryByText(/outside the mapped area/i)).toBeNull()
+	})
+})
+
+/** Seed a state-keyed dataset for the Custom-seeding tests. Must run AFTER
+ *  `seed(...)` (which resets the in-memory localStorage). */
+const STATE_DATASET_ID = "ds-maps-states"
+const seedStateDataset = (rows: Record<string, string>[]) => {
+	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	const set = (k: string, v: unknown) =>
+		localStorage.setItem(k, JSON.stringify(v))
+	set("vis-components:datasets", {
+		[STATE_DATASET_ID]: buildDatasetFixture({
+			id: STATE_DATASET_ID,
+			name: "rates",
+			filename: "rates.csv",
+			fields: [
+				{ name: "state", inferredType: "categorical" },
+				{ name: "rate", inferredType: "quantitative" },
+			],
+			rows,
+		}),
+	})
+	set("vis-components:currentDatasetId", STATE_DATASET_ID)
+	set("vis-components:previewVersionId", null)
+	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+}
+
+/** The persisted `customViewport`, read back through the versioned envelope
+ *  the map-config atom writes (bare object tolerated). */
+const storedCustomViewport = (): Record<string, number> | null => {
+	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try */
+	const raw = localStorage.getItem("vis-components:currentMapConfig")
+	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try */
+	if (!raw) return null
+	const parsed = JSON.parse(raw) as {
+		data?: { customViewport?: Record<string, number> | null }
+		customViewport?: Record<string, number> | null
+	}
+	return parsed.data?.customViewport ?? parsed.customViewport ?? null
+}
+
+describe("MapsSection — Custom focus seeding", () => {
+	it("seeds Custom from the data frame when auto frames only the data regions", async () => {
+		// Choropleth, "Fill regions with no data" off, Washington-only data: auto
+		// frames just Washington, so switching to Custom must start THERE — not
+		// jump back to the continental-US default.
+		seed("geographic", { showNoDataRegions: false }, CHOROPLETH_HUE_ENC)
+		// With a hue measure mapped, the blank-value CA row joins but paints as
+		// no-data, so it is neither drawn nor framed — the seed must follow
+		// Washington alone.
+		seedStateDataset([
+			{ state: "WA", rate: "1" },
+			{ state: "CA", rate: "" },
+		])
+		mount()
+		// Geometry + join resolve async; the note under Focus appears once auto
+		// is framing the data regions.
+		await screen.findByText(/Framing just the regions with data/i)
+		fireEvent.change(screen.getByLabelText("Focus"), {
+			target: { value: "custom" },
+		})
+		await waitFor(() => {
+			const vp = storedCustomViewport()
+			expect(vp).not.toBeNull()
+			// Brackets Washington (−124.8…−116.9 lon, 45.5…49 lat) with the 1°
+			// floor margin — nowhere near the CONUS default (−128…−66, 23…50).
+			expect(vp!.west).toBeGreaterThan(-127)
+			expect(vp!.west).toBeLessThan(-124.8)
+			expect(vp!.east).toBeGreaterThan(-116.9)
+			expect(vp!.east).toBeLessThan(-114)
+			expect(vp!.south).toBeGreaterThan(43)
+			expect(vp!.south).toBeLessThan(45.5)
+			expect(vp!.north).toBeGreaterThan(49)
+			expect(vp!.north).toBeLessThan(52)
+		})
+	})
+
+	it("seeds Custom from the level default while every region draws", async () => {
+		// Same data, toggle ON: auto frames the whole US, so Custom starts from
+		// the continental-US default exactly as before, and no framing note.
+		seed("geographic", { showNoDataRegions: true }, CHOROPLETH_ENC)
+		seedStateDataset([{ state: "WA", rate: "1" }])
+		mount()
+		await screen.findByText(/1 of 1 matched/i)
+		expect(
+			screen.queryByText(/Framing just the regions with data/i)
+		).toBeNull()
+		fireEvent.change(screen.getByLabelText("Focus"), {
+			target: { value: "custom" },
+		})
+		await waitFor(() => {
+			expect(storedCustomViewport()).toEqual({
+				west: -128,
+				south: 23,
+				east: -66,
+				north: 50,
+			})
+		})
 	})
 })

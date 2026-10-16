@@ -1,9 +1,13 @@
-import { useState, type ReactNode } from "react"
+import { useId, useState, type ReactNode } from "react"
 import { SectionChevron } from "../../../../../components/ui/Chevron"
+import { DateInput } from "../../../../../components/ui/DateInput"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
-import { LABEL_COL } from "../../../../../components/ui/LabeledField"
-import { cleanNumber, type AxisInfo } from "./axisInfo"
+import {
+	LABEL_COL,
+	LabeledField,
+} from "../../../../../components/ui/LabeledField"
+import { cleanNumber, temporalCoordMs, type AxisInfo } from "./axisInfo"
 
 /** Which annotation an editor card belongs to — drives the kind glyph in its
  *  header row. */
@@ -195,9 +199,11 @@ const AnnotationNameEditor = ({
 }
 
 /** Picks the right input for an axis: a dropdown of unique categories
- *  for categorical/string-ordinal axes, a number input for everything
- *  else. The renderer treats string values as category labels and
- *  numeric values as scaled positions. */
+ *  for categorical/string-ordinal axes, a date box for temporal axes, a
+ *  number input for everything else. The renderer treats string values
+ *  as category labels and numeric values as scaled positions — epoch ms
+ *  on a temporal axis, the unit the axis's Scale range bounds and custom
+ *  breaks store too. */
 export const AxisValueInput = ({
 	label,
 	value,
@@ -211,6 +217,7 @@ export const AxisValueInput = ({
 	onChange: (next: number | string) => void
 	labelClassName?: string
 }) => {
+	const dateId = useId()
 	// Categorical-or-string-ordinal: dropdown.
 	if (axis.categories && axis.categories.length > 0) {
 		const current = typeof value === "string" ? value : (axis.categories[0] ?? "")
@@ -224,7 +231,27 @@ export const AxisValueInput = ({
 			/>
 		)
 	}
-	// Numeric / temporal / numeric-ordinal: number input.
+	// Temporal: a date box (typed YYYY-MM-DD or picked from the month / year
+	// calendar), stored as epoch ms at local midnight — the clock the time
+	// scale lays its ticks on. The raw number is nothing a person could type.
+	// A blank commit (null) leaves the coordinate alone: a position has to
+	// be somewhere.
+	if (axis.type === "temporal") {
+		const ms = temporalCoordMs(value)
+		return (
+			<LabeledField id={dateId} label={label} labelClassName={labelClassName}>
+				<DateInput
+					id={dateId}
+					value={Number.isFinite(ms) ? ms : null}
+					onChange={(next) => {
+						if (next !== null) onChange(next)
+					}}
+					className="w-40"
+				/>
+			</LabeledField>
+		)
+	}
+	// Numeric / numeric-ordinal: number input.
 	const numericValue = typeof value === "number" ? value : Number(value)
 	return (
 		<NumberInput

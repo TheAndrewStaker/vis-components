@@ -369,3 +369,77 @@ describe("LabelsPanel — alignment writes relative to the theme base", () => {
 		expect(probe.dataset.titleAlign).toBe("")
 	})
 })
+
+// ---------------------------------------------------------------------------
+// Secondary-tier inherit entries
+// ---------------------------------------------------------------------------
+
+/** Axis and facet titles render through resolveTitleFont's "secondary" slot,
+ *  which prefers the theme's per-slot axis-title family / color
+ *  (`secondaryFamily` / `secondaryColor`) over the shared title values. The
+ *  Family select's "(inherit)" entry — and the color swatch — must name the
+ *  same thing, or the dropdown claims one family while the chart draws
+ *  another (the bundled themes set Fraunces titles over Quicksand axis
+ *  titles, so this was visible out of the box). */
+describe("LabelsPanel — secondary-tier inherit entries follow the axis-title slots", () => {
+	afterEach(cleanup)
+
+	const INTER = "Inter, system-ui, sans-serif"
+	const QUICKSAND = "'Quicksand', system-ui, sans-serif"
+
+	const seedSplitFamilies = (encodings: Encodings) =>
+		seedStorage({
+			encodings,
+			labels: {
+				baseFont: {
+					...DEFAULT_LABELS_CONFIG.baseFont,
+					titles: {
+						...DEFAULT_LABELS_CONFIG.baseFont.titles,
+						family: INTER,
+						secondaryFamily: QUICKSAND,
+						color: "#111111",
+						secondaryColor: "#222222",
+					},
+				},
+			},
+		})
+
+	// FontEditor's Family row is a <label> whose first child span reads
+	// "Family"; the select's first option is the inherit entry.
+	const familyInheritEntries = (container: HTMLElement) =>
+		[...container.querySelectorAll<HTMLSelectElement>("select")]
+			.filter(
+				(s) =>
+					s.closest("label")?.firstElementChild?.textContent?.trim() ===
+					"Family"
+			)
+			.map((s) => s.options[0]?.text ?? "")
+
+	it("names the axis-title family for a row-only facet's title control", () => {
+		seedSplitFamilies({ ...emptyEncodings(), facetRow: { field: "region" } })
+		const { container } = renderPanel()
+		expandSection(container, "Facet titles")
+		expect(familyInheritEntries(container)).toEqual(["(Quicksand)"])
+		// The swatch previews the axis-title color, not the shared title color.
+		const swatch = container.querySelector<HTMLInputElement>(
+			'input[type="color"]'
+		)
+		expect(swatch?.value).toBe("#222222")
+	})
+
+	it("names the axis-title family for the x-axis title row", () => {
+		seedSplitFamilies({ ...emptyEncodings(), x: { field: "x" } })
+		const { container } = renderPanel()
+		expandSection(container, "Axis titles")
+		fireEvent.click(rowToggle(container, "X-axis title")!)
+		expect(familyInheritEntries(container)).toEqual(["(Quicksand)"])
+	})
+
+	it("keeps the primary title on the shared title family", () => {
+		seedSplitFamilies({ ...emptyEncodings(), x: { field: "x" } })
+		const { container } = renderPanel()
+		expandSection(container, "Primary titles")
+		fireEvent.click(rowToggle(container, "Title")!)
+		expect(familyInheritEntries(container)).toEqual(["(Inter)"])
+	})
+})

@@ -75,3 +75,50 @@ export const measureLabelWidths = (
 		return max
 	})
 }
+
+/** Font fields that affect a measured width (a `FontConfig` satisfies it). */
+export type MeasureFont = {
+	family: string | null | undefined
+	size: number
+	weight?: number
+	italic?: boolean
+}
+
+/** Widest rendered line of a chart-level title, px. The chart title's first
+ *  line carries its prefix run the way `renderMultilineTspans` draws it: the
+ *  prefix in its own font, then one space plus the line in the title font.
+ *  0 when the canvas API isn't available (SSR / non-DOM env), which the
+ *  solver reads as "unmeasured" and leaves the title's anchor as aligned. */
+export const measureTitleWidth = (
+	text: string,
+	font: MeasureFont,
+	prefix?: (MeasureFont & { text: string }) | null,
+): number => {
+	const lines = text.split("\n")
+	const widths = measureLabelWidths(
+		lines,
+		font.family,
+		font.size,
+		font.weight,
+		font.italic,
+	)
+	if (widths.length === 0) return 0
+	if (prefix) {
+		const [prefixWidth = 0] = measureLabelWidths(
+			[prefix.text],
+			prefix.family,
+			prefix.size,
+			prefix.weight,
+			prefix.italic,
+		)
+		const [firstWithGap = 0] = measureLabelWidths(
+			[` ${lines[0]}`],
+			font.family,
+			font.size,
+			font.weight,
+			font.italic,
+		)
+		widths[0] = prefixWidth + firstWithGap
+	}
+	return Math.max(...widths)
+}

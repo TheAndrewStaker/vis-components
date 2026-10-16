@@ -1,10 +1,16 @@
 import {
 	DEFAULT_RECTANGLE_TEXT,
 	type CircleAnnotation,
+	type LineCapStyle,
 	type LineSegmentAnnotation,
 	type RectangleAnnotation,
 	type TextAnnotation,
 } from "../../../lib/annotationsConfig"
+import {
+	computeArrowhead,
+	resolveLineEnds,
+	type ArrowheadGeometry,
+} from "../../../lib/arrowheadGeometry"
 import {
 	isPixelSystem,
 	pixelToCanvasX,
@@ -72,10 +78,16 @@ export type PlacedCircle = {
 export type PlacedLine = {
 	kind: "line"
 	anno: LineSegmentAnnotation
+	/** The configured endpoints in canvas px (B = x2, y2 is the arrow end). */
 	x1: number
 	y1: number
 	x2: number
 	y2: number
+	/** Where the stroke actually stops: (x2, y2) with no arrowhead, else the
+	 *  head's base so the line doesn't paint through the head. */
+	end: { x: number; y: number }
+	cap: LineCapStyle
+	arrowhead: ArrowheadGeometry | null
 	bbox: BBox
 }
 export type PlacedText = {
@@ -421,19 +433,42 @@ export const layoutPanelAnnotations = ({
 	for (const l of visibleLines) {
 		const geom = computeLineSegmentPixels(l, inner, ctx)
 		if (geom === null) continue
+		const ends = resolveLineEnds(l)
+		const arrowhead = ends.arrowhead
+			? computeArrowhead({
+					...geom,
+					thickness: l.lineThickness,
+					style: ends.arrowheadStyle,
+					scale: ends.arrowheadScale,
+					lineCap: ends.lineCap,
+				})
+			: null
+		const end = arrowhead?.lineEnd ?? { x: geom.x2, y: geom.y2 }
+		// The stroke's box (half-width on every side covers a round cap's
+		// overhang too), widened to the head's box when there is one.
+		const stroke = strokeBBox(
+			Math.min(geom.x1, end.x),
+			Math.min(geom.y1, end.y),
+			Math.max(geom.x1, end.x),
+			Math.max(geom.y1, end.y),
+			l.lineThickness
+		)
+		const bbox: BBox = arrowhead
+			? {
+					left: Math.min(stroke.left, arrowhead.bbox.left),
+					top: Math.min(stroke.top, arrowhead.bbox.top),
+					right: Math.max(stroke.right, arrowhead.bbox.right),
+					bottom: Math.max(stroke.bottom, arrowhead.bbox.bottom),
+				}
+			: stroke
 		placed.push({
 			kind: "line",
 			anno: l,
 			...geom,
-			bbox: finish(
-				strokeBBox(
-					Math.min(geom.x1, geom.x2),
-					Math.min(geom.y1, geom.y2),
-					Math.max(geom.x1, geom.x2),
-					Math.max(geom.y1, geom.y2),
-					l.lineThickness
-				)
-			),
+			end,
+			cap: ends.lineCap,
+			arrowhead,
+			bbox: finish(bbox),
 		})
 	}
 	for (const t of visibleTexts) {

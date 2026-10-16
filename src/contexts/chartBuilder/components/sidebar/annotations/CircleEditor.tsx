@@ -3,12 +3,16 @@ import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleS
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import {
+	radiusUnitOf,
 	type BoxAnnotationStyle,
 	type CircleAnnotation,
+	type RadiusUnit,
 } from "../../../lib/annotationsConfig"
 import {
 	convertCoord,
 	convertRadius,
+	convertRadiusUnit,
+	hasDataUnits,
 	toNumber,
 	cleanNumber,
 	type AxisInfo,
@@ -22,10 +26,23 @@ import {
 	usePlotDims,
 } from "./sections"
 
+/** The px / % toggle's buttons, in display order. */
+const RADIUS_UNITS: ReadonlyArray<readonly [RadiusUnit, string]> = [
+	["px", "px"],
+	["percent", "%"],
+]
+
+/** Helper line under the radius box when its axis has no data units. */
+const radiusUnitHelpFor = (axis: "x" | "y"): string =>
+	`The ${axis} axis has no data units, so the radius is a fixed px size or a % of the plot's ${axis === "x" ? "width" : "height"}.`
+
 /** Sidebar editor for circle annotations. Mirrors RectangleEditor, but a
  *  circle is center + radius rather than four edges. The radius is measured
  *  against a single chosen axis (`radiusAxis`) so it always renders as a true
- *  on-screen circle — see `circleAnnotationGeometry.ts` for the placement. */
+ *  on-screen circle — see `circleAnnotationGeometry.ts` for the placement.
+ *  When that axis has no data units (categorical / string-ordinal /
+ *  temporal), the Values-mode radius box grows a px / % unit toggle beside
+ *  it (`radiusUnit`), since there is no axis unit a radius could count in. */
 export const CircleEditor = ({
 	circle,
 	defaults,
@@ -76,6 +93,23 @@ export const CircleEditor = ({
 			: circle.radiusAxis === "x"
 				? dims.widthPx
 				: dims.heightPx
+	// A categorical / string-ordinal / temporal radius axis has no data units,
+	// so in values mode the radius carries its own unit — on-screen px, or a
+	// fraction of that axis's plot extent — picked by the toggle beside the
+	// radius box. Radar keeps its r-axis rule (`computePolarCirclePixels`).
+	const radiusUnit = radiusUnitOf(circle)
+	const showRadiusUnit =
+		!isRadar &&
+		circle.coordSystem === "values" &&
+		!hasDataUnits(radiusAxisInfo)
+	const setRadiusUnit = (next: RadiusUnit) => {
+		if (next === radiusUnit) return
+		// Convert the stored number so the circle keeps its on-screen size.
+		onChange({
+			radiusUnit: next,
+			radius: convertRadiusUnit(circle.radius, radiusUnit, next, radiusExtentPx),
+		})
+	}
 	return (
 		<AnnotationCard
 			kind="circle"
@@ -120,7 +154,8 @@ export const CircleEditor = ({
 									cur,
 									next,
 									radiusAxisInfo,
-									radiusExtentPx
+									radiusExtentPx,
+									radiusUnit
 								),
 							})
 						}}
@@ -170,14 +205,57 @@ export const CircleEditor = ({
 								axis={yAxis}
 								onChange={(v) => onChange({ centerY: v })}
 							/>
-							<NumberInput
-								label={isRadar ? "radius (r)" : `radius (${circle.radiusAxis})`}
-								labelClassName={LABEL_COL}
-								value={cleanNumber(toNumber(circle.radius))}
-								step={1}
-								min={0}
-								onChange={(v) => onChange({ radius: v })}
-							/>
+							{showRadiusUnit ? (
+								<div className="flex items-center gap-2">
+									<NumberInput
+										label={`radius (${circle.radiusAxis})`}
+										labelClassName={LABEL_COL}
+										value={cleanNumber(
+											radiusUnit === "px"
+												? toNumber(circle.radius)
+												: toNumber(circle.radius) * 100
+										)}
+										step={1}
+										min={0}
+										onChange={(v) =>
+											onChange({ radius: radiusUnit === "px" ? v : v / 100 })
+										}
+									/>
+									<div
+										role="group"
+										aria-label="Radius unit"
+										className="inline-flex overflow-hidden rounded border border-vc-brand-text"
+									>
+										{RADIUS_UNITS.map(([unit, text]) => (
+											<button
+												key={unit}
+												type="button"
+												onClick={() => setRadiusUnit(unit)}
+												className={
+													radiusUnit === unit
+														? "vc-toggle-on px-2 py-1 text-sm"
+														: "vc-toggle-off px-2 py-1 text-sm"
+												}
+												aria-pressed={radiusUnit === unit}
+											>
+												{text}
+											</button>
+										))}
+									</div>
+								</div>
+							) : (
+								<NumberInput
+									label={isRadar ? "radius (r)" : `radius (${circle.radiusAxis})`}
+									labelClassName={LABEL_COL}
+									value={cleanNumber(toNumber(circle.radius))}
+									step={1}
+									min={0}
+									onChange={(v) => onChange({ radius: v })}
+								/>
+							)}
+							{showRadiusUnit && (
+								<p className="vc-help">{radiusUnitHelpFor(circle.radiusAxis)}</p>
+							)}
 						</div>
 					) : (
 						<div className="flex flex-col gap-2">

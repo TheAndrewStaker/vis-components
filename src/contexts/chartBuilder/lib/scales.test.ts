@@ -7,6 +7,7 @@ import {
 	CATEGORICAL_HUE_PALETTE,
 	applyAreaScale,
 	applyHueScale,
+	applyPositionScale,
 	autoDivergingMid,
 	makeAreaScale,
 	makeBrightnessScale,
@@ -17,6 +18,7 @@ import {
 	modulateColor,
 	outlinePaletteForHueType,
 	parseNumericCell,
+	parseValue,
 	ordinalAreaCategories,
 } from "./scales"
 
@@ -507,5 +509,29 @@ describe("parseNumericCell", () => {
 		expect(parseNumericCell("12abc")).toBeNull()
 		expect(parseNumericCell(Number.NaN)).toBeNull()
 		expect(parseNumericCell(Number.POSITIVE_INFINITY)).toBeNull()
+	})
+})
+
+describe("parseValue / applyPositionScale — temporal", () => {
+	it("reads a number as epoch ms, not as a string to parse", () => {
+		// The unit annotation coordinates, domain pins and custom breaks carry.
+		// Stringified, `new Date("1593561600000")` is an Invalid Date.
+		const ms = Date.UTC(2020, 6, 1)
+		expect(parseValue(ms, "temporal")).toEqual(new Date(ms))
+		// Date strings — every data cell — parse as before.
+		expect(parseValue("2020-07-01", "temporal")).toEqual(new Date("2020-07-01"))
+		expect(parseValue("not a date", "temporal")).toBeNull()
+	})
+
+	it("places an epoch-ms coordinate where the same date lands on the time scale", () => {
+		const scale = makePositionScale(
+			["2020-01-01", "2020-12-31"],
+			"temporal",
+			[0, 400]
+		)
+		const ms = Date.UTC(2020, 6, 1)
+		const viaDate = (scale as unknown as (d: Date) => number)(new Date(ms))
+		expect(applyPositionScale(scale, ms, "temporal")).toBe(viaDate)
+		expect(applyPositionScale(scale, "2020-07-01", "temporal")).toBe(viaDate)
 	})
 })

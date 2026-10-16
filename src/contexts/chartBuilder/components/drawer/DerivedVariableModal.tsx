@@ -11,7 +11,10 @@ import {
 } from "../../lib/derivedExpression"
 import {
 	COMPARISON_OPTIONS,
+	comparisonText,
 	joinComparison,
+	levelLabel,
+	levelSource,
 	makeLevelLookup,
 	splitComparison,
 } from "../../lib/derivedRuleForm"
@@ -55,6 +58,11 @@ const PREVIEW_ROWS = 5
 
 /** The left box holding exactly one `{Variable}` token and nothing else. */
 const LONE_TOKEN_RE = /^\{([^{}]+)\}$/
+
+/** The "Formula…" entry at the end of a rule row's dropdowns — not a value
+ * but a hand-over of the whole row to a formula box. A control character,
+ * so no data value collides. */
+const FORMULA_OPTION = "\u0000formula"
 
 const KIND_OPTIONS: ReadonlyArray<{
 	value: DerivedVariableKind
@@ -223,6 +231,10 @@ const DerivedVariableEditor = ({
 	// The variable buttons insert into the box that last had focus; null
 	// falls back to the current function's first box.
 	const [activeKey, setActiveKey] = useState<TokenKey | null>(null)
+	// The rule right box being typed in — it stays a text box until it loses
+	// focus, so typing "East" on the way to "Eastern" doesn't snap it back
+	// to the level list mid-word.
+	const [typingKey, setTypingKey] = useState<TokenKey | null>(null)
 	const fieldsRef = useRef<HTMLDivElement>(null)
 
 	// This variable's position in the evaluation order — it may reference the
@@ -288,14 +300,20 @@ const DerivedVariableEditor = ({
 			? COMPARISON_OPTIONS
 			: COMPARISON_OPTIONS.filter((o) => o.value === "==" || o.value === "!=")
 	/** Levels to offer on a rule's right side: only when the left box is a
-	 * lone categorical / ordinal variable, and the right box is empty or
-	 * already one of its levels (a variable or free text inserted there keeps
-	 * the text box, so nothing typed is lost). */
-	const rightSideLevels = (left: string, right: string): string[] | null => {
+	 * lone categorical / ordinal variable, the right box isn't being typed
+	 * in, and it is empty or already one of its levels (a variable or free
+	 * text inserted there keeps the text box, so nothing typed is lost). */
+	const rightSideLevels = (
+		left: string,
+		right: string,
+		key: TokenKey
+	): string[] | null => {
 		const field = loneDiscreteField(left)
 		const levels = field === null ? null : levelsFor(field)
-		if (!levels || levels.length === 0) return null
-		return right === "" || levels.includes(right) ? levels : null
+		if (!levels || levels.length === 0 || typingKey === key) return null
+		return right === "" || levels.some((l) => levelSource(l) === right)
+			? levels
+			: null
 	}
 	// Rows as the editor shows AND saves them: a comparator the left side no
 	// longer allows (a stored "{Region} > 3", or a left box edited from a
@@ -501,6 +519,32 @@ const DerivedVariableEditor = ({
 		const first = rules[0]
 		if (!first) return "fallback"
 		return ruleKey(0, first.form === "compare" ? "left" : "condition")
+	}
+	/** Put the caret at the end of a text box, once it has rendered. */
+	const focusBox = (key: TokenKey) => {
+		setActiveKey(key)
+		window.requestAnimationFrame(() => {
+			const el = findInput(key)
+			if (!(el instanceof HTMLInputElement)) return
+			el.focus()
+			el.setSelectionRange(el.value.length, el.value.length)
+		})
+	}
+	/** "Formula…" (from either of a row's menus) folds the three boxes into
+	 * one condition box holding what they said, written the way a formula
+	 * needs it (text quoted), with the caret at the end to carry on by hand
+	 * — AND / OR, another comparison. The row unfolds again when it's left
+	 * holding a single comparison. */
+	const foldToFormula = (
+		i: number,
+		row: Extract<RuleDraft, { form: "compare" }>
+	) => {
+		updateRule(i, () => ({
+			form: "text",
+			condition: comparisonText(row),
+			output: row.output,
+		}))
+		focusBox(ruleKey(i, "condition"))
 	}
 
 	/** Drop a `{Field}` token at the cursor of the active box (or the
@@ -721,45 +765,64 @@ const DerivedVariableEditor = ({
 												value={rule.op}
 												aria-label={`Rule ${i + 1} comparison`}
 												onChange={(e) => {
+													if (e.target.value === FORMULA_OPTION) {
+														foldToFormula(i, rule)
+														return
+													}
 													const op = e.target.value as ComparisonOp
 													updateRule(i, (r) =>
 														r.form === "compare" ? { ...r, op } : r
 													)
 												}}
-												className="flex-shrink-0"
+												// Fixed width: the closed box shows one sign, and sizing
+												// to the widest entry would let "Formula…" stretch it.
+												className="w-14 flex-shrink-0"
 											>
 												{comparatorsFor(rule.left).map((o) => (
 													<option key={o.value} value={o.value} title={o.title}>
 														{o.label}
 													</option>
 												))}
+												<option value={FORMULA_OPTION}>Formula…</option>
 											</Select>
 											{(() => {
-												const levels = rightSideLevels(rule.left, rule.right)
+												const key = ruleKey(i, "right")
+												const levels = rightSideLevels(rule.left, rule.right, key)
 												const setRight = (next: string) =>
 													updateRule(i, (r) =>
 														r.form === "compare" ? { ...r, right: next } : r
 													)
 												return levels ? (
 													<Select
-														data-token-key={ruleKey(i, "right")}
-														onFocus={() => setActiveKey(ruleKey(i, "right"))}
+														data-token-key={key}
+														onFocus={() => setActiveKey(key)}
 														value={rule.right}
-														onChange={(e) => setRight(e.target.value)}
+														onChange={(e) =>
+															e.target.value === FORMULA_OPTION
+																? foldToFormula(i, rule)
+																: setRight(e.target.value)
+														}
 														aria-label={`Rule ${i + 1} right side`}
 														className="min-w-0 flex-1"
 													>
 														<option value="">Choose a value…</option>
 														{levels.map((level) => (
-															<option key={level} value={level}>
-																{level}
+															<option key={level} value={levelSource(level)}>
+																{levelLabel(level)}
 															</option>
 														))}
+														<option value={FORMULA_OPTION}>Formula…</option>
 													</Select>
 												) : (
 													<TokenInput
-														tokenKey={ruleKey(i, "right")}
-														onActivate={setActiveKey}
+														tokenKey={key}
+														onActivate={(k) => {
+															setActiveKey(k)
+															setTypingKey(k)
+														}}
+														onBlur={() =>
+															setTypingKey((t) => (t === key ? null : t))
+														}
 														value={rule.right}
 														onChange={(e) => setRight(e.target.value)}
 														placeholder="100"
@@ -773,6 +836,18 @@ const DerivedVariableEditor = ({
 										<TokenInput
 											tokenKey={ruleKey(i, "condition")}
 											onActivate={setActiveKey}
+											// Left holding a single comparison (or nothing), the row
+											// unfolds into its three boxes — what reopening would show.
+											onBlur={() =>
+												updateRule(i, (r) =>
+													r.form === "text"
+														? draftFromRule({
+																condition: r.condition,
+																output: r.output,
+															})
+														: r
+												)
+											}
 											value={rule.condition}
 											onChange={(e) =>
 												updateRule(i, (r) =>
@@ -819,12 +894,6 @@ const DerivedVariableEditor = ({
 										{ruleErrors[i]}
 									</p>
 								)}
-								{rule.form === "text" && (
-									<p className="vc-help">
-										This rule was written as a formula (it combines
-										comparisons with AND / OR), so it stays a single box.
-									</p>
-								)}
 							</div>
 						))}
 						{/* mr-6 = the × column (w-4) + gap-2, so the link's right
@@ -855,14 +924,15 @@ const DerivedVariableEditor = ({
 							<span aria-hidden="true" className="w-4 flex-shrink-0" />
 						</div>
 						<p className="vc-help">
-							Rules run top to bottom; the first match wins. Each side of a
-							comparison can be a variable, a number, plain text, or a
-							formula like <code className="font-mono">{"{A} / {B}"}</code>.
-							When the left side is a single text variable, only = and ≠
-							apply and the right side lists its values — to compare it
-							with another variable instead, click that variable&apos;s
-							button while the list is selected.
-							Outputs are text and may include variables — an output of{" "}
+							Rules run top to bottom; the first match wins. Each side can
+							be a variable, a number, text, or a formula like{" "}
+							<code className="font-mono">{"{A} / {B}"}</code>. To combine
+							comparisons with AND / OR, pick Formula… at the end of the =
+							menu or the value list and write the whole condition:{" "}
+							<code className="font-mono">{"{A} == 1 AND {B} > 3"}</code>.
+							A blank cell matches only the blank test: = (blank) from the
+							list, or <code className="font-mono">{'""'}</code> typed in a
+							box. Outputs may include variables:{" "}
 							<code className="font-mono">{"{B}"}</code> keeps that
 							row&apos;s value of B.
 						</p>
