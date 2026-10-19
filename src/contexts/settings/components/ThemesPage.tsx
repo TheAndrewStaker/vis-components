@@ -13,6 +13,11 @@ import {
 	userDefaultThemeIdAtom,
 } from "../../chartBuilder/store/atoms"
 import { stringifyJsonDangerous } from "../../../lib/json"
+import {
+	pickSaveTarget,
+	writeSaveTarget,
+} from "../../chartBuilder/lib/saveFile"
+import type { SaveFileType } from "../../chartBuilder/lib/saveFile"
 
 import { ConfirmDialog } from "../../../components/ui/Modal"
 
@@ -35,6 +40,13 @@ import { Button } from "../../../components/ui/Button"
 import { ThemePreview } from "./ThemePreview"
 import { ThemeSamplerPreview } from "./ThemeSamplerPreview"
 import { Input } from "../../../components/ui/Input"
+
+/** What the Save-as dialog offers for a single-theme export. */
+const THEME_FILE_TYPE: SaveFileType = {
+	description: "Theme (JSON)",
+	mimeType: "application/json",
+	extensions: [".json"],
+}
 
 /** The editor's live previews: the gallery card's bar chart plus a sampler
  *  of what it leaves out. Both read the theme straight from the atom, so
@@ -184,27 +196,29 @@ export const ThemesPage = ({
 	// shape and the older `{themes: [...]}` bundle for back-compat.
 	const fileInputRef = useRef<HTMLInputElement>(null)
 
-	const exportTheme = () => {
+	const exportTheme = async () => {
+		const safeName = (editingTheme.name || "theme")
+			.toLowerCase()
+			.replaceAll(/[^a-z0-9]+/g, "-")
+			.replaceAll(/(^-|-$)/g, "")
+		const filename = `vis-components-theme-${safeName || "export"}-${new Date().toISOString().slice(0, 10)}.json`
+		// Save-as dialog where the browser has one (same flow as image and
+		// bundle export); a cancelled dialog saves nothing.
+		const target = await pickSaveTarget({
+			suggestedName: filename,
+			type: THEME_FILE_TYPE,
+			rememberAs: "vis-export-theme",
+		})
+		if (target === null) return
 		const payload = {
 			version: 1,
 			exportedAt: new Date().toISOString(),
 			theme: editingTheme,
 		}
 		const blob = new Blob([stringifyJsonDangerous(payload as never)], {
-			type: "application/json",
+			type: THEME_FILE_TYPE.mimeType,
 		})
-		const url = URL.createObjectURL(blob)
-		const a = document.createElement("a")
-		a.href = url
-		const safeName = (editingTheme.name || "theme")
-			.toLowerCase()
-			.replaceAll(/[^a-z0-9]+/g, "-")
-			.replaceAll(/(^-|-$)/g, "")
-		a.download = `vis-components-theme-${safeName || "export"}-${new Date().toISOString().slice(0, 10)}.json`
-		document.body.append(a)
-		a.click()
-		a.remove()
-		URL.revokeObjectURL(url)
+		await writeSaveTarget(target, blob, filename)
 	}
 
 	const performImportOverride = async (file: File) => {
@@ -327,7 +341,9 @@ export const ThemesPage = ({
 					</div>
 					<div className="flex flex-wrap gap-1.5 sm:flex-col">
 						<Button compact
-							onClick={exportTheme}
+							onClick={() => {
+								void exportTheme()
+							}}
 							title={`Download "${editingTheme.name}" as a JSON file`}
 						>
 							Export theme
