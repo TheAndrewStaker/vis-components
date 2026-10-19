@@ -12,8 +12,8 @@ import {
 	packedSourceOf,
 	topLevelGroupNames,
 } from "../../../lib/packedMeasure"
-import { parseValue } from "../../../lib/scales"
 import type { FieldType } from "../../../lib/types"
+import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import {
 	currentChannelConfigsAtom,
 	currentEncodingsAtom,
@@ -103,13 +103,6 @@ export const useUniqueValuesForChannel = (
 			}
 		}
 	}
-	const values = [
-		...new Set(
-			dataset.rows
-				.map((r) => parseValue(r[fieldName], type))
-				.filter((v) => v !== null)
-				.map(String)
-		),
-	]
+	const values = uniqueFieldValues(dataset.rows, fieldName, { type })
 	return { values, type, order: levelOrders[fieldName] }
 }

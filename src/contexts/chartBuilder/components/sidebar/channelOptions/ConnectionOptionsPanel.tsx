@@ -49,7 +49,7 @@ import {
 } from "../../../store/atoms"
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
 import { effectiveType } from "../../../lib/fieldType"
-import { parseValue } from "../../../lib/scales"
+import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import { orderedLevels } from "../../../lib/smartSort"
 import type { FieldType } from "../../../lib/types"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
@@ -237,14 +237,7 @@ export const ConnectionOptionsPanel = () => {
 	const levelsOf = (name: string): string[] => {
 		if (!dataset) return []
 		const type = typeOf(name)
-		const values = [
-			...new Set(
-				dataset.rows
-					.map((r) => parseValue(r[name], type))
-					.filter((v) => v !== null)
-					.map(String)
-			),
-		]
+		const values = uniqueFieldValues(dataset.rows, name, { type })
 		return orderedLevels(values, type, levelOrders[name]).map((l) => l.value)
 	}
 	const thicknessLevels = thicknessField ? levelsOf(thicknessField) : []

@@ -12,9 +12,9 @@ import { shapeConfigFromTheme } from "../../../lib/themeConfig"
 import {
 	CATEGORICAL_HUE_PALETTE,
 	outlinePaletteForHueType,
-	parseValue,
 } from "../../../lib/scales"
 import type { FieldType } from "../../../lib/types"
+import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import {
 	currentChannelConfigsAtom,
 	currentEncodingsAtom,
@@ -354,14 +354,7 @@ const OutlineCategoricalControls = ({
 	const scheme =
 		outlinePaletteForHueType(type, configs) ?? CATEGORICAL_HUE_PALETTE
 
-	const uniqueValues = [
-		...new Set(
-			dataset.rows
-				.map((r) => parseValue(r[fieldName], type))
-				.filter((v) => v !== null)
-				.map(String),
-		),
-	]
+	const uniqueValues = uniqueFieldValues(dataset.rows, fieldName, { type })
 
 	const update = (next: HueConfig) =>
 		setConfigs((prev) => ({ ...prev, outlineHue: next }))

@@ -18,7 +18,7 @@ import { isPieModeId } from "../../../lib/chartModes/families"
 import { facetAxisMapping } from "../../../lib/facetAxisMapping"
 import { effectiveType } from "../../../lib/fieldType"
 import { resolveFacetGrid } from "../../../lib/resolveFacetGrid"
-import { parseValue } from "../../../lib/scales"
+import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import {
 	currentChannelConfigsAtom,
 	currentEncodingsAtom,
@@ -80,14 +80,7 @@ export const FacetOptionsPanel = () => {
 			: "categorical"
 	const values =
 		dataset && fieldName
-			? [
-					...new Set(
-						dataset.rows
-							.map((r) => parseValue(r[fieldName], type))
-							.filter((v) => v !== null)
-							.map(String),
-					),
-				]
+			? uniqueFieldValues(dataset.rows, fieldName, { type })
 			: []
 	const facetCount = values.length
 	const grid = resolveFacetGrid(facetCount, cfg.rows, cfg.cols)

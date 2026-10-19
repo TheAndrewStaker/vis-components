@@ -2,6 +2,7 @@ import type { AxisConfig, MirrorAxisConfig } from "./channelConfig"
 import { parseValue } from "./scales"
 import { applyLevelOrder } from "./smartSort"
 import type { FieldType } from "./types"
+import { uniqueFieldValues } from "./uniqueFieldValues"
 
 type Row = Record<string, unknown>
 
@@ -28,14 +29,7 @@ export const twoLevelsOf = (
 	type: FieldType,
 	pinnedOrder: readonly string[] | undefined
 ): [string, string] | null => {
-	const discovered = [
-		...new Set(
-			rows
-				.map((r) => parseValue(r[field], type))
-				.filter((v) => v !== null)
-				.map(String)
-		),
-	]
+	const discovered = uniqueFieldValues(rows, field, { type })
 	if (discovered.length !== 2) return null
 	// Pinned order from the Fields panel wins; otherwise first-seen order,
 	// matching the legend (`orderCategories`) — never smart-sorted, so the

@@ -5,8 +5,8 @@ import {
 	type ChannelConfigs,
 	type PatternConfig,
 } from "./channelConfig"
-import { parseValue } from "./scales"
 import type { FieldType, Theme } from "./types"
+import { uniqueValues } from "./uniqueFieldValues"
 
 /**
  * Pattern rendering.
@@ -199,14 +199,7 @@ const scaleSlug = (scale: number): string =>
 export const patternCategoriesFor = (
 	rawValues: unknown[],
 	type: FieldType
-): string[] => [
-	...new Set(
-		rawValues
-			.map((v) => parseValue(v, type))
-			.filter((v) => v !== null)
-			.map(String)
-	),
-]
+): string[] => uniqueValues(rawValues, { type })
 
 export type ResolvedPattern = {
 	paletteIdx: number

@@ -7,6 +7,7 @@ import { buildTickFormatter } from "./formatTick"
 import { parseValue } from "./scales"
 import { applyLevelOrder } from "./smartSort"
 import type { FieldType } from "./types"
+import { uniqueValues } from "./uniqueFieldValues"
 
 /** Build polar angle + radius scales from a field's raw values. The
  *  resulting `RadialScales` packages the per-row mappers plus the
@@ -145,11 +146,7 @@ const buildAngleScale = (
 	const labelFor = (raw: number | Date | string): string =>
 		fmt(type === "temporal" && typeof raw === "number" ? new Date(raw) : raw)
 	if (type === "categorical" || type === "ordinal") {
-		const parsed = raws
-			.map((v) => parseValue(v, type))
-			.filter((v) => v !== null)
-			.map(String)
-		const domain = applyLevelOrder([...new Set(parsed)], type, levelOrder)
+		const domain = applyLevelOrder(uniqueValues(raws, { type }), type, levelOrder)
 		const n = Math.max(domain.length, 1)
 		const indexByValue = new Map<string, number>()
 		domain.forEach((v, i) => indexByValue.set(v, i))
@@ -267,11 +264,7 @@ const buildRScale = (
 	if (type === "categorical" || type === "ordinal") {
 		// Categorical/ordinal r: place rings at equal spacing. The first
 		// category sits at maxRadius/N from the center, the last at maxRadius.
-		const parsed = raws
-			.map((v) => parseValue(v, type))
-			.filter((v) => v !== null)
-			.map(String)
-		const domain = applyLevelOrder([...new Set(parsed)], type, levelOrder)
+		const domain = applyLevelOrder(uniqueValues(raws, { type }), type, levelOrder)
 		const n = Math.max(domain.length, 1)
 		const indexByValue = new Map<string, number>()
 		domain.forEach((v, i) => indexByValue.set(v, i))

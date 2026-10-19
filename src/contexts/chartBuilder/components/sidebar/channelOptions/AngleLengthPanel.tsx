@@ -11,7 +11,7 @@ import {
 	type LengthConfig,
 } from "../../../lib/channelConfig"
 import { MIN_LINE_THICKNESS } from "../../../lib/connectionThickness"
-import { parseValue } from "../../../lib/scales"
+import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import { orderedLevels } from "../../../lib/smartSort"
 import { isBarModeId, isPieModeId } from "../../../lib/chartModes/families"
 import { useChartModeDef } from "../../../store/useChartModeDef"
@@ -719,14 +719,7 @@ const SegmentPropertiesSection = () => {
 	const levelsOf = (name: string): string[] => {
 		if (!dataset) return []
 		const type = typeOf(name)
-		const values = [
-			...new Set(
-				dataset.rows
-					.map((r) => parseValue(r[name], type))
-					.filter((v) => v !== null)
-					.map(String)
-			),
-		]
+		const values = uniqueFieldValues(dataset.rows, name, { type })
 		return orderedLevels(values, type, levelOrders[name]).map((l) => l.value)
 	}
 	const levels = varyField ? levelsOf(varyField) : []

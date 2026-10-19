@@ -1,6 +1,7 @@
 import { DEFAULT_SHAPE_CONFIG } from "../../../lib/channelConfig"
 import { GlyphMark, resolveGlyph, stripNudge } from "../../../lib/customGlyphs"
-import { orderCategories, uniqueValues } from "../../../lib/legendSections"
+import { orderCategories } from "../../../lib/legendSections"
+import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import { makeShapeIndexer } from "../../../lib/scales"
 import { EntryHoverWrap, renderEntryList, SwatchCell } from "./swatches"
 import type { LegendProps } from "./types"
@@ -25,7 +26,7 @@ export const ShapeLegend = ({
 	 *  (`swatchSizes.shape`). `null` / undefined = the historical 5. */
 	swatchSize?: number | null
 }) => {
-	const unique = orderCategories(uniqueValues(values, type), type, pinnedOrder)
+	const unique = orderCategories(uniqueValues(values, { type }), type, pinnedOrder)
 	const indexer = makeShapeIndexer(values, type, configs.shape)
 	const outlineColor =
 		configs.shape?.outlineColor ?? DEFAULT_SHAPE_CONFIG.outlineColor

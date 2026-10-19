@@ -19,6 +19,7 @@ import {
 	type PositionScale,
 } from "../../lib/scales"
 import { applyLevelOrder } from "../../lib/smartSort"
+import { uniqueFieldValues } from "../../lib/uniqueFieldValues"
 import { formatSingleLabel } from "../../lib/dataLabelsStyle"
 import { formatTextValue, resolveTextColor } from "../../lib/textEncoding"
 import {
@@ -56,14 +57,7 @@ type CellAggregation = {
 const collectCategories = (
 	rows: Array<Record<string, unknown>>,
 	field: string
-): string[] => [
-	...new Set(
-		rows
-			.map((r) => r[field])
-			.filter((v) => v !== undefined && v !== null && String(v) !== "")
-			.map(String)
-	),
-]
+): string[] => uniqueFieldValues(rows, field, { skipBlank: true })
 
 const collectOrderedCategories = (
 	rows: Array<Record<string, unknown>>,

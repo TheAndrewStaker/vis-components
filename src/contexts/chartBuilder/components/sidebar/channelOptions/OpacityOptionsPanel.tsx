@@ -33,10 +33,11 @@ import {
 } from "../../../lib/chartModes/families"
 import { filledRadarOn } from "../../../lib/colorSlots"
 import { valueChanged } from "../../../lib/themeConfig"
-import { makeOpacityScale, parseValue } from "../../../lib/scales"
+import { makeOpacityScale } from "../../../lib/scales"
 import { preserveStackMode } from "../../../lib/stackMode"
 import { orderedLevels } from "../../../lib/smartSort"
 import type { FieldType } from "../../../lib/types"
+import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import {
 	currentChannelConfigsAtom,
 	currentEncodingsAtom,
@@ -368,7 +369,7 @@ const FillOpacityControls = ({
 		configs.opacity?.kind === "categorical"
 			? configs.opacity
 			: DEFAULT_OPACITY_CATEGORICAL
-	const uniqueValues = uniqueFieldValues(dataset, fieldName, type)
+	const uniqueValues = uniqueFieldValues(dataset.rows, fieldName, { type })
 	return (
 		<div className="flex flex-col gap-2">
 			{!hideVaryBy && varyBy}
@@ -524,7 +525,7 @@ const SlotCategoricalOpacity = ({
 			? slotCfg.opacity
 			: DEFAULT_OPACITY_CATEGORICAL
 	const uniqueValues = dataset
-		? uniqueFieldValues(dataset, fieldName, fieldType)
+		? uniqueFieldValues(dataset.rows, fieldName, { type: fieldType as FieldType })
 		: []
 	return (
 		<CategoricalOpacityList
@@ -697,17 +698,3 @@ const makeOpacityResolver = (
 	)
 	return (value) => Math.round((scale(value) ?? 1) * 100) / 100
 }
-
-/** Distinct stringified non-null values of a field, in first-seen order. */
-const uniqueFieldValues = (
-	dataset: NonNullable<ReturnType<typeof useCurrentDatasetView>>,
-	fieldName: string,
-	type: string
-): string[] => [
-	...new Set(
-		dataset.rows
-			.map((r) => parseValue(r[fieldName], type as never))
-			.filter((v) => v !== null)
-			.map(String)
-	),
-]

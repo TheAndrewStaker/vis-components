@@ -7,7 +7,8 @@ import {
 	resolveLegendChannelConfig,
 	resolveLegendDomain,
 } from "../../../lib/legendBreaks"
-import { orderCategories, uniqueValues } from "../../../lib/legendSections"
+import { orderCategories } from "../../../lib/legendSections"
+import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import { makeLengthScale } from "../../../lib/scales"
 import { DEFAULT_SEGMENT_THICKNESS } from "../../../lib/channelConfig"
 import { segmentStrokeLinecap } from "../../../lib/segmentStroke"
@@ -39,7 +40,7 @@ export const LengthLegend = ({
 	// Categorical / ordinal length: one swatch per unique category, sized
 	// by the length scale (which distributes evenly across categories).
 	if (type === "categorical" || type === "ordinal") {
-		const unique = orderCategories(uniqueValues(values, type), type, pinnedOrder)
+		const unique = orderCategories(uniqueValues(values, { type }), type, pinnedOrder)
 		if (unique.length === 0) return null
 		// Pin every row to the max swatch width so labels line up in a
 		// consistent column (per-row sizing pushes long-segment rows'

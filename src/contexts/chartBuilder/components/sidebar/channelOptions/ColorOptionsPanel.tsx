@@ -66,6 +66,7 @@ import {
 	themeAtom,
 } from "../../../store/atoms"
 import { orderedLevels } from "../../../lib/smartSort"
+import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
 
@@ -610,16 +611,7 @@ const CategoricalPanel = ({
 			: DEFAULT_CATEGORICAL_HUE_CONFIG
 	const uniqueValues =
 		valuesOverride ??
-		(hueFieldName
-			? [
-					...new Set(
-						dataset.rows
-							.map((r) => parseValue(r[hueFieldName], type))
-							.filter((v) => v !== null)
-							.map(String),
-					),
-				]
-			: [])
+		(hueFieldName ? uniqueFieldValues(dataset.rows, hueFieldName, { type }) : [])
 	// Ordinal hue values read from the theme's ordinal palette list first
 	// (sequential / ordered ramps read as ordered), but the categorical
 	// palettes are OFFERED too — an ordered variable with few levels (e.g.
@@ -807,14 +799,7 @@ export const AreaRadarOutlinePanel = () => {
 		configs.hue?.kind === "categorical"
 			? configs.hue
 			: DEFAULT_CATEGORICAL_HUE_CONFIG
-	const uniqueValues = [
-		...new Set(
-			dataset.rows
-				.map((r) => parseValue(r[hueFieldName], type))
-				.filter((v) => v !== null)
-				.map(String),
-		),
-	]
+	const uniqueValues = uniqueFieldValues(dataset.rows, hueFieldName, { type })
 	const isOrdinal = type === "ordinal"
 	const palettesForType = isOrdinal
 		? theme.ordinalPalettes

@@ -30,6 +30,7 @@ import { dashArrayFor, sanitizeCustomDasharray } from "../../lib/dashPatterns"
 import { effectiveType } from "../../lib/fieldType"
 import { resolveTextFont, resolveTitleFont } from "../../lib/labelsConfig"
 import { buildRadarScales } from "../../lib/radarScales"
+import { uniqueFieldValues } from "../../lib/uniqueFieldValues"
 import { GlyphMark, resolveGlyph } from "../../lib/customGlyphs"
 import { resolveShapeColors } from "../../lib/shapeColors"
 import type { DatasetView, FieldType } from "../../lib/types"
@@ -239,18 +240,7 @@ export const RadarPlot = (props: RadarPlotProps = {}) => {
 				// minimum padding is enough. Skip measurement.
 				return []
 			}
-			const seen = new Set<string>()
-			const out: string[] = []
-			for (const r of rowsForAngleScale) {
-				const v = r[angleField]
-				if (v == null) continue
-				const s = String(v)
-				if (!seen.has(s)) {
-					seen.add(s)
-					out.push(s)
-				}
-			}
-			return out
+			return uniqueFieldValues(rowsForAngleScale, angleField, { skipBlank: false })
 		})()
 		const longestAngleLabelPx = (() => {
 			if (typeof document === "undefined") return 0

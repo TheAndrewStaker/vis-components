@@ -16,7 +16,9 @@ import {
 import { isAreaModeId } from "../../../lib/chartModes/families"
 import { effectiveType } from "../../../lib/fieldType"
 import { buildQuantHueConfigFromTheme } from "../../../lib/hueDefaults"
-import { CATEGORICAL_HUE_PALETTE, parseValue } from "../../../lib/scales"
+import { CATEGORICAL_HUE_PALETTE } from "../../../lib/scales"
+import type { FieldType } from "../../../lib/types"
+import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import {
 	currentChannelConfigsAtom,
 	currentEncodingsAtom,
@@ -478,14 +480,9 @@ const SlotCategoricalControls = ({
 	const catCfg =
 		slotCfg?.hue?.kind === "categorical" ? slotCfg.hue : DEFAULT_CATEGORICAL_HUE_CONFIG
 
-	const uniqueValues = [
-		...new Set(
-			(dataset?.rows ?? [])
-				.map((r) => parseValue(r[fieldName], fieldType as never))
-				.filter((v) => v !== null)
-				.map(String)
-		),
-	]
+	const uniqueValues = uniqueFieldValues(dataset?.rows ?? [], fieldName, {
+		type: fieldType as FieldType,
+	})
 
 	const changePalette = (paletteId: string) => {
 		const pal = palettes.find((p) => p.id === paletteId)

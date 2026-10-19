@@ -7,6 +7,7 @@ import {
 } from "../../lib/orderLevelsByField"
 import { applyLevelOrder, smartSortCategories } from "../../lib/smartSort"
 import type { Field, FieldLevelOrderSpec, FieldType } from "../../lib/types"
+import { uniqueFieldValues } from "../../lib/uniqueFieldValues"
 import {
 	currentDatasetIdAtom,
 	currentDerivedVariablesAtom,
@@ -486,14 +487,7 @@ const LevelReorderPanel = ({
 	// Discover the unique values for this field, then apply the user's
 	// pinned ordering on top so the displayed list reflects what the chart
 	// will actually render.
-	const discovered: string[] = [
-		...new Set(
-			dataset.rows
-				.map((r) => r[field])
-				.filter((v) => v !== undefined && v !== null && String(v) !== "")
-				.map(String)
-		),
-	]
+	const discovered = uniqueFieldValues(dataset.rows, field, { skipBlank: true })
 	const ordered = applyLevelOrder(discovered, type, pinnedOrder)
 
 	// Fields a level order can be computed FROM: quantitative or temporal by

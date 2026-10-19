@@ -21,6 +21,7 @@ import { resolveSlotColor } from "../../../lib/resolveLayerColor"
 import { applyPositionScale, type PositionScale } from "../../../lib/scales"
 import { splitPolylineAtRange } from "../../../lib/dashRange"
 import type { DatasetView, Encodings, FieldType } from "../../../lib/types"
+import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import type { AestheticScales } from "../../../store/useAestheticScales"
 import {
 	rowHighlight,
@@ -238,14 +239,10 @@ export const renderConnectionLines = (
 	const dashOverrides = channelConfigs.pattern?.dashOverrides ?? {}
 	const customDashOverrides = channelConfigs.pattern?.customDashOverrides ?? {}
 	const patternValues = patternField
-		? [
-				...new Set(
-					marks
-						.map((m) => m.row[patternField])
-						.filter((v) => v !== undefined && v !== null)
-						.map(String)
-				),
-			]
+		? uniqueValues(
+				marks.map((m) => m.row[patternField]),
+				{ skipBlank: false }
+			)
 		: []
 	// Whether dash gaps get the alternate-color underlay (connected
 	// two-color line) or stay empty (truly dashed). Auto unless the user

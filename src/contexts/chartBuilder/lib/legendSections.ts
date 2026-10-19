@@ -53,28 +53,16 @@ import {
 	makeAreaScale,
 	makeHueScale,
 	makeLengthScale,
-	parseValue,
 } from "./scales"
 import type { HueScale } from "./scales"
 import { applyLevelOrder } from "./smartSort"
 import type { DatasetView, EncodingChannel, Encodings, FieldType } from "./types"
+import { uniqueValues } from "./uniqueFieldValues"
 
 const effectiveType = (
 	inferred: FieldType | undefined,
 	override: FieldType | undefined
 ): FieldType => override ?? inferred ?? "categorical"
-
-export const uniqueValues = (
-	values: unknown[],
-	type: FieldType
-): string[] => [
-	...new Set(
-		values
-			.map((v) => parseValue(v, type))
-			.filter((v) => v !== null)
-			.map(String)
-	),
-]
 
 /** Reorder a discovery-ordered category list to follow the user's pinned
  *  field ordering (from the Fields reorder UI), so the legend lists values
@@ -233,7 +221,7 @@ const colorSwatchRows = (
 		const scale = makeHueScale(values, type, hue, palette ?? undefined)
 		if (scale.kind !== "categorical") return null
 		const out = new Map<string, string>()
-		for (const v of uniqueValues(values, type)) {
+		for (const v of uniqueValues(values, { type })) {
 			const c = applyHueScale(scale, v, type)
 			if (c) out.set(v, c)
 		}
@@ -916,11 +904,7 @@ export const planLegendSections = ({
 	const SAFETY_PAD = 6
 	const labelTexts: string[] = []
 	const longestLabelChars = sections.reduce((max, s) => {
-		const uniques = new Set<string>()
-		for (const v of s.values) {
-			if (v === undefined || v === null) continue
-			uniques.add(String(v))
-		}
+		const uniques = new Set(uniqueValues(s.values, { skipBlank: false }))
 		// Quant sections render labels from RESOLVED BREAKS through the
 		// user's chosen formatter — not from raw data values. A user-set
 		// break of "100" or a format that adds " · 2024" can produce
@@ -1094,11 +1078,8 @@ export const planLegendSections = ({
 				})
 			} else {
 				// Angle / shape / etc.: every swatch the same fixed width.
-				const uniques = new Set<string>()
-				for (const v of s.values) {
-					if (v !== undefined && v !== null) uniques.add(String(v))
-				}
-				const stopCount = Math.max(uniques.size, 5)
+				const uniques = uniqueValues(s.values, { skipBlank: false })
+				const stopCount = Math.max(uniques.length, 5)
 				const w = channelSwatchW(channelKey)
 				perStopWidths = Array.from({ length: stopCount }, () => w)
 			}

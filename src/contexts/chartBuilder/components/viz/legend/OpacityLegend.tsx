@@ -8,7 +8,8 @@ import {
 	resolveLegendChannelConfig,
 	resolveLegendDomain,
 } from "../../../lib/legendBreaks"
-import { orderCategories, uniqueValues } from "../../../lib/legendSections"
+import { orderCategories } from "../../../lib/legendSections"
+import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import { makeOpacityScale } from "../../../lib/scales"
 import { renderEntryList, SwatchCell } from "./swatches"
 import type { ReversibleLegendProps } from "./types"
@@ -37,7 +38,7 @@ export const OpacityLegend = ({
 		? `${swatchRgb.r}, ${swatchRgb.g}, ${swatchRgb.b}`
 		: "79, 142, 218"
 	if (!isQuantitative) {
-		const raw = orderCategories(uniqueValues(values, type), type, pinnedOrder)
+		const raw = orderCategories(uniqueValues(values, { type }), type, pinnedOrder)
 		const unique = reverseCategorical ? [...raw].reverse() : raw
 		return renderEntryList(
 			unique.map((v) => {

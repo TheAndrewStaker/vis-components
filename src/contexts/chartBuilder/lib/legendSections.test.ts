@@ -25,7 +25,6 @@ import {
 	orderCategories,
 	planLegendSections,
 	sampleRampCssStops,
-	uniqueValues,
 	type PlanLegendSectionsInput,
 	type SectionInfo,
 } from "./legendSections"
@@ -127,15 +126,6 @@ const describeSection = (s: SectionInfo) =>
 // ---------------------------------------------------------------------------
 
 describe("legendSections helpers", () => {
-	it("uniqueValues dedupes stringified parsed values and drops blanks", () => {
-		expect(uniqueValues(["b", "a", "b", "", null, undefined], "categorical")).toEqual([
-			"b",
-			"a",
-		])
-		// Quantitative parsing normalizes numeric text; non-numbers drop out.
-		expect(uniqueValues(["1", "1.0", "x", "2"], "quantitative")).toEqual(["1", "2"])
-	})
-
 	it("orderCategories keeps discovery order without a pin and leads with pinned levels", () => {
 		const discovered = ["c", "a", "b"]
 		expect(orderCategories(discovered, "categorical", undefined)).toEqual(discovered)

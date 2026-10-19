@@ -5,6 +5,7 @@ import { sortPanelValues } from "./facetOrder"
 import { resolveCrossProduct, resolveFacetGrid } from "./resolveFacetGrid"
 import { parseValue } from "./scales"
 import type { DatasetView, Encodings, FieldType } from "./types"
+import { uniqueFieldValues } from "./uniqueFieldValues"
 
 /** Reorder a set of facet values using the user's field-level ordering
  *  (from the Fields sidebar) as the canonical source, with a fallback to
@@ -407,14 +408,7 @@ export const resolveFacetPanels = (
 		}
 	}
 	const facetType = effectiveType(dataset, facetField, overrides)
-	const natural = [
-		...new Set(
-			dataset.rows
-				.map((r) => parseValue(r[facetField], facetType))
-				.filter((v) => v !== null)
-				.map(String),
-		),
-	]
+	const natural = uniqueFieldValues(dataset.rows, facetField, { type: facetType })
 	const sorted = applyOrderingForField(
 		natural,
 		levelOrders[facetField],

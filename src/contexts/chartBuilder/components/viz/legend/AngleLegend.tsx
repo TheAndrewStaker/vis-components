@@ -6,7 +6,8 @@ import {
 	resolveLegendChannelConfig,
 	resolveLegendDomain,
 } from "../../../lib/legendBreaks"
-import { orderCategories, uniqueValues } from "../../../lib/legendSections"
+import { orderCategories } from "../../../lib/legendSections"
+import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import { makeAngleScale } from "../../../lib/scales"
 import { SwatchCell } from "./swatches"
 import type { LegendProps } from "./types"
@@ -27,7 +28,7 @@ export const AngleLegend = ({
 	// Categorical / ordinal angle: one swatch per category, rotated by the
 	// angle scale (which evenly distributes categories across the range).
 	if (type === "categorical" || type === "ordinal") {
-		const unique = orderCategories(uniqueValues(values, type), type, pinnedOrder)
+		const unique = orderCategories(uniqueValues(values, { type }), type, pinnedOrder)
 		if (unique.length === 0) return null
 		const lineLen = 10
 		return (

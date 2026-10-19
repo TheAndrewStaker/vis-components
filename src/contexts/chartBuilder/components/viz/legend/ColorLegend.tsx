@@ -11,8 +11,8 @@ import {
 import {
 	orderCategories,
 	sampleRampCssStops,
-	uniqueValues,
 } from "../../../lib/legendSections"
+import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import { applyHueScale, makeHueScale } from "../../../lib/scales"
 import {
 	DEFAULT_GRADIENT_BAR_STYLE,
@@ -85,7 +85,7 @@ export const ColorLegend = ({
 		// `raw` stays in discovery order so `strokeFor` indexes the line
 		// palette against the renderer's group iteration; only the displayed
 		// order follows the user's pinned field ordering.
-		const raw = uniqueValues(values, type)
+		const raw = uniqueValues(values, { type })
 		const ordered = orderCategories(raw, type, pinnedOrder)
 		const unique = reverseCategorical ? [...ordered].reverse() : ordered
 		// Stroke resolution per category — matches AreaPlot/RadarPlot's

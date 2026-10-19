@@ -6,6 +6,7 @@ import {
 } from "../../../lib/channelConfig"
 import type { PositionScale } from "../../../lib/scales"
 import type { FieldType } from "../../../lib/types"
+import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import type { Mark } from "./types"
 
 // ---------------------------------------------------------------------------
@@ -105,14 +106,8 @@ export const resolveStripAxes = (args: {
 	const xIsQuant = xType === "quantitative"
 	const yIsQuant = yType === "quantitative"
 
-	const uniqueValuesFor = (field: string): string[] => [
-		...new Set(
-			rows
-				.map((r) => r[field])
-				.filter((v) => v !== undefined && v !== null && String(v) !== "")
-				.map(String)
-		),
-	]
+	const uniqueValuesFor = (field: string): string[] =>
+		uniqueFieldValues(rows, field, { skipBlank: true })
 
 	let categoryAxis: "x" | "y"
 	let categoryField: string

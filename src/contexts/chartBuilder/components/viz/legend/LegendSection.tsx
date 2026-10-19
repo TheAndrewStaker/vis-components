@@ -9,7 +9,8 @@ import {
 	type LegendSwatchShape,
 	type QuantitativeLegendChannel,
 } from "../../../lib/labelsConfig"
-import { type SectionInfo, uniqueValues } from "../../../lib/legendSections"
+import type { SectionInfo } from "../../../lib/legendSections"
+import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import { applyHueScale, makeHueScale } from "../../../lib/scales"
 import { currentFieldLevelOrdersAtom } from "../../../store/atoms"
 import { useThemeInkFallback } from "../../../store/useThemeInkFallback"
@@ -439,7 +440,7 @@ export const LegendSection = ({
 							)
 							const lineColors: Record<string, string> = {}
 							if (outlineScale.kind === "categorical") {
-								for (const v of uniqueValues(values, type)) {
+								for (const v of uniqueValues(values, { type })) {
 									const c = applyHueScale(outlineScale, v, type)
 									if (c) lineColors[v] = c
 								}

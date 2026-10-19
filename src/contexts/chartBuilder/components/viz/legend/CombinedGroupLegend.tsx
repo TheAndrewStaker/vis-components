@@ -19,8 +19,8 @@ import {
 	type GroupChannel,
 	orderCategories,
 	sampleRampCssStops,
-	uniqueValues,
 } from "../../../lib/legendSections"
+import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import {
 	inkForHueColor,
 	inkPaletteForHue,
@@ -290,7 +290,7 @@ export const CombinedGroupLegend = ({
 	// way AreaPlot/RadarPlot do (per-value override → line palette by category
 	// position → global stroke). Discovery order matches the renderer's group
 	// iteration. Returns null when no split outline applies or it equals fill.
-	const splitOutlineOrder = splitOutline ? uniqueValues(values, type) : []
+	const splitOutlineOrder = splitOutline ? uniqueValues(values, { type }) : []
 	const splitOutlineStrokeFor = (v: string, fill: string): string | null => {
 		if (!splitOutline) return null
 		const override = splitOutline.lineColors[v]
@@ -814,7 +814,7 @@ export const CombinedGroupLegend = ({
 		)
 	}
 
-	const rawUnique = orderCategories(uniqueValues(values, type), type, pinnedOrder)
+	const rawUnique = orderCategories(uniqueValues(values, { type }), type, pinnedOrder)
 	const unique = reverseCategorical ? [...rawUnique].reverse() : rawUnique
 	// When area sizes the swatches, their SVG widths vary by category, which
 	// would ragged-left the labels in a stacked list. Reserve a fixed column

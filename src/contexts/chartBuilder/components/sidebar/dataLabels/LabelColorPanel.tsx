@@ -8,7 +8,8 @@ import {
 	type TextColorRule,
 } from "../../../lib/channelConfig"
 import { labelEntry, withLabelEntry } from "../../../lib/labelPieces"
-import { CATEGORICAL_HUE_PALETTE, parseValue } from "../../../lib/scales"
+import { CATEGORICAL_HUE_PALETTE } from "../../../lib/scales"
+import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import { resolveTextPickerPalette } from "../../../lib/themeConfig"
 import type { DatasetView, FieldType } from "../../../lib/types"
 import {
@@ -310,14 +311,7 @@ const LabelSwatchList = ({
 	const values =
 		valuesOverride ??
 		(hueField
-			? [
-					...new Set(
-						dataset.rows
-							.map((r) => parseValue(r[hueField], hueFieldType))
-							.filter((v) => v !== null)
-							.map(String)
-					),
-				]
+			? uniqueFieldValues(dataset.rows, hueField, { type: hueFieldType })
 			: [])
 	if (values.length === 0) return null
 	// Default color per row mirrors the layer's palette resolution: the
