@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-globals, @th/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
+/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { Dataset } from "./types"
@@ -78,7 +78,7 @@ const makeDataset = (id: string, name = id): Dataset => ({
 })
 
 const seedLegacyLocalStorage = (datasets: Record<string, Dataset>) => {
-	/* eslint-disable-next-line @th/use-wrapped-json-functions */
+	/* eslint-disable-next-line @vc/use-wrapped-json-functions */
 	localStorage.setItem(KEY, JSON.stringify({ _v: 1, data: datasets }))
 }
 

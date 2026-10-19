@@ -64,7 +64,7 @@ const mount = (rows: Array<Record<string, string>>) => {
 		y: { field: "h" },
 	}
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset(rows) }),
@@ -72,7 +72,7 @@ const mount = (rows: Array<Record<string, string>>) => {
 	store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
 	store.set("vis-components:previewVersionId", JSON.stringify(null))
 	store.set("vis-components:currentEncodings", JSON.stringify(encodings))
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 	const init = (snap: TestStore) => {
 		snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset(rows) })
 		snap.set(currentDatasetIdAtom, DATASET_ID)

@@ -72,7 +72,7 @@ const channelConfigs = (opts: Opts) => ({
 
 const seedStorage = (opts: Opts) => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set("vis-components:datasets", JSON.stringify({ [DATASET_ID]: buildDataset() }))
 	store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
 	store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -87,7 +87,7 @@ const seedStorage = (opts: Opts) => {
 		}),
 	)
 	store.set("vis-components:currentChannelConfigs", JSON.stringify(channelConfigs(opts)))
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const initState =

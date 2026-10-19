@@ -51,14 +51,14 @@ const buildDataset = (): Dataset =>
 
 const mount = (encodings: Encodings, configs: ChannelConfigs) => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => store.set(k, JSON.stringify(v))
 	set("vis-components:datasets", { [ID]: buildDataset() })
 	set("vis-components:currentDatasetId", ID)
 	set("vis-components:previewVersionId", null)
 	set("vis-components:currentEncodings", encodings)
 	set("vis-components:currentChannelConfigs", configs)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 	const init = (snap: TestStore) => {
 		snap.set(loadedDatasetsAtom, { [ID]: buildDataset() })
 		snap.set(currentDatasetIdAtom, ID)

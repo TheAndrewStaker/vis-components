@@ -58,7 +58,7 @@ const encodingsFor = (opts?: { dropY?: boolean }) => ({
 const mountHexbin = (opts?: { dropY?: boolean; configs?: ChannelConfigs }) => {
 	const store = installInMemoryLocalStorage()
 	const configs = opts?.configs ?? EMPTY_CHANNEL_CONFIGS
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -70,7 +70,7 @@ const mountHexbin = (opts?: { dropY?: boolean; configs?: ChannelConfigs }) => {
 		JSON.stringify(encodingsFor(opts))
 	)
 	store.set("vis-components:currentChannelConfigs", JSON.stringify(configs))
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 
 	const init = (snap: TestStore) => {
 		snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })

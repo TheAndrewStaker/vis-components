@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-globals, @th/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
+/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
 import { cleanup, render, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import { TestProvider } from "../../../../testSupport/TestProvider"
@@ -54,7 +54,7 @@ const seed = (
 	config?: Partial<DataLabelsConfig>
 ) => {
 	installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) =>
 		localStorage.setItem(k, JSON.stringify(v))
 	set("vis-components:datasets", { [DATASET_ID]: buildDataset() })
@@ -79,7 +79,7 @@ const seed = (
 		_v: MAP_CONFIG_VERSION,
 		data: { ...DEFAULT_MAP_CONFIG, coordSystem: "geographic" },
 	})
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const labelTexts = (container: HTMLElement): string[] =>

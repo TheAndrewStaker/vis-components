@@ -68,7 +68,7 @@ const mountPanel = (cfg: Partial<DataLabelsConfig>) => {
 		value: { field: null, multiField: true, fields: ["y", "g"] },
 	}
 	const full: DataLabelsConfig = { ...DEFAULT_DATA_LABELS_CONFIG, ...cfg }
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -81,7 +81,7 @@ const mountPanel = (cfg: Partial<DataLabelsConfig>) => {
 		JSON.stringify(dataLabelsEncodings)
 	)
 	store.set("vis-components:currentDataLabelsConfig", JSON.stringify(full))
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 	let snapRef: TestStore | null = null
 	const init = (snap: TestStore) => {
 		snapRef = snap

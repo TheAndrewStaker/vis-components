@@ -1,7 +1,6 @@
-// Local copy of the two @th/eslint-plugin rules this codebase references, so
-// disable directives and conventions stay aligned with engineering-frontend
-// (source: tooling/eslint-plugin in that repo). If a rule changes there,
-// mirror it here.
+// The two custom ESLint rules this codebase registers under the `@vc/`
+// namespace (see eslint.config.js). The rule logic is self-contained and
+// vendored here; edit it in place.
 
 /** @type {(x: any) => boolean} */
 const isIdentifier = (x) => typeof x.name === "string"
@@ -66,7 +65,7 @@ export default {
 						context.report({
 							node,
 							message:
-								"Do not use `JSON.stringify` directly due to misleading types. Look to the json functions inside @th/lib instead.",
+								"Do not use `JSON.stringify` directly due to misleading types. Use the wrapped json functions in src/lib/json.ts instead.",
 						})
 					},
 				}

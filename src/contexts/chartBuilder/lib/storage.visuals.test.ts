@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-globals, @th/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
+/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { installInMemoryLocalStorage } from "../../../testSupport/localStorageShim"
@@ -24,7 +24,7 @@ const LEGACY_KEY_PROJECTS = "vis-components:projects"
 const LEGACY_KEY_CURRENT_PROJECT = "vis-components:currentProjectId"
 
 const write = (key: string, value: unknown) =>
-	/* eslint-disable-next-line @th/use-wrapped-json-functions */
+	/* eslint-disable-next-line @vc/use-wrapped-json-functions */
 	localStorage.setItem(key, JSON.stringify(value))
 
 const stored = (key: string): { _v: number; data: unknown } | null => {

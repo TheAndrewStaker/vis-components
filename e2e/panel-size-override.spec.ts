@@ -1,4 +1,4 @@
-/* eslint-disable @th/use-wrapped-json-functions -- debug/measurement output, not app data */
+/* eslint-disable @vc/use-wrapped-json-functions -- debug/measurement output, not app data */
 import { existsSync, mkdirSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"

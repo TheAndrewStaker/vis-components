@@ -34,7 +34,7 @@ const buildDataset = (): Dataset =>
 
 const seed = (withText: boolean) => {
 	installInMemoryLocalStorage()
-	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v))
 	set("vis-components:datasets", { [DATASET_ID]: buildDataset() })
 	set("vis-components:currentDatasetId", DATASET_ID)
@@ -61,7 +61,7 @@ const seed = (withText: boolean) => {
 		_v: 3,
 		data: { rectangles: [rect], circles: [], lineSegments: [] },
 	})
-	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 }
 
 const mount = () =>

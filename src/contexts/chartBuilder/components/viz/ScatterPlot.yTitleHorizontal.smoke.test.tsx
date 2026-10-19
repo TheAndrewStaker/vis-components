@@ -54,7 +54,7 @@ const buildDataset = (): Dataset =>
 
 const seed = (horizontal: boolean) => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -76,7 +76,7 @@ const seed = (horizontal: boolean) => {
 			data: { ...DEFAULT_LABELS_CONFIG, yAxisTitleHorizontal: horizontal },
 		})
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const initState = (horizontal: boolean) => (snap: TestStore) => {

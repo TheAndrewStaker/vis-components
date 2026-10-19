@@ -46,7 +46,7 @@ const buildDataset = (): Dataset =>
 
 const seed = (labelsCfg: Partial<DataLabelsConfig>) => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -80,7 +80,7 @@ const seed = (labelsCfg: Partial<DataLabelsConfig>) => {
 		"vis-components:currentDataLabelsConfig",
 		JSON.stringify({ ...DEFAULT_DATA_LABELS_CONFIG, ...labelsCfg })
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const mount = () =>

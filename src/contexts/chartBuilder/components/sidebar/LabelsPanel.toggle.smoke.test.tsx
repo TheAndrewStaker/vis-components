@@ -84,8 +84,8 @@ describe("LabelsPanel — y-axis horizontal toggle wiring", () => {
 		// Seed localStorage too — `persistEffect` calls `setSelf(load())` on
 		// first read, which would otherwise clobber `initializeState`.
 		installInMemoryLocalStorage()
-		/* eslint-disable @th/use-wrapped-json-functions */
-		// eslint-disable-next-line @th/no-storage-outside-try
+		/* eslint-disable @vc/use-wrapped-json-functions */
+		// eslint-disable-next-line @vc/no-storage-outside-try
 		window.localStorage.setItem(
 			"vis-components:currentLabels",
 			JSON.stringify({
@@ -93,7 +93,7 @@ describe("LabelsPanel — y-axis horizontal toggle wiring", () => {
 				data: { ...DEFAULT_LABELS_CONFIG, yAxisTitleHorizontal: true },
 			})
 		)
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const { container } = render(
 			<TestProvider
 				initializeState={(snap) => {

@@ -51,7 +51,7 @@ const seed = () => {
 }
 
 const store_set = (key: string, value: unknown) => {
-	/* eslint-disable-next-line no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-disable-next-line no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 	localStorage.setItem(key, JSON.stringify(value))
 }
 

@@ -48,7 +48,7 @@ const PICKED_GRADIENT: Extract<HueConfig, { kind: "quantitative" }> = {
 
 const seed = () => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -63,7 +63,7 @@ const seed = () => {
 		"vis-components:currentChannelConfigs",
 		JSON.stringify({ hue: PICKED_GRADIENT })
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 /** Surfaces the live channel configs so assertions can read them. */
@@ -71,7 +71,7 @@ const ConfigsProbe = () => {
 	const configs = useAtomValue(currentChannelConfigsAtom)
 	return (
 		<div data-testid="configs">
-			{/* eslint-disable-next-line @th/use-wrapped-json-functions */}
+			{/* eslint-disable-next-line @vc/use-wrapped-json-functions */}
 			{JSON.stringify({ hue: configs.hue, stash: configs.hueQuantStash })}
 		</div>
 	)

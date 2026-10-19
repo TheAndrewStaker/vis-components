@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-globals, @th/no-storage-outside-try -- tests seed localStorage deliberately */
+/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try -- tests seed localStorage deliberately */
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { installInMemoryLocalStorage } from "../../../testSupport/localStorageShim"
@@ -34,7 +34,7 @@ const KEY_CURRENT_DATA_LABELS_CONFIG = "vis-components:currentDataLabelsConfig"
 const KEY_CURRENT_CAPTION = "vis-components:currentCaption"
 
 const write = (key: string, value: unknown) =>
-	/* eslint-disable-next-line @th/use-wrapped-json-functions */
+	/* eslint-disable-next-line @vc/use-wrapped-json-functions */
 	localStorage.setItem(key, JSON.stringify(value))
 
 beforeEach(() => {

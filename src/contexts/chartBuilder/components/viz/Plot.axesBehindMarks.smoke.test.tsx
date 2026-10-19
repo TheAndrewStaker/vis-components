@@ -43,7 +43,7 @@ const INNER: PlotInner = { x0: 50, y0: 20, x1: 550, y1: 400 }
 
 const seed = (axesBehindMarks: boolean | undefined) => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set("vis-components:datasets", JSON.stringify({ [DATASET_ID]: dataset }))
 	store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
 	store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -62,7 +62,7 @@ const seed = (axesBehindMarks: boolean | undefined) => {
 		"vis-components:currentLabels",
 		JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 /** Document-order indices of the first scatter mark and of the first and

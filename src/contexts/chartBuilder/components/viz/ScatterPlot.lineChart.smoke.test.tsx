@@ -75,7 +75,7 @@ const seedLocalStorage = (opts: {
 	// Test-only seed of localStorage; the project's JSON-wrapper rule is
 	// for runtime code that needs the safer parsing semantics. Test
 	// fixtures are simple enough that direct stringify is fine.
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildLineChartDataset() })
@@ -92,7 +92,7 @@ const seedLocalStorage = (opts: {
 			...(opts.hueField ? { hue: { field: opts.hueField } } : {}),
 		})
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const initLineChartState =
@@ -128,7 +128,7 @@ const seedAreaChartStorage = (opts: {
 	hueField?: string
 }) => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildLineChartDataset() })
@@ -145,7 +145,7 @@ const seedAreaChartStorage = (opts: {
 			...(opts.hueField ? { hue: { field: opts.hueField } } : {}),
 		})
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const initAreaChartState =
@@ -244,12 +244,12 @@ describe("Line chart (scatter + connection) — points + line render together", 
 	const seedConnectionCfg = (cfg: object) => {
 		// Channel configs are seeded via localStorage (not snap.set):
 		// the persisted atom bootstraps from storage on first read.
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		globalThis.localStorage.setItem(
 			"vis-components:currentChannelConfigs",
 			JSON.stringify({ connection: cfg })
 		)
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 	}
 
 	it("connection polylines honor the Line cap option (square → stroke-linecap=butt)", () => {

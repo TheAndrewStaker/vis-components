@@ -33,7 +33,7 @@ const buildDataset = (): Dataset =>
 
 const seed = (brightnessField: string) => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -48,14 +48,14 @@ const seed = (brightnessField: string) => {
 			saturation: { field: brightnessField },
 		})
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 /** Same fixture with NO field on either modulation channel — the panels then
  *  show the single-level default editor instead of the per-category one. */
 const seedUnmapped = () => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -66,7 +66,7 @@ const seedUnmapped = () => {
 		"vis-components:currentEncodings",
 		JSON.stringify(emptyEncodings())
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 /** Surfaces the live channel configs so assertions can read them. */
@@ -74,7 +74,7 @@ const ConfigsProbe = () => {
 	const configs = useAtomValue(currentChannelConfigsAtom)
 	return (
 		<div data-testid="configs">
-			{/* eslint-disable-next-line @th/use-wrapped-json-functions */}
+			{/* eslint-disable-next-line @vc/use-wrapped-json-functions */}
 			{JSON.stringify({
 				brightness: configs.brightness,
 				defaultBrightness: configs.defaultBrightness,

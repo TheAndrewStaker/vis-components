@@ -75,7 +75,7 @@ const buildLineDataset = (): Dataset => ({
 
 const seedState = (connectionCfg: Partial<ConnectionConfig> = {}) => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildLineDataset() })
@@ -97,7 +97,7 @@ const seedState = (connectionCfg: Partial<ConnectionConfig> = {}) => {
 			connection: { ...DEFAULT_CONNECTION_CONFIG, ...connectionCfg },
 		})
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const initState =

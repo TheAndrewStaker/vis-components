@@ -283,7 +283,7 @@
 	}
 
 	& code {
-		@apply rounded-md border border-th-electric-indigo-500/40 bg-th-electric-indigo-100 px-1 py-px dark:bg-th-electric-indigo-950;
+		@apply rounded-md border border-vc-electric-indigo-500/40 bg-vc-electric-indigo-100 px-1 py-px dark:bg-vc-electric-indigo-950;
 	}
 
 	& pre {
@@ -469,7 +469,7 @@
 }
 
 @utility code {
-	@apply rounded-md border border-th-electric-indigo-500/40 bg-th-electric-indigo-100 px-1 py-px dark:bg-th-electric-indigo-950;
+	@apply rounded-md border border-vc-electric-indigo-500/40 bg-vc-electric-indigo-100 px-1 py-px dark:bg-vc-electric-indigo-950;
 }
 
 @utility pre {

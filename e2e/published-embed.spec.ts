@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions -- storage probes run inside page.evaluate (browser context); the JSON body is a test fixture, not app data */
+/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions -- storage probes run inside page.evaluate (browser context); the JSON body is a test fixture, not app data */
 /** The 0016 public-embed contract, tested literally: publish through the
  *  self-host server, STOP that server, serve the publish directory with a
  *  dumb static file server, and assert the embed renders and stays

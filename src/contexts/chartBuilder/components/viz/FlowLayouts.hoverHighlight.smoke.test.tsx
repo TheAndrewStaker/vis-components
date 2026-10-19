@@ -91,7 +91,7 @@ const mountFlow = (
 	const configs: ChannelConfigs = {
 		connection: { hierarchyLayout: layout } as never,
 	}
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -104,7 +104,7 @@ const mountFlow = (
 		"vis-components:currentLabels",
 		JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 
 	const init = (snap: TestStore) => {
 		snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })

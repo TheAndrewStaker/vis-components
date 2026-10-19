@@ -29,7 +29,7 @@ const seedStorage = ({
 	labels?: Partial<LabelsConfig>
 }) => {
 	installInMemoryLocalStorage()
-	/* eslint-disable @th/no-storage-outside-try */
+	/* eslint-disable @vc/no-storage-outside-try */
 	window.localStorage.setItem(
 		"vis-components:currentEncodings",
 		stringifyJsonDangerous({ _v: 1, data: encodings })
@@ -52,7 +52,7 @@ const seedStorage = ({
 			})
 		)
 	}
-	/* eslint-enable @th/no-storage-outside-try */
+	/* eslint-enable @vc/no-storage-outside-try */
 }
 
 const gridEncodings = (): Encodings => ({

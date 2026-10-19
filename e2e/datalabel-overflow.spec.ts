@@ -48,8 +48,8 @@ const lineFixture = (id: string, longName: string): SeedFixture => {
  *  straight off the Visual). Left-aligned "last per series" labels with a
  *  small offset — the direct-labeling setup that clips. */
 /** Serializes for interpolation into the browser init script, where the
- *  @th/lib json helpers aren't available (same carve-out as seed.ts). */
-// eslint-disable-next-line @th/use-wrapped-json-functions
+ *  src/lib/json helpers aren't available (same carve-out as seed.ts). */
+// eslint-disable-next-line @vc/use-wrapped-json-functions
 const toJson = (v: unknown): string => JSON.stringify(v)
 
 const patchDataLabels = (

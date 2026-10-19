@@ -82,7 +82,7 @@ type Opts = {
 
 const seedStorage = (opts: Opts) => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildRadarDataset() }),
@@ -110,7 +110,7 @@ const seedStorage = (opts: Opts) => {
 			...(opts.extraConfigs ?? {}),
 		}),
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const initState =

@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import jsxA11y from 'eslint-plugin-jsx-a11y'
 import globals from 'globals'
-import th from './tooling/eslint/th-plugin.js'
+import vc from './tooling/eslint/vc-plugin.js'
 import { restrictedGlobals } from './tooling/eslint/restricted-globals.js'
 
 // Rule choices mirror engineering-frontend's eslint.config.mjs where they
@@ -32,13 +32,13 @@ export default tseslint.config(
 		plugins: {
 			'react-hooks': reactHooks,
 			'react-refresh': reactRefresh,
-			'@th': th,
+			'@vc': vc,
 		},
 		rules: {
 			...reactHooks.configs.recommended.rules,
 
-			'@th/use-wrapped-json-functions': 'error',
-			'@th/no-storage-outside-try': 'error',
+			'@vc/use-wrapped-json-functions': 'error',
+			'@vc/no-storage-outside-try': 'error',
 
 			'@typescript-eslint/ban-ts-comment': 'off',
 			'@typescript-eslint/no-explicit-any': 'off',

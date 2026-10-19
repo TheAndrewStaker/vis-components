@@ -1332,7 +1332,7 @@ describe("Legend — hexbin Point count section", () => {
 		// Persist-effect-backed atoms re-read localStorage on init, so the
 		// store must carry the same state as the snapshot (see the mount
 		// helpers in the other renderer smoke tests).
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set(
 			"vis-components:datasets",
 			JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -1344,7 +1344,7 @@ describe("Legend — hexbin Point count section", () => {
 			"vis-components:currentChannelConfigs",
 			JSON.stringify(EMPTY_CHANNEL_CONFIGS)
 		)
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const init = (snap: TestStore) => {
 			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
 			snap.set(currentDatasetIdAtom, DATASET_ID)
@@ -1426,7 +1426,7 @@ describe("Legend — flow modes list hue nodes over the endpoint UNION domain", 
 			...EMPTY_CHANNEL_CONFIGS,
 			connection: { hierarchyLayout: "chord" },
 		} as typeof EMPTY_CHANNEL_CONFIGS
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set(
 			"vis-components:datasets",
 			JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -1435,7 +1435,7 @@ describe("Legend — flow modes list hue nodes over the endpoint UNION domain", 
 		store.set("vis-components:previewVersionId", JSON.stringify(null))
 		store.set("vis-components:currentEncodings", JSON.stringify(encodings))
 		store.set("vis-components:currentChannelConfigs", JSON.stringify(configs))
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const init = (snap: TestStore) => {
 			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
 			snap.set(currentDatasetIdAtom, DATASET_ID)
@@ -1705,7 +1705,7 @@ describe("Legend — solo saturation / brightness sections", () => {
 			...DEFAULT_LEGEND_CONFIG,
 			...(opts?.legend ?? {}),
 		}
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set(
 			"vis-components:datasets",
 			JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -1718,7 +1718,7 @@ describe("Legend — solo saturation / brightness sections", () => {
 			JSON.stringify(channelConfigs)
 		)
 		store.set("vis-components:currentLegend", JSON.stringify(legendCfg))
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const init = (snap: TestStore) => {
 			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
 			snap.set(currentDatasetIdAtom, DATASET_ID)
@@ -1968,7 +1968,7 @@ describe("Legend — columns arrange sections, orientation flows entries", () =>
 			shape: DEFAULT_SHAPE_CONFIG,
 		}
 		const legendCfg: LegendConfig = { ...DEFAULT_LEGEND_CONFIG, ...legend }
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set(
 			"vis-components:datasets",
 			JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -1981,7 +1981,7 @@ describe("Legend — columns arrange sections, orientation flows entries", () =>
 			JSON.stringify(channelConfigs)
 		)
 		store.set("vis-components:currentLegend", JSON.stringify(legendCfg))
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const init = (snap: TestStore) => {
 			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
 			snap.set(currentDatasetIdAtom, DATASET_ID)
@@ -2194,7 +2194,7 @@ describe("Legend — bar-mode categorical flip only applies when stacked", () =>
 			...EMPTY_CHANNEL_CONFIGS,
 			hue: { ...DEFAULT_CATEGORICAL_HUE_CONFIG, stackMode },
 		}
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set(
 			"vis-components:datasets",
 			JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -2203,7 +2203,7 @@ describe("Legend — bar-mode categorical flip only applies when stacked", () =>
 		store.set("vis-components:previewVersionId", JSON.stringify(null))
 		store.set("vis-components:currentEncodings", JSON.stringify(encodings))
 		store.set("vis-components:currentChannelConfigs", JSON.stringify(configs))
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const init = (snap: TestStore) => {
 			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
 			snap.set(currentDatasetIdAtom, DATASET_ID)
@@ -2270,7 +2270,7 @@ describe("Legend — fixed legend width", () => {
 			shape: DEFAULT_SHAPE_CONFIG,
 		}
 		const legendCfg: LegendConfig = { ...DEFAULT_LEGEND_CONFIG, ...legend }
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set(
 			"vis-components:datasets",
 			JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -2283,7 +2283,7 @@ describe("Legend — fixed legend width", () => {
 			JSON.stringify(channelConfigs)
 		)
 		store.set("vis-components:currentLegend", JSON.stringify(legendCfg))
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const init = (snap: TestStore) => {
 			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
 			snap.set(currentDatasetIdAtom, DATASET_ID)
@@ -2392,7 +2392,7 @@ describe("Legend — auto width from measured text", () => {
 				},
 			},
 		}
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set(
 			"vis-components:datasets",
 			JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -2400,7 +2400,7 @@ describe("Legend — auto width from measured text", () => {
 		store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
 		store.set("vis-components:previewVersionId", JSON.stringify(null))
 		store.set("vis-components:currentEncodings", JSON.stringify(encodings))
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const init = (snap: TestStore) => {
 			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
 			snap.set(currentDatasetIdAtom, DATASET_ID)
@@ -2505,7 +2505,7 @@ describe("Hierarchy-derived Color legend (Top-level group / Nesting depth)", () 
 			...DEFAULT_LEGEND_CONFIG,
 			hidden: opts.hidden ?? {},
 		}
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set(
 			"vis-components:datasets",
 			JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -2515,7 +2515,7 @@ describe("Hierarchy-derived Color legend (Top-level group / Nesting depth)", () 
 		store.set("vis-components:currentEncodings", JSON.stringify(encodings))
 		store.set("vis-components:currentChannelConfigs", JSON.stringify(configs))
 		store.set("vis-components:currentLegend", JSON.stringify(legendCfg))
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const init = (snap: TestStore) => {
 			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
 			snap.set(currentDatasetIdAtom, DATASET_ID)
@@ -2698,7 +2698,7 @@ describe("Legend — Legend text", () => {
 		const store = installInMemoryLocalStorage()
 		const encodings = { ...emptyEncodings(), hue: { field: "Tier" } }
 		const legendCfg: LegendConfig = { ...DEFAULT_LEGEND_CONFIG, ...legend }
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set(
 			"vis-components:datasets",
 			JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -2707,7 +2707,7 @@ describe("Legend — Legend text", () => {
 		store.set("vis-components:previewVersionId", JSON.stringify(null))
 		store.set("vis-components:currentEncodings", JSON.stringify(encodings))
 		store.set("vis-components:currentLegend", JSON.stringify(legendCfg))
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const init = (snap: TestStore) => {
 			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
 			snap.set(currentDatasetIdAtom, DATASET_ID)
@@ -2817,7 +2817,7 @@ describe("Legend — rug + density curve colored by the Color field", () => {
 				densityCurveStroke: byGroup,
 			},
 		}
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set(
 			"vis-components:datasets",
 			JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -2829,7 +2829,7 @@ describe("Legend — rug + density curve colored by the Color field", () => {
 			"vis-components:currentChannelConfigs",
 			JSON.stringify(channelConfigs)
 		)
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const init = (snap: TestStore) => {
 			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
 			snap.set(currentDatasetIdAtom, DATASET_ID)

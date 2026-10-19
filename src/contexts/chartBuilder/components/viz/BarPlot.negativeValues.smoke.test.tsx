@@ -37,7 +37,7 @@ const buildDataset = (): Dataset =>
 
 const seed = ({ horizontal = false }: { horizontal?: boolean } = {}) => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -64,7 +64,7 @@ const seed = ({ horizontal = false }: { horizontal?: boolean } = {}) => {
 		"vis-components:currentLabels",
 		JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const mount = () =>
@@ -161,7 +161,7 @@ describe("BarPlot — negative measures", () => {
 
 	it("all-positive data keeps the zero-floored axis (no regression)", () => {
 		const store = installInMemoryLocalStorage()
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set(
 			"vis-components:datasets",
 			JSON.stringify({
@@ -195,7 +195,7 @@ describe("BarPlot — negative measures", () => {
 			"vis-components:currentLabels",
 			JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
 		)
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const { container } = mount()
 		const rects = markRects(container)
 		expect(rects).toHaveLength(2)

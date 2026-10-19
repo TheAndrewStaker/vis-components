@@ -103,8 +103,8 @@ export type SeedFixture = {
 }
 
 /** Serializes the fixture for interpolation into the browser init script,
- *  where the @th/lib json helpers are not available. */
-// eslint-disable-next-line @th/use-wrapped-json-functions
+ *  where the src/lib/json helpers are not available. */
+// eslint-disable-next-line @vc/use-wrapped-json-functions
 const fixtureJson = (fixture: SeedFixture): string => JSON.stringify(fixture)
 
 /** Build a Visual JSON shape that matches what useLoadVisual expects.

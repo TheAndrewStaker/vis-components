@@ -33,7 +33,7 @@ const seed = (
 	encodings?: Partial<Record<string, { field: string }>>
 ) => {
 	installInMemoryLocalStorage()
-	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 	// Wrapped in the current-version envelope so overrides are taken literally
 	// — a bare (v0) object would run the migration chain, whose v5→v6 step
 	// resets an explicit `showNoDataRegions: false` back to true.
@@ -50,7 +50,7 @@ const seed = (
 			JSON.stringify({ ...emptyEncodings(), ...encodings })
 		)
 	}
-	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 }
 
 /** Seed a lon/lat dataset for the outside-the-projection hint tests. Must run
@@ -58,7 +58,7 @@ const seed = (
  *  viz smoke tests' dataset seeding (GeoPointPlot.smoke.test.tsx). */
 const OUTSIDE_DATASET_ID = "ds-maps-outside"
 const seedPointDataset = (rows: Record<string, string>[]) => {
-	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) =>
 		localStorage.setItem(k, JSON.stringify(v))
 	set("vis-components:datasets", {
@@ -76,7 +76,7 @@ const seedPointDataset = (rows: Record<string, string>[]) => {
 	})
 	set("vis-components:currentDatasetId", OUTSIDE_DATASET_ID)
 	set("vis-components:previewVersionId", null)
-	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 }
 
 /** Encoding shorthands for the two geographic modes. */
@@ -431,7 +431,7 @@ describe("MapsSection", () => {
  *  `seed(...)` (which resets the in-memory localStorage). */
 const STATE_DATASET_ID = "ds-maps-states"
 const seedStateDataset = (rows: Record<string, string>[]) => {
-	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) =>
 		localStorage.setItem(k, JSON.stringify(v))
 	set("vis-components:datasets", {
@@ -448,15 +448,15 @@ const seedStateDataset = (rows: Record<string, string>[]) => {
 	})
 	set("vis-components:currentDatasetId", STATE_DATASET_ID)
 	set("vis-components:previewVersionId", null)
-	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 }
 
 /** The persisted `customViewport`, read back through the versioned envelope
  *  the map-config atom writes (bare object tolerated). */
 const storedCustomViewport = (): Record<string, number> | null => {
-	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try */
+	/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try */
 	const raw = localStorage.getItem("vis-components:currentMapConfig")
-	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try */
+	/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try */
 	if (!raw) return null
 	const parsed = JSON.parse(raw) as {
 		data?: { customViewport?: Record<string, number> | null }

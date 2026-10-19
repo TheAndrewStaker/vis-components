@@ -33,13 +33,13 @@ const mount = (legend: Partial<LegendConfig> = {}) => {
 	const store = installInMemoryLocalStorage()
 	const encodings = { ...emptyEncodings(), hue: { field: "Tier" } }
 	const legendCfg: LegendConfig = { ...DEFAULT_LEGEND_CONFIG, ...legend }
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set("vis-components:datasets", JSON.stringify({ [DATASET_ID]: buildDataset() }))
 	store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
 	store.set("vis-components:previewVersionId", JSON.stringify(null))
 	store.set("vis-components:currentEncodings", JSON.stringify(encodings))
 	store.set("vis-components:currentLegend", JSON.stringify(legendCfg))
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 	let snap: TestStore | null = null
 	const init = (s: TestStore) => {
 		snap = s

@@ -73,7 +73,7 @@ const SOUTH_ROWS = [
 
 const seedState = () => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -107,7 +107,7 @@ const seedState = () => {
 			paletteId: "test-palette",
 		})
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const initState = (snap: TestStore) => {

@@ -264,7 +264,7 @@ describe("deletion vs the bootstrap blob", () => {
 			_v: DATASETS_VERSION,
 			data: { "d-boot": dataset("d-boot") },
 		} as never)
-		// eslint-disable-next-line no-restricted-globals, @th/no-storage-outside-try -- seeding the legacy blob deliberately
+		// eslint-disable-next-line no-restricted-globals, @vc/no-storage-outside-try -- seeding the legacy blob deliberately
 		localStorage.setItem("vis-components:datasets", legacyBlob)
 		const store = createStore()
 		expect(store.get(loadedDatasetsAtom)["d-boot"]).toBeTruthy()

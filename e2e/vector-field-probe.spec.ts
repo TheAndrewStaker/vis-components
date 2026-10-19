@@ -109,7 +109,7 @@ test("vector field: setup + screenshot + glyph readings", async ({ page }, info)
 			samples: geometry.slice(0, 10),
 		}
 	})
-	// eslint-disable-next-line @th/use-wrapped-json-functions
+	// eslint-disable-next-line @vc/use-wrapped-json-functions
 	console.log("[chart]", JSON.stringify(glyphs, null, 2))
 
 	expect(glyphs, "no chart SVG (#vc-scatter-svg) rendered").not.toBeNull()

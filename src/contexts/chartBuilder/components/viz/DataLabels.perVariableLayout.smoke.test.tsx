@@ -51,7 +51,7 @@ const seed = (labelsCfg: Partial<DataLabelsConfig>) => {
 		length: { field: "value" },
 		hue: { field: "level" },
 	}
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -81,7 +81,7 @@ const seed = (labelsCfg: Partial<DataLabelsConfig>) => {
 			...labelsCfg,
 		})
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const mount = () =>

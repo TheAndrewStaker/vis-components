@@ -524,7 +524,7 @@ const FolderTreeItem = ({
 							e.stopPropagation()
 							onToggleExpanded(folder.id)
 						}}
-						className={`flex ${ROW_CHEVRON_BOX} items-center justify-center text-vc-brand-text dark:text-th-electric-indigo-300`}
+						className={`flex ${ROW_CHEVRON_BOX} items-center justify-center text-vc-brand-text dark:text-vc-electric-indigo-300`}
 					>
 						<SectionChevron open={expanded} />
 					</button>
@@ -551,7 +551,7 @@ const FolderTreeItem = ({
 					/>
 				) : (
 					<span
-						className="min-w-0 flex-1 truncate font-bold text-vc-brand-text dark:text-th-electric-indigo-300"
+						className="min-w-0 flex-1 truncate font-bold text-vc-brand-text dark:text-vc-electric-indigo-300"
 						onDoubleClick={(e) => {
 							e.stopPropagation()
 							setEditing(true)

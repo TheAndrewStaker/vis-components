@@ -28,7 +28,7 @@ const buildDataset = (): Dataset =>
 
 const seed = (histogram: Record<string, unknown>) => {
 	installInMemoryLocalStorage()
-	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v))
 	set("vis-components:datasets", { [DATASET_ID]: buildDataset() })
 	set("vis-components:currentDatasetId", DATASET_ID)
@@ -41,7 +41,7 @@ const seed = (histogram: Record<string, unknown>) => {
 		x: { ...DEFAULT_AXIS_CONFIG, histogram: { enabled: true, binCount: 8, ...histogram } },
 	})
 	set("vis-components:currentLabels", { _v: 1, data: DEFAULT_LABELS_CONFIG })
-	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 }
 
 const mount = () =>
@@ -92,7 +92,7 @@ describe("BarPlot — histogram density curve overlay", () => {
 
 	it("the filled area honors the Density Curve Fill opacity slot", () => {
 		installInMemoryLocalStorage()
-		/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+		/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 		const set = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v))
 		set("vis-components:datasets", { [DATASET_ID]: buildDataset() })
 		set("vis-components:currentDatasetId", DATASET_ID)
@@ -115,7 +115,7 @@ describe("BarPlot — histogram density curve overlay", () => {
 			opacitySlots: { densityCurveFill: { field: null, level: 0.8 } },
 		})
 		set("vis-components:currentLabels", { _v: 1, data: DEFAULT_LABELS_CONFIG })
-		/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+		/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 		const { container } = mount()
 		const areas = [...container.querySelectorAll("path")].filter(
 			(p) => p.getAttribute("stroke") === "none" && p.getAttribute("fill") !== "none"
@@ -128,7 +128,7 @@ describe("BarPlot — histogram density curve overlay", () => {
 		// Dataset with a 3-level categorical field; map it to the density curve
 		// outline color so the curve splits into one KDE per category.
 		installInMemoryLocalStorage()
-		/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+		/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 		const set = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v))
 		set("vis-components:datasets", {
 			[DATASET_ID]: {
@@ -178,7 +178,7 @@ describe("BarPlot — histogram density curve overlay", () => {
 			opacitySlots: { densityCurveFill: { field: null, level: 0.7 } },
 		})
 		set("vis-components:currentLabels", { _v: 1, data: DEFAULT_LABELS_CONFIG })
-		/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+		/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 		// Three categories → three curve paths, each a distinct stroke color.
 		const { container } = mount()
 		const curves = curvePaths(container)

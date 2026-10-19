@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-globals, @th/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
+/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { EMPTY_CHANNEL_CONFIGS } from "./channelConfig"

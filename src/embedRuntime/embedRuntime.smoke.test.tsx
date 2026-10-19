@@ -118,7 +118,7 @@ describe("published-embed runtime", () => {
 
 describe("parseEmbedDocument", () => {
 	it("reads the server's wrapper shape", () => {
-		// eslint-disable-next-line @th/use-wrapped-json-functions
+		// eslint-disable-next-line @vc/use-wrapped-json-functions
 		const payloadJson = JSON.stringify(payload())
 		const doc = parseEmbedDocument(
 			`{"v":1,"part":"chart","payload":${payloadJson}}`

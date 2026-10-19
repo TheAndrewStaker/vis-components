@@ -15,6 +15,6 @@ export function stringifyJsonDangerous(data: JsonLike): string
 export function stringifyJsonDangerous(data: undefined): undefined
 export function stringifyJsonDangerous(data?: JsonLike): string | undefined
 export function stringifyJsonDangerous(data: JsonLike | undefined) {
-	// eslint-disable-next-line @th/use-wrapped-json-functions -- this is the wrapper
+	// eslint-disable-next-line @vc/use-wrapped-json-functions -- this is the wrapper
 	return JSON.stringify(data) as string | undefined
 }

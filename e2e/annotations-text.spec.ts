@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions -- seeding runs inside page.addInitScript (browser context) */
+/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions -- seeding runs inside page.addInitScript (browser context) */
 import { expect, test } from "@playwright/test"
 
 /** Text annotations in a REAL browser.

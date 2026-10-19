@@ -58,14 +58,14 @@ const cfg = {
 
 const mount = () => {
 	const storeShim = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => storeShim.set(k, JSON.stringify(v))
 	set("vis-components:datasets", { [ID]: buildDataset() })
 	set("vis-components:currentDatasetId", ID)
 	set("vis-components:previewVersionId", null)
 	set("vis-components:currentEncodings", enc)
 	set("vis-components:currentChannelConfigs", cfg)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 	let store: TestStore | null = null
 	const init = (snap: TestStore) => {
 		store = snap

@@ -59,7 +59,7 @@ const WHITE_BLACK_HUE = {
 
 const seed = () => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -93,7 +93,7 @@ const seed = () => {
 		"vis-components:currentLabels",
 		JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const mount = () =>

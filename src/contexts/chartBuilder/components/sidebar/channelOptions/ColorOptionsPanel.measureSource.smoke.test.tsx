@@ -34,7 +34,7 @@ const buildDataset = (): Dataset =>
 
 const seed = (encodings: Record<string, unknown>, histogram: boolean) => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set("vis-components:datasets", JSON.stringify({ [DATASET_ID]: buildDataset() }))
 	store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
 	store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -51,7 +51,7 @@ const seed = (encodings: Record<string, unknown>, histogram: boolean) => {
 			},
 		})
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 /** Surfaces the live hue encoding so assertions can read it after a change. */
@@ -59,7 +59,7 @@ const HueProbe = () => {
 	const enc = useAtomValue(currentEncodingsAtom)
 	return (
 		<div data-testid="hue">
-			{/* eslint-disable-next-line @th/use-wrapped-json-functions */}
+			{/* eslint-disable-next-line @vc/use-wrapped-json-functions */}
 			{JSON.stringify(enc.hue)}
 		</div>
 	)

@@ -129,7 +129,7 @@ const mountPacked = (opts: MountOpts) => {
 						: {}),
 				}
 			: EMPTY_CHANNEL_CONFIGS
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildDataset() })
@@ -162,7 +162,7 @@ const mountPacked = (opts: MountOpts) => {
 			})
 		)
 	}
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 
 	const init = (snap: TestStore) => {
 		snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })

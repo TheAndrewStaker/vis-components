@@ -68,13 +68,13 @@ const encodings = () => ({
 
 const seedStorage = () => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set("vis-components:datasets", JSON.stringify({ [DATASET_ID]: buildDataset() }))
 	store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
 	store.set("vis-components:previewVersionId", JSON.stringify(null))
 	store.set("vis-components:currentEncodings", JSON.stringify(encodings()))
 	store.set("vis-components:currentChannelConfigs", JSON.stringify(channelConfigs()))
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const initState = (snap: TestStore) => {

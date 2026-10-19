@@ -48,14 +48,14 @@ const mount = (withConnection = false) => {
 		...(withConnection ? { connection: { field: "series" } } : {}),
 	}
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => store.set(k, JSON.stringify(v))
 	set("vis-components:datasets", { [ID]: buildDataset() })
 	set("vis-components:currentDatasetId", ID)
 	set("vis-components:previewVersionId", null)
 	set("vis-components:currentEncodings", enc)
 	set("vis-components:currentChannelConfigs", EMPTY_CHANNEL_CONFIGS)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 	const init = (snap: TestStore) => {
 		snap.set(loadedDatasetsAtom, { [ID]: buildDataset() })
 		snap.set(currentDatasetIdAtom, ID)

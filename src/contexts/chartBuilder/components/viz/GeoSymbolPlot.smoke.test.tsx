@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-globals, @th/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
+/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react"
 import { afterEach } from "vitest"
 import { TestProvider } from "../../../../testSupport/TestProvider"
@@ -44,7 +44,7 @@ const seed = (
 	mapConfigOverrides: Partial<typeof DEFAULT_MAP_CONFIG> = {}
 ) => {
 	installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) =>
 		localStorage.setItem(k, JSON.stringify(v))
 	set("vis-components:datasets", { [DATASET_ID]: buildDataset(rows) })
@@ -61,7 +61,7 @@ const seed = (
 		geographyLevel: "states",
 		...mapConfigOverrides,
 	})
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const mount = () =>
@@ -205,7 +205,7 @@ describe("GeoSymbolPlot (states bubble map)", () => {
 		// assert: ≥2 distinct REGION (path) fills, bubbles vary in `r`, and the
 		// bubble fill is the slot default (NOT one of the region/hue colors).
 		installInMemoryLocalStorage()
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		const set = (k: string, v: unknown) =>
 			localStorage.setItem(k, JSON.stringify(v))
 		const dataset: Dataset = {
@@ -245,7 +245,7 @@ describe("GeoSymbolPlot (states bubble map)", () => {
 			coordSystem: "geographic",
 			geographyLevel: "states",
 		})
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 
 		const { container } = mount()
 		await waitFor(() => {
@@ -272,7 +272,7 @@ describe("GeoSymbolPlot (states bubble map)", () => {
 		// The point-fill color slot drives bubble fill, independent of the region
 		// choropleth. With a single color set, every bubble uses it.
 		installInMemoryLocalStorage()
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		const set = (k: string, v: unknown) =>
 			localStorage.setItem(k, JSON.stringify(v))
 		set("vis-components:datasets", { [DATASET_ID]: buildDataset() })
@@ -291,7 +291,7 @@ describe("GeoSymbolPlot (states bubble map)", () => {
 		set("vis-components:currentChannelConfigs", {
 			colorSlots: { geoPointFill: { singleColor: "#ff00ff" } },
 		})
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 
 		const { container } = mount()
 		await waitFor(() => {
@@ -305,7 +305,7 @@ describe("GeoSymbolPlot (states bubble map)", () => {
 
 	it("strokes bubbles with the geoPointStroke slot single color", async () => {
 		installInMemoryLocalStorage()
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		const set = (k: string, v: unknown) =>
 			localStorage.setItem(k, JSON.stringify(v))
 		set("vis-components:datasets", { [DATASET_ID]: buildDataset() })
@@ -324,7 +324,7 @@ describe("GeoSymbolPlot (states bubble map)", () => {
 		set("vis-components:currentChannelConfigs", {
 			colorSlots: { geoPointStroke: { singleColor: "#00ff00" } },
 		})
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 
 		const { container } = mount()
 		await waitFor(() => {
@@ -340,7 +340,7 @@ describe("GeoSymbolPlot (states bubble map)", () => {
 		// The point-fill slot can map its own categorical field, independent of
 		// the region hue. Three rows with distinct `cat` values → ≥2 bubble fills.
 		installInMemoryLocalStorage()
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		const set = (k: string, v: unknown) =>
 			localStorage.setItem(k, JSON.stringify(v))
 		const dataset: Dataset = {
@@ -384,7 +384,7 @@ describe("GeoSymbolPlot (states bubble map)", () => {
 				geoPointFill: { field: "cat" },
 			},
 		})
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 
 		const { container } = mount()
 		await waitFor(() => {
@@ -406,7 +406,7 @@ describe("GeoSymbolPlot (states bubble map)", () => {
 			mapConfigOverrides: Partial<typeof DEFAULT_MAP_CONFIG> = {}
 		) => {
 			installInMemoryLocalStorage()
-			/* eslint-disable @th/use-wrapped-json-functions */
+			/* eslint-disable @vc/use-wrapped-json-functions */
 			const set = (k: string, v: unknown) =>
 				localStorage.setItem(k, JSON.stringify(v))
 			const dataset: Dataset = buildDatasetFixture({
@@ -433,7 +433,7 @@ describe("GeoSymbolPlot (states bubble map)", () => {
 				geographyLevel: "countries",
 				...mapConfigOverrides,
 			})
-			/* eslint-enable @th/use-wrapped-json-functions */
+			/* eslint-enable @vc/use-wrapped-json-functions */
 		}
 
 		const ISO3_ROWS = [

@@ -50,7 +50,7 @@ const seed = (
 	mapConfigOverrides: Partial<typeof DEFAULT_MAP_CONFIG> = {}
 ) => {
 	installInMemoryLocalStorage()
-	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) =>
 		localStorage.setItem(k, JSON.stringify(v))
 	set("vis-components:datasets", { [DATASET_ID]: buildDataset(rows) })
@@ -68,7 +68,7 @@ const seed = (
 		geographyLevel: "states",
 		...mapConfigOverrides,
 	})
-	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 }
 
 const mount = () =>
@@ -97,7 +97,7 @@ const seedWithCategory = (
 	rows: Record<string, string>[] = CITIES_WITH_CATEGORY
 ) => {
 	installInMemoryLocalStorage()
-	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) =>
 		localStorage.setItem(k, JSON.stringify(v))
 	const dataset: Dataset = buildDatasetFixture({
@@ -128,7 +128,7 @@ const seedWithCategory = (
 		geographyLevel: "states",
 		...mapConfigOverrides,
 	})
-	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 }
 
 /** Mark circles only — `<pattern>` defs contain circles of their own. */

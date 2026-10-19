@@ -59,7 +59,7 @@ const buildRowDataset = (): Dataset => ({
 const seedRowFacets = (panelHeight: number | null) => {
 	const store = installInMemoryLocalStorage()
 	const ds = buildRowDataset()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set("vis-components:datasets", JSON.stringify({ [DATASET_ID]: ds }))
 	store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
 	store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -80,7 +80,7 @@ const seedRowFacets = (panelHeight: number | null) => {
 		"vis-components:currentLabels",
 		JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const chartSvg = (container: HTMLElement): SVGSVGElement => {

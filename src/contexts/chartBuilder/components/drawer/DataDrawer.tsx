@@ -206,7 +206,7 @@ export const DataDrawer = () => {
 							}}
 							className={
 								reshapeApplied
-									? "text-sm font-medium text-vc-brand-text hover:opacity-80 pointer-coarse:px-2 pointer-coarse:py-1.5 dark:text-th-electric-indigo-300"
+									? "text-sm font-medium text-vc-brand-text hover:opacity-80 pointer-coarse:px-2 pointer-coarse:py-1.5 dark:text-vc-electric-indigo-300"
 									: "text-sm transition-colors hover:text-stone-900 pointer-coarse:px-2 pointer-coarse:py-1.5 dark:hover:text-white vc-muted"
 							}
 						>

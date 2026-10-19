@@ -86,14 +86,14 @@ const mount = (
 		...reshape,
 	}
 	const derivedConfig = { ...DEFAULT_DERIVED_VARIABLES_CONFIG, variables: derived }
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => store.set(k, JSON.stringify(v))
 	set("vis-components:datasets", { [ID]: buildDataset() })
 	set("vis-components:currentDatasetId", ID)
 	set("vis-components:previewVersionId", null)
 	set("vis-components:currentReshapeConfig", { _v: 1, data: reshapeConfig })
 	set("vis-components:currentDerivedVariables", { _v: 1, data: derivedConfig })
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 	let snapshot: TestStore | undefined
 	const init = (snap: TestStore) => {
 		snapshot = snap

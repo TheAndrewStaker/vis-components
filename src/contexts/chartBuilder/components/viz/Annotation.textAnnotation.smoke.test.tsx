@@ -35,7 +35,7 @@ const buildDataset = (): Dataset =>
 
 const seed = (patch: Partial<TextAnnotation>) => {
 	installInMemoryLocalStorage()
-	/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v))
 	set("vis-components:datasets", { [DATASET_ID]: buildDataset() })
 	set("vis-components:currentDatasetId", DATASET_ID)
@@ -61,7 +61,7 @@ const seed = (patch: Partial<TextAnnotation>) => {
 		_v: 4,
 		data: { rectangles: [], circles: [], lineSegments: [], texts: [anno] },
 	})
-	/* eslint-enable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions */
+	/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 }
 
 const mount = () =>

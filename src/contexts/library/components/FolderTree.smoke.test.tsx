@@ -73,7 +73,7 @@ const mkVisual = (id: string, folderId: string | null, name = id): Visual => ({
 	updatedAt: 1,
 })
 
-/* eslint-disable @th/no-storage-outside-try -- the in-memory shim cannot
+/* eslint-disable @vc/no-storage-outside-try -- the in-memory shim cannot
    throw, and a swallowed seeding failure would only obscure test errors */
 
 /** Seed the persistence layer the atoms' persistEffects read on init.
@@ -101,7 +101,7 @@ const readStoredFolders = (): Folder[] => {
 	return JSON.parse(raw) as Folder[]
 }
 
-/* eslint-enable @th/no-storage-outside-try */
+/* eslint-enable @vc/no-storage-outside-try */
 
 const renderTree = (onSelect: (id: string | null) => void = () => {}) =>
 	render(

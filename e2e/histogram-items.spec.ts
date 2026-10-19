@@ -1,4 +1,4 @@
-/* eslint-disable @th/use-wrapped-json-functions -- debug/measurement output, not app data */
+/* eslint-disable @vc/use-wrapped-json-functions -- debug/measurement output, not app data */
 import { expect, test, type Page } from "@playwright/test"
 
 import { seedFixtureScript, type SeedFixture } from "./seed"

@@ -94,7 +94,7 @@ const dataLabelsConfig: DataLabelsConfig = {
 
 const seedState = () => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [DATASET_ID]: buildLineDataset() })
@@ -118,7 +118,7 @@ const seedState = () => {
 		"vis-components:currentDataLabelsConfig",
 		JSON.stringify(dataLabelsConfig)
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const initState = (snap: TestStore) => {

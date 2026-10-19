@@ -49,7 +49,7 @@ const buildFacetDataset = (): Dataset => ({
 const seed = (opts: { faceted: boolean; labels?: Partial<LabelsConfig> }) => {
 	const store = installInMemoryLocalStorage()
 	const ds = buildFacetDataset()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set("vis-components:datasets", JSON.stringify({ [DATASET_ID]: ds }))
 	store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
 	store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -75,7 +75,7 @@ const seed = (opts: { faceted: boolean; labels?: Partial<LabelsConfig> }) => {
 			data: { ...DEFAULT_LABELS_CONFIG, ...(opts.labels ?? {}) },
 		})
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const mountChartCanvas = () =>
@@ -177,7 +177,7 @@ const buildGridDataset = (): Dataset => ({
 const seedGrid = (opts?: { labels?: Partial<LabelsConfig> }) => {
 	const store = installInMemoryLocalStorage()
 	const ds = buildGridDataset()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set("vis-components:datasets", JSON.stringify({ [GRID_DATASET_ID]: ds }))
 	store.set("vis-components:currentDatasetId", JSON.stringify(GRID_DATASET_ID))
 	store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -204,7 +204,7 @@ const seedGrid = (opts?: { labels?: Partial<LabelsConfig> }) => {
 			data: { ...DEFAULT_LABELS_CONFIG, ...(opts?.labels ?? {}) },
 		})
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 describe("PlotCanvas — grid mode (facetRow + facetCol)", () => {
@@ -272,7 +272,7 @@ describe("PlotCanvas — grid mode (facetRow + facetCol)", () => {
 	it("row-only mode: facetRow set without facetCol renders N×1 panel layout", () => {
 		const store = installInMemoryLocalStorage()
 		const ds = buildGridDataset()
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set("vis-components:datasets", JSON.stringify({ [GRID_DATASET_ID]: ds }))
 		store.set("vis-components:currentDatasetId", JSON.stringify(GRID_DATASET_ID))
 		store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -294,7 +294,7 @@ describe("PlotCanvas — grid mode (facetRow + facetCol)", () => {
 			"vis-components:currentLabels",
 			JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
 		)
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const { container } = mountChartCanvas()
 		// 2 regions (N, S) × 1 col = 2 panels.
 		const panels = container.querySelectorAll("[data-panel]")
@@ -313,7 +313,7 @@ describe("PlotCanvas — grid mode (facetRow + facetCol)", () => {
 	it("col-only mode: facetCol set without facetRow renders 1×N panel layout", () => {
 		const store = installInMemoryLocalStorage()
 		const ds = buildGridDataset()
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set("vis-components:datasets", JSON.stringify({ [GRID_DATASET_ID]: ds }))
 		store.set("vis-components:currentDatasetId", JSON.stringify(GRID_DATASET_ID))
 		store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -335,7 +335,7 @@ describe("PlotCanvas — grid mode (facetRow + facetCol)", () => {
 			"vis-components:currentLabels",
 			JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
 		)
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const { container } = mountChartCanvas()
 		// 1 row × 3 years (2023, 2024, 2025) = 3 panels.
 		const panels = container.querySelectorAll("[data-panel]")
@@ -367,7 +367,7 @@ describe("PlotCanvas — grid mode (facetRow + facetCol)", () => {
 				},
 			],
 		}
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set("vis-components:datasets", JSON.stringify({ [GRID_DATASET_ID]: sparse }))
 		store.set("vis-components:currentDatasetId", JSON.stringify(GRID_DATASET_ID))
 		store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -391,7 +391,7 @@ describe("PlotCanvas — grid mode (facetRow + facetCol)", () => {
 			"vis-components:currentLabels",
 			JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
 		)
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const { container } = mountChartCanvas()
 		// (a) Only the 4 non-empty combinations render, not the 6-cell
 		// cross-product; keys stay `${row}|${col}`.
@@ -445,7 +445,7 @@ describe("PlotCanvas — grid mode (facetRow + facetCol)", () => {
 				},
 			],
 		}
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set("vis-components:datasets", JSON.stringify({ [GRID_DATASET_ID]: sparse }))
 		store.set("vis-components:currentDatasetId", JSON.stringify(GRID_DATASET_ID))
 		store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -473,7 +473,7 @@ describe("PlotCanvas — grid mode (facetRow + facetCol)", () => {
 			"vis-components:currentLabels",
 			JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
 		)
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const { container } = mountChartCanvas()
 		const keys = [...container.querySelectorAll("[data-panel]")].map((el) =>
 			el.getAttribute("data-panel")
@@ -509,7 +509,7 @@ describe("PlotCanvas — grid mode (facetRow + facetCol)", () => {
 				},
 			],
 		}
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		store.set("vis-components:datasets", JSON.stringify({ [GRID_DATASET_ID]: sparse }))
 		store.set("vis-components:currentDatasetId", JSON.stringify(GRID_DATASET_ID))
 		store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -533,7 +533,7 @@ describe("PlotCanvas — grid mode (facetRow + facetCol)", () => {
 			"vis-components:currentLabels",
 			JSON.stringify({ _v: 1, data: labelsData })
 		)
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 	}
 
 	it("hideEmptyPanels: facetPanelTitle override styles the compact per-panel titles, NOT the strip", () => {
@@ -646,7 +646,7 @@ const seedWithLayout = (opts: {
 }) => {
 	const store = installInMemoryLocalStorage()
 	const ds = buildFacetDataset()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set("vis-components:datasets", JSON.stringify({ [DATASET_ID]: ds }))
 	store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
 	store.set("vis-components:previewVersionId", JSON.stringify(null))
@@ -682,7 +682,7 @@ const seedWithLayout = (opts: {
 			},
 		})
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 describe("PlotCanvas (flag ON) — legacy smoke-test invariants on SVG model", () => {
@@ -826,7 +826,7 @@ const seedTriState = (opts: {
 }) => {
 	const store = installInMemoryLocalStorage()
 	const ds = buildTriStateDataset()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
 		"vis-components:datasets",
 		JSON.stringify({ [TRISTATE_DATASET_ID]: ds })
@@ -861,7 +861,7 @@ const seedTriState = (opts: {
 		"vis-components:currentLabels",
 		JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const panelRowCounts = (

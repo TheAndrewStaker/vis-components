@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-globals, @th/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
+/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try -- tests seed and inspect localStorage deliberately */
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react"
 import { afterEach } from "vitest"
 import { TestProvider } from "../../../../testSupport/TestProvider"
@@ -49,7 +49,7 @@ const seed = (
 	hueField: string | null = "rate"
 ) => {
 	installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) =>
 		localStorage.setItem(k, JSON.stringify(v))
 	set("vis-components:datasets", { [DATASET_ID]: buildDataset(rows) })
@@ -71,7 +71,7 @@ const seed = (
 			...mapConfigOverrides,
 		},
 	})
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 /** Seed with the full basemap drawn (showNoDataRegions on — the default,
@@ -90,12 +90,12 @@ const seedWithShape = (
 	rows?: Record<string, string>[]
 ) => {
 	seed(rows, { showNoDataRegions: true })
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	localStorage.setItem(
 		"vis-components:currentChannelConfigs",
 		JSON.stringify({ shape })
 	)
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 /** Seed a hue + BRIGHTNESS map: both states share one hue category, so only
@@ -104,7 +104,7 @@ const seedWithShape = (
  *  No-data regions are off so exactly the matched regions draw. */
 const seedHuePlusBrightness = () => {
 	installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) =>
 		localStorage.setItem(k, JSON.stringify(v))
 	set("vis-components:datasets", {
@@ -139,7 +139,7 @@ const seedHuePlusBrightness = () => {
 			showNoDataRegions: false,
 		},
 	})
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 /** Projected extent of a set of `<path>`s, parsed from their `d` strings
@@ -755,7 +755,7 @@ const seedCountries = (
 	mapConfigOverrides: Partial<typeof DEFAULT_MAP_CONFIG> = {}
 ) => {
 	installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) =>
 		localStorage.setItem(k, JSON.stringify(v))
 	set("vis-components:datasets", {
@@ -777,7 +777,7 @@ const seedCountries = (
 			...mapConfigOverrides,
 		},
 	})
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 describe("GeoChoroplethPlot (world-country choropleth)", () => {
@@ -875,7 +875,7 @@ describe("GeoChoroplethPlot (world-country choropleth)", () => {
 		)
 		// The stock dataset has no pattern-able column — extend the seeded
 		// fields and map the pattern channel on top of the stock seed.
-		/* eslint-disable @th/use-wrapped-json-functions */
+		/* eslint-disable @vc/use-wrapped-json-functions */
 		const ds = JSON.parse(localStorage.getItem("vis-components:datasets")!)
 		ds[DATASET_ID].fields.push({ name: "kind", inferredType: "categorical" })
 		localStorage.setItem("vis-components:datasets", JSON.stringify(ds))
@@ -884,7 +884,7 @@ describe("GeoChoroplethPlot (world-country choropleth)", () => {
 		)
 		enc.pattern = { field: "kind" }
 		localStorage.setItem("vis-components:currentEncodings", JSON.stringify(enc))
-		/* eslint-enable @th/use-wrapped-json-functions */
+		/* eslint-enable @vc/use-wrapped-json-functions */
 		const { container } = mount()
 		// The <pattern> defs themselves contain paths/circles, so count only
 		// the mark paths OUTSIDE <defs>.

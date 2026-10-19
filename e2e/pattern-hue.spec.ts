@@ -55,7 +55,7 @@ test("item 19 — pattern ink uses the ordinal palette when pattern shares hue",
 			return parts[parts.length - 1]
 		})
 	)
-	// eslint-disable-next-line @th/use-wrapped-json-functions
+	// eslint-disable-next-line @vc/use-wrapped-json-functions
 	console.log(JSON.stringify({ inkSlugs }))
 
 	// Expect the configured ordinal inks (ff0000 / 00ff00 / 0000ff), NOT the

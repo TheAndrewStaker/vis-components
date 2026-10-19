@@ -987,7 +987,7 @@ const seedTheme = async (page: Page): Promise<void> => {
 			name: "System (Light)",
 			isSystem: true,
 		}
-		/* eslint-disable no-restricted-globals, @th/no-storage-outside-try, @th/use-wrapped-json-functions -- runs inside page.addInitScript (browser context) */
+		/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions -- runs inside page.addInitScript (browser context) */
 		localStorage.setItem(
 			"vis-components:themes",
 			JSON.stringify({
@@ -995,9 +995,9 @@ const seedTheme = async (page: Page): Promise<void> => {
 				data: [SYSTEM_LIGHT_SEED, JSON.parse(themeJson)],
 			}),
 		)
-		/* eslint-enable no-restricted-globals, @th/no-storage-outside-try */
+		/* eslint-enable no-restricted-globals, @vc/no-storage-outside-try */
 	}, JSON.stringify(CUSTOM_THEME))
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 }
 
 const applyTheme = async (page: Page, themeId: string): Promise<void> => {

@@ -37,10 +37,10 @@ const buildDataset = (): Dataset =>
 
 const mount = () => {
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set("vis-components:datasets", JSON.stringify({ [ID]: buildDataset() }))
 	store.set("vis-components:currentDatasetId", JSON.stringify(ID))
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 	const init = (snap: TestStore) => {
 		snap.set(loadedDatasetsAtom, { [ID]: buildDataset() })
 		snap.set(currentDatasetIdAtom, ID)

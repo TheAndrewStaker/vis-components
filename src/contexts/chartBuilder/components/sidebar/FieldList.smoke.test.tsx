@@ -79,14 +79,14 @@ const mount = (
 	// Atom storage effects re-load from localStorage on init and would reset a
 	// snapshot-only seed to defaults, so the fixture goes into BOTH.
 	const store = installInMemoryLocalStorage()
-	/* eslint-disable @th/use-wrapped-json-functions */
+	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => store.set(k, JSON.stringify(v))
 	set("vis-components:datasets", { [ID]: buildDataset(fields) })
 	set("vis-components:currentDatasetId", ID)
 	set("vis-components:previewVersionId", null)
 	set("vis-components:currentDerivedVariables", { _v: 1, data: derived })
 	set("vis-components:currentFieldLevelOrderSpecs", { _v: 1, data: orderSpecs })
-	/* eslint-enable @th/use-wrapped-json-functions */
+	/* eslint-enable @vc/use-wrapped-json-functions */
 	let atomStore: TestStore | undefined
 	const init = (snap: TestStore) => {
 		atomStore = snap
