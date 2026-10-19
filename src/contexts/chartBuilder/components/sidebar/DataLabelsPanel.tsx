@@ -15,6 +15,16 @@ import {
 	type LabelPositionRule,
 } from "../../lib/channelConfig"
 import { resolveHierarchyIdField } from "../../lib/buildHierarchy"
+import { buildFlowGraph, resolveFlowEndpoints } from "../../lib/buildFlowGraph"
+import {
+	effectiveFlowLabelNodes,
+	everyNodeSendsAndReceives,
+	flowLabelFieldNames,
+	flowLabelNodeOptions,
+	flowNodeTotals,
+	flowRedundantLabelFields,
+	type FlowLabelNodes,
+} from "../../lib/flowNodeLabels"
 import {
 	POPULATION_LABEL,
 	composedLabelForField,
@@ -262,11 +272,17 @@ export const DataLabelsPanel = () => {
 	// the position / overlap / background fine-tuning stands down there too.
 	// The sunburst hands its arc anchors to the shared label layer, so it
 	// keeps the full fine-tuning set (polar nudges included, like a pie).
-	// Chord / sankey label styling is a follow-up; their panel is unchanged.
 	// Which of those applies is the mode's declared `labels.placement`.
 	const isTreeMode = isHierarchyModeId(chartMode)
 	const isRingLabels = modeDef.labels.placement === "ring"
 	const fineTuningApplies = modeDef.labels.placement !== "layout"
+	// Flow diagrams (chord / sankey): labels sit beside each NODE (outside
+	// the chord ring, beside a sankey rect), so the X / Y rows grey out;
+	// everything else applies through the shared label layer. "Which labels"
+	// becomes the by-flow-direction node selection, and Value / Size also
+	// offer the flow-only values (Flow in / Flow out / Node total).
+	const flowGeometry = modeDef.canvas.flowGeometry
+	const isFlowMode = flowGeometry !== undefined
 	// Pie family — labels are placed in polar terms (distance from center +
 	// angular nudge) rather than the cartesian X/Y pixel offsets that make
 	// no sense around a wedge.
@@ -617,6 +633,8 @@ export const DataLabelsPanel = () => {
 	// geo-only: the color/thickness inputs are gated behind the toggle, so
 	// the toggle alone decides their contribution — like Text Background.)
 	const selectionChanged =
+		(flowGeometry !== undefined &&
+			effectiveFlowLabelNodes(merged.flowLabelNodes, flowGeometry) !== "all") ||
 		selection.present.first ||
 		selection.present.last ||
 		(isFaceted &&
@@ -706,6 +724,16 @@ export const DataLabelsPanel = () => {
 	// `value.field` null and drives the label off `value.fields` + template.
 	const setValueField = (v: string) => {
 		if (v === DATA_LABELS_MULTI_VALUE) {
+			// A flow's labels start from the node names: an empty checklist
+			// begins with the source column, as if the user had checked it.
+			if (
+				isFlowMode &&
+				flowSourceField &&
+				(encodings.value.fields ?? []).length === 0
+			) {
+				setValueFields([flowSourceField])
+				return
+			}
 			setEncodings((prev) => ({
 				...prev,
 				value: { field: null, multiField: true, fields: prev.value?.fields ?? [] },
@@ -718,6 +746,9 @@ export const DataLabelsPanel = () => {
 				field: v === "" ? null : v,
 				multiField: false,
 				fields: prev.value?.fields ?? [],
+				// Flows only: "— none —" is a deliberate "no labels", distinct
+				// from the unset default (the node names).
+				...(isFlowMode && v === "" ? { none: true } : {}),
 			},
 		}))
 	}
@@ -748,6 +779,58 @@ export const DataLabelsPanel = () => {
 	}
 
 	const allEligible = dataset?.fields ?? []
+	// The flow's source / target / weight columns — the same resolution the
+	// renderers use (full data set).
+	const flowEndpoints = useMemo(
+		() =>
+			isFlowMode && dataset
+				? resolveFlowEndpoints(chartEncodings, chartConfigs.connection, dataset)
+				: null,
+		[isFlowMode, dataset, chartEncodings, chartConfigs.connection]
+	)
+	// Flow diagrams: an unset Value is the source column (the node names),
+	// shown selected so its Text format is right there; "— none —" is the
+	// explicit `none` (no node labels).
+	const flowSourceField = flowEndpoints?.sourceField ?? null
+	// The target and weight columns only repeat the names / Flow out on a
+	// node, so the Value and Size lists leave them out (unless picked).
+	const flowRedundant = flowEndpoints
+		? flowRedundantLabelFields(flowEndpoints, [
+				encodings.value.field,
+				encodings.size.field,
+				...(encodings.value.fields ?? []),
+			])
+		: new Set<string>()
+	const labelTextEligible = allEligible.filter((f) => !flowRedundant.has(f.name))
+	const valueFieldShown: string | null =
+		encodings.value.field ??
+		(isFlowMode && !encodings.value.multiField && encodings.value.none !== true
+			? flowSourceField
+			: null)
+	// Flow-only values (Flow in / Flow out / Node total) listed with the
+	// dataset's variables under Value and Size; a column already using one
+	// of the names keeps it.
+	const flowFieldOptions = isFlowMode
+		? flowLabelFieldNames(allEligible.map((f) => f.name)).map((name) => ({
+				value: name,
+				label: name,
+			}))
+		: []
+	// Chord nodes usually both send and receive, which makes Senders,
+	// Receivers and All nodes the same set — said in a hint so the select
+	// doesn't look broken. Over the full data set (the sankey breaks cycles
+	// per panel, but the ring draws every edge).
+	const flowSameSet = useMemo(() => {
+		if (flowGeometry !== "ring" || !dataset || !flowEndpoints) return false
+		const { sourceField, targetField, valueField } = flowEndpoints
+		if (!sourceField || !targetField || !valueField) return false
+		const { nodes, edges } = buildFlowGraph(dataset.rows, {
+			sourceField,
+			targetField,
+			valueField,
+		})
+		return everyNodeSendsAndReceives(flowNodeTotals(nodes, edges))
+	}, [flowGeometry, dataset, flowEndpoints])
 	const tileXEligible = chartXField
 		? allEligible.filter((f) => f.name === chartXField)
 		: []
@@ -847,6 +930,13 @@ export const DataLabelsPanel = () => {
 					name from the ID column.
 				</p>
 			)}
+			{isFlowMode && (
+				<p className="vc-help">
+					Labels sit beside each node, so X and Y position don&apos;t
+					apply. Value starts on the node names; Flow in, Flow out and Node
+					total are each node&apos;s flow, and — none — hides the labels.
+				</p>
+			)}
 			{/* Maps anchor labels to REGIONS — one Geography row replaces the
 			 *  cartesian X/Y rows. Its field joins to map regions at its own
 			 *  auto-detected level, independent of the map's region field, so
@@ -888,6 +978,7 @@ export const DataLabelsPanel = () => {
 						value={encodings.x.field}
 						onChange={(v) => setField("x", v)}
 						eligible={xEligible}
+						disabled={isFlowMode}
 					/>
 
 					<DataLabelChannelRow
@@ -896,6 +987,7 @@ export const DataLabelsPanel = () => {
 						value={encodings.y.field}
 						onChange={(v) => setField("y", v)}
 						eligible={yEligible}
+						disabled={isFlowMode}
 					/>
 				</>
 			)}
@@ -904,12 +996,11 @@ export const DataLabelsPanel = () => {
 				channel="value"
 				label={CHANNEL_LABEL.value}
 				value={
-					encodings.value.multiField
-						? DATA_LABELS_MULTI_VALUE
-						: encodings.value.field
+					encodings.value.multiField ? DATA_LABELS_MULTI_VALUE : valueFieldShown
 				}
 				onChange={setValueField}
-				eligible={allEligible}
+				eligible={labelTextEligible}
+				derivedOptions={flowFieldOptions}
 				extraOptions={[
 					{ value: DATA_LABELS_MULTI_VALUE, label: "Multiple variables…" },
 				]}
@@ -924,13 +1015,16 @@ export const DataLabelsPanel = () => {
 						cfg={merged}
 						onChange={updateCfg}
 						fields={encodings.value.fields ?? []}
-						allFields={allEligible.map((f) => f.name)}
+						allFields={[
+							...labelTextEligible.map((f) => f.name),
+							...flowFieldOptions.map((o) => o.value),
+						]}
 						onFieldsChange={setValueFields}
 						countryNames={countryNameFormats}
 					/>
-				) : encodings.value.field ? (
+				) : valueFieldShown ? (
 					<SingleValuePanel
-						field={encodings.value.field}
+						field={valueFieldShown}
 						cfg={merged}
 						onChange={updateCfg}
 						countryNames={countryNameFormats}
@@ -974,8 +1068,8 @@ export const DataLabelsPanel = () => {
 						: encodings.size.field
 				}
 				onChange={(v) => setField("size", v)}
-				eligible={allEligible}
-				derivedOptions={labelDerivedSizeOptions}
+				eligible={labelTextEligible}
+				derivedOptions={[...labelDerivedSizeOptions, ...flowFieldOptions]}
 			>
 				<SizePanel
 					cfg={merged}
@@ -1021,6 +1115,31 @@ export const DataLabelsPanel = () => {
 				 *  Per-series endpoints are meaningless on a map or a sunburst
 				 *  (no series) — the renderer skips them there, so only the
 				 *  facet scope shows. */}
+				{/* Flow diagrams: which NODES get a label, by flow direction —
+				 *  one choice for every label (nodes have no series to rank). */}
+				{flowGeometry && (
+					<>
+						<SelectInput
+							label="Which labels"
+							labelClassName={LABEL_COL}
+							value={effectiveFlowLabelNodes(
+								merged.flowLabelNodes,
+								flowGeometry
+							)}
+							options={flowLabelNodeOptions(flowGeometry)}
+							onChange={(mode: FlowLabelNodes) =>
+								updateCfg({ flowLabelNodes: mode })
+							}
+						/>
+						<p className="vc-help">
+							{flowGeometry === "columns"
+								? "First senders have no incoming flow; last receivers have no outgoing flow."
+								: flowSameSet
+									? "Every node here both sends and receives, so these options label the same nodes."
+									: "Senders have outgoing flow; receivers have incoming flow."}
+						</p>
+					</>
+				)}
 				{!selectionControlsApply ? null : encodings.value.multiField ? (
 					multiFields.length === 0 ? (
 						<p className="vc-help">

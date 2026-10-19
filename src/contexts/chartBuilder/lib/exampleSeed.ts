@@ -37,6 +37,7 @@ import {
 	resetVisualFontSizesV1ToV2,
 	themeFontSizesFromListV2,
 } from "./storage/migrations"
+import { foldFlowNodeTitles } from "./foldFlowNodeTitles"
 import { structureVisualKeys } from "./savedKeyStructure"
 import { dedupeDatasetStores } from "./datasetDedupe"
 import { getStorageAdapter } from "./storage/registry"
@@ -124,10 +125,10 @@ const FONT_PT_CUTOVER = "2026-08-12T00:00:00.000Z"
 
 const seedVisualsAtCurrentFontUnit = (seed: SeedBundle): Visual[] => {
 	// Visuals v5→v6 (tickLabelAngle 0 → auto) and v6→v7 (joined keys →
-	// structure) apply to EVERY seed: both are idempotent and there is no
-	// cutover stamp to gate on.
+	// structure), plus the flow Node-titles fold, apply to EVERY seed: all
+	// are idempotent and there is no cutover stamp to gate on.
 	const visuals = seed.visuals.map((v) =>
-		structureVisualKeys(clearLegacyAutoTickLabelAngle(v))
+		foldFlowNodeTitles(structureVisualKeys(clearLegacyAutoTickLabelAngle(v)))
 	)
 	if (seed.exportedAt === null || seed.exportedAt >= FONT_PT_CUTOVER) {
 		return visuals

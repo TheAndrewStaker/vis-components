@@ -22,6 +22,7 @@
 import { datasetContentHash, datasetsEqual } from "./datasetDedupe"
 import type { SeedBundle } from "./exampleSeed"
 import { loadUserDefaultThemeId, loadVisuals, mergeThumbnails } from "./storage"
+import { foldFlowNodeTitles } from "./foldFlowNodeTitles"
 import { structureVisualKeys } from "./savedKeyStructure"
 import { clearLegacyAutoTickLabelAngle } from "./storage/migrations"
 import { getStorageAdapter } from "./storage/registry"
@@ -667,10 +668,13 @@ export const mergeBundleIntoLibrary = (
 		const themeId = v.themeId != null ? themeIdMap.get(v.themeId) ?? v.themeId : v.themeId
 		// Bundles carry no storage version, so pre-v6 `tickLabelAngle: 0`
 		// (then "auto") would land as today's explicit "keep level", and a
-		// pre-v7 export carries joined facet / piece keys. Both steps are
+		// pre-v7 export carries joined facet / piece keys, and a flow chart
+		// from before 2026-10-19 its Node-titles styling. All three steps are
 		// idempotent; apply them to every import.
 		imported.push({
-			...structureVisualKeys(clearLegacyAutoTickLabelAngle(v)),
+			...foldFlowNodeTitles(
+				structureVisualKeys(clearLegacyAutoTickLabelAngle(v))
+			),
 			id,
 			datasetId,
 			createdAtVersionId,

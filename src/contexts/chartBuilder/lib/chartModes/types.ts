@@ -141,8 +141,9 @@ export type ChartModeLabelTraits = {
 	positionLockedToAxes: boolean
 	/** True when labels have per-series ENDPOINTS to select ("first and
 	 * last" along the series). False where there is no series to run along
-	 * — regions on a map, nodes in a sunburst — so the "Which labels"
-	 * selection hides and the renderer skips it. */
+	 * — regions on a map, nodes in a sunburst or a flow diagram — so the
+	 * series "Which labels" selection hides and the renderer skips it (flows
+	 * offer their own by-direction selection instead). */
 	seriesEndpoints: boolean
 	/** True when the mode draws container (group) labels that can sit inside
 	 * the rim or wrap around the outside, per nesting level — the packed

@@ -25,6 +25,10 @@ type DataLabelChannelRowProps = {
 	 *  "Multiple variables…" sentinel. Same shape as `derivedOptions`;
 	 *  onChange receives the option's `value`. */
 	extraOptions?: ReadonlyArray<{ value: string; label: string }>
+	/** Greyed out and not editable — a row that doesn't apply to this chart
+	 *  (flow diagrams place labels beside their nodes, so X / Y stand down)
+	 *  but stays visible so the panel keeps its shape. */
+	disabled?: boolean
 	/** Per-channel option panel. Omit it for channels whose only settings
 	 *  live elsewhere (e.g. Angle / R, tuned under "Adjust position") — the
 	 *  row then renders as a plain mapping dropdown with no chevron. */
@@ -39,6 +43,7 @@ export const DataLabelChannelRow = ({
 	eligible,
 	derivedOptions,
 	extraOptions,
+	disabled = false,
 	children,
 }: DataLabelChannelRowProps) => {
 	// Associates the visible channel label with its field dropdown.
@@ -48,7 +53,7 @@ export const DataLabelChannelRow = ({
 		<div className="flex min-w-0 flex-1 items-center gap-2">
 			<label
 				htmlFor={selectId}
-				className={`${LABEL_COL} shrink-0 text-sm`}
+				className={`${LABEL_COL} shrink-0 text-sm ${disabled ? "opacity-60" : ""}`}
 			>
 				{label}
 			</label>
@@ -57,6 +62,7 @@ export const DataLabelChannelRow = ({
 				value={value ?? ""}
 				onChange={(e) => onChange(e.target.value)}
 				className={selectClass}
+				disabled={disabled}
 			>
 				<option value="">— none —</option>
 				{derivedOptions?.map((o) => (

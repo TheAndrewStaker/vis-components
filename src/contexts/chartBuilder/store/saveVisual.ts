@@ -26,6 +26,7 @@ import {
 	labelsFromTheme,
 	legendConfigFromTheme,
 } from "../lib/themeConfig"
+import { foldFlowNodeTitles } from "../lib/foldFlowNodeTitles"
 import {
 	emptyDataLabelsEncodings,
 	emptyEncodings,
@@ -182,7 +183,7 @@ export const useSaveVisual = () => {
 					channelConfigs.facet ?? DEFAULT_FACET_CONFIG
 				)
 			)
-			const saved = structureVisualKeys(visual, panels)
+			const saved = foldFlowNodeTitles(structureVisualKeys(visual, panels))
 
 			const nextVisuals = existing
 			? visuals.map((v) => (v.id === id ? saved : v))
@@ -213,8 +214,10 @@ export const useLoadVisual = () => {
 			// Accept the joined-key shape a tab on an older build may still write
 			// back (chart saves aren't version-checked): structure it on the way
 			// in, so the editor and embed read one shape and the next save
-			// persists it (`lib/savedKeyStructure`).
-			const visual = structureVisualKeys(stored)
+			// persists it (`lib/savedKeyStructure`). A flow chart's retired
+			// Node-titles styling folds into Data Labels the same way
+			// (`lib/foldFlowNodeTitles`).
+			const visual = foldFlowNodeTitles(structureVisualKeys(stored))
 			// Opening a DIFFERENT visual restarts the undo stack. Re-loading the
 			// same id (the route remount after autosave created a new visual)
 			// keeps it, so the first edits of a new visual stay undoable.

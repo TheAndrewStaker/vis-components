@@ -1,14 +1,25 @@
-import { render } from "@testing-library/react"
+import { cleanup, render } from "@testing-library/react"
 import { TestProvider, type TestStore } from "../../../../testSupport/TestProvider"
 import { installInMemoryLocalStorage } from "../../../../testSupport/localStorageShim"
 import { buildDataset as buildDatasetFixture } from "../../../../testSupport/fixtures"
 import { describe, expect, it } from "vitest"
 
-import { type ChannelConfigs } from "../../lib/channelConfig"
-import { DEFAULT_LABELS_CONFIG, type LabelsConfig } from "../../lib/labelsConfig"
-import { emptyEncodings, type Dataset } from "../../lib/types"
+import {
+	DEFAULT_DATA_LABELS_CONFIG,
+	type ChannelConfigs,
+	type DataLabelsConfig,
+} from "../../lib/channelConfig"
+import { DEFAULT_LABELS_CONFIG } from "../../lib/labelsConfig"
+import {
+	emptyDataLabelsEncodings,
+	emptyEncodings,
+	type DataLabelsEncodings,
+	type Dataset,
+} from "../../lib/types"
 import {
 	currentChannelConfigsAtom,
+	currentDataLabelsConfigAtom,
+	currentDataLabelsEncodingsAtom,
 	currentDatasetIdAtom,
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
@@ -71,6 +82,12 @@ const buildDataset = (
 
 const plotFor = { chord: ChordPlot, sankey: SankeyPlot } as const
 
+/** Every `<text>`'s content (node labels, notices, axis labels). */
+const labelTexts = (container: HTMLElement) =>
+	[...container.querySelectorAll("text")].map((t) => t.textContent ?? "")
+const textNamed = (container: HTMLElement, name: string) =>
+	[...container.querySelectorAll("text")].find((t) => t.textContent === name)
+
 const mountFlow = (
 	layout: "chord" | "sankey",
 	opts: {
@@ -81,9 +98,10 @@ const mountFlow = (
 		/** Extra channel configs merged over the layout pick (opacity slots,
 		 * pattern config, …). */
 		configsExtra?: Partial<ChannelConfigs>
-		/** Labels-config fields merged over the defaults (node-title font
-		 * overrides / alignments / offsets). */
-		labelsExtra?: Partial<LabelsConfig>
+		/** Data Labels encodings / config merged over the defaults — node
+		 * labels are styled from the Data Labels section. */
+		dataLabelsEncodings?: Partial<DataLabelsEncodings>
+		dataLabelsConfig?: Partial<DataLabelsConfig>
 		/** Explicit plot rect (bypasses container measurement — happy-dom
 		 * ignores the wrapper's style). Tiny rects exercise the
 		 * degenerate-panel guards (first layout pass / thumbnails). */
@@ -115,10 +133,25 @@ const mountFlow = (
 	// effect hydrates from this key and would override a snapshot-only seed.
 	store.set(
 		"vis-components:currentLabels",
-		JSON.stringify({
-			_v: 1,
-			data: { ...DEFAULT_LABELS_CONFIG, ...opts.labelsExtra },
-		})
+		JSON.stringify({ _v: 1, data: DEFAULT_LABELS_CONFIG })
+	)
+	// persistEffect-backed atoms re-read the shim on init, so Data Labels
+	// seeding must land in the store (the snapshot alone doesn't stick).
+	const dataLabelsEncodings = {
+		...emptyDataLabelsEncodings(),
+		...opts.dataLabelsEncodings,
+	}
+	const dataLabelsConfig = {
+		...DEFAULT_DATA_LABELS_CONFIG,
+		...opts.dataLabelsConfig,
+	}
+	store.set(
+		"vis-components:currentDataLabelsEncodings",
+		JSON.stringify(dataLabelsEncodings)
+	)
+	store.set(
+		"vis-components:currentDataLabelsConfig",
+		JSON.stringify(dataLabelsConfig)
 	)
 	/* eslint-enable @vc/use-wrapped-json-functions */
 
@@ -128,10 +161,9 @@ const mountFlow = (
 		snap.set(previewVersionIdAtom, null)
 		snap.set(currentEncodingsAtom, encodings)
 		snap.set(currentChannelConfigsAtom, configs)
-		snap.set(currentLabelsAtom, {
-			...DEFAULT_LABELS_CONFIG,
-			...opts.labelsExtra,
-		})
+		snap.set(currentLabelsAtom, DEFAULT_LABELS_CONFIG)
+		snap.set(currentDataLabelsEncodingsAtom, dataLabelsEncodings)
+		snap.set(currentDataLabelsConfigAtom, dataLabelsConfig)
 		snap.set(currentFieldOverridesAtom, {})
 		snap.set(currentFieldLevelOrdersAtom, {})
 	}
@@ -388,25 +420,71 @@ describe("ChordPlot", () => {
 		}
 	})
 
-	it("node labels honor the Node-titles font override, alignment, and offset", () => {
+	it("node labels take the Data Labels text properties and alignment", () => {
 		const container = mountFlow("chord", {
-			labelsExtra: {
-				fontOverrides: {
-					nodeTitle: { color: "#ff0000", size: 12, italic: true },
-				},
-				titleAlignments: { nodeTitle: "left" },
-				titleOffsets: { nodeTitle: { x: 10 } },
+			dataLabelsConfig: {
+				color: "#ff0000",
+				fontSize: 12,
+				italic: true,
+				alignment: "left",
 			},
 		})
-		const label = [...container.querySelectorAll("text")].find(
-			(t) => t.textContent === "Memphis"
-		)
+		const label = textNamed(container, "Memphis")
 		expect(label).toBeDefined()
 		expect(label?.getAttribute("fill")).toBe("#ff0000")
 		expect(label?.getAttribute("font-size")).toBe("16") // 12pt → 16px
 		expect(label?.getAttribute("font-style")).toBe("italic")
 		// "left" forces every label's anchor to start (auto would flip by side).
 		expect(label?.getAttribute("text-anchor")).toBe("start")
+	})
+
+	it("the ring shrinks to fit long labels instead of dropping them", () => {
+		// Outer radius of the first group arc (d3's arc path: "M…A r,r …").
+		const ringRadius = (c: HTMLElement) =>
+			Number(
+				/A\s*([\d.]+)/.exec(
+					c.querySelector('path[data-kind="chord-arc"]')?.getAttribute("d") ?? ""
+				)?.[1]
+			)
+		const inner = { x0: 0, y0: 0, x1: 600, y1: 400 }
+		const small = mountFlow("chord", { inner, dataLabelsConfig: { fontSize: 8 } })
+		const smallR = ringRadius(small)
+		cleanup()
+		const big = mountFlow("chord", { inner, dataLabelsConfig: { fontSize: 30 } })
+		// Every node keeps its label at 30pt — none is hidden for width.
+		for (const n of ["Nashville", "New York", "Memphis", "Miami", "Seattle"]) {
+			expect(textNamed(big, n), n).toBeDefined()
+		}
+		expect(ringRadius(big)).toBeLessThan(smallR)
+		expect(ringRadius(big)).toBeGreaterThan(0)
+	})
+
+	it("Value → Node total is in + out on a chord (the arc spans both)", () => {
+		const container = mountFlow("chord", {
+			dataLabelsEncodings: { value: { field: "Node total" } },
+		})
+		// New York: out 8 + 3, in 1 + 4 → 16; Memphis: in 5 only.
+		const texts = labelTexts(container)
+		expect(texts).toContain("16")
+		expect(texts).toContain("5")
+	})
+
+	it("Which labels → Receivers drops send-only nodes", () => {
+		// Seattle only sends; Memphis only receives.
+		const container = mountFlow("chord", {
+			dataLabelsConfig: { flowLabelNodes: "allReceivers" },
+		})
+		expect(textNamed(container, "Memphis")).toBeDefined()
+		expect(textNamed(container, "Seattle")).toBeUndefined()
+	})
+
+	it("a sankey-only pick reads as its chord equivalent", () => {
+		// "Last receivers" on a ring = Receivers: Memphis stays, Seattle drops.
+		const container = mountFlow("chord", {
+			dataLabelsConfig: { flowLabelNodes: "lastReceivers" },
+		})
+		expect(textNamed(container, "Memphis")).toBeDefined()
+		expect(textNamed(container, "Seattle")).toBeUndefined()
 	})
 })
 
@@ -450,18 +528,89 @@ describe("SankeyPlot", () => {
 		expect(container.querySelectorAll("pattern").length).toBeGreaterThan(0)
 	})
 
-	it("node labels honor the Node-titles font override", () => {
+	it("node labels take the Data Labels font and color", () => {
 		const container = mountFlow("sankey", {
-			labelsExtra: {
-				fontOverrides: { nodeTitle: { color: "#ff0000", size: 15 } },
-			},
+			dataLabelsConfig: { color: "#ff0000", fontSize: 15 },
 		})
-		const label = [...container.querySelectorAll("text")].find(
-			(t) => t.textContent === "Memphis"
-		)
+		const label = textNamed(container, "Memphis")
 		expect(label).toBeDefined()
 		expect(label?.getAttribute("fill")).toBe("#ff0000")
 		expect(label?.getAttribute("font-size")).toBe("20") // 15pt → 20px
+	})
+
+	it("automatic alignment reads away from the node (last column leftward)", () => {
+		const container = mountFlow("sankey")
+		// Memphis is a destination only → last column → text ends at the rect.
+		expect(textNamed(container, "Memphis")?.getAttribute("text-anchor")).toBe(
+			"end"
+		)
+		// Seattle only sends → first column → text starts beside the rect.
+		expect(textNamed(container, "Seattle")?.getAttribute("text-anchor")).toBe(
+			"start"
+		)
+	})
+
+	it("Which labels → First senders keeps only nodes with no incoming flow", () => {
+		const container = mountFlow("sankey", {
+			dataLabelsConfig: { flowLabelNodes: "firstSenders" },
+		})
+		expect(textNamed(container, "Seattle")).toBeDefined()
+		for (const n of ["New York", "Nashville", "Miami", "Memphis"]) {
+			expect(textNamed(container, n), n).toBeUndefined()
+		}
+	})
+
+	it("Which labels → Last receivers keeps only nodes with no outgoing flow", () => {
+		// Over the KEPT edges: the Miami self-loop is dropped, so Miami ends.
+		const container = mountFlow("sankey", {
+			dataLabelsConfig: { flowLabelNodes: "lastReceivers" },
+		})
+		expect(textNamed(container, "Memphis")).toBeDefined()
+		expect(textNamed(container, "Miami")).toBeDefined()
+		expect(textNamed(container, "Seattle")).toBeUndefined()
+		expect(textNamed(container, "New York")).toBeUndefined()
+	})
+
+	it("Value → Node total labels each node with its drawn size", () => {
+		const container = mountFlow("sankey", {
+			dataLabelsEncodings: { value: { field: "Node total" } },
+		})
+		const texts = labelTexts(container)
+		// New York: out 8 + 3 = 11 (its 1 in from Nashville is the dropped
+		// back-edge); Memphis: in 5.
+		expect(texts).toContain("11")
+		expect(texts).toContain("5")
+		expect(texts).not.toContain("New York")
+	})
+
+	it('Value "— none —" (none) hides every node label', () => {
+		const container = mountFlow("sankey", {
+			dataLabelsEncodings: { value: { field: null, none: true } },
+		})
+		const texts = labelTexts(container)
+		for (const n of ["Memphis", "Seattle", "New York"]) {
+			expect(texts, n).not.toContain(n)
+		}
+	})
+
+	it("an unset Value is the source column, so its format applies", () => {
+		const container = mountFlow("sankey", {
+			// Before / after text around the value (`literal` = as-is).
+			dataLabelsConfig: { fieldFormats: { Start: "To literal!" } },
+		})
+		expect(labelTexts(container)).toContain("To Memphis!")
+	})
+
+	it("Multiple variables compose a node's name and its flow", () => {
+		const container = mountFlow("sankey", {
+			dataLabelsEncodings: {
+				value: { field: null, multiField: true, fields: ["Start", "Flow in"] },
+			},
+			dataLabelsConfig: {
+				composedLabels: [{ id: "both", template: "{Start} · in {Flow in}" }],
+			},
+		})
+		expect(labelTexts(container)).toContain("Memphis · in 5")
 	})
 
 	it("acyclic data shows no notice (and still draws the full graph)", () => {

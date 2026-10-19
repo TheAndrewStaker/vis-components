@@ -25,18 +25,19 @@ import { chordAxisConfigFromTheme } from "../../lib/themeConfig"
 import {} from "../../store/atoms"
 import { useCurrentTheme } from "../../store/useCurrentTheme"
 
+import { DataLabelsLayer, type DataLabelAnchor } from "./DataLabelsLayer"
 import { Plot, type PlotContext } from "./Plot"
 import { useFlowScaffold } from "./useFlowScaffold"
-import { hierarchyLabelFits, hierarchyLabelWidth } from "./useHierarchyScaffold"
+import { hierarchyLabelWidth } from "./useHierarchyScaffold"
 
 type ChordPlotProps = ChartRendererBaseProps
 
 /** Radial thickness of the node group arcs, the ring's angular padding
- * between groups (radians), and the margin reserved outside the ring for
- * node labels (px). */
+ * between groups (radians), and the smallest share of its room the ring
+ * gives up to node labels (it shrinks to fit them, but never below this). */
 const ARC_THICKNESS = 12
 const PAD_ANGLE = 0.02
-const LABEL_GUTTER = 24
+const MIN_RING_SHARE = 0.5
 
 /** Gap between the ring (or the tick marks' outer end) and the text that
  * follows it — tick labels sit this far past the marks, node labels this far
@@ -74,10 +75,7 @@ export const ChordPlot = (props: ChordPlotProps = {}) => {
 		outlineColor,
 		outlineWidth,
 		tickFont,
-		nodeLabelFont,
-		nodeLabelColorFor,
-		nodeLabelAlignment,
-		nodeLabelOffset,
+		labelFontSizePx,
 	} = scaffold
 
 	// The ring's value axis (Connection panel → Show axis, chord only).
@@ -179,7 +177,38 @@ export const ChordPlot = (props: ChordPlotProps = {}) => {
 				(maxTickLabelDepth > 0 ? TEXT_GAP + maxTickLabelDepth : 0)
 			: 0
 
-		const radius = Math.min(w, h) / 2 - LABEL_GUTTER - axisExtent
+		// Node labels are measured BEFORE the radius so the ring leaves room
+		// for them. A label reads horizontally away from its anchor (just
+		// outside the ring / axis at the node's mid-angle), so it reaches
+		// |sin θ|·r + its width across and |cos θ|·r + half a line up or down
+		// from the center; the ring takes the largest radius at which every
+		// label fits at its own angle.
+		const labeler = scaffold.makeNodeLabeler(edges, "ring")
+		const labelInset = axisExtent + TEXT_GAP
+		const halfW = w / 2
+		const halfH = h / 2
+		const room = Math.min(halfW, halfH) - axisExtent
+		let radius = room - TEXT_GAP
+		for (const g of chords.groups) {
+			const width = labeler.widthFor(nodes[g.index])
+			if (width <= 0) continue
+			const mid = (g.startAngle + g.endAngle) / 2
+			const sin = Math.abs(Math.sin(mid))
+			const cos = Math.abs(Math.cos(mid))
+			if (sin > 1e-6) {
+				radius = Math.min(radius, (halfW - width - TEXT_GAP) / sin - labelInset)
+			}
+			if (cos > 1e-6) {
+				radius = Math.min(
+					radius,
+					(halfH - labelFontSizePx / 2 - TEXT_GAP) / cos - labelInset
+				)
+			}
+		}
+		// Very long names would collapse the ring: it stops shrinking at half
+		// its room, and past that the longest labels run over the edge rather
+		// than disappear.
+		radius = Math.max(radius, room * MIN_RING_SHARE)
 		// Degenerate-panel guard: below this the ring's inner radius goes
 		// negative and d3-path THROWS ("negative radius") — reachable via
 		// the first pre-solver layout pass, thumbnail renders, and sliver
@@ -193,12 +222,13 @@ export const ChordPlot = (props: ChordPlotProps = {}) => {
 		const ribbonGen = ribbon<Chord, ChordSubgroup>().radius(
 			radius - ARC_THICKNESS
 		)
-		// Node labels clear whatever is outermost — the ring itself, or the
-		// axis's tick labels when the axis is on.
-		const labelInset = axisExtent + TEXT_GAP
 
 		const groupArcs: React.ReactNode[] = []
-		const groupLabels: React.ReactNode[] = []
+		// Node labels go through the shared Data Labels layer (chord draws the
+		// full edge list, so totals follow every edge). They clear whatever
+		// is outermost — the ring itself, or the axis's tick labels.
+		const labelFor = labeler.anchorFor
+		const groupLabels: DataLabelAnchor[] = []
 		const axisMarks: React.ReactNode[] = []
 		for (const group of chords.groups) {
 			const name = nodes[group.index]
@@ -319,47 +349,19 @@ export const ChordPlot = (props: ChordPlotProps = {}) => {
 			}
 
 			// Label outside the ring (and outside the axis when shown) at the
-			// group's mid-angle, anchored away from the center by default —
-			// a Node-titles Align pick forces the anchor; names too long for
-			// the gutter go unlabeled. The Distance offset moves the label
-			// radially (out for +, in for -); x / y then shift in screen space.
+			// group's mid-angle, reading away from the center by default.
 			const midAngle = (group.startAngle + group.endAngle) / 2
-			const anchor =
-				nodeLabelAlignment === "left"
-					? "start"
-					: nodeLabelAlignment === "right"
-						? "end"
-						: midAngle > Math.PI
-							? "end"
-							: "start"
-			if (hierarchyLabelFits(name, nodeLabelFont.size, LABEL_GUTTER * 3)) {
-				groupLabels.push(
-					<text
-						key={`lbl-${name}`}
-						x={
-							cx +
-							Math.sin(midAngle) * (radius + labelInset + nodeLabelOffset.distance) +
-							nodeLabelOffset.x
-						}
-						y={
-							cy -
-							Math.cos(midAngle) * (radius + labelInset + nodeLabelOffset.distance) +
-							nodeLabelOffset.y
-						}
-						fill={nodeLabelColorFor(name)}
-						fontFamily={nodeLabelFont.family}
-						fontSize={nodeLabelFont.size}
-						fontWeight={nodeLabelFont.fontWeight}
-						fontStyle={nodeLabelFont.fontStyle}
-						textDecoration={nodeLabelFont.textDecoration}
-						textAnchor={anchor}
-						dominantBaseline="middle"
-						pointerEvents="none"
-					>
-						{name}
-					</text>
-				)
-			}
+			const labelRadius = radius + labelInset
+			const anchor = labelFor(
+				name,
+				{
+					cx: cx + Math.sin(midAngle) * labelRadius,
+					cy: cy - Math.cos(midAngle) * labelRadius,
+					side: midAngle > Math.PI ? "right" : "left",
+				},
+				mh.opacityMul
+			)
+			if (anchor) groupLabels.push(anchor)
 		}
 
 		const ribbons: React.ReactNode[] = []
@@ -394,7 +396,15 @@ export const ChordPlot = (props: ChordPlotProps = {}) => {
 				{ribbons}
 				{groupArcs}
 				{axisMarks}
-				{groupLabels}
+				<DataLabelsLayer
+					rows={[]}
+					xScale={null}
+					yScale={null}
+					xType={null}
+					yType={null}
+					positionGate="layout"
+					anchors={groupLabels}
+				/>
 			</g>
 		)
 	}

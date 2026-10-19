@@ -792,23 +792,11 @@ no connection) under a flow layout has no edges to draw — the canvas
 stays empty and the Structure section's hint says to map a source
 column.
 
-**Flow node labels** (the node names beside chord arcs / sankey rects)
-style through the Labels menu's **Node titles** section (flow modes
-only): a textless "Auto" row — the names come from the data — with the
-same alignment / font / offset controls as the axis titles
-(`labels.fontOverrides.nodeTitle` + `titleAlignments` /
-`titleOffsets`). Each SET field layers over the legacy Text-channel
-config (`channelConfigs.text`) field by field, so visuals styled
-through the old Text panel render unchanged until a Node-titles field
-overrides it; a Node-titles color override beats the Text channel's
-per-value colors. Align's default (center) keeps the renderer's
-automatic anchoring (away from the ring for chord, side-dependent for
-sankey); Left / Right force every label's reading direction. Besides
-the shared x / y offset, node titles get a **Distance from figure**
-input (`titleOffsets.nodeTitle.distance`, default 0): it moves every
-label along its away-from-the-figure direction — radially outward for
-chord, away from the node rect for sankey — with negative values
-pulling labels closer; x / y then shift in screen space on top.
+**Flow node labels** (the labels beside chord arcs / sankey rects) are
+styled from the **Data Labels** section (§6.5) — nothing about them
+lives under Labels. Old visuals that styled them through the retired
+Labels → "Node titles" section keep their look: that styling folds into
+the visual's Data Labels config on intake (see §6.5).
 
 **Chord ring axis** — Connection panel → **Show axis** (chord layout
 only; checkbox, off by default): graduated value tick marks around the
@@ -2149,8 +2137,72 @@ Background. Its **Adjust position** polar pair is Angle (the pie's
 RING-relative **R** (`ringLabelRadius`, percent across the ring's
 thickness from the inner edge — 50% (default) is the middle, 100% the
 outer edge, >100% outside the ring); the pie's center-relative R
-doesn't transfer because each ring sits at its own radius. Chord /
-sankey label styling is a planned follow-up.
+doesn't transfer because each ring sits at its own radius.
+
+On the FLOW diagrams (chord / sankey) labels sit on NODES — beside each
+sankey rect (left of last-column nodes, right of the rest, vertically
+centered) and just outside the chord ring (outside the ring axis when
+shown) at the node's mid-angle. The renderers hand those anchors to this
+layer in the `"layout"` gate, like the sunburst, so labels show with
+nothing mapped. The **X / Y position rows are greyed out, not hidden**
+(a note says labels sit beside each node); everything else applies:
+
+- **Value** starts on the SOURCE column — the node names — shown
+  selected (an unset Value means that column on a flow), so its Text
+  format, before / after text included, is right there. Picking
+  **— none —** hides the node labels (stored as `value.none`, since an
+  unset Value already means "the names"); "Multiple variables…" from an
+  empty checklist starts with the source column checked. It offers the data set's
+  variables plus three flow-only values — **Flow in**, **Flow out**, and
+  **Node total** (the drawn size: in + out on a chord, whose arc spans
+  both its outgoing and incoming ribbons; the larger of the two on a
+  sankey) — and
+  "Multiple variables…" composes them like any chart (`{Start} · in
+  {Flow in}`; the source and target columns both read as the node's
+  name). A dataset variable on a node aggregates the node's OUTGOING rows
+  (an end node with none uses its incoming rows) — numbers sum, text
+  takes the first non-empty value, the bar-label rule — so a middle node
+  isn't counted twice. A column already named like a flow-only value
+  keeps the name (the flow-only value isn't offered). The TARGET column
+  and the WEIGHT column aren't listed under Value / Size — on a node the
+  first repeats the name (the source column already offers it) and the
+  second is Flow out again (Flow in on an end node) — unless already
+  picked. Totals follow the
+  DRAWN edges: on a sankey, the cycle-closing edges it hides don't count.
+  `lib/flowNodeLabels.ts` builds each node's record.
+- **Color** maps the data set's variables; on an endpoint column it
+  colors labels by node over the same node-union domain as the marks.
+  **Size** also accepts the flow-only values (font scales with node
+  total).
+- **Which labels** (under Label selection) picks NODES by flow
+  direction — one choice for every label (`flowLabelNodes`). Sankey: All
+  nodes (default) · First senders (no incoming flow) · All senders (any
+  outgoing) · Last receivers (no outgoing flow) · All receivers (any
+  incoming). Chord: All nodes · Senders · Receivers; a sankey-only pick
+  reads as its chord equivalent, and when every node both sends and
+  receives a hint says the three label the same nodes. The per-series
+  "Which labels" / "Of each" stand down (no series).
+- **Adjust position and alignment**, **Text properties** and **Text
+  background** all apply. Alignment's default (center) is automatic:
+  text reads away from the node (end-anchored on the left half of the
+  ring and on a sankey's last column); Left / Right force the anchor.
+  The chord ring makes room for its labels: each selected node's widest
+  line (composed labels included, at the largest size a mapped Size can
+  reach, cut at the Wrap width when wrapping) is measured first, and the
+  ring takes the largest radius at which every label fits inside the
+  panel at its own angle. It never shrinks below half its room — past
+  that, very long names run over the edge rather than disappear.
+
+Defaults come from the theme's **Data labels** text block (Settings →
+Themes → Text: family, color, size, weight, italic, underline), like
+every other chart's labels; the legacy Text-channel styling no longer
+applies to flow labels. Visuals that styled them through the retired
+Labels → "Node titles" section are folded on intake (open, save,
+bundle import, example seed — `lib/foldFlowNodeTitles.ts`, beside
+`structureVisualKeys`; idempotent, no storage version bump): font
+family / size / weight / italic / underline / color → the Data Labels
+text fields, alignment → Alignment, x / y → the x / y nudges; the old
+radial "Distance from figure" offset has no equivalent and is dropped.
 
 In the GEO modes (choropleth / bubble map / dot map) labels anchor to
 REGIONS: a **Geography** row replaces the X/Y position rows. Its field's
@@ -2450,7 +2502,8 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   the whole layer before composed labels keeps its scope — and an entry
   of "all facets" overrides a layer-wide list rather than falling back
   to it. It is also the one Label-selection control a map or a sunburst
-  keeps (they have no series ends to select or scope). The list uses the
+  keeps (they have no series ends to select or scope; flow diagrams add
+  their own by-direction node selection). The list uses the
   same panel references the annotations' "Apply to all facets" picker
   stores (`FacetPanelRef`: the facet value in wrap mode, a `{ row, col }`
   pair in grid mode), labeled as the rendered titles are (facet value,
@@ -2644,6 +2697,12 @@ title, and facet/legend titles. Each title has:
   the Y sign convention (positive = up).
 - Y-axis title only: a "Read horizontally" toggle that un-rotates the
   title from -90°.
+- On a chart that draws no x / y axis — flow diagrams, the tree layouts,
+  maps — that axis's title row is **greyed out, not hidden** (text box and
+  styling disclosure disabled; a note says so when both are). Stored
+  values are left alone and don't light the subsection's dot. Polar
+  charts keep both live: the pie bands and the radar's R axis draw from
+  them.
 - Chart title only: an **Add prefix** checkbox (between the Style row
   and Adjust position). Checking it reveals a **Prefix** text box and a
   font editor (family / color / size / weight / style — no alignment)

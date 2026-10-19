@@ -6,6 +6,7 @@ import { breakCycles, flowEdgeKey, type FlowEdge } from "../../lib/buildFlowGrap
 import { ptToPx } from "../../lib/fontUnit"
 import type { ChartRendererBaseProps } from "../../lib/chartRendererProps"
 
+import { DataLabelsLayer, type DataLabelAnchor } from "./DataLabelsLayer"
 import { Plot, type PlotContext } from "./Plot"
 import { useFlowScaffold } from "./useFlowScaffold"
 
@@ -26,6 +27,8 @@ type LayoutNode = SankeyNode<SankeyNodeDatum, SankeyLinkDatum>
 const NODE_WIDTH = 12
 const NODE_PADDING = 10
 const LABEL_GUTTER = 24
+/** Gap between a node rect and its label's anchor point (px). */
+const LABEL_GAP = 6
 
 // Links read as translucent runs of their source node's color while node
 // rects anchor the eye — both opacities come from the Nodes / Ribbons
@@ -42,16 +45,7 @@ const LABEL_GUTTER = 24
  */
 export const SankeyPlot = (props: SankeyPlotProps = {}) => {
 	const scaffold = useFlowScaffold(props)
-	const {
-		nodes,
-		edges,
-		outlineColor,
-		outlineWidth,
-		nodeLabelFont,
-		nodeLabelColorFor,
-		nodeLabelAlignment,
-		nodeLabelOffset,
-	} = scaffold
+	const { nodes, edges, outlineColor, outlineWidth } = scaffold
 
 	const { kept, droppedSelfLoops, droppedCycleEdges } = useMemo(
 		() => breakCycles(edges),
@@ -132,7 +126,10 @@ export const SankeyPlot = (props: SankeyPlotProps = {}) => {
 		}
 
 		const nodeRects: React.ReactNode[] = []
-		const nodeLabels: React.ReactNode[] = []
+		// Labels go through the shared Data Labels layer; totals and the
+		// "Which labels" roles follow the KEPT edges — what's drawn.
+		const labelFor = scaffold.makeNodeLabeler(kept, "columns").anchorFor
+		const nodeLabels: DataLabelAnchor[] = []
 		for (const node of layout.nodes) {
 			const { name } = node
 			const x0 = node.x0 ?? 0
@@ -162,52 +159,36 @@ export const SankeyPlot = (props: SankeyPlotProps = {}) => {
 			)
 
 			// Label beside the rect: last-column nodes read leftward from
-			// their rect (anchor end), everything else reads to the right.
-			// Zero-height nodes (all edges dropped) go unlabeled — there's
-			// no mark to point at.
+			// their rect, everything else reads to the right. Zero-height
+			// nodes (all edges dropped) go unlabeled — there's no mark to
+			// point at.
 			if (height <= 0) continue
 			const lastColumn = (node.x1 ?? 0) >= extentRight - 1
-			// "center" = automatic side-dependent anchoring; a Node-titles
-			// Align pick forces every label's anchor (the anchor POINT stays
-			// beside the rect, so left/right reads as text direction).
-			const autoAnchor = lastColumn ? "end" : "start"
-			const anchor =
-				nodeLabelAlignment === "left"
-					? "start"
-					: nodeLabelAlignment === "right"
-						? "end"
-						: autoAnchor
-			// The Distance offset moves the label along its away-from-the-rect
-			// direction (leftward for last-column labels, rightward otherwise);
-			// x / y then shift in screen space.
-			const gap = 6 + nodeLabelOffset.distance
-			nodeLabels.push(
-				<text
-					key={`lbl-${name}`}
-					x={
-						(lastColumn ? x0 - gap : (node.x1 ?? 0) + gap) + nodeLabelOffset.x
-					}
-					y={(y0 + (node.y1 ?? 0)) / 2 + nodeLabelOffset.y}
-					fill={nodeLabelColorFor(name)}
-					fontFamily={nodeLabelFont.family}
-					fontSize={nodeLabelFont.size}
-					fontWeight={nodeLabelFont.fontWeight}
-					fontStyle={nodeLabelFont.fontStyle}
-					textDecoration={nodeLabelFont.textDecoration}
-					textAnchor={anchor}
-					dominantBaseline="middle"
-					pointerEvents="none"
-				>
-					{name}
-				</text>
+			const anchor = labelFor(
+				name,
+				{
+					cx: lastColumn ? x0 - LABEL_GAP : (node.x1 ?? 0) + LABEL_GAP,
+					cy: (y0 + (node.y1 ?? 0)) / 2,
+					side: lastColumn ? "right" : "left",
+				},
+				mh.opacityMul
 			)
+			if (anchor) nodeLabels.push(anchor)
 		}
 
 		return (
 			<g onMouseLeave={scaffold.clearHover}>
 				{linkMarks}
 				{nodeRects}
-				{nodeLabels}
+				<DataLabelsLayer
+					rows={[]}
+					xScale={null}
+					yScale={null}
+					xType={null}
+					yType={null}
+					positionGate="layout"
+					anchors={nodeLabels}
+				/>
 				{notice}
 			</g>
 		)

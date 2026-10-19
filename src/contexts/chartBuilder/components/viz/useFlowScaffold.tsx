@@ -7,22 +7,29 @@ import {
 	type FlowEdge,
 } from "../../lib/buildFlowGraph"
 import {
+	DEFAULT_DATA_LABELS_CONFIG,
 	DEFAULT_FILL,
 	DEFAULT_SHAPE_CONFIG,
-	DEFAULT_TEXT_CONFIG,
-	type TextConfig,
+	type DataLabelsConfig,
 } from "../../lib/channelConfig"
 import type { ChartRendererBaseProps } from "../../lib/chartRendererProps"
+import { normalizeComposedLabels } from "../../lib/dataLabelsSelection"
+import {
+	buildLabelText,
+	formatSingleLabel,
+	labelHueScaleParts,
+	resolveLabelFill,
+} from "../../lib/dataLabelsStyle"
+import {
+	buildFlowNodeRows,
+	effectiveFlowLabelNodes,
+	flowNodeLabeled,
+	flowNodeTotals,
+	type FlowGeometry,
+} from "../../lib/flowNodeLabels"
 import { ptToPx } from "../../lib/fontUnit"
 import { cartesian } from "./coords"
-import {
-	fontStyleAttrs,
-	resolveTextFont,
-	titleOffsetOf,
-	type FontStyleAttrs,
-	type LabelAlignment,
-} from "../../lib/labelsConfig"
-import { resolveTextColor } from "../../lib/textEncoding"
+import { resolveTextFont } from "../../lib/labelsConfig"
 import { OPACITY_SLOT_DEFS } from "../../lib/opacitySlots"
 import { dedupPatternDefs, type PatternDefSpec } from "../../lib/patternDefs"
 import {
@@ -31,12 +38,15 @@ import {
 	resolvePatternForMark,
 } from "../../lib/patterns"
 import { applyHueScale, makeHueScale } from "../../lib/scales"
+import { emptyDataLabelsEncodings } from "../../lib/types"
 import {
+	currentDataLabelsEncodingsAtom,
 	currentEncodingsAtom,
 	currentLabelsAtom,
 } from "../../store/atoms"
 import {
 	renderChannelConfigsAtom,
+	renderDataLabelsConfigAtom,
 } from "../../store/renderConfigs"
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
 import { useThemeInkFallback } from "../../store/useThemeInkFallback"
@@ -48,10 +58,21 @@ import {
 	type MarkHighlight,
 } from "../../store/useLegendHighlight"
 
+import type { DataLabelAnchor } from "./DataLabelsLayer"
 import { HoverTooltip, type TooltipState } from "./HoverTooltip"
 import type { CoordFactory } from "./Plot"
+import { hierarchyLabelWidth } from "./useHierarchyScaffold"
 
 export type FlowEdgeStyle = { fill: string; opacity: number }
+
+/** Where a renderer puts one node's label: the anchor point, and which way
+ *  the text reads from it when Alignment is left at its automatic
+ *  "center" ("left" = text starts at the point, "right" = ends there). */
+export type FlowLabelPlacement = {
+	cx: number
+	cy: number
+	side: "left" | "right"
+}
 
 /**
  * Shared scaffolding for the flow renderers (chord, sankey): edge-list →
@@ -66,6 +87,14 @@ export const useFlowScaffold = (props: ChartRendererBaseProps = {}) => {
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
 	const labels = useAtomValue(currentLabelsAtom)
+	const dataLabelsCfg: DataLabelsConfig = {
+		...DEFAULT_DATA_LABELS_CONFIG,
+		...useAtomValue(renderDataLabelsConfigAtom),
+	}
+	const dataLabelsEnc = {
+		...emptyDataLabelsEncodings(),
+		...useAtomValue(currentDataLabelsEncodingsAtom),
+	}
 	const dataset = useCurrentDatasetView()
 	const themeInkFallback = useThemeInkFallback()
 	const [hovered, setHovered] = useState<TooltipState | null>(null)
@@ -245,34 +274,155 @@ export const useFlowScaffold = (props: ChartRendererBaseProps = {}) => {
 	})
 
 	const tickFont = resolveTextFont(labels.baseFont)
-	const textCfg: TextConfig = { ...DEFAULT_TEXT_CONFIG, ...channelConfigs.text }
 
-	// Node-label styling: the Labels panel's "Node titles" slot layered over
-	// the legacy Text-channel config, field by field — an unset field falls
-	// through to `textCfg`, so visuals styled via the old Text panel render
-	// unchanged until a Node-titles field overrides it.
-	const nodeTitleOverride = labels.fontOverrides?.nodeTitle
-	const nodeLabelFont = {
-		family: nodeTitleOverride?.family ?? textCfg.fontFamily,
-		// Config sizes are pt; rendering is px (lib/fontUnit).
-		size: ptToPx(nodeTitleOverride?.size ?? textCfg.fontSize),
-		// fontStyleAttrs supplies weight/italic/underline; weight falls back to
-		// the Text channel's weight so the pre-slot rendering is preserved.
-		...fontStyleAttrs({
-			weight: nodeTitleOverride?.weight ?? textCfg.fontWeight,
-			italic: nodeTitleOverride?.italic,
-			underline: nodeTitleOverride?.underline,
-		}),
-	} satisfies { family: string; size: number } & FontStyleAttrs
-	/** Per-node label color: a Node-titles color override beats the Text
-	 * channel's per-value / palette / fallback resolution. */
-	const nodeLabelColorFor = (name: string): string =>
-		nodeTitleOverride?.color ?? resolveTextColor(name, textCfg)
-	/** "center" = the renderer's automatic anchoring (away from the ring for
-	 * chord, side-dependent for sankey); left/right force start/end anchors. */
-	const nodeLabelAlignment: LabelAlignment =
-		labels.titleAlignments?.nodeTitle ?? "center"
-	const nodeLabelOffset = titleOffsetOf(labels, "nodeTitle")
+	// ── Node labels (Data Labels section) ───────────────────────────────
+	// Renderers place each node's anchor (beside a sankey rect, outside the
+	// chord ring); everything else is the Data Labels section, applied by
+	// the shared `DataLabelsLayer`. Value picks the text — the node's name
+	// by default, else a variable from the node's synthetic row
+	// (`buildFlowNodeRows`: aggregated dataset variables + Flow in / Flow
+	// out / Node total); "Multiple variables…" composes that row. Color
+	// mapped to an endpoint column colors labels by node over the same
+	// node-UNION domain the marks use (the layer's own scale would only see
+	// the one column's values); any other Color / Size variable resolves in
+	// the layer from the row's value.
+	const datasetFieldNames = useMemo(
+		() => (dataset?.fields ?? []).map((f) => f.name),
+		[dataset?.fields]
+	)
+	const labelMulti = dataLabelsEnc.value.multiField === true
+	// An unset Value is the source column — the node names (both endpoint
+	// columns read as the name on a node's row). "— none —" (`none`) turns
+	// node labels off.
+	const labelsOff =
+		!labelMulti &&
+		dataLabelsEnc.value.field === null &&
+		dataLabelsEnc.value.none === true
+	const labelValueField =
+		dataLabelsEnc.value.field ?? (labelMulti ? null : sourceField)
+	const labelHueField = dataLabelsEnc.hue.field
+	const labelSizeField = dataLabelsEnc.size.field
+	const labelHueOnNodes =
+		!!labelHueField &&
+		(labelHueField === sourceField || labelHueField === targetField)
+	const labelNodeHueScale = (() => {
+		if (!labelHueOnNodes) return null
+		const { hueConfig, customPalette } = labelHueScaleParts(
+			dataLabelsCfg,
+			"categorical",
+			channelConfigs
+		)
+		if (!hueConfig) return null
+		return makeHueScale(scaleDomainNodes, "categorical", hueConfig, customPalette)
+	})()
+	/** Labels for one drawn graph. `drawnEdges` is what the renderer actually
+	 *  lays out (sankey drops cycle-closing edges), so a node's totals — and
+	 *  hence "Which labels" and the flow-only values — match what's on
+	 *  screen. `anchorFor` builds a node's anchor (`null` = no label: not
+	 *  selected, or nothing to say); `widthFor` estimates the widest line
+	 *  its label(s) will draw, so a renderer can reserve room before it
+	 *  places anything (0 = no label). */
+	const makeNodeLabeler = (
+		drawnEdges: readonly FlowEdge[],
+		geometry: FlowGeometry
+	) => {
+		const totals = flowNodeTotals(nodes, drawnEdges)
+		const nodeRows =
+			sourceField && targetField
+				? buildFlowNodeRows(nodes, drawnEdges, {
+						sourceField,
+						targetField,
+						fields: datasetFieldNames,
+						geometry,
+					})
+				: new Map<string, Record<string, unknown>>()
+		const which = effectiveFlowLabelNodes(dataLabelsCfg.flowLabelNodes, geometry)
+		const autoAlign = (dataLabelsCfg.alignment ?? "center") === "center"
+		const singleText = (name: string, row: Record<string, unknown>) =>
+			labelValueField
+				? formatSingleLabel(
+						row[labelValueField],
+						dataLabelsCfg.fieldFormats?.[labelValueField],
+						dataLabelsCfg.decimals
+					)
+				: name
+		// Measurement inputs: the composed labels the layer will draw, the
+		// largest size a label can take, and the wrap width in characters.
+		const composed = labelMulti
+			? (normalizeComposedLabels(dataLabelsCfg, dataLabelsEnc.value.fields ?? [])
+					.composedLabels ?? [])
+			: []
+		const measurePx = ptToPx(
+			labelSizeField ? dataLabelsCfg.sizeMax : dataLabelsCfg.fontSize
+		)
+		const wrapChars =
+			dataLabelsCfg.wrapText === true
+				? Math.max(1, dataLabelsCfg.wrapMaxChars ?? 20)
+				: Infinity
+		const selected = (name: string) => {
+			if (labelsOff) return false
+			const t = totals.get(name)
+			return !!t && flowNodeLabeled(which, t)
+		}
+		const widthFor = (name: string): number => {
+			if (!selected(name)) return 0
+			const row = nodeRows.get(name) ?? {}
+			const texts = labelMulti
+				? composed.map(
+						(l) =>
+							buildLabelText(row, dataLabelsEnc.value, {
+								...dataLabelsCfg,
+								labelTemplate: l.template,
+							}) ?? ""
+					)
+				: [singleText(name, row) ?? ""]
+			let widest = 0
+			for (const text of texts) {
+				for (const line of text.split("\n")) {
+					widest = Math.max(
+						widest,
+						hierarchyLabelWidth(line.slice(0, wrapChars), measurePx)
+					)
+				}
+			}
+			return widest
+		}
+		const anchorFor = (
+			name: string,
+			at: FlowLabelPlacement,
+			opacityMul?: number
+		): DataLabelAnchor | null => {
+			if (!selected(name)) return null
+			const row = nodeRows.get(name) ?? {}
+			const labelValue = labelValueField ? row[labelValueField] : name
+			const label = singleText(name, row)
+			const hueValue = labelHueField ? row[labelHueField] : undefined
+			const hueColor =
+				labelNodeHueScale && hueValue !== undefined
+					? (applyHueScale(labelNodeHueScale, hueValue, "categorical") ?? null)
+					: null
+			return {
+				cx: at.cx,
+				cy: at.cy,
+				key: `node-${name}`,
+				label,
+				labelValue,
+				hueValue,
+				sizeValue: labelSizeField ? row[labelSizeField] : undefined,
+				// Endpoint-colored labels resolve here (node-union scale); the
+				// rest leave fill to the layer.
+				fill: labelHueOnNodes
+					? resolveLabelFill(dataLabelsCfg, hueValue, hueColor, labelValue)
+					: undefined,
+				row: labelMulti ? row : undefined,
+				// Automatic alignment reads away from the node; a left / right
+				// pick is the user's and applies as-is.
+				hAlign: autoAlign ? at.side : undefined,
+				opacityMul,
+			}
+		}
+		return { anchorFor, widthFor }
+	}
 	const outlineColor =
 		channelConfigs.shape?.outlineColor ?? DEFAULT_SHAPE_CONFIG.outlineColor
 	const outlineWidth =
@@ -336,12 +486,12 @@ export const useFlowScaffold = (props: ChartRendererBaseProps = {}) => {
 		patternDefs,
 		edgeStyleFor,
 		nodeHighlight,
-		textCfg,
 		tickFont,
-		nodeLabelFont,
-		nodeLabelColorFor,
-		nodeLabelAlignment,
-		nodeLabelOffset,
+		makeNodeLabeler,
+		/** The largest label font size (px) — chord's vertical label room. */
+		labelFontSizePx: ptToPx(
+			labelSizeField ? dataLabelsCfg.sizeMax : dataLabelsCfg.fontSize
+		),
 		outlineColor,
 		outlineWidth,
 		coord,

@@ -5,6 +5,7 @@ import type { GradientInterpolation } from "./colorInterpolate"
 import type { DisplayUnit } from "./displayUnits"
 import type { DrawOrderConfig } from "./drawOrder"
 import type { FacetPanelRef } from "./facetPanelRef"
+import type { FlowLabelNodes } from "./flowNodeLabels"
 import type { FontConfig, LabelAlignment } from "./labelsConfig"
 
 export type GridlineConfig = {
@@ -2062,6 +2063,10 @@ export type DataLabelsConfig = {
 	 *  - `"first-last"`: both ends. A single-point series renders ONE label,
 	 *    styled by the `lastLabel` overrides (direct-labeling intent). */
 	labelPoints?: LabelPointsMode
+	/** Flow diagrams (chord / sankey) only: which NODES get a label — by flow
+	 *  direction (`lib/flowNodeLabels`). Absent = every node. Applies to
+	 *  every composed label; `labelPoints` stands down on flows (no series). */
+	flowLabelNodes?: FlowLabelNodes
 	/** Multi-field mode only: per-variable "Which labels" selection, keyed by
 	 * field name. A field with no entry falls back to `labelPoints` (via
 	 * `fieldLabelPointsMode`). Each selected field joins the label

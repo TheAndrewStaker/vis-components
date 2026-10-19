@@ -872,11 +872,10 @@ export type LabelFontKey =
 	// titles keep using `facetTitle` directly — this key styles ONLY the
 	// compact-grid panel titles.
 	| "facetPanelTitle"
-	// Flow-layout (chord / sankey) node labels — the names drawn beside each
-	// node arc / bar. Textless (names come from the data); each set field
-	// layers over the legacy Text-channel config (`channelConfigs.text`), so
-	// visuals styled through the old Text panel keep their look until a field
-	// here overrides it.
+	// LEGACY (read-only): flow-layout node labels were styled here until
+	// 2026-10-19. They're Data Labels now; `foldFlowNodeTitles` moves any
+	// stored entry into the visual's Data Labels config on intake, and
+	// nothing renders from this key.
 	| "nodeTitle"
 	| `legend:${LegendChannel}`
 
@@ -1057,10 +1056,8 @@ export type LabelsConfig = {
 	 * positions. `+x` moves right, `+y` moves down (SVG convention). The
 	 * solver also feeds these offsets into margin estimation so titles
 	 * pushed outward grow the canvas reserve rather than clipping.
-	 * `distance` is honored only by the `nodeTitle` slot: it moves flow
-	 * node labels along their away-from-the-figure direction (radially
-	 * outward for chord, away from the rect for sankey) — `+` is further
-	 * out, `-` is closer in. */
+	 * `distance` is LEGACY: only the retired `nodeTitle` slot ever stored
+	 * it, and nothing reads it now (see `foldFlowNodeTitles`). */
 	titleOffsets?: Partial<
 		Record<LabelFontKey, { x?: number; y?: number; distance?: number }>
 	>
@@ -1139,8 +1136,7 @@ export const facetTitleColorOf = (
 		? labels.facetTitleColors?.[value]
 		: undefined
 
-/** Resolve the stored offset for a title slot, defaulting to zeros.
- * `distance` only ever holds a value for `nodeTitle` (see LabelsConfig). */
+/** Resolve the stored offset for a title slot, defaulting to zeros. */
 export const titleOffsetOf = (
 	labels: LabelsConfig,
 	key: LabelFontKey

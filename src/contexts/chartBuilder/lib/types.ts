@@ -239,8 +239,19 @@ export type DataLabelsEncodings = {
 	 * (a string with `{Field}` tokens; empty = join the selected fields with
 	 * ", ") and each field's number format from `DataLabelsConfig.fieldFormats`.
 	 * `field` is null in this mode. Both are optional so visuals saved before
-	 * the feature load unchanged (single-field). */
-	value: { field: string | null; multiField?: boolean; fields?: string[] }
+	 * the feature load unchanged (single-field).
+	 *
+	 * Flow diagrams (chord / sankey) always have a node name to show, so an
+	 * unset Value there means "the source column" (the node names) and the
+	 * panel shows it selected. `none: true` records the user picking
+	 * "— none —" — no node labels — which an unset Value can't express.
+	 * Only flows read it; elsewhere a null field already draws nothing. */
+	value: {
+		field: string | null
+		multiField?: boolean
+		fields?: string[]
+		none?: boolean
+	}
 	/** Geo modes only — replaces the X/Y position rows on maps. The field
 	 * whose values join to map regions; each label centers on its region's
 	 * centroid. Independent of the map's own `connection` field AND of the

@@ -40,7 +40,9 @@ export const SankeyMode: ChartModeDef = {
 	labels: {
 		placement: "mark",
 		positionLockedToAxes: false,
-		seriesEndpoints: true,
+		// Nodes, not series: flows use their own "Which labels" (by flow
+		// direction, `lib/flowNodeLabels`).
+		seriesEndpoints: false,
 		containerRimLabels: false,
 	},
 	canvas: {

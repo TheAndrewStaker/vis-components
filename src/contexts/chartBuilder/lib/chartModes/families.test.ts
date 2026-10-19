@@ -166,7 +166,15 @@ const CONVERTED_GATES: {
 	},
 	{
 		gate: 'Data labels: no per-series endpoints ("Which labels" hidden)',
-		was: ["geo-points", "geo-symbols", "geo-choropleth", "sunburst"],
+		was: [
+			"geo-points",
+			"geo-symbols",
+			"geo-choropleth",
+			"sunburst",
+			// Added 2026-10-19: flows label nodes by flow direction instead.
+			"chord",
+			"sankey",
+		],
 		now: (m) => !m.labels.seriesEndpoints,
 	},
 	{

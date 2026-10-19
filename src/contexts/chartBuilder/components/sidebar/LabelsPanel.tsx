@@ -3,7 +3,6 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { useChartModeDef } from "../../store/useChartModeDef"
 import {
 	DEFAULT_FACET_CONFIG,
-	DEFAULT_TEXT_CONFIG,
 	type FacetConfig,
 } from "../../lib/channelConfig"
 import {
@@ -24,7 +23,6 @@ import {
 	type VerticalAlignment,
 } from "../../lib/labelsConfig"
 import { axisFieldsFor } from "../../lib/axisFields"
-import { isFlowModeId } from "../../lib/chartModes/families"
 import { effectiveType } from "../../lib/fieldType"
 import { resolveHistogramMeasure } from "../../lib/histogramMeasure"
 import {
@@ -411,25 +409,18 @@ export const LabelsPanel = () => {
 	// retained under an unchecked box doesn't dot.
 	const primaryChanged =
 		keyChanged("title") || keyChanged("subtitle") || titlePrefixOn
+	// An axis title the chart can't draw greys out: flow diagrams, the tree
+	// layouts and maps have no x / y axes. Polar charts stay live — the pie
+	// bands and the radar's R axis draw from these titles.
+	const isPolar = modeDef.canvas.coordFamily === "polar"
+	const xTitleInert = !isPolar && !modeDef.canvas.cartesianAxes.x
+	const yTitleInert = !isPolar && !modeDef.canvas.cartesianAxes.y
+	// A stored value on a greyed-out title can't be cleared from here, so it
+	// doesn't light the dot.
 	const axisChanged =
-		keyChanged("xAxisTitle") ||
-		keyChanged("yAxisTitle") ||
-		!!labels.yAxisTitleHorizontal
-	// Flow layouts (chord / sankey) draw node names instead of x/y axes —
-	// their styling gets its own "Node titles" section below the axis one.
-	const isFlowChart = isFlowModeId(modeDef.id)
-	const nodeTitlesChanged = keyChanged("nodeTitle")
-	// The color the node labels render with when nothing is overridden: the
-	// legacy Text-channel fallback color (per-value Text overrides can still
-	// vary individual labels — this is the swatch's best single answer).
-	const nodeTitleBaseColor =
-		channelConfigs.text?.color ?? DEFAULT_TEXT_CONFIG.color
-	const nodeTitleBaseSize =
-		channelConfigs.text?.fontSize ?? DEFAULT_TEXT_CONFIG.fontSize
-	const nodeTitleBaseFamily =
-		channelConfigs.text?.fontFamily ?? DEFAULT_TEXT_CONFIG.fontFamily
-	const nodeTitleBaseWeight =
-		channelConfigs.text?.fontWeight ?? DEFAULT_TEXT_CONFIG.fontWeight
+		(!xTitleInert && keyChanged("xAxisTitle")) ||
+		(!yTitleInert &&
+			(keyChanged("yAxisTitle") || !!labels.yAxisTitleHorizontal))
 	// Wrap/single-axis renders one unified "Facet titles" subsection; a
 	// both-axes grid renders per-strip row / column (+ optional panel)
 	// subsections, each dotting on its own key. "Color by facet" is a
@@ -611,8 +602,12 @@ export const LabelsPanel = () => {
 			</CollapsibleSubsection>
 			<CollapsibleSubsection title="Axis titles" changed={axisChanged}>
 				<div className="flex flex-col gap-2">
+			{xTitleInert && yTitleInert && (
+				<p className="vc-help">This chart has no x or y axis to title.</p>
+			)}
 			<LabelRow
 				label="X-axis title"
+				disabled={xTitleInert}
 				fontKey="xAxisTitle"
 				value={labels.xAxisTitle ?? ""}
 				onChange={(v) => updateText("xAxisTitle", v)}
@@ -635,6 +630,7 @@ export const LabelsPanel = () => {
 			/>
 			<LabelRow
 				label="Y-axis title"
+				disabled={yTitleInert}
 				fontKey="yAxisTitle"
 				value={labels.yAxisTitle ?? ""}
 				onChange={(v) => updateText("yAxisTitle", v)}
@@ -667,41 +663,6 @@ export const LabelsPanel = () => {
 			/>
 				</div>
 			</CollapsibleSubsection>
-			{/* Node titles: flow layouts (chord / sankey) label each node with
-			 *  its name from the data — no text to type (like the single facet
-			 *  title), so the alignment / font / offset controls render inline.
-			 *  Align's default ("center") keeps the renderer's automatic
-			 *  anchoring (away from the ring / side-dependent); left or right
-			 *  force every label's reading direction. */}
-			{isFlowChart && (
-				<CollapsibleSubsection title="Node titles" changed={nodeTitlesChanged}>
-					<div className="flex flex-col gap-2">
-						<LabelStyleControls
-							override={overrides.nodeTitle}
-							onOverride={(patch) => setOverride("nodeTitle", patch)}
-							alignment={titleAlignments.nodeTitle}
-							onAlignment={(a) => setAlignment("nodeTitle", a)}
-							baseColor={nodeTitleBaseColor}
-							baseSize={nodeTitleBaseSize}
-							baseFamily={nodeTitleBaseFamily}
-							baseWeight={nodeTitleBaseWeight}
-							extraControls={
-								<OffsetControl
-									value={labels.titleOffsets?.nodeTitle ?? {}}
-									onChange={(axis, n) => setOffset("nodeTitle", axis, n)}
-									showDistance
-								/>
-							}
-						/>
-						<p className="vc-help">
-							Styles the node names drawn beside each mark. Center alignment
-							keeps the automatic anchoring away from the figure; distance
-							moves every label further from the figure (or closer, when
-							negative).
-						</p>
-					</div>
-				</CollapsibleSubsection>
-			)}
 			{/* Facet titles are populated from the dataset's facet values, so
 			 *  there's no text to type — each subsection exposes only the
 			 *  alignment / font / offset styling controls, inline the moment it
@@ -997,6 +958,10 @@ type LabelRowProps = {
 	 * supplied elsewhere (e.g. facet titles come from the dataset's facet
 	 * values). The row still exposes alignment + font + offset controls. */
 	textless?: boolean
+	/** Greyed out and not editable — a title the chart can't draw (an axis
+	 *  title on a chart with no such axis). Stays visible so the panel keeps
+	 *  its shape; stored values are left alone. */
+	disabled?: boolean
 }
 
 /** Word-style horizontal-line glyphs for left / center / right alignment.
@@ -1153,19 +1118,13 @@ const VerticalAlignmentControl = ({
 const OffsetControl = ({
 	value,
 	onChange,
-	showDistance = false,
 }: {
-	value: { x?: number; y?: number; distance?: number }
-	onChange: (axis: "x" | "y" | "distance", n: number) => void
-	/** Adds a "Distance from figure" row that moves the label along its
-	 * away-from-the-figure direction (`+` further out, `-` closer in).
-	 * Only meaningful for slots whose renderer honors `distance` —
-	 * today that's the flow node titles. */
-	showDistance?: boolean
+	value: { x?: number; y?: number }
+	onChange: (axis: "x" | "y", n: number) => void
 }) => {
 	// One row per axis: each label doubles as the w-24 left column so the
 	// inputs line up with the Align / Family / Color controls above.
-	const row = (axis: "x" | "y" | "distance", labelText: string) => {
+	const row = (axis: "x" | "y", labelText: string) => {
 		const flip = axis === "y" ? -1 : 1
 		return (
 			<NumberInput
@@ -1184,7 +1143,6 @@ const OffsetControl = ({
 			<span className="vc-group-header">Adjust position</span>
 			{row("x", "X")}
 			{row("y", "Y")}
-			{showDistance && row("distance", "Distance from figure")}
 		</div>
 	)
 }
@@ -1383,6 +1341,7 @@ const LabelRow = ({
 	extraControls,
 	extraActive = false,
 	textless = false,
+	disabled = false,
 }: LabelRowProps) => {
 	const hasOverride = override !== undefined && Object.keys(override).length > 0
 	// "Modified" means the stored alignment differs from the theme-seeded
@@ -1407,7 +1366,9 @@ const LabelRow = ({
 							</span>
 						) : (
 							<label className="flex min-w-0 flex-1 items-start gap-2 text-sm">
-								<span className={`mt-1 shrink-0 ${LABEL_COL}`}>
+								<span
+									className={`mt-1 shrink-0 ${LABEL_COL} ${disabled ? "opacity-60" : ""}`}
+								>
 									{label}
 								</span>
 								<Textarea
@@ -1416,13 +1377,15 @@ const LabelRow = ({
 									placeholder={placeholder}
 									rows={1}
 									autoSize
+									disabled={disabled}
 									className="flex-1"
 								/>
 							</label>
 						)}
 						<Disclosure.Button
-							className={`relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 hover:text-stone-900 dark:hover:bg-stone-700 dark:hover:text-white vc-muted`}
+							className={`relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 hover:text-stone-900 disabled:pointer-events-none disabled:opacity-60 dark:hover:bg-stone-700 dark:hover:text-white vc-muted`}
 							aria-label={`Toggle font settings for ${label}`}
+							disabled={disabled}
 						>
 							<DisclosureChevron open={open} />
 							{(hasOverride ||
