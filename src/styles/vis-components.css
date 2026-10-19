@@ -1,10 +1,7 @@
 /* -----------------------------------------------------------------------------
  * vis-components project-local styles.
  *
- * Layered on top of the shared @th/react-app Tailwind config (imported first
- * in global.css). Anything here is scoped to vis-components; once a token or
- * utility stabilizes, consider promoting it into the shared tailwind.theme.css
- * in packages/react-app/src/tailwind/ so the rest of the monorepo can use it.
+ * Layered on top of the Tailwind config (imported first in global.css).
  *
  * Tailwind v4 syntax:
  *   @theme    → design tokens that become utilities (text-<name>, bg-<name>, …)
@@ -24,7 +21,7 @@
 	 * font option (FONT_FAMILY_OPTIONS in labelsConfig.ts) for figures. The
 	 * --font-heading token stays wired up so we can swap in a header/body
 	 * pairing later without replumbing.
-	 * Overriding --font-sans here (imported after the vendored theme) keeps
+	 * Overriding --font-sans here (imported after the base theme) keeps
 	 * the change project-local without editing tailwind.theme.css. */
 	--font-sans:
 		"Quicksand", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",

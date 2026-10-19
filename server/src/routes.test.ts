@@ -871,6 +871,32 @@ describe("multipart thumbnail uploads", () => {
 		expect(res.status).toBe(400)
 	})
 
+	it("rejects extra parts and a malformed ending", async () => {
+		await putVisual("v-mp-extra", { id: "v-mp-extra", name: "Chart" })
+		const form = new FormData()
+		form.append("thumbnail", new Blob([new Uint8Array(PNG)], { type: "image/png" }), "thumbnail.png")
+		form.append("note", "an extra part")
+		const extra = await fetch(`${base}/api/visuals/v-mp-extra/thumbnail`, {
+			method: "PUT",
+			body: form,
+		})
+		expect(extra.status).toBe(400)
+
+		const head = Buffer.from(
+			'--b\r\nContent-Disposition: form-data; name="thumbnail"; filename="thumbnail.png"\r\n\r\n',
+			"latin1"
+		)
+		for (const tail of ["\r\n--b--\r\ntrailing junk", "\r\n--b", ""]) {
+			const res = await fetch(`${base}/api/visuals/v-mp-extra/thumbnail`, {
+				method: "PUT",
+				headers: { "content-type": "multipart/form-data; boundary=b" },
+				body: Buffer.concat([head, PNG, Buffer.from(tail, "latin1")]),
+			})
+			expect(res.status).toBe(400)
+		}
+		expect((await stored("v-mp-extra"))?.thumbnail).toBeNull()
+	})
+
 	it("rejects a non-multipart body and a non-PUT method", async () => {
 		await putVisual("v-mp-json", { id: "v-mp-json", name: "Chart" })
 		const json = await fetch(`${base}/api/visuals/v-mp-json/thumbnail`, {

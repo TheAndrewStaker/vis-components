@@ -2,7 +2,15 @@ import { useRef, useState } from "react"
 import { useAtomValue } from "jotai"
 import { isEphemeralSeedId } from "../../chartBuilder/lib/exampleOverlay"
 import { buildSeedBundle } from "../../chartBuilder/lib/exampleSeed"
+import {
+	BUNDLE_FILE_TYPE,
+	BUNDLE_SAVE_KEY,
+} from "../../chartBuilder/lib/downloadVisuals"
 import { LIBRARY_BUNDLE_FILENAME } from "../../chartBuilder/lib/libraryBundle"
+import {
+	pickSaveTarget,
+	writeSaveTarget,
+} from "../../chartBuilder/lib/saveFile"
 import { stringifyJsonDangerous } from "../../../lib/json"
 import { datasetIndexAtom, visualsAtom } from "../../chartBuilder/store/atoms"
 import {
@@ -42,15 +50,21 @@ export const SharingPage = () => {
 		setExporting(true)
 		setStatus(null)
 		try {
+			// Ask where to save before the (slow) build, while the click's
+			// user activation is still live; a cancelled dialog exports nothing.
+			const target = await pickSaveTarget({
+				suggestedName: LIBRARY_BUNDLE_FILENAME,
+				type: BUNDLE_FILE_TYPE,
+				rememberAs: BUNDLE_SAVE_KEY,
+			})
+			if (target === null) return
 			const bundle = await buildSeedBundle()
 			const json = stringifyJsonDangerous(bundle as never)
-			const blob = new Blob([json], { type: "application/json" })
-			const url = URL.createObjectURL(blob)
-			const a = document.createElement("a")
-			a.href = url
-			a.download = LIBRARY_BUNDLE_FILENAME
-			a.click()
-			URL.revokeObjectURL(url)
+			await writeSaveTarget(
+				target,
+				new Blob([json], { type: BUNDLE_FILE_TYPE.mimeType }),
+				LIBRARY_BUNDLE_FILENAME
+			)
 			setStatus(
 				`Exported ${plural(bundle.visuals.length, "visualization")} and ${plural(
 					Object.keys(bundle.datasets).length,

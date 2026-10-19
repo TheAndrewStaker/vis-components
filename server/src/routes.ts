@@ -63,7 +63,7 @@ import {
 	THUMBNAIL_BODY_CAP_BYTES,
 } from "./limits.js"
 import { logError } from "./log.js"
-import { findMultipartPart, multipartBoundary } from "./multipart.js"
+import { multipartBoundary, parseMultipart } from "./multipart.js"
 import { serveStatic } from "./staticFiles.js"
 
 export type HandlerDeps = {
@@ -342,8 +342,8 @@ const assertClientCurrent = (
 /** The eight bytes every PNG starts with. */
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
-/** PUT /api/visuals/<id>/thumbnail — one `thumbnail` file part in a
- *  multipart/form-data body, a PNG. Stored as the same `data:image/png;base64`
+/** PUT /api/visuals/<id>/thumbnail — exactly one `thumbnail` file part in
+ *  a well-formed multipart/form-data body, a PNG. Stored as the same `data:image/png;base64`
  *  URL the inline JSON path always kept in the thumbnail column, so every
  *  reader (the collection GET, `?thumbnails=0`, the browser-local mirror of
  *  the shape) is untouched. Only the signature is checked — the part's
@@ -362,14 +362,17 @@ const putVisualThumbnail = async (
 		throw new HttpError(400, "Expected a multipart/form-data body")
 	}
 	const body = await readBody(req, THUMBNAIL_BODY_CAP_BYTES)
-	let part
+	let parts
 	try {
-		part = findMultipartPart(body, boundary, "thumbnail")
+		parts = parseMultipart(body, boundary)
 	} catch {
 		throw new HttpError(400, "Body is not well-formed multipart/form-data")
 	}
-	if (part === null || part.filename === null) {
-		throw new HttpError(400, 'Expected a "thumbnail" file part')
+	// Exactly the one part the client sends — an extra part is not ignored,
+	// it is a request this route does not accept.
+	const [part] = parts
+	if (parts.length !== 1 || part?.name !== "thumbnail" || part.filename === null) {
+		throw new HttpError(400, 'Expected exactly one "thumbnail" file part')
 	}
 	if (
 		part.data.length < PNG_SIGNATURE.length ||

@@ -334,9 +334,11 @@ export const createHttpStorageAdapter = (): StorageContentAdapter => {
 	 *  a failed upload retries on the next save — the body PUT it repeats is
 	 *  idempotent.
 	 *
-	 *  A thumbnail that is not a PNG data URL (nothing in the app produces
-	 *  one, but a bundle could carry one) goes up inline the old way rather
-	 *  than being dropped: the server still accepts that shape. */
+	 *  A thumbnail that is not a decodable PNG data URL (nothing in the app
+	 *  produces one, but a bundle could carry one) is left out entirely:
+	 *  never inline, which is the shape the WAF rejects, and never uploaded,
+	 *  which the server would 400 on every retry. The server keeps whatever
+	 *  preview it held, and the library's thumbnail refresh replaces it. */
 	const putVisual = async (id: string, serialized: string): Promise<void> => {
 		const { thumbnail, ...rest } = JSON.parse(serialized) as {
 			thumbnail?: string | null
@@ -346,14 +348,9 @@ export const createHttpStorageAdapter = (): StorageContentAdapter => {
 			if (thumbnail === null) uploadedThumbnails.delete(id)
 			return
 		}
-		const png = pngFileFromDataUrl(thumbnail)
-		if (png === null) {
-			await putJson("visuals")(id, serialized)
-			uploadedThumbnails.set(id, thumbnail)
-			return
-		}
 		await putJson("visuals")(id, serialize(rest))
-		if (uploadedThumbnails.get(id) === thumbnail) return
+		const png = pngFileFromDataUrl(thumbnail)
+		if (png === null || uploadedThumbnails.get(id) === thumbnail) return
 		await request(
 			"PUT",
 			`visuals/${encodeURIComponent(id)}`,

@@ -1,9 +1,8 @@
 import { forwardRef } from "react"
 import { combine as c } from "../../lib/cls"
 
-// Locally-styled button that mirrors the look of @th/react-app's Button without
-// pulling in its tailwind.macro dependency. Keeps vis-components decoupled from
-// the external-ui build toolchain.
+// The app's button: filled brand purple by default, with compact, theme and
+// danger variants.
 
 export type ButtonProps = Omit<JSX.IntrinsicElements["button"], "ref"> & {
 	compact?: boolean

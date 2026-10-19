@@ -62,7 +62,64 @@ describe("DownloadVisualsButton", () => {
 		await waitFor(() => expect(clicks.length).toBe(1))
 		expect(buildBundleForVisuals).toHaveBeenCalledWith(["vs-1"])
 		expect(clicks[0]?.download).toBe("q3-revenue.json")
-		expect(revoked).toEqual(["blob:fake"])
+		// The object URL is revoked after a short deferral (saveFile.ts).
+		await waitFor(() => expect(revoked).toEqual(["blob:fake"]), {
+			timeout: 2000,
+		})
+	})
+
+	it("writes to the file chosen in the Save-as dialog when available", async () => {
+		const { clicks } = captureDownload()
+		const written: unknown[] = []
+		const picker = vi.fn().mockResolvedValue({
+			createWritable: () =>
+				Promise.resolve({
+					write: (blob: unknown) => {
+						written.push(blob)
+						return Promise.resolve()
+					},
+					close: () => Promise.resolve(),
+				}),
+		})
+		vi.stubGlobal("showSaveFilePicker", picker)
+		try {
+			const { getByRole } = render(
+				<DownloadVisualsButton selected={[{ id: "vs-1", name: "Q3 Revenue!" }]} />
+			)
+			fireEvent.click(getByRole("button", { name: "Download" }))
+			await waitFor(() => expect(written.length).toBe(1))
+			expect(picker).toHaveBeenCalledWith(
+				expect.objectContaining({ suggestedName: "q3-revenue.json" })
+			)
+			expect(clicks).toEqual([])
+		} finally {
+			vi.unstubAllGlobals()
+		}
+	})
+
+	it("builds nothing when the Save-as dialog is cancelled", async () => {
+		const { clicks } = captureDownload()
+		const picker = vi
+			.fn()
+			.mockRejectedValue(new DOMException("closed", "AbortError"))
+		vi.stubGlobal("showSaveFilePicker", picker)
+		try {
+			const { getByRole } = render(
+				<DownloadVisualsButton selected={[{ id: "vs-1", name: "One" }]} />
+			)
+			fireEvent.click(getByRole("button", { name: "Download" }))
+			await waitFor(() => expect(picker).toHaveBeenCalled())
+			await waitFor(() =>
+				expect(
+					(getByRole("button", { name: "Download" }) as HTMLButtonElement)
+						.disabled
+				).toBe(false)
+			)
+			expect(buildBundleForVisuals).not.toHaveBeenCalled()
+			expect(clicks).toEqual([])
+		} finally {
+			vi.unstubAllGlobals()
+		}
 	})
 
 	it("downloads a multi-selection as the generic bundle file", async () => {

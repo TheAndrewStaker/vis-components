@@ -1,6 +1,4 @@
-/* Tailwind entry — provides @theme tokens, base resets, and the utility set.
- * Originally lived in @th/react-app; vendored here so vis-components has no
- * cross-package CSS dependency. */
+/* Tailwind entry — provides @theme tokens, base resets, and the utility set. */
 @import "./styles/tailwind/tailwind.css";
 
 /* Project-local styles (tokens, base overrides, components, utilities).

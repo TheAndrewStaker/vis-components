@@ -1,6 +1,5 @@
 // The two custom ESLint rules this codebase registers under the `@vc/`
-// namespace (see eslint.config.js). The rule logic is self-contained and
-// vendored here; edit it in place.
+// namespace (see eslint.config.js).
 
 /** @type {(x: any) => boolean} */
 const isIdentifier = (x) => typeof x.name === "string"

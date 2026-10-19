@@ -1,6 +1,5 @@
-// Bare-global blocklist mirrored from engineering-frontend
-// (eslint.config.lib.mjs restrictedGlobals). Access these via `window.*`
-// instead so the reference is explicit.
+// Bare-global blocklist. Access these via `window.*` instead so the
+// reference is explicit.
 export const restrictedGlobals = [	// uniq([...Object.keys(chrome.window), ...safari, ...firefox])
 	"0",
 	"alert",

@@ -1,7 +1,7 @@
 /**
  * Typed JSON.stringify — returns `undefined` when given `undefined`, matching
  * the actual runtime behavior of `JSON.stringify` (which the built-in TS
- * types lie about). Vendored from `@th/lib/src/json.ts`.
+ * types lie about).
  */
 type JsonLike =
 	| string

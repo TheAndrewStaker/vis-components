@@ -1,7 +1,8 @@
 /** Download visualizations as a standard library bundle (the same JSON
  *  Settings → Sharing produces and imports), so one chart can be handed to a
  *  colleague without exporting the whole library. Used by the library page's
- *  bulk "Download" and by the editor's Export popup ("Download JSON").
+ *  bulk "Download" and by the editor's Export popup ("Download JSON"). Like
+ *  image export, it offers the browser's Save-as dialog (./saveFile.ts).
  *
  *  The bundle build itself lives in ./libraryBundle.ts and reads through the
  *  storage adapter, so this works in server mode too. */
@@ -10,6 +11,8 @@ import {
 	buildBundleForVisuals,
 	LIBRARY_BUNDLE_FILENAME,
 } from "./libraryBundle"
+import { pickSaveTarget, writeSaveTarget } from "./saveFile"
+import type { SaveFileType } from "./saveFile"
 import { stringifyJsonDangerous } from "../../../lib/json"
 
 /** One selected row: everything the download needs to know about a visual. */
@@ -41,21 +44,40 @@ export const bundleFilenameFor = (
 		? `${sanitizeVisualFilename(visuals[0].name)}.json`
 		: LIBRARY_BUNDLE_FILENAME
 
-/** Build the bundle for `visuals` and hand it to the browser as a download.
- *  Rejects if the bundle can't be read; the caller surfaces that. */
+/** What the Save-as dialog offers for a library bundle. */
+export const BUNDLE_FILE_TYPE: SaveFileType = {
+	description: "Library bundle (JSON)",
+	mimeType: "application/json",
+	extensions: [".json"],
+}
+
+/** Shared by every bundle save, so the dialog reopens in the folder the
+ *  user last saved a bundle to. */
+export const BUNDLE_SAVE_KEY = "vis-export-bundle"
+
+/** Ask where to save (Save-as dialog where the browser has one, plain
+ *  download otherwise), then build the bundle for `visuals` and write it
+ *  there. The dialog opens FIRST, while the click's user activation is
+ *  live — the build reads through the storage adapter and can be slow.
+ *  Resolves `false` when the user cancels the dialog (nothing is built),
+ *  `true` once written. Rejects if the bundle can't be read; the caller
+ *  surfaces that. */
 export const downloadVisualsBundle = async (
 	visuals: readonly DownloadableVisual[]
-): Promise<void> => {
+): Promise<boolean> => {
+	const filename = bundleFilenameFor(visuals)
+	const target = await pickSaveTarget({
+		suggestedName: filename,
+		type: BUNDLE_FILE_TYPE,
+		rememberAs: BUNDLE_SAVE_KEY,
+	})
+	if (target === null) return false
 	const bundle = await buildBundleForVisuals(visuals.map((v) => v.id))
 	const json = stringifyJsonDangerous(bundle as never)
-	const blob = new Blob([json], { type: "application/json" })
-	const url = URL.createObjectURL(blob)
-	try {
-		const a = document.createElement("a")
-		a.href = url
-		a.download = bundleFilenameFor(visuals)
-		a.click()
-	} finally {
-		URL.revokeObjectURL(url)
-	}
+	await writeSaveTarget(
+		target,
+		new Blob([json], { type: BUNDLE_FILE_TYPE.mimeType }),
+		filename
+	)
+	return true
 }

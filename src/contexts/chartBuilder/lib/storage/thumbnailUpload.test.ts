@@ -17,6 +17,8 @@ describe("pngFileFromDataUrl", () => {
 		expect(pngFileFromDataUrl("data:image/jpeg;base64,/9j/4AAQ")).toBeNull()
 		expect(pngFileFromDataUrl("https://example.com/x.png")).toBeNull()
 		expect(pngFileFromDataUrl("data:image/png;base64,!!!not base64!!!")).toBeNull()
+		// Decodes fine, but the bytes are a GIF's, not a PNG's.
+		expect(pngFileFromDataUrl("data:image/png;base64,R0lGODlh")).toBeNull()
 	})
 })
 

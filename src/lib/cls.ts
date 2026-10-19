@@ -4,10 +4,7 @@
  *
  * @example
  *   const classes = combine("font-bold", isOpen && "open", className)
- *
- * Vendored from `@th/lib/src/render/classes.ts` — the original also reported
- * a runtime error if `true` was passed in; we drop that since vis-components
- * doesn't have the in-house error-reporting plumbing.
+
  */
 type ClassName = string | false | undefined | null
 

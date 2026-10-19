@@ -8,9 +8,6 @@ import globals from 'globals'
 import vc from './tooling/eslint/vc-plugin.js'
 import { restrictedGlobals } from './tooling/eslint/restricted-globals.js'
 
-// Rule choices mirror engineering-frontend's eslint.config.mjs where they
-// apply to a standalone Vite repo (no nx/import/unicorn/tanstack machinery),
-// plus jsx-a11y, which this repo adds.
 export default tseslint.config(
 	{ ignores: ['dist', 'server/dist', 'coverage', 'node_modules', 'test-results', 'playwright-report'] },
 	{

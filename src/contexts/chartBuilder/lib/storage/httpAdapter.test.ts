@@ -705,7 +705,8 @@ describe("the example sandbox in server mode", () => {
 		datasetId: "ds-seed",
 		themeId: "th-seed",
 		folderId: "f-seed",
-		thumbnail: "data:image/png;base64,AAA",
+		// The eight PNG signature bytes — anything less is never uploaded.
+		thumbnail: "data:image/png;base64,iVBORw0KGgo=",
 	}
 	const seedTheme = { id: "th-seed", name: "Seed theme", isSystem: false }
 	const seedFolder = { id: "f-seed", name: "Examples", parentId: null, createdAt: 0 }
@@ -998,13 +999,22 @@ describe("multipart thumbnail uploads", () => {
 		expect(calls(mock)).toEqual([])
 	})
 
-	it("falls back to the inline JSON for a thumbnail that is not a PNG data URL", async () => {
+	it("sends no preview at all for a thumbnail that is not a decodable PNG", async () => {
 		const v1 = { id: "v1", name: "One", thumbnail: null }
 		const { mock, adapter } = await loadAdapter([v1])
-		const odd = "data:image/jpeg;base64,/9j/4AAQ"
-		await adapter.saveVisuals([{ ...v1, thumbnail: odd }] as never)
-		expect(calls(mock)).toEqual(["PUT /api/visuals/v1"])
-		expect(JSON.parse(bodyOf(mock, "/api/visuals/v1") as string).thumbnail).toBe(odd)
+		for (const odd of [
+			"data:image/jpeg;base64,/9j/4AAQ",
+			"data:image/png;base64,!!!not base64!!!",
+			"data:image/png;base64,R0lGODlh",
+		]) {
+			mock.mockClear()
+			await adapter.saveVisuals([{ ...v1, thumbnail: odd }] as never)
+			// Never inline (the WAF's shape), never uploaded (the server 400s).
+			expect(calls(mock)).toEqual(["PUT /api/visuals/v1"])
+			expect(JSON.parse(bodyOf(mock, "/api/visuals/v1") as string)).not.toHaveProperty(
+				"thumbnail"
+			)
+		}
 	})
 
 	it("forgets a deleted visual's thumbnail so a re-created one uploads", async () => {

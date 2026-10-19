@@ -3650,8 +3650,13 @@ follows as a multipart file — `PUT /api/visuals/:id/thumbnail`, one
 `thumbnail` part named `thumbnail.png`, the browser's own boundary, no
 Content-Encoding — and only when it differs from what the server is
 known to hold, so a rename does not re-upload the preview. An explicit
-`thumbnail: null` stays in the JSON: that is the clear. The route takes
-a single PNG (signature-checked, 2 MB cap), 404s for a visual that is
+`thumbnail: null` stays in the JSON: that is the clear. A thumbnail
+that is not a decodable PNG (another media type, bad base64, no PNG
+signature — only an imported bundle could carry one) is not sent at all:
+never inline, and never uploaded only to fail. The route is strict: the
+body must be well-formed multipart (no preamble, nothing after the
+closing boundary) holding exactly one part, a `thumbnail` file, and that
+file a PNG (signature-checked, 2 MB cap); anything else is a 400. It 404s for a visual that is
 not stored (the JSON always lands first, and a thumbnail trailing a
 DELETE must not resurrect the row), and stores the same data URL the
 inline path always kept in the thumbnail column — so every reader,

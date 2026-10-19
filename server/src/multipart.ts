@@ -1,7 +1,6 @@
-/** A minimal multipart/form-data reader — just enough to pull ONE named file
- *  part out of a buffered request body. The server is zero-dependency by
- *  policy, and the only multipart route is the thumbnail upload, so this
- *  stays deliberately small: no streaming, no nested multipart, no
+/** A minimal, strict multipart/form-data reader for a buffered request
+ *  body. The server is zero-dependency by policy, and the only multipart
+ *  route is the thumbnail upload, so this stays deliberately small: no streaming, no nested multipart, no
  *  content-transfer-encoding (browsers never set one for FormData).
  *
  *  Everything works on Buffers, never on decoded strings: a file part is
@@ -36,42 +35,61 @@ export const multipartBoundary = (contentType: string | undefined): string | nul
 	return null
 }
 
-/** Find the first part whose Content-Disposition `name` is `fieldName`, or
- *  null when the body holds no such part. Throws on a body that is not
- *  well-formed multipart (no opening delimiter, a part without a header
- *  block, an unterminated part) — callers map that to a 400. */
-export const findMultipartPart = (
-	body: Buffer,
-	boundary: string,
-	fieldName: string
-): MultipartFile | null => {
+export type MultipartPart = MultipartFile & {
+	/** The Content-Disposition `name`. */
+	name: string
+}
+
+/** Every part of a multipart/form-data body, in order. Strict by design —
+ *  this guards an upload route, and a browser's FormData encoding is
+ *  regular enough that anything looser is a request no client of ours
+ *  sent: the body must open with the delimiter (no preamble), every
+ *  delimiter line ends in a bare CRLF, every part carries a header block
+ *  and a `form-data` Content-Disposition with a name, and the body ends
+ *  at the closing `--boundary--` (one trailing CRLF allowed, nothing
+ *  after). Throws on any violation — callers map that to a 400. */
+export const parseMultipart = (body: Buffer, boundary: string): MultipartPart[] => {
 	const delimiter = Buffer.from(`--${boundary}`)
-	let cursor = body.indexOf(delimiter)
-	if (cursor === -1) throw new Error("multipart body has no opening boundary")
+	const nextDelimiter = Buffer.concat([CRLF, delimiter])
+	if (!body.subarray(0, delimiter.length).equals(delimiter)) {
+		throw new Error("multipart body does not open with its boundary")
+	}
+	const parts: MultipartPart[] = []
+	let cursor = delimiter.length
 	for (;;) {
-		cursor += delimiter.length
-		// The closing delimiter is `--boundary--`; anything else after the
-		// delimiter is the (optional) transport padding then CRLF.
-		if (body[cursor] === 0x2d && body[cursor + 1] === 0x2d) return null
-		const lineEnd = body.indexOf(CRLF, cursor)
-		if (lineEnd === -1) throw new Error("multipart delimiter line is unterminated")
-		const headersStart = lineEnd + CRLF.length
-		const headersEnd = body.indexOf(HEADER_END, headersStart)
-		if (headersEnd === -1) throw new Error("multipart part has no header block")
-		const headers = parseHeaders(body.subarray(headersStart, headersEnd).toString("latin1"))
-		const dataStart = headersEnd + HEADER_END.length
-		// Each part's data runs up to the CRLF that precedes the next delimiter.
-		const next = body.indexOf(Buffer.concat([CRLF, delimiter]), dataStart)
-		if (next === -1) throw new Error("multipart part is unterminated")
-		const disposition = parseDisposition(headers.get("content-disposition") ?? "")
-		if (disposition.name === fieldName) {
-			return {
-				filename: disposition.filename,
-				contentType: headers.get("content-type") ?? null,
-				data: body.subarray(dataStart, next),
-			}
+		if (body[cursor] === 0x2d && body[cursor + 1] === 0x2d) {
+			// The closing delimiter. A single CRLF may follow it; nothing else.
+			const rest = body.subarray(cursor + 2)
+			if (rest.length === 0 || rest.equals(CRLF)) return parts
+			throw new Error("multipart body has data after its closing boundary")
 		}
-		cursor = next + CRLF.length
+		if (!body.subarray(cursor, cursor + CRLF.length).equals(CRLF)) {
+			throw new Error("multipart delimiter line is malformed")
+		}
+		const lineEnd = cursor
+		// Each part's data runs up to the CRLF that precedes the next delimiter.
+		const next = body.indexOf(nextDelimiter, lineEnd + CRLF.length)
+		if (next === -1) throw new Error("multipart part is unterminated")
+		// Searching from the delimiter line's own CRLF finds an empty header
+		// block too; the match must sit inside this part, not a later one.
+		const headersEnd = body.indexOf(HEADER_END, lineEnd)
+		if (headersEnd === -1 || headersEnd + HEADER_END.length > next) {
+			throw new Error("multipart part has no header block")
+		}
+		const headers = parseHeaders(
+			body.subarray(lineEnd + CRLF.length, headersEnd).toString("latin1")
+		)
+		const disposition = parseDisposition(headers.get("content-disposition") ?? "")
+		if (!disposition.formData || disposition.name === null) {
+			throw new Error("multipart part has no form-data name")
+		}
+		parts.push({
+			name: disposition.name,
+			filename: disposition.filename,
+			contentType: headers.get("content-type") ?? null,
+			data: body.subarray(headersEnd + HEADER_END.length, next),
+		})
+		cursor = next + nextDelimiter.length
 	}
 }
 
@@ -90,11 +108,12 @@ const parseHeaders = (block: string): Map<string, string> => {
  *  a raw `"` there), so a quoted value runs to the next quote. */
 const parseDisposition = (
 	value: string
-): { name: string | null; filename: string | null } => {
+): { formData: boolean; name: string | null; filename: string | null } => {
 	const read = (key: string): string | null => {
 		const match = new RegExp(`(?:^|;)\\s*${key}=(?:"([^"]*)"|([^;]*))`, "i").exec(value)
 		if (!match) return null
 		return (match[1] ?? match[2] ?? "").trim()
 	}
-	return { name: read("name"), filename: read("filename") }
+	const formData = value.split(";")[0]?.trim().toLowerCase() === "form-data"
+	return { formData, name: read("name"), filename: read("filename") }
 }
