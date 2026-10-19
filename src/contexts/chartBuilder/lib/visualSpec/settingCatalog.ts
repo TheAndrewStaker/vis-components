@@ -16,6 +16,8 @@ export type SettingType = {
 export type SettingCatalog = {
 	docs: Record<string, string>
 	types: Record<string, SettingType>
+	/** A list setting's path to the fields each of its elements must have. */
+	required: Record<string, string[]>
 }
 
 export const SETTING_CATALOG: SettingCatalog = CATALOG

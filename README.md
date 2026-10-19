@@ -178,10 +178,10 @@ curl -X PATCH https://charts.example.com/api/visuals/vs-… \
   -d '{"sort":{"country":{"by":"rate","decreasing":true}}}'
 ```
 
-`If-Match` is required and carries the `updatedAt` the caller last read
-(`*` skips the check); without it the edit answers **428**, and when the
-visual has changed since, **409**, changing nothing. A visual changed
-by another write while the edit runs also answers **409**. Responses are the
+`If-Match` is required and carries the `updatedAt` the caller last read;
+without it the edit answers **428**, `*` answers **400**, and when the
+visual has changed since, **412**, changing nothing. A visual changed
+by another write while the edit runs also answers **412**. Responses are the
 create route's, with **200** `{id, visual, warnings, editorUrl}` for a saved
 edit, **404** for an unknown visual and **409** for one in the trash. The
 saved visual's preview image is cleared, since it no longer shows the chart.

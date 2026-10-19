@@ -170,8 +170,13 @@ export const settingsProblems = (
 			.filter((p) => p.startsWith(`${bare}[].`))
 			.map((p) => p.slice(bare.length + 3))
 		if (fields.length === 0) return
+		const must = SETTING_CATALOG.required[bare] ?? []
 		value.forEach((item, i) => {
 			if (!isRecord(item)) return
+			const missing = must.filter((k) => !Object.hasOwn(item, k))
+			if (missing.length > 0) {
+				problems.push({ path: `${path}[${i}]`, message: `each entry needs ${missing.map((k) => `"${k}"`).join(", ")}` })
+			}
 			for (const [k, v] of Object.entries(item)) {
 				const at = join(`${path}[${i}]`, k)
 				if (keyProblem(k, at)) continue
