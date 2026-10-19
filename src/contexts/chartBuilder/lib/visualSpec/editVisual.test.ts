@@ -726,6 +726,11 @@ describe("settings review findings", () => {
 		expect(ok(edit(labelled(), { settings: { channelConfigs: { y: { tickCount: 6 } } } })).channelConfigs?.y?.tickCount).toBe(6)
 	})
 
+	it("refuses list entries missing a field every entry needs", () => {
+		const errors = errorsOf(edit(labelled(), { settings: { dataLabelsConfig: { composedLabels: [{ id: "broken" }] } } }))
+		expect(errors[0]).toMatchObject({ path: "settings.dataLabelsConfig.composedLabels[0]", message: expect.stringMatching(/"template"/) })
+	})
+
 	it("colors the lines by a field through the line color slot", () => {
 		const v = ok(edit(labelled(), { settings: { channelConfigs: { colorSlots: { line: { field: "flavor" } } } } }))
 		expect(v.channelConfigs?.colorSlots?.line).toMatchObject({ field: "flavor", hue: { kind: "categorical" }, palette: v.channelConfigs?.categoricalPalette })
@@ -837,5 +842,21 @@ describe("choosing a variation", () => {
 		expect(errorsOf(composeChartSpec(spec({ variation: "Violin (horizontal)" }), ctx(CAFE.id)))[0]?.message).toMatch(/needs "y" \(/)
 		const made = ok(composeChartSpec(spec({}), ctx(CAFE.id)))
 		expect(errorsOf(edit(made, { variation: "Box plot (vertical)" }))[0]?.path).toBe("variation")
+	})
+})
+
+describe("derived variables the reshape keeps", () => {
+	const spec = {
+		datasetId: CAFE.id,
+		folderId: null,
+		derivedVariables: [{ name: "Total", kind: "math", math: { formula: "{muffins} + {coffees}" } }],
+		reshape: { idFields: ["month", "flavor", "Total"], meltFields: ["muffins", "coffees"], variableName: "item", valueName: "sold" },
+		encodings: { x: "Total", y: "sold", hue: "item" },
+	}
+
+	it("computes them before the melt, as the editor does, on create and on a later edit", () => {
+		const made = ok(composeChartSpec(spec, ctx(CAFE.id)))
+		expect(made.encodings.x?.field).toBe("Total")
+		expect(ok(edit(made, { title: "Sold" })).labelsConfig.title).toBe("Sold")
 	})
 })

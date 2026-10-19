@@ -1,8 +1,7 @@
 /** What a chart spec can say, read from the same tables the editor uses:
  *  channels and the field types they take (CHANNELS), and the chart
  *  families with the channels each variation fills (the quick-start
- *  decision tree). A chart name that isn't a family here isn't one Zafiro
- *  knows. */
+ *  decision tree). */
 
 import { CHANNELS, conflictsFor } from "../channels"
 import type { StackMode } from "../channelConfig"

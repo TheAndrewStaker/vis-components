@@ -38,7 +38,8 @@ const tidy = (doc) => {
  *  `{ kinds, values?, items? }`. `kinds` holds "string", "number",
  *  "boolean", "null", "list" or "object"; `values` the allowed strings
  *  when the type is a union of string literals; `items` a list's element
- *  type. A path whose type can't be described (any, unknown) has none. */
+ *  type. A path whose type can't be described (any, unknown) has none.
+ *  `required`: a list setting's path to the fields each element must have. */
 export const extractSettingCatalog = () => {
 	const program = ts.createProgram([TYPES], {
 		strict: true,
@@ -102,6 +103,7 @@ export const extractSettingCatalog = () => {
 
 	const docs = {}
 	const types = {}
+	const required = {}
 	const walk = (type, path, depth) => {
 		if (depth > MAX_DEPTH) return
 		for (const part of objectParts(type)) {
@@ -118,10 +120,14 @@ export const extractSettingCatalog = () => {
 			}
 		}
 	}
-	/** A list's object elements, keyed `path[].field`, types only. */
+	/** A list's object elements, keyed `path[].field`, types only; the
+	 *  fields every element must have go in `required[path]`. */
 	const walkItems = (type, path, depth) => {
 		if (depth > MAX_DEPTH || !type) return
 		for (const part of objectParts(type)) {
+			const must = checker.getPropertiesOfType(part).filter((p) => !(p.flags & ts.SymbolFlags.Optional)).map((p) => p.name)
+			const list = path.slice(0, -2)
+			required[list] = Object.hasOwn(required, list) ? required[list].filter((n) => must.includes(n)) : must
 			for (const prop of checker.getPropertiesOfType(part)) {
 				const at = `${path}.${prop.name}`
 				const described = describe(checker.getTypeOfSymbol(prop))
@@ -140,7 +146,7 @@ export const extractSettingCatalog = () => {
 				.filter(([, v]) => v !== undefined)
 				.sort(([a], [b]) => a.localeCompare(b))
 		)
-	return { docs: sorted(docs), types: sorted(types) }
+	return { docs: sorted(docs), types: sorted(types), required: sorted(required) }
 }
 
 const ID = "virtual:setting-catalog"

@@ -25,6 +25,7 @@ import { buildQuantHueConfigFromTheme } from "../hueDefaults"
 import type { ColorSlotConfig, ColorSlotKey } from "../channelConfig"
 import { COLOR_SLOT_DEFS } from "../colorSlots"
 import { seedColorSlot } from "../seedColorSlot"
+import { applyDerivedVariablesBeforeReshape, splitDerivedVariablesAroundReshape } from "../derivedReshapeStages"
 import { alphabeticalLevelOrder, orderLevelsByField } from "../orderLevelsByField"
 import {
 	lineAnnotationStyleFromTheme,
@@ -242,35 +243,16 @@ const compose = (
 		overrides[field] = type
 	}
 
-	// The data as the editor shows it for this visual: its reshape, the
-	// percent and dollar conversions an override switches on, then its
+	// The data as the editor shows it for this visual (useCurrentDatasetView):
+	// the derived variables the reshape uses, computed wide; the reshape; the
+	// percent and dollar conversions an override switches on; then the other
 	// derived variables.
-	const rawNames = raw.fields.map((f) => f.name)
 	const reshapeConfig: ReshapeConfig =
 		spec.reshape === null
 			? { ...DEFAULT_RESHAPE_CONFIG }
 			: spec.reshape
 				? { ...DEFAULT_RESHAPE_CONFIG, ...spec.reshape, idFields: spec.reshape.idFields ?? [] }
 				: (hydrated?.reshapeConfig ?? { ...DEFAULT_RESHAPE_CONFIG })
-	if (spec.reshape) {
-		for (const key of ["idFields", "meltFields"] as const) {
-			for (const field of reshapeConfig[key]) {
-				if (rawNames.includes(field)) continue
-				problem(
-					pathOf("reshape", key),
-					`no field "${named(field)}" in dataset "${raw.name}"${hint(field, rawNames)}`
-				)
-			}
-		}
-		for (const issue of reshapeIssues(raw.fields, reshapeConfig)) problem("reshape", issue)
-		if (presentMeltFields(raw.fields, reshapeConfig).length === 0 && reshapeConfig.meltFields.every((f) => rawNames.includes(f))) {
-			problem("reshape.meltFields", "every melt field is also an ID field, so nothing would be reshaped")
-		}
-	}
-	const shaped = applyReshapeToView(raw, reshapeConfig) ?? raw
-	const converted =
-		applyDollarConversionToView(applyPercentConversionToView(shaped, overrides), overrides) ??
-		shaped
 
 	const currentDerived = hydrated?.derivedVariablesConfig ?? DEFAULT_DERIVED_VARIABLES_CONFIG
 	for (const name of spec.removeDerivedVariables ?? []) {
@@ -286,8 +268,36 @@ const compose = (
 		spec.derivedVariables ?? [],
 		ctx.now
 	)
+	const stages = splitDerivedVariablesAroundReshape(raw.fields, derivedConfig, reshapeConfig)
+	const convert = (v: DatasetView): DatasetView =>
+		applyDollarConversionToView(applyPercentConversionToView(v, overrides), overrides) ?? v
+	const wide = applyDerivedVariablesBeforeReshape(raw, derivedConfig, stages.beforeIds, () => convert(raw)) ?? raw
+
+	const wideNames = wide.fields.map((f) => f.name)
+	if (spec.reshape) {
+		for (const key of ["idFields", "meltFields"] as const) {
+			for (const field of reshapeConfig[key]) {
+				if (wideNames.includes(field)) continue
+				problem(
+					pathOf("reshape", key),
+					`no field "${named(field)}" in dataset "${raw.name}"${hint(field, wideNames)}`
+				)
+			}
+		}
+		for (const issue of reshapeIssues(wide.fields, reshapeConfig)) problem("reshape", issue)
+		if (presentMeltFields(wide.fields, reshapeConfig).length === 0 && reshapeConfig.meltFields.every((f) => wideNames.includes(f))) {
+			problem("reshape.meltFields", "every melt field is also an ID field, so nothing would be reshaped")
+		}
+	}
+	const shaped = applyReshapeToView(wide, reshapeConfig) ?? wide
+	const converted = convert(shaped)
+
 	if (spec.derivedVariables) {
-		const available = new Set(converted.fields.map((f) => f.name))
+		const derivedNames = new Set(derivedConfig.variables.map((v, i) => effectiveDerivedName(v, i)))
+		const available = new Set([
+			...raw.fields.map((f) => f.name),
+			...converted.fields.map((f) => f.name).filter((n) => !derivedNames.has(n)),
+		])
 		const numeric = makeNonNumericLookup(converted.rows)
 		const fromSpec = new Set(spec.derivedVariables.map((d) => d.name))
 		derivedConfig.variables.forEach((variable, index) => {
@@ -310,7 +320,7 @@ const compose = (
 			available.add(name)
 		})
 	}
-	const view = applyDerivedVariablesToView(converted, derivedConfig) ?? converted
+	const view = applyDerivedVariablesToView(converted, derivedConfig, stages.afterIds) ?? converted
 
 	const fieldNames = view.fields.map((f) => f.name)
 	const hasField = (name: string) => fieldNames.includes(name)
