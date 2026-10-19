@@ -14,6 +14,7 @@ import { gzipSync } from "node:zlib"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { openDb } from "./db.js"
 import { PAYLOAD_MARKER } from "./embedFiles.js"
+import { THUMBNAIL_BODY_CAP_BYTES } from "./limits.js"
 import { createHandler } from "./routes.js"
 
 let server: Server
@@ -156,9 +157,12 @@ describe("content versions over HTTP", () => {
 		expect(await res.json()).toEqual({})
 	})
 
+	// Stamped collections refuse header-less writes from then on (see the
+	// "behind the content schema" block), so this stamps only collections no
+	// later block writes to through the shared server.
 	it("stores a stamp per collection and reads them all back", async () => {
 		for (const [collection, v] of [
-			["visuals", 4],
+			["embed-instances", 4],
 			["themes", 2],
 		] as const) {
 			const put = await fetch(`${base}/api/content-versions/${collection}`, {
@@ -169,7 +173,7 @@ describe("content versions over HTTP", () => {
 			expect(put.status).toBe(204)
 		}
 		expect(await (await fetch(`${base}/api/content-versions`)).json()).toEqual({
-			visuals: 4,
+			"embed-instances": 4,
 			themes: 2,
 		})
 	})
@@ -793,5 +797,245 @@ describe("published embeds over HTTP", () => {
 			(await fetch(`${base}/api/embeds/${uuid("0ffff")}`)).status
 		).toBe(405)
 		expect((await fetch(`${base}/api/embeds`)).status).toBe(404)
+	})
+})
+
+describe("multipart thumbnail uploads", () => {
+	const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02])
+
+	const putVisual = (id: string, body: unknown) =>
+		fetch(`${base}/api/visuals/${id}`, {
+			method: "PUT",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(body),
+		})
+
+	const upload = (id: string, bytes: Buffer, name = "thumbnail") => {
+		const form = new FormData()
+		form.append(name, new Blob([new Uint8Array(bytes)], { type: "image/png" }), "thumbnail.png")
+		return fetch(`${base}/api/visuals/${id}/thumbnail`, { method: "PUT", body: form })
+	}
+
+	const stored = async (id: string) =>
+		(
+			(await (await fetch(`${base}/api/visuals`)).json()) as {
+				id: string
+				name?: string
+				thumbnail?: string | null
+			}[]
+		).find((v) => v.id === id)
+
+	it("stores the PNG as the same data URL the inline path kept", async () => {
+		await putVisual("v-mp", { id: "v-mp", name: "Chart" })
+		const res = await upload("v-mp", PNG)
+		expect(res.status).toBe(204)
+
+		const row = await stored("v-mp")
+		expect(row?.name).toBe("Chart")
+		expect(row?.thumbnail).toBe(`data:image/png;base64,${PNG.toString("base64")}`)
+	})
+
+	it("a later thumbnail-free JSON save keeps it; an explicit null clears it", async () => {
+		await putVisual("v-mp-keep", { id: "v-mp-keep", name: "Chart" })
+		await upload("v-mp-keep", PNG)
+		await putVisual("v-mp-keep", { id: "v-mp-keep", name: "Renamed" })
+		expect((await stored("v-mp-keep"))?.thumbnail).toBe(
+			`data:image/png;base64,${PNG.toString("base64")}`
+		)
+		await putVisual("v-mp-keep", { id: "v-mp-keep", name: "Renamed", thumbnail: null })
+		expect((await stored("v-mp-keep"))?.thumbnail).toBeNull()
+	})
+
+	it("404s for a visual that is not stored rather than inventing a row", async () => {
+		const res = await upload("v-mp-missing", PNG)
+		expect(res.status).toBe(404)
+		expect(await stored("v-mp-missing")).toBeUndefined()
+	})
+
+	it("rejects a part that is not a PNG", async () => {
+		await putVisual("v-mp-bad", { id: "v-mp-bad", name: "Chart" })
+		const res = await upload("v-mp-bad", Buffer.from("GIF89a....."))
+		expect(res.status).toBe(400)
+		expect((await stored("v-mp-bad"))?.thumbnail).toBeNull()
+	})
+
+	it("rejects a body without a thumbnail file part", async () => {
+		await putVisual("v-mp-nopart", { id: "v-mp-nopart", name: "Chart" })
+		expect((await upload("v-mp-nopart", PNG, "other")).status).toBe(400)
+		const form = new FormData()
+		form.append("thumbnail", "a plain field, not a file")
+		const res = await fetch(`${base}/api/visuals/v-mp-nopart/thumbnail`, {
+			method: "PUT",
+			body: form,
+		})
+		expect(res.status).toBe(400)
+	})
+
+	it("rejects a non-multipart body and a non-PUT method", async () => {
+		await putVisual("v-mp-json", { id: "v-mp-json", name: "Chart" })
+		const json = await fetch(`${base}/api/visuals/v-mp-json/thumbnail`, {
+			method: "PUT",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ thumbnail: "data:image/png;base64,AA" }),
+		})
+		expect(json.status).toBe(400)
+		const get = await fetch(`${base}/api/visuals/v-mp-json/thumbnail`)
+		expect(get.status).toBe(405)
+		expect((await stored("v-mp-json"))?.thumbnail).toBeNull()
+	})
+
+	it("413s past the thumbnail cap", async () => {
+		await putVisual("v-mp-big", { id: "v-mp-big", name: "Chart" })
+		const big = Buffer.concat([PNG, Buffer.alloc(THUMBNAIL_BODY_CAP_BYTES)])
+		const res = await upload("v-mp-big", big).catch(() => null)
+		// The server destroys the socket on overflow; depending on timing the
+		// client sees the 413 or a reset connection. Either way nothing lands.
+		if (res) expect(res.status).toBe(413)
+		expect((await stored("v-mp-big"))?.thumbnail).toBeNull()
+	})
+
+	it("other visual sub-resources stay 404", async () => {
+		const res = await fetch(`${base}/api/visuals/v-mp/other`, { method: "PUT" })
+		expect(res.status).toBe(404)
+	})
+})
+
+describe("writes from a build behind the content schema", () => {
+	// Chart saves carry no version of their own, so a tab still running the
+	// previous bundle after a deploy would write the previous shape back over
+	// migrated content. Every write names the version its build writes; the
+	// server refuses one behind the stored stamp — and one naming none.
+	//
+	// Its own server: the stamps this block sets can only move forward, and
+	// would refuse every header-less write the other blocks make.
+	let own: Server
+	let base: string
+	beforeAll(async () => {
+		const dbDir = mkdtempSync(join(tmpdir(), "vis-routes-stale-db-"))
+		const distDir = mkdtempSync(join(tmpdir(), "vis-routes-stale-dist-"))
+		writeFileSync(join(distDir, "index.html"), "<title>spa</title>")
+		const handler = createHandler({
+			config: {
+				baseUrl: "https://charts.example.com",
+				dbDir,
+				dataDir: mkdtempSync(join(tmpdir(), "vis-routes-stale-data-")),
+				port: 0,
+				publishDir: mkdtempSync(join(tmpdir(), "vis-routes-stale-publish-")),
+				publishBaseUrl: "https://embeds.example.com",
+			},
+			db: openDb(dbDir),
+			distDir,
+		})
+		own = createServer((req, res) => void handler(req, res))
+		await new Promise<void>((resolve) => own.listen(0, resolve))
+		base = `http://127.0.0.1:${(own.address() as AddressInfo).port}`
+	})
+	afterAll(() => {
+		own.close()
+	})
+
+	const put = (path: string, headers: Record<string, string> = {}) =>
+		fetch(`${base}${path}`, {
+			method: "PUT",
+			headers: { "content-type": "application/json", ...headers },
+			body: JSON.stringify({ id: path.split("/").pop(), name: "x" }),
+		})
+	const stamp = (collection: string, v: number) =>
+		fetch(`${base}/api/content-versions/${collection}`, {
+			method: "PUT",
+			headers: { "content-type": "application/json" },
+			body: `{"v":${v}}`,
+		})
+
+	it("an unstamped collection takes a write from any build", async () => {
+		expect((await put("/api/embed-instances/ei-open")).status).toBe(204)
+		expect(
+			(await put("/api/embed-instances/ei-open2", { "x-vis-content-version": "1" })).status
+		).toBe(204)
+	})
+
+	it("once stamped, a write naming no version or an older one is refused with 409", async () => {
+		await stamp("embed-instances", 3)
+		const unversioned = await put("/api/embed-instances/ei-old")
+		expect(unversioned.status).toBe(409)
+		expect(await unversioned.text()).toMatch(/content version 3/)
+		expect(
+			(await put("/api/embed-instances/ei-old", { "x-vis-content-version": "2" })).status
+		).toBe(409)
+		expect(
+			(await put("/api/embed-instances/ei-old", { "x-vis-content-version": "junk" })).status
+		).toBe(409)
+		// Nothing landed.
+		const all = (await (await fetch(`${base}/api/embed-instances`)).json()) as Record<
+			string,
+			unknown
+		>
+		expect(all["ei-old"]).toBeUndefined()
+	})
+
+	it("a build at or ahead of the stamp writes (ahead = migrating before it moves the stamp)", async () => {
+		await stamp("embed-instances", 3)
+		expect(
+			(await put("/api/embed-instances/ei-cur", { "x-vis-content-version": "3" })).status
+		).toBe(204)
+		expect(
+			(await put("/api/embed-instances/ei-next", { "x-vis-content-version": "4" })).status
+		).toBe(204)
+		const del = await fetch(`${base}/api/embed-instances/ei-next`, {
+			method: "DELETE",
+			headers: { "x-vis-content-version": "3" },
+		})
+		expect(del.status).toBe(204)
+		const stale = await fetch(`${base}/api/embed-instances/ei-cur`, { method: "DELETE" })
+		expect(stale.status).toBe(409)
+	})
+
+	it("guards every versioned route: datasets and their sub-resources, thumbnails, published embeds", async () => {
+		await stamp("datasets", 1)
+		await stamp("visuals", 7)
+		const gz = gzipSync(Buffer.from(JSON.stringify({ id: "ds-s", rows: [] })))
+		const dataset = await fetch(`${base}/api/datasets/ds-s`, {
+			method: "PUT",
+			headers: { "content-type": "application/json", "content-encoding": "gzip" },
+			body: gz,
+		})
+		expect(dataset.status).toBe(409)
+		expect(
+			(
+				await fetch(`${base}/api/datasets/ds-s/meta`, {
+					method: "PUT",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ id: "ds-s" }),
+				})
+			).status
+		).toBe(409)
+		expect(
+			(
+				await fetch(`${base}/api/visuals/v-s/thumbnail`, {
+					method: "PUT",
+					headers: { "content-type": "multipart/form-data; boundary=x" },
+					body: "--x--",
+				})
+			).status
+		).toBe(409)
+		expect(
+			(
+				await fetch(`${base}/api/embeds/0b7f3c2e-4d1a-4e8b-9c6d-2f1e3a4b5c6d`, {
+					method: "PUT",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ v: 1, parts: ["html"], payload: {} }),
+				})
+			).status
+		).toBe(409)
+		// Unversioned collections are untouched: folders have no schema.
+		expect((await put("/api/folders/f-any")).status).toBe(204)
+	})
+
+	it("a stamp cannot be wound back by a build behind it", async () => {
+		await stamp("themes", 5)
+		const back = await stamp("themes", 4)
+		expect(back.status).toBe(409)
+		expect((await stamp("themes", 5)).status).toBe(204)
+		expect((await stamp("themes", 6)).status).toBe(204)
 	})
 })

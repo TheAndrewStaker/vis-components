@@ -1,4 +1,5 @@
 import type { FacetConfig } from "./channelConfig"
+import type { FacetPanelRef, KnownFacetPanels } from "./facetPanelRef"
 import { effectiveType } from "./fieldType"
 import { sortPanelValues } from "./facetOrder"
 import { resolveCrossProduct, resolveFacetGrid } from "./resolveFacetGrid"
@@ -187,22 +188,65 @@ export const panelFacetValues = (
 	}
 }
 
+/** The SAVED reference for a panel (`FacetPanelRef`): the facet value in
+ *  wrap mode (the key itself), the `{ row, col }` pair in grid mode — read
+ *  off the compact descriptor or the layout position like
+ *  `panelFacetValues`, never by splitting the key. */
+export const facetPanelRefOf = (
+	panelData: FacetPanels,
+	key: string,
+	idx: number,
+): FacetPanelRef => {
+	if (panelData.mode !== "grid") return key
+	const { rowValue, colValue } = panelFacetValues(panelData, key, idx)
+	return rowValue === null || colValue === null
+		? key
+		: { row: rowValue, col: colValue }
+}
+
+/** The rendered GRID panels by in-memory key — what a save hands
+ *  `structureVisualKeys` so a pre-pair key is resolved against the data
+ *  rather than by its shape. Empty outside grid mode (there a key is a
+ *  facet value and needs no resolving). Two panels whose values join to
+ *  the same key (`a|b` × `x` and `a` × `b|x`) are left out: the key names
+ *  either, so it resolves to neither. */
+export const knownFacetPanels = (panelData: FacetPanels): KnownFacetPanels => {
+	const out = new Map<string, { row: string; col: string }>()
+	if (panelData.mode !== "grid") return out
+	const collided = new Set<string>()
+	panelData.values.forEach((key, idx) => {
+		const ref = facetPanelRefOf(panelData, key, idx)
+		if (typeof ref === "string") return
+		if (out.has(key) || collided.has(key)) {
+			out.delete(key)
+			collided.add(key)
+			return
+		}
+		out.set(key, ref)
+	})
+	return out
+}
+
 /** The facet panels as pick-list entries for sidebar scope controls
- *  (annotations, data labels): the panel KEY the renderer matches against
- *  plus a display label. Wrap panels are titled by their facet value (the
- *  key itself). Grid panels show their row / column values joined with
- *  " · " — the internal `__all__` placeholder of a row-only / col-only
- *  grid is dropped — or the compact-grid label when hide-empty-panels
- *  compaction is active, so the list reads like the rendered titles. */
+ *  (annotations, data labels) and the per-panel axis editors: the panel
+ *  KEY the renderer matches against, the reference to STORE for it
+ *  (`facetPanelRefOf`), and a display label. Wrap panels are titled by
+ *  their facet value (the key itself). Grid panels show their row / column
+ *  values joined with " · " — the internal `__all__` placeholder of a
+ *  row-only / col-only grid is dropped — or the compact-grid label when
+ *  hide-empty-panels compaction is active, so the list reads like the
+ *  rendered titles. */
 export const facetPanelOptions = (
 	panelData: FacetPanels,
-): Array<{ key: string; label: string }> =>
-	panelData.values.map((key) => {
-		if (panelData.mode !== "grid") return { key, label: key }
+): Array<{ key: string; label: string; ref: FacetPanelRef }> =>
+	panelData.values.map((key, idx) => {
+		const ref = facetPanelRefOf(panelData, key, idx)
+		if (panelData.mode !== "grid" || typeof ref === "string")
+			return { key, label: key, ref }
 		const compactLabel = panelData.compact?.panels[key]?.label
-		if (compactLabel !== undefined) return { key, label: compactLabel }
-		const parts = key.split("|").filter((part) => part !== "__all__")
-		return { key, label: parts.length > 0 ? parts.join(" · ") : key }
+		if (compactLabel !== undefined) return { key, label: compactLabel, ref }
+		const parts = [ref.row, ref.col].filter((part) => part !== "__all__")
+		return { key, label: parts.length > 0 ? parts.join(" · ") : key, ref }
 	})
 
 /** Partition the dataset into facet panels for the current encodings.

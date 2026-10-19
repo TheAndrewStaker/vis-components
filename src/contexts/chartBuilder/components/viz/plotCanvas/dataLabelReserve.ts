@@ -9,6 +9,7 @@ import {
 	resolveLabelSelection,
 	sectionKeysFor,
 } from "../../../lib/dataLabelsSelection"
+import { labelEntry } from "../../../lib/labelPieces"
 import { BAR_LABEL_EDGE_PAD_PX } from "../../../lib/dataLabelsLayout"
 import { buildLabelText } from "../../../lib/dataLabelsStyle"
 import { effectiveType } from "../../../lib/fieldType"
@@ -327,7 +328,7 @@ export const computeDataLabelOverflow = ({
 		: []
 	const perVariableMax = Math.max(
 		0,
-		...sizeKeys.map((k) => dataLabels.fieldSizes?.[k] ?? 0)
+		...sizeKeys.map((k) => labelEntry(dataLabels, "fieldSizes", k) ?? 0)
 	)
 	const fontSizeForEstimate = ptToPx(
 		Math.max(

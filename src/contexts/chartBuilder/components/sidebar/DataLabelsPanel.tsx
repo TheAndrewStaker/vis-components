@@ -24,6 +24,7 @@ import {
 	labelKeysFor,
 	labelScopeFor,
 	normalizeComposedLabels,
+	labelEntry,
 	sectionKeysFor,
 	presentPopulations,
 	resolveLabelSelection,
@@ -38,6 +39,7 @@ import {
 	facetPanelOptions,
 	resolveFacetPanels,
 } from "../../lib/resolveFacetPanels"
+import type { FacetPanelRef } from "../../lib/facetPanelRef"
 import {
 	PACKED_DERIVED_LABELS,
 	PACKED_MEASURE_OPTION_VALUE,
@@ -424,7 +426,7 @@ export const DataLabelsPanel = () => {
 				[key]: scope,
 			},
 		})
-	const setLabelFacetKeys = (key: string, next: string[] | null) =>
+	const setLabelFacetKeys = (key: string, next: FacetPanelRef[] | null) =>
 		updateCfg({
 			fieldFacetKeys: { ...(merged.fieldFacetKeys ?? {}), [key]: next },
 		})
@@ -620,7 +622,8 @@ export const DataLabelsPanel = () => {
 	const textPropertiesChanged = styleFields.length > 0
 		? styleFields.some((k) =>
 				sectionKeys("text")(k).some(
-					(kk) => Object.keys(merged.fieldFonts?.[kk] ?? {}).length > 0
+					(kk) =>
+						Object.keys(labelEntry(merged, "fieldFonts", kk) ?? {}).length > 0
 				)
 			)
 		: merged.fontFamily !== themeDefaults.fontFamily ||

@@ -1,3 +1,9 @@
+import {
+	structureAnnotationKeys,
+	structureChannelConfigKeys,
+	structureDataLabelsKeys,
+	structureVisualKeys,
+} from "../savedKeyStructure"
 import type { Dataset, DatasetVersion, Field, Visual } from "../types"
 import type { Migration } from "./versioning"
 
@@ -22,21 +28,21 @@ import type { Migration } from "./versioning"
  *   v0 = pre-versioning (unwrapped JSON; no `_v` field). Existing user
  *        data lives here, so the v0→v1 migration must be tolerant of
  *        the existing on-disk shape. */
-export const VISUALS_VERSION = 6
+export const VISUALS_VERSION = 7
 export const DATASETS_VERSION = 1
-export const CHANNEL_CONFIGS_VERSION = 2
+export const CHANNEL_CONFIGS_VERSION = 3
 export const LABELS_VERSION = 1
 export const LEGEND_VERSION = 2
 export const TOOLTIP_VERSION = 1
 export const DATA_LABELS_ENCODINGS_VERSION = 1
-export const DATA_LABELS_CONFIG_VERSION = 1
+export const DATA_LABELS_CONFIG_VERSION = 2
 export const ENCODINGS_VERSION = 1
 export const THEMES_VERSION = 2
 export const EMBED_INSTANCES_VERSION = 1
 export const FIELD_OVERRIDES_VERSION = 1
 export const FIELD_LEVEL_ORDERS_VERSION = 1
 export const FIELD_LEVEL_ORDER_SPECS_VERSION = 1
-export const ANNOTATIONS_VERSION = 4
+export const ANNOTATIONS_VERSION = 5
 export const CAPTION_VERSION = 1
 export const MAP_CONFIG_VERSION = 8
 export const RESHAPE_CONFIG_VERSION = 1
@@ -370,6 +376,22 @@ export const visualsMigrations: Migration[] = [
 		if (!Array.isArray(raw)) return raw
 		return raw.map(clearLegacyAutoTickLabelAngle)
 	},
+	// v6 -> v7: saved keys built by JOINING user values become structure —
+	// a split label's per-variable styling (`labelId U+001F field`) moves
+	// under `dataLabelsConfig.pieces[labelId][field]`, and grid facet panels
+	// (`row|col`) become `{ row, col }` pairs in every facet scope and the
+	// `gridPanelAxisOverrides[row][col]` map. A joined key reads as what it
+	// isn't to anything inspecting stored content (the hosting firewall),
+	// and is ambiguous when a value contains the joiner. Idempotent and
+	// identity-preserving (`lib/savedKeyStructure.ts`), so a retry of a
+	// partly written server migration re-accepts the visuals it already
+	// wrote; the same function runs on every load and save, so a visual an
+	// older build writes back in the old shape keeps loading.
+	(raw) => {
+		if (!Array.isArray(raw)) return raw
+		// One argument: a map index must not land in the `panels` slot.
+		return raw.map((visual) => structureVisualKeys(visual))
+	},
 ]
 
 /** The v5→v6 step for one visual-shaped record: drop `tickLabelAngle: 0`
@@ -491,6 +513,13 @@ export const channelConfigsMigrations: Migration[] = [
 		if (typeof raw !== "object" || !raw) return raw
 		return clearLegacyAutoTickLabelAngleInConfigs(raw as Record<string, unknown>)
 	},
+	// v2 -> v3: grid per-panel axis bounds move off joined `row|col` keys
+	// (the visuals v6→v7 step, for the draft slice). The slice loads on its
+	// own, without the encodings that say whether the chart is a grid, so
+	// only the unambiguous row-only / col-only keys move here; a full-grid
+	// key stays readable through `gridPanelAxisOverride`'s fallback and is
+	// moved by the next save, which structures the whole visual.
+	(raw) => structureChannelConfigKeys(raw, false),
 ]
 /** mapConfig v0 (pre-versioning) shape matched the original `MapConfig`, so
  *  the v0→v1 promotion is the identity. v1→v2 backfills `showNoDataRegions`
@@ -601,7 +630,14 @@ export const captionMigrations = identityMigrations
 export const reshapeConfigMigrations = identityMigrations
 export const derivedVariablesMigrations = identityMigrations
 export const dataLabelsEncodingsMigrations = identityMigrations
-export const dataLabelsConfigMigrations = identityMigrations
+/** Data Labels config v1 → v2: split-piece entries move under `pieces` and
+ *  grid facet scopes become pairs (the visuals v6→v7 step, for the draft
+ *  slice — see `channelConfigsMigrations` for why full-grid scope keys wait
+ *  for the next save). */
+export const dataLabelsConfigMigrations: Migration[] = [
+	...identityMigrations,
+	(raw) => structureDataLabelsKeys(raw, false),
+]
 export const encodingsMigrations = identityMigrations
 /** Themes v1 → v2: backfill the `ordinalPalettes` list and
  *  `defaultOrdinalPaletteId` for themes saved before the ordinal palette
@@ -646,6 +682,9 @@ export const fieldLevelOrderSpecsMigrations = identityMigrations
 /** Annotations v1 → v2: backfill the `circles` list for configs saved before
  *  circle annotations shipped. v2 → v3: same for the `lineSegments` list.
  *  v3 → v4: same for the `texts` list (free-standing text labels).
+ *  v4 → v5: grid facet scopes become `{ row, col }` pairs (the visuals
+ *  v6→v7 step, for the draft slice — see `channelConfigsMigrations` for why
+ *  full-grid keys wait for the next save).
  *  Each step is idempotent — re-running on an already-shaped value leaves the
  *  existing array untouched. */
 export const annotationsMigrations: Migration[] = [
@@ -668,6 +707,7 @@ export const annotationsMigrations: Migration[] = [
 		const o = raw as Record<string, unknown>
 		return { ...o, texts: Array.isArray(o.texts) ? o.texts : [] }
 	},
+	(raw) => structureAnnotationKeys(raw, false),
 ]
 
 /** The content-schema registry for the adapter-backed collections, keyed by

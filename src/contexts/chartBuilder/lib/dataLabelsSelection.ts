@@ -27,7 +27,19 @@ import {
 	type LabelPointsScope,
 } from "./channelConfig"
 import type { EndpointTag } from "./dataLabelsLayout"
+import type { FacetPanelRef } from "./facetPanelRef"
+import { pieceKey } from "./labelPieces"
 import type { DataLabelsEncodings } from "./types"
+
+// The in-memory piece key and its accessors live in `lib/labelPieces.ts`;
+// re-exported so the sidebar and renderer keep one import for label keys.
+export {
+	labelEntries,
+	labelEntry,
+	parsePieceKey,
+	pieceKey,
+	withLabelEntry,
+} from "./labelPieces"
 
 export type LabelPopulation = "all" | "first" | "last"
 
@@ -66,7 +78,7 @@ export const labelScopeFor = (
 export const labelFacetKeysFor = (
 	cfg: Pick<DataLabelsConfig, "fieldFacetKeys" | "facetKeys">,
 	key: string | null
-): string[] | null | undefined => {
+): FacetPanelRef[] | null | undefined => {
 	const own = key === null ? undefined : cfg.fieldFacetKeys?.[key]
 	return own !== undefined ? own : cfg.facetKeys
 }
@@ -377,30 +389,10 @@ export const effectiveComposedLabels = (
 
 // ---------------------------------------------------------------------------
 // Label PIECES — the variables inside one composed label, when its Color /
-// Size / Text properties section is split per variable.
+// Size / Text properties section is split per variable. The piece KEY
+// (`pieceKey`, in-memory only) and the entry accessors are in
+// `lib/labelPieces.ts`.
 // ---------------------------------------------------------------------------
-
-/** Separator between a label's id and a variable's name in a piece key. A
- *  unit separator can't occur in either, so the two halves always split
- *  back out cleanly. */
-const PIECE_SEP = "\u001f"
-
-/** The key one variable's entry uses inside a composed label — distinct
- *  from the label's own key, so styling the `{Region}` piece of
- *  `{Revenue} ({Region})` leaves the standalone `{Region}` label alone. */
-export const pieceKey = (labelId: string, field: string): string =>
-	`${labelId}${PIECE_SEP}${field}`
-
-/** A piece key split back into its label id and variable; `null` for a
- *  plain (whole-label) key. */
-export const parsePieceKey = (
-	key: string
-): { labelId: string; field: string } | null => {
-	const i = key.indexOf(PIECE_SEP)
-	return i === -1
-		? null
-		: { labelId: key.slice(0, i), field: key.slice(i + PIECE_SEP.length) }
-}
 
 /** The variables one composed label names, in template order — what its
  *  split sections list. Fewer than two means there's nothing to split (the

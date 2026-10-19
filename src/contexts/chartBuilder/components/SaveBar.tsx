@@ -1,13 +1,17 @@
-import { useState } from "react"
+import { Fragment, useState } from "react"
+import { Link } from "@tanstack/react-router"
 import { useAtom, useAtomValue } from "jotai"
 import { nameCollides } from "../lib/nameUniqueness"
 import {
 	currentVisualIdAtom,
 	currentVisualNameAtom,
+	foldersAtom,
 	lastSavedAtAtom,
 	liveVisualsAtom,
 	saveStatusAtom,
+	visualsAtom,
 } from "../store/atoms"
+import { folderAncestors } from "../../library/lib/folderSubtree"
 import { useMediaQuery, useNarrowLayout } from "../../../lib/useMediaQuery"
 
 import { DisclosureChevron } from "../../../components/ui/Chevron"
@@ -20,6 +24,36 @@ const formatSavedTime = (ts: number) => {
 		hour: "numeric",
 		minute: "2-digit",
 	})
+}
+
+/** The saved visual's folder path, each crumb a link back to that folder's
+ *  library view. Renders nothing for a root-level or never-saved visual. */
+const FolderBreadcrumbs = ({ visualId }: { visualId: string | null }) => {
+	// Id lookup, so the full list (a trashed visual still has a folder).
+	const visuals = useAtomValue(visualsAtom)
+	const folders = useAtomValue(foldersAtom)
+	const folderId = visuals.find((v) => v.id === visualId)?.folderId ?? null
+	const path = folderAncestors(folders, folderId)
+	if (path.length === 0) return null
+	return (
+		<nav aria-label="Folder" className="flex min-w-0 shrink items-center">
+			{path.map((folder) => (
+				<Fragment key={folder.id}>
+					<Link
+						to="/"
+						search={{ folder: folder.id }}
+						title={folder.name}
+						className="max-w-40 min-w-0 truncate rounded px-1 text-sm vc-muted hover:text-brand-700 hover:underline dark:hover:text-brand-300"
+					>
+						{folder.name}
+					</Link>
+					<span aria-hidden className="flex-shrink-0 px-0.5 text-sm vc-muted">
+						›
+					</span>
+				</Fragment>
+			))}
+		</nav>
+	)
 }
 
 export const SaveBar = () => {
@@ -51,15 +85,18 @@ export const SaveBar = () => {
 
 	const nameField = (
 		<div className="flex min-w-32 flex-1 flex-col">
-			<input
-				type="text"
-				value={name}
-				onChange={(e) => setName(e.target.value)}
-				placeholder="Untitled visualization"
-				className={`min-w-0 rounded-control border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-stone-900 transition-colors outline-none hover:border-stone-200 focus:border-stone-400 dark:text-white dark:hover:border-stone-700 dark:focus:border-stone-500 ${
-					nameTaken ? "border-red-400 dark:border-red-500" : ""
-				}`}
-			/>
+			<div className="flex min-w-0 items-center">
+				<FolderBreadcrumbs visualId={visualId} />
+				<input
+					type="text"
+					value={name}
+					onChange={(e) => setName(e.target.value)}
+					placeholder="Untitled visualization"
+					className={`min-w-24 flex-1 rounded-control border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-stone-900 transition-colors outline-none hover:border-stone-200 focus:border-stone-400 dark:text-white dark:hover:border-stone-700 dark:focus:border-stone-500 ${
+						nameTaken ? "border-red-400 dark:border-red-500" : ""
+					}`}
+				/>
+			</div>
 			{nameTaken && (
 				<span className="px-2 text-xs text-red-700 dark:text-red-300">
 					A visualization named &ldquo;{name.trim()}&rdquo; already exists.

@@ -22,6 +22,7 @@
 import { datasetContentHash, datasetsEqual } from "./datasetDedupe"
 import type { SeedBundle } from "./exampleSeed"
 import { loadUserDefaultThemeId, loadVisuals, mergeThumbnails } from "./storage"
+import { structureVisualKeys } from "./savedKeyStructure"
 import { clearLegacyAutoTickLabelAngle } from "./storage/migrations"
 import { getStorageAdapter } from "./storage/registry"
 import { normalizeSavedTheme } from "./systemThemes"
@@ -665,10 +666,11 @@ export const mergeBundleIntoLibrary = (
 		// repointing a name-matched theme changes nothing about how it draws.
 		const themeId = v.themeId != null ? themeIdMap.get(v.themeId) ?? v.themeId : v.themeId
 		// Bundles carry no storage version, so pre-v6 `tickLabelAngle: 0`
-		// (then "auto") would land as today's explicit "keep level". The
-		// visuals v5→v6 step is idempotent; apply it to every import.
+		// (then "auto") would land as today's explicit "keep level", and a
+		// pre-v7 export carries joined facet / piece keys. Both steps are
+		// idempotent; apply them to every import.
 		imported.push({
-			...clearLegacyAutoTickLabelAngle(v),
+			...structureVisualKeys(clearLegacyAutoTickLabelAngle(v)),
 			id,
 			datasetId,
 			createdAtVersionId,

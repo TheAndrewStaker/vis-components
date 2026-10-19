@@ -4,6 +4,7 @@
 import type { GradientInterpolation } from "./colorInterpolate"
 import type { DisplayUnit } from "./displayUnits"
 import type { DrawOrderConfig } from "./drawOrder"
+import type { FacetPanelRef } from "./facetPanelRef"
 import type { FontConfig, LabelAlignment } from "./labelsConfig"
 
 export type GridlineConfig = {
@@ -1383,9 +1384,19 @@ export type FacetConfig = {
 	panelWidth?: number | null
 	/** Mirror of `panelWidth` for `inner.height`. */
 	panelHeight?: number | null
-	/** Per-panel axis range overrides keyed by facet value (stringified). Only
-	 * consulted when neither share-axis flag is on for that axis. */
+	/** Wrap mode's per-panel axis range overrides, keyed by the facet value
+	 * (stringified). Only consulted when neither share-axis flag is on for
+	 * that axis. Grid panels live in `gridPanelAxisOverrides`; a joined
+	 * `row|col` key left here by a build before that map existed is still
+	 * read through `gridPanelAxisOverride` until a save rewrites it. */
 	panelAxisOverrides: Record<string, PanelAxisOverride>
+	/** Grid mode's per-panel axis range overrides, keyed by the panel's ROW
+	 * facet value and then its COLUMN value — two user values kept as two
+	 * keys, never joined. The unmapped side of a row-only / col-only grid
+	 * keys as `FACET_PANEL_ALL`. Written by the row / column panels'
+	 * "range per panel" editor (an unshared continuous axis with 2+ panels
+	 * across); read via `gridPanelAxisOverride`. Sparse. */
+	gridPanelAxisOverrides?: Record<string, Record<string, PanelAxisOverride>>
 	/** Per-row y-axis range overrides. Keyed by the row's facet value
 	 *  (stringified). Only consulted when `shareY === "perGroup"` AND the
 	 *  y-axis variable is continuous (quantitative or temporal); the UI
@@ -1497,6 +1508,23 @@ export const DEFAULT_FACET_CONFIG: FacetConfig = {
 	proportionalSizingY: "categoryCount",
 	hideEmptyPanels: false,
 }
+
+/** Grid mode's per-panel axis bounds for the panel at (`rowValue`,
+ *  `colValue`): its `gridPanelAxisOverrides` entry, else the flat
+ *  `panelAxisOverrides` entry under the joined key grid panels were keyed by
+ *  before the nested map existed — what a draft restored from before the
+ *  change still holds until its next save rewrites it
+ *  (`lib/savedKeyStructure.ts`). Wrap mode reads `panelAxisOverrides`
+ *  directly, keyed by the facet value. */
+export const gridPanelAxisOverride = (
+	facet: Pick<FacetConfig, "gridPanelAxisOverrides" | "panelAxisOverrides">,
+	rowValue: string | null | undefined,
+	colValue: string | null | undefined
+): PanelAxisOverride | undefined =>
+	rowValue == null || colValue == null
+		? undefined
+		: (facet.gridPanelAxisOverrides?.[rowValue]?.[colValue] ??
+			facet.panelAxisOverrides?.[`${rowValue}|${colValue}`])
 
 /** Normalize a possibly-legacy share value to the canonical tri-state.
  *  Saved visuals predating Phase 2 carry `shareX` / `shareY` as
@@ -1886,9 +1914,9 @@ export type DataLabelsConfig = {
 	 * category can be tinted to match its line while a delta varies by value.
 	 * No entry → that label uses the layer's normal color chain.
 	 *
-	 * A label whose Color section is SPLIT (`pieceSplits[id].color`) also
-	 * keys entries by `pieceKey(id, field)` — one per variable inside the
-	 * label, laid over the label's own slot. */
+	 * A label whose Color section is SPLIT (`pieceSplits[id].color`) colours
+	 * each variable inside it through `pieces[id][field].color`, laid over
+	 * the label's own slot. */
 	fieldColors?: Record<string, ColorSlotConfig>
 	/** Multi-field mode only: per-field TEXT COLOR RULES, keyed by field
 	 * name — the same conditional rules as `textColorRules`, but evaluated
@@ -1902,24 +1930,36 @@ export type DataLabelsConfig = {
 	 * label's own color / size / text properties. True for a section = that
 	 * section's controls expand to one block per variable in the label, and
 	 * the renderer resolves that section per piece through
-	 * `pieceKey(id, field)`. Only labels naming two or more variables offer
+	 * `pieces[id][field]`. Only labels naming two or more variables offer
 	 * it (one variable is already the whole label). */
 	pieceSplits?: Record<string, LabelPieceSplits>
 	/** Multi-field mode only: font SIZE in POINTS per composed label, keyed
 	 * by the label's id — so one label can render larger than another. A
 	 * label with no entry takes `fontSize` (or the mapped Size scale when a
-	 * size source is mapped). A SPLIT Size section
-	 * (`pieceSplits[id].size`) also keys entries by `pieceKey(id, field)`,
-	 * so a value can outsize the category beside it inside one label. */
+	 * size source is mapped). A SPLIT Size section (`pieceSplits[id].size`)
+	 * sizes each variable through `pieces[id][field].size`, so a value can
+	 * outsize the category beside it inside one label. */
 	fieldSizes?: Record<string, number>
 	/** Multi-field mode only: text properties (family / weight / italic /
 	 * underline) per composed label, keyed by the label's id. Every key left
 	 * unset inherits the layer-wide value, so a sparse `{ fontWeight: 700 }`
 	 * bolds one label and changes nothing else. A SPLIT Text properties
-	 * section (`pieceSplits[id].text`) also keys entries by
-	 * `pieceKey(id, field)`, laid over the label's own — the recipe for a
+	 * section (`pieceSplits[id].text`) styles each variable through
+	 * `pieces[id][field].font`, laid over the label's own — the recipe for a
 	 * bold series name beside an unbolded value. */
 	fieldFonts?: Record<string, LabelFontOverrides>
+	/** Multi-field mode only: the per-VARIABLE styling of split sections,
+	 * keyed by the composed label's id and then the variable's name — two
+	 * user strings kept as two keys, never joined into one (a joined key
+	 * needs a separator no name can contain, which means a control
+	 * character in saved content). Each entry's `color` / `colorRules` /
+	 * `size` / `font` applies only while that section of the label is split
+	 * (`pieceSplits[id]`) and lays over the label's own `fieldColors` /
+	 * `fieldColorRules` / `fieldSizes` / `fieldFonts` entry. Read and
+	 * written through `labelEntry` / `withLabelEntry`
+	 * (`lib/dataLabelsSelection.ts`), which route a piece key there and a
+	 * label key to the per-label maps. Sparse. */
+	pieces?: Record<string, Record<string, LabelPieceStyle>>
 	/** Multi-field mode only: per-field text background, keyed by field
 	 * name. `textBackground` null / unset follows the layer-wide toggle;
 	 * `true` / `false` show / hide a background behind THAT variable's text
@@ -2070,22 +2110,23 @@ export type DataLabelsConfig = {
 	avoidOverlaps?: boolean
 	/** Faceted charts only: which panels draw labels. `null` / unset =
 	 * every panel ("Label all facets", the default). An array lists the
-	 * panel keys that keep their labels — the same keys `resolveFacetPanels`
-	 * hands PlotCanvas (facet value in wrap mode, `row|col` in grid mode) —
-	 * so panels not listed render no labels. Mirrors the annotations'
-	 * per-annotation `facetKeys`; resolve via `dataLabelsOnPanel`. Ignored
-	 * (every label draws) when the chart isn't faceted.
+	 * panels that keep their labels (`FacetPanelRef`: the facet value in
+	 * wrap mode, a `{ row, col }` pair in grid mode), matched against the
+	 * keys `resolveFacetPanels` hands PlotCanvas — so panels not listed
+	 * render no labels. Mirrors the annotations' per-annotation
+	 * `facetKeys`; resolve via `dataLabelsOnPanel`. Ignored (every label
+	 * draws) when the chart isn't faceted.
 	 *
 	 * Multi-field mode: the fallback for labels with no entry in
 	 * `fieldFacetKeys`. */
-	facetKeys?: string[] | null
+	facetKeys?: FacetPanelRef[] | null
 	/** Multi-field mode only: per-composed-label facet scope, keyed by the
 	 * label's id — one label can draw on every panel while another is kept
 	 * to a few. The entry's value reads exactly like `facetKeys` (`null` =
 	 * every panel, an array = those panel keys); an ABSENT entry inherits
 	 * `facetKeys`, so a visual that scoped the whole layer before composed
 	 * labels keeps its scope. Resolve via `labelFacetKeysFor`. */
-	fieldFacetKeys?: Record<string, string[] | null>
+	fieldFacetKeys?: Record<string, FacetPanelRef[] | null>
 	/** Conditional overrides for the label's text color, evaluated against
 	 * the label's numeric value when it can be parsed as a number. The
 	 * first matching rule's color wins; non-matching rules fall through
@@ -2196,6 +2237,18 @@ export type LabelPieceSplits = {
 	text?: boolean
 }
 export type LabelPieceSection = keyof LabelPieceSplits
+
+/** One VARIABLE's own styling inside a split composed label
+ *  (`DataLabelsConfig.pieces[labelId][field]`): the per-piece halves of the
+ *  Color / Size / Text properties sections. Each property applies only while
+ *  its section is split (`pieceSplits`); an unset one inherits the label's
+ *  own entry. */
+export type LabelPieceStyle = {
+	color?: ColorSlotConfig
+	colorRules?: TextColorRule[]
+	size?: number
+	font?: LabelFontOverrides
+}
 
 /** One variable's text-property overrides (`DataLabelsConfig.fieldFonts`).
  *  Sparse: an unset key inherits the layer-wide value. */

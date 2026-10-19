@@ -1,23 +1,28 @@
 import type { DataLabelsConfig } from "./channelConfig"
 import { labelFacetKeysFor } from "./dataLabelsSelection"
+import {
+	FACET_PANEL_ALL,
+	facetScopeIncludes,
+	type FacetPanelRef,
+} from "./facetPanelRef"
 
 /** Is a facet-scoped setting active on this panel?
  *
  *  Shared semantics for everything that scopes itself to facet panels
  *  (per-annotation `facetKeys`, the Data Labels layer's `facetKeys`):
  *  `null` / undefined ⇒ every panel (the default); an array ⇒ only the
- *  listed panel keys. The unfaceted chart's single panel (`"__all__"`) and
- *  a render site outside any panel (`null`) always qualify, so a stored
- *  selection from a previously faceted chart never blanks an unfaceted
- *  one. */
+ *  listed panels (`FacetPanelRef`, matched by the panel key). The
+ *  unfaceted chart's single panel (`FACET_PANEL_ALL`) and a render site
+ *  outside any panel (`null`) always qualify, so a stored selection from a
+ *  previously faceted chart never blanks an unfaceted one. */
 export const onFacetPanel = (
-	facetKeys: readonly string[] | null | undefined,
+	facetKeys: readonly FacetPanelRef[] | null | undefined,
 	panelKey: string | null,
 ): boolean =>
 	facetKeys == null ||
 	panelKey === null ||
-	panelKey === "__all__" ||
-	facetKeys.includes(panelKey)
+	panelKey === FACET_PANEL_ALL ||
+	facetScopeIncludes(facetKeys, panelKey)
 
 /** Does the Data Labels layer draw on this facet panel? ("Label all
  *  facets" unchecked ⇒ only the panels the user ticked.)

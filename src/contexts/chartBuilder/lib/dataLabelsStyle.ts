@@ -14,6 +14,7 @@ import {
 } from "./channelConfig"
 import { buildLabelHueConfig } from "./dataLabelsHue"
 import { ptToPx } from "./fontUnit"
+import { labelEntry } from "./labelPieces"
 import {
 	applyFormatAffixes,
 	buildTickFormatter,
@@ -248,10 +249,13 @@ export type ResolvedLabelFont = {
 }
 
 export const resolveFieldFont = (
-	cfg: Pick<DataLabelsConfig, "fontFamily" | "fontWeight" | "italic" | "underline" | "fieldFonts">,
+	cfg: Pick<
+		DataLabelsConfig,
+		"fontFamily" | "fontWeight" | "italic" | "underline" | "fieldFonts" | "pieces"
+	>,
 	field: string | null
 ): ResolvedLabelFont => {
-	const ov = field ? cfg.fieldFonts?.[field] : undefined
+	const ov = labelEntry(cfg, "fieldFonts", field)
 	return {
 		fontFamily: ov?.fontFamily ?? cfg.fontFamily,
 		fontWeight: ov?.fontWeight ?? cfg.fontWeight,
@@ -264,11 +268,11 @@ export const resolveFieldFont = (
  *  label's resolved font (not the layer's), so a piece that only sets a
  *  weight keeps the label's family. */
 export const resolveFieldFontOver = (
-	cfg: Pick<DataLabelsConfig, "fieldFonts">,
+	cfg: Pick<DataLabelsConfig, "fieldFonts" | "pieces">,
 	key: string | null,
 	base: ResolvedLabelFont
 ): ResolvedLabelFont => {
-	const ov = key ? cfg.fieldFonts?.[key] : undefined
+	const ov = labelEntry(cfg, "fieldFonts", key)
 	if (!ov) return base
 	return {
 		fontFamily: ov.fontFamily ?? base.fontFamily,
@@ -283,11 +287,11 @@ export const resolveFieldFontOver = (
  *  `basePx`, which the caller resolved from the default size or the mapped
  *  Size scale. Literal segments always take `basePx`. */
 export const resolveFieldSizePx = (
-	cfg: Pick<DataLabelsConfig, "fieldSizes">,
+	cfg: Pick<DataLabelsConfig, "fieldSizes" | "pieces">,
 	field: string | null,
 	basePx: number
 ): number => {
-	const pt = field ? cfg.fieldSizes?.[field] : undefined
+	const pt = labelEntry(cfg, "fieldSizes", field)
 	return pt != null && Number.isFinite(pt) ? ptToPx(pt) : basePx
 }
 

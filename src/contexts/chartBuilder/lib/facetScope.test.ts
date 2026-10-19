@@ -57,3 +57,18 @@ describe("composedLabelOnPanel", () => {
 		expect(composedLabelOnPanel(cfg, "g", "A")).toBe(true)
 	})
 })
+
+describe("onFacetPanel — grid panels are referenced as pairs", () => {
+	it("a { row, col } pair names the renderer's row|col panel", () => {
+		const keys = [{ row: "A", col: "x" }, { row: "__all__", col: "y" }]
+		expect(onFacetPanel(keys, "A|x")).toBe(true)
+		expect(onFacetPanel(keys, "__all__|y")).toBe(true)
+		expect(onFacetPanel(keys, "B|x")).toBe(false)
+	})
+
+	it("a joined string saved before pairs existed still matches the same panel", () => {
+		expect(onFacetPanel(["A|x"], "A|x")).toBe(true)
+		expect(composedLabelOnPanel({ fieldFacetKeys: { g: ["A|x"] } }, "g", "A|x")).toBe(true)
+		expect(dataLabelsOnPanel({ facetKeys: [{ row: "A", col: "x" }] }, "A|x")).toBe(true)
+	})
+})

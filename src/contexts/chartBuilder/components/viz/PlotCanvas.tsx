@@ -173,8 +173,9 @@ export const PlotCanvas = ({
 			dataLabels.fontWeight,
 			dataLabels.italic,
 			dataLabels.sizeMax,
-			// Stored map — stable reference unless a per-variable size is edited.
+			// Stored maps — stable references unless a per-variable size is edited.
 			dataLabels.fieldSizes,
+			dataLabels.pieces,
 			dataLabels.decimals,
 			dataLabels.labelTemplate,
 			dataLabels.combineVariables,

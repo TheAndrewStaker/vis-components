@@ -4,6 +4,12 @@ import { datasetContentHash } from "../datasetDedupe"
 import { clearExampleOverlay, installExampleOverlay } from "../exampleOverlay"
 import { createHttpStorageAdapter } from "./httpAdapter"
 import { CONTENT_MIGRATIONS } from "./migrations"
+import {
+	CONTENT_VERSION_HEADER,
+	contentVersionHeader,
+	isStaleBuild,
+	resetStaleBuildForTests,
+} from "./staleBuild"
 
 /** The content-version stamps a server written by THIS build carries — i.e.
  *  nothing to migrate. Tests about diffing shouldn't also be tests about
@@ -850,8 +856,12 @@ describe("the example sandbox in server mode", () => {
 		expect(made).toContain("GET /api/themes")
 		expect(made).toContain("GET /api/datasets?view=index")
 		expect(made).toContain("PUT /api/visuals/v-copy")
-		// The library's own copies of the seed rows are NOT overwritten.
-		expect(made.filter((c) => c.startsWith("PUT "))).toEqual(["PUT /api/visuals/v-copy"])
+		// The library's own copies of the seed rows are NOT overwritten; the
+		// only writes are the copy itself and its preview (a multipart file).
+		expect(made.filter((c) => c.startsWith("PUT "))).toEqual([
+			"PUT /api/visuals/v-copy",
+			"PUT /api/visuals/v-copy/thumbnail",
+		])
 	})
 
 	it("reads a seed dataset from the server when the library holds its own copy", async () => {
@@ -870,5 +880,208 @@ describe("the example sandbox in server mode", () => {
 		const adapter = createHttpStorageAdapter()
 		await Promise.all([adapter.loadDatasetIndex(), adapter.loadDatasetIndex()])
 		expect(calls(mock).filter((c) => c === "GET /api/datasets?view=index")).toHaveLength(1)
+	})
+})
+
+describe("multipart thumbnail uploads", () => {
+	/** base64 of the eight PNG signature bytes — a valid PNG data URL prefix. */
+	const PNG_A = "data:image/png;base64,iVBORw0KGgo="
+	const PNG_B = "data:image/png;base64,iVBORw0KGgoAAAA="
+
+	const bodyOf = (mock: ReturnType<typeof vi.fn>, path: string): unknown =>
+		(mock.mock.calls.find(([p]) => p === path)?.[1] as RequestInit | undefined)?.body
+
+	const loadAdapter = async (visuals: unknown[]) => {
+		const mock = stubFetch((path) =>
+			path === "/api/visuals" ? okJson(visuals) : okEmpty()
+		)
+		const adapter = createHttpStorageAdapter()
+		await adapter.loadVisuals()
+		mock.mockClear()
+		return { mock, adapter }
+	}
+
+	it("sends the thumbnail as a multipart PNG file, never inside the JSON", async () => {
+		const v1 = { id: "v1", name: "One", thumbnail: null }
+		const { mock, adapter } = await loadAdapter([v1])
+		await adapter.saveVisuals([{ ...v1, thumbnail: PNG_A, thumbnailAt: 5 }] as never)
+		expect(calls(mock)).toEqual([
+			"PUT /api/visuals/v1",
+			"PUT /api/visuals/v1/thumbnail",
+		])
+
+		const json = bodyOf(mock, "/api/visuals/v1") as string
+		expect(JSON.parse(json)).toEqual({ id: "v1", name: "One", thumbnailAt: 5 })
+		expect(json).not.toContain("thumbnail\"")
+
+		const [, init] = mock.mock.calls[1] as [string, RequestInit]
+		// No content-type: the browser sets the multipart boundary itself. The
+		// write still names the content version like every visuals write.
+		expect(init.headers).toEqual({
+			[CONTENT_VERSION_HEADER]: String(CONTENT_MIGRATIONS.visuals.currentVersion),
+		})
+		expect(init.body).toBeInstanceOf(FormData)
+		const part = (init.body as FormData).get("thumbnail") as File
+		expect(part.type).toBe("image/png")
+		expect(part.name).toBe("thumbnail.png")
+	})
+
+	it("re-saves the JSON alone while the thumbnail is unchanged", async () => {
+		const v1 = { id: "v1", name: "One", thumbnail: PNG_A }
+		const { mock, adapter } = await loadAdapter([v1])
+		await adapter.saveVisuals([{ ...v1, name: "Renamed" }] as never)
+		expect(calls(mock)).toEqual(["PUT /api/visuals/v1"])
+		expect(JSON.parse(bodyOf(mock, "/api/visuals/v1") as string)).toEqual({
+			id: "v1",
+			name: "Renamed",
+		})
+
+		// A new capture goes up; a second save of the same capture does not.
+		mock.mockClear()
+		await adapter.saveVisuals([{ ...v1, name: "Renamed", thumbnail: PNG_B }] as never)
+		expect(calls(mock)).toEqual([
+			"PUT /api/visuals/v1",
+			"PUT /api/visuals/v1/thumbnail",
+		])
+		mock.mockClear()
+		await adapter.saveVisuals([
+			{ ...v1, name: "Renamed again", thumbnail: PNG_B },
+		] as never)
+		expect(calls(mock)).toEqual(["PUT /api/visuals/v1"])
+	})
+
+	it("clears with an explicit null in the JSON and no upload", async () => {
+		const v1 = { id: "v1", name: "One", thumbnail: PNG_A }
+		const { mock, adapter } = await loadAdapter([v1])
+		await adapter.saveVisuals([{ ...v1, thumbnail: null }] as never)
+		expect(calls(mock)).toEqual(["PUT /api/visuals/v1"])
+		expect(JSON.parse(bodyOf(mock, "/api/visuals/v1") as string)).toEqual({
+			id: "v1",
+			name: "One",
+			thumbnail: null,
+		})
+
+		// Cleared on the server, so re-capturing the same bytes uploads again.
+		mock.mockClear()
+		await adapter.saveVisuals([{ ...v1, thumbnail: PNG_A }] as never)
+		expect(calls(mock)).toEqual([
+			"PUT /api/visuals/v1",
+			"PUT /api/visuals/v1/thumbnail",
+		])
+	})
+
+	it("retries a failed upload on the next save, JSON included", async () => {
+		const v1 = { id: "v1", name: "One", thumbnail: null }
+		let failUploads = true
+		const mock = stubFetch((path) => {
+			if (path === "/api/visuals") return okJson([v1])
+			if (path.endsWith("/thumbnail") && failUploads) return failed()
+			return okEmpty()
+		})
+		const adapter = createHttpStorageAdapter()
+		await adapter.loadVisuals()
+		mock.mockClear()
+
+		const next = [{ ...v1, thumbnail: PNG_A }] as never
+		await expect(adapter.saveVisuals(next)).rejects.toThrow(/thumbnail failed: 500/)
+
+		failUploads = false
+		mock.mockClear()
+		await adapter.saveVisuals(next)
+		expect(calls(mock)).toEqual([
+			"PUT /api/visuals/v1",
+			"PUT /api/visuals/v1/thumbnail",
+		])
+
+		mock.mockClear()
+		await adapter.saveVisuals(next)
+		expect(calls(mock)).toEqual([])
+	})
+
+	it("falls back to the inline JSON for a thumbnail that is not a PNG data URL", async () => {
+		const v1 = { id: "v1", name: "One", thumbnail: null }
+		const { mock, adapter } = await loadAdapter([v1])
+		const odd = "data:image/jpeg;base64,/9j/4AAQ"
+		await adapter.saveVisuals([{ ...v1, thumbnail: odd }] as never)
+		expect(calls(mock)).toEqual(["PUT /api/visuals/v1"])
+		expect(JSON.parse(bodyOf(mock, "/api/visuals/v1") as string).thumbnail).toBe(odd)
+	})
+
+	it("forgets a deleted visual's thumbnail so a re-created one uploads", async () => {
+		const v1 = { id: "v1", name: "One", thumbnail: PNG_A }
+		const { mock, adapter } = await loadAdapter([v1])
+		await adapter.saveVisuals([] as never)
+		expect(calls(mock)).toEqual(["DELETE /api/visuals/v1"])
+		mock.mockClear()
+		await adapter.saveVisuals([v1] as never)
+		expect(calls(mock)).toEqual([
+			"PUT /api/visuals/v1",
+			"PUT /api/visuals/v1/thumbnail",
+		])
+	})
+})
+
+describe("writes from a build behind the server's content schema", () => {
+	afterEach(() => {
+		resetStaleBuildForTests()
+	})
+
+	it("every write to a versioned collection names the content version this build writes", async () => {
+		const mock = stubFetch((path) =>
+			path === "/api/visuals" ? okJson([]) : okEmpty()
+		)
+		const adapter = createHttpStorageAdapter()
+		await adapter.loadVisuals()
+		await adapter.saveVisuals([{ id: "v1", name: "One", thumbnail: null }] as never)
+		const put = mock.mock.calls.find(([p, init]) =>
+			p === "/api/visuals/v1" && (init as RequestInit).method === "PUT"
+		)
+		expect((put?.[1] as RequestInit).headers).toMatchObject({
+			[CONTENT_VERSION_HEADER]: String(CONTENT_MIGRATIONS.visuals.currentVersion),
+		})
+		expect(contentVersionHeader("datasets/ds-1")).toEqual({
+			[CONTENT_VERSION_HEADER]: String(CONTENT_MIGRATIONS.datasets.currentVersion),
+		})
+		expect(contentVersionHeader("embeds")).toEqual({
+			[CONTENT_VERSION_HEADER]: String(CONTENT_MIGRATIONS.visuals.currentVersion),
+		})
+		// Unversioned collections carry nothing.
+		expect(contentVersionHeader("folders")).toEqual({})
+		expect(contentVersionHeader("content-versions")).toEqual({})
+	})
+
+	it("a 409 marks this build stale, and no later write is even attempted", async () => {
+		const mock = stubFetch((path, init) =>
+			path === "/api/visuals"
+				? okJson([])
+				: init?.method === "PUT"
+					? ({ ok: false, status: 409 } as unknown as Response)
+					: okEmpty()
+		)
+		const adapter = createHttpStorageAdapter()
+		await adapter.loadVisuals()
+		expect(isStaleBuild()).toBe(false)
+		await expect(
+			adapter.saveVisuals([{ id: "v1", name: "One", thumbnail: null }] as never)
+		).rejects.toThrow(/behind the server's content schema/)
+		expect(isStaleBuild()).toBe(true)
+		mock.mockClear()
+		await expect(
+			adapter.saveVisuals([{ id: "v2", name: "Two", thumbnail: null }] as never)
+		).rejects.toThrow(/behind the server's content schema/)
+		expect(calls(mock)).toEqual([])
+	})
+
+	it("any other failure is reported as before and does not mark the build stale", async () => {
+		const mock = stubFetch((path) =>
+			path === "/api/visuals" ? okJson([]) : failed()
+		)
+		const adapter = createHttpStorageAdapter()
+		await adapter.loadVisuals()
+		await expect(
+			adapter.saveVisuals([{ id: "v1", name: "One", thumbnail: null }] as never)
+		).rejects.toThrow(/500/)
+		expect(isStaleBuild()).toBe(false)
+		expect(mock).toHaveBeenCalled()
 	})
 })

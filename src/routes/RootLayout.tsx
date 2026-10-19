@@ -4,6 +4,7 @@ import { Outlet, useRouterState } from "@tanstack/react-router"
 
 import { Footer } from "../components/Footer"
 import { Header } from "../components/Header"
+import { StaleBuildBanner } from "../components/StaleBuildBanner"
 import { EMBED_PATH_PREFIX } from "../lib/embedPath"
 import { UploadNoticeModal } from "../contexts/chartBuilder/components/UploadNoticeModal"
 import { registerUserFonts } from "../contexts/chartBuilder/lib/fontRegistration"
@@ -58,6 +59,7 @@ export const RootLayout = () => {
 	useUserFontRegistration()
 	return (
 		<div className="flex min-h-screen flex-col bg-white text-stone-900 dark:bg-stone-900 dark:text-stone-100">
+			{!isEmbed && <StaleBuildBanner />}
 			{!isEmbed && <Header />}
 			<main className="flex-1">
 				<Outlet />

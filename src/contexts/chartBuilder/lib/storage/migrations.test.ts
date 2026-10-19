@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest"
 import { CONTENT_VERSION_COLLECTIONS } from "../../../../../server/src/contentVersionCollections"
 import { stringifyJsonDangerous } from "../../../../lib/json"
 
+import { pieceKey } from "../labelPieces"
 import {
+	annotationsMigrations,
 	channelConfigsMigrations,
 	clearLegacyAutoTickLabelAngle,
 	CONTENT_MIGRATIONS,
+	dataLabelsConfigMigrations,
 	datasetBodyMigrations,
 	datasetsMigrations,
 	readThemeFontSizesV2,
@@ -500,6 +503,105 @@ describe("visualsMigrations v5 -> v6 (tickLabelAngle 0 → auto)", () => {
 			y: { tickLabelAngle: 15 },
 		})
 		expect(v1ToV2(null)).toBe(null)
+	})
+})
+
+describe("visualsMigrations v6 -> v7 (joined saved keys → structure)", () => {
+	const v6ToV7 = visualsMigrations[6]!
+
+	it("structures a col-only grid chart: pairs in every facet scope, nested per-panel bounds, pieces", () => {
+		const out = v6ToV7([
+			{
+				id: "v1",
+				encodings: { facetCol: { field: "System" } },
+				channelConfigs: {
+					facet: { panelAxisOverrides: { "__all__|Type of System": { yMin: 0 } } },
+				},
+				dataLabelsConfig: {
+					facetKeys: ["__all__|Type of System"],
+					fieldFonts: { [pieceKey("lbl", "Region")]: { fontWeight: 700 } },
+				},
+				annotationsConfig: {
+					rectangles: [{ id: "r", facetKeys: ["__all__|Type of System"] }],
+					circles: [],
+					lineSegments: [],
+					texts: [],
+				},
+			},
+		]) as Array<Record<string, any>>
+		expect(out[0].channelConfigs.facet).toEqual({
+			panelAxisOverrides: {},
+			gridPanelAxisOverrides: { __all__: { "Type of System": { yMin: 0 } } },
+		})
+		expect(out[0].dataLabelsConfig).toEqual({
+			facetKeys: [{ row: "__all__", col: "Type of System" }],
+			fieldFonts: {},
+			pieces: { lbl: { Region: { font: { fontWeight: 700 } } } },
+		})
+		expect(out[0].annotationsConfig.rectangles[0].facetKeys).toEqual([
+			{ row: "__all__", col: "Type of System" },
+		])
+	})
+
+	it("accepts already-structured visuals unchanged (a partly written server migration retries over them)", () => {
+		const structured = {
+			id: "v2",
+			encodings: { facetRow: { field: "r" } },
+			dataLabelsConfig: { facetKeys: [{ row: "a", col: "__all__" }] },
+		}
+		const out = v6ToV7([structured]) as unknown[]
+		expect(out[0]).toBe(structured)
+		expect(v6ToV7(out)).toEqual(out)
+	})
+
+	it("tolerates sparse visuals and non-array input", () => {
+		expect(v6ToV7([{ id: "a" }, null])).toEqual([{ id: "a" }, null])
+		expect(v6ToV7("nope")).toBe("nope")
+	})
+
+	it("the draft slices run the same step: dataLabelsConfig v1→v2, annotations v4→v5, channelConfigs v2→v3", () => {
+		expect(
+			dataLabelsConfigMigrations[1]!({
+				fieldSizes: { [pieceKey("l", "a")]: 9 },
+				facetKeys: ["x|__all__"],
+			})
+		).toEqual({
+			fieldSizes: {},
+			pieces: { l: { a: { size: 9 } } },
+			facetKeys: [{ row: "x", col: "__all__" }],
+		})
+		expect(
+			annotationsMigrations[4]!({
+				rectangles: [{ facetKeys: ["__all__|c"] }],
+				circles: [],
+				lineSegments: [],
+				texts: [],
+			})
+		).toEqual({
+			rectangles: [{ facetKeys: [{ row: "__all__", col: "c" }] }],
+			circles: [],
+			lineSegments: [],
+			texts: [],
+		})
+		expect(
+			channelConfigsMigrations[2]!({
+				facet: { panelAxisOverrides: { "__all__|c": { xMin: 1 }, wrap: { xMin: 2 } } },
+			})
+		).toEqual({
+			facet: {
+				panelAxisOverrides: { wrap: { xMin: 2 } },
+				gridPanelAxisOverrides: { __all__: { c: { xMin: 1 } } },
+			},
+		})
+		// A slice loads without the encodings, so a full-grid key it can't
+		// tell from a wrap value stays until the next save structures the
+		// whole visual.
+		expect(channelConfigsMigrations[2]!({ facet: { panelAxisOverrides: { "a|b": {} } } })).toEqual({
+			facet: { panelAxisOverrides: { "a|b": {} } },
+		})
+		expect(dataLabelsConfigMigrations[1]!(null)).toBeNull()
+		expect(annotationsMigrations[4]!(null)).toBeNull()
+		expect(channelConfigsMigrations[2]!(null)).toBeNull()
 	})
 })
 

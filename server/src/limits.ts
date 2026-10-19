@@ -21,6 +21,13 @@ export const DATASET_BODY_CAP_BYTES = 512 * 1024 * 1024
  *  not move this one. */
 export const JSON_BODY_CAP_BYTES = 10 * 1024 * 1024
 
+/** Cap on a multipart thumbnail upload (PUT /api/visuals/:id/thumbnail).
+ *  A library thumbnail is rasterized at a 480px longest edge and lands
+ *  around 15 KB; 2 MB is two orders of magnitude of headroom, and still
+ *  small enough that a confused client can't park megabytes of PNG in the
+ *  visuals table. */
+export const THUMBNAIL_BODY_CAP_BYTES = 2 * 1024 * 1024
+
 /** Cap on an embed publish body: a payload carries a whole dataset version
  *  (bounded by the dataset rule above) plus font binaries and, for ZCTA
  *  maps, an inlined topology — hence dataset parity with headroom. */

@@ -1,5 +1,6 @@
 import { pinnedAxisBounds } from "../../../lib/mirrorAxis"
 import {
+	gridPanelAxisOverride,
 	migratePolarShareValue,
 	type ChannelConfigs,
 	type FacetConfig,
@@ -219,14 +220,16 @@ export const resolvePanelRenderInputs = ({
 		shareXMode === "all" && xIsContinuous
 			? facetCfg.overallXRange
 			: undefined
-	// Per-panel overrides keyed by panel key. Wrap mode: the legacy
-	// map keyed by the single facet value (== p.key), consulted as-is
-	// so saved visuals keep working. Grid mode: the row / column
-	// panels' "range per panel" editor writes the same map (keyed
-	// "row|col") when that axis is unshared and the other direction
-	// has 2+ panels — so it's read only under share "none" for the
-	// axis in question, never outranking a shared scale.
-	const panelOverride = facetCfg.panelAxisOverrides?.[p.key]
+	// Per-panel overrides. Wrap mode: `panelAxisOverrides`, keyed by the
+	// single facet value (== p.key). Grid mode: the row / column panels'
+	// "range per panel" editor writes `gridPanelAxisOverrides` (row value,
+	// then column value) when that axis is unshared and the other
+	// direction has 2+ panels — so it's read only under share "none" for
+	// the axis in question, never outranking a shared scale.
+	const panelOverride =
+		panelData.mode === "grid"
+			? gridPanelAxisOverride(facetCfg, panelFV.rowValue, panelFV.colValue)
+			: facetCfg.panelAxisOverrides?.[p.key]
 	const legacyPanelOverride =
 		panelData.mode === "wrap" ? panelOverride : undefined
 	const xPanelOverride =

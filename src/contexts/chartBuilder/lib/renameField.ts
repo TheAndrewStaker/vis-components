@@ -2,11 +2,12 @@ import type {
 	ChannelConfigs,
 	ColorSlotConfig,
 	DataLabelsConfig,
+	LabelPieceStyle,
 	ModulationSlotConfig,
 	OpacitySlotConfig,
 } from "./channelConfig"
 import type { AnnotationsConfig } from "./annotationsConfig"
-import { parsePieceKey, pieceKey } from "./dataLabelsSelection"
+import type { FacetPanelRef } from "./facetPanelRef"
 import type {
 	DerivedVariable,
 	DerivedVariablesConfig,
@@ -116,27 +117,35 @@ const renameKey = <V>(
 			)
 		: map
 
-/** Rename a map keyed by composed-LABEL keys: a whole-label key (a default
- *  label's id IS the variable's name) or a `pieceKey(labelId, field)`, whose
- *  BOTH halves can name the renamed variable. Same reference when nothing
+/** Rename inside the split-piece map (label id → variable → style): a
+ *  default label's id IS the variable's name, so the outer key moves with
+ *  the field; the inner key is the variable itself; and a piece's color
+ *  slot can vary by the renamed field. Same reference when nothing
  *  matches. */
-const renameLabelKey = <V>(
-	map: Record<string, V> | undefined,
+const renamePieces = (
+	pieces: Record<string, Record<string, LabelPieceStyle>> | undefined,
 	oldName: string,
 	newName: string
-): Record<string, V> | undefined => {
-	if (!map) return map
-	const swap = (k: string): string => {
-		const piece = parsePieceKey(k)
-		if (!piece) return k === oldName ? newName : k
-		return pieceKey(
-			piece.labelId === oldName ? newName : piece.labelId,
-			piece.field === oldName ? newName : piece.field
-		)
+): Record<string, Record<string, LabelPieceStyle>> | undefined => {
+	if (!pieces) return pieces
+	let changed = false
+	const out: Record<string, Record<string, LabelPieceStyle>> = {}
+	for (const [labelId, byField] of Object.entries(pieces)) {
+		const nextByField: Record<string, LabelPieceStyle> = {}
+		for (const [field, style] of Object.entries(byField)) {
+			const color = style.color
+				? renameSlotField(style.color, oldName, newName)
+				: style.color
+			const nextStyle = color === style.color ? style : { ...style, color }
+			const nextField = field === oldName ? newName : field
+			if (nextStyle !== style || nextField !== field) changed = true
+			nextByField[nextField] = nextStyle
+		}
+		const nextId = labelId === oldName ? newName : labelId
+		if (nextId !== labelId) changed = true
+		out[nextId] = nextByField
 	}
-	return Object.keys(map).some((k) => swap(k) !== k)
-		? Object.fromEntries(Object.entries(map).map(([k, v]) => [swap(k), v]))
-		: map
+	return changed ? out : pieces
 }
 
 /** Swap a value in a string array. Same reference when absent. */
@@ -399,13 +408,14 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 				fieldFacetKeys: renameKey(dlc.fieldFacetKeys, oldName, newName),
 				pieceSplits: renameKey(dlc.pieceSplits, oldName, newName),
 				fieldColors: mapRecordValues(
-					renameLabelKey(dlc.fieldColors, oldName, newName),
+					renameKey(dlc.fieldColors, oldName, newName),
 					(s) => renameSlotField(s, oldName, newName)
 				) as Record<string, ColorSlotConfig> | undefined,
-				fieldColorRules: renameLabelKey(dlc.fieldColorRules, oldName, newName),
-				fieldSizes: renameLabelKey(dlc.fieldSizes, oldName, newName),
-				fieldFonts: renameLabelKey(dlc.fieldFonts, oldName, newName),
-				fieldBackgrounds: renameLabelKey(dlc.fieldBackgrounds, oldName, newName),
+				fieldColorRules: renameKey(dlc.fieldColorRules, oldName, newName),
+				fieldSizes: renameKey(dlc.fieldSizes, oldName, newName),
+				fieldFonts: renameKey(dlc.fieldFonts, oldName, newName),
+				fieldBackgrounds: renameKey(dlc.fieldBackgrounds, oldName, newName),
+				pieces: renamePieces(dlc.pieces, oldName, newName),
 				fieldAlignments: renameKey(dlc.fieldAlignments, oldName, newName),
 				fieldOffsets: renameKey(dlc.fieldOffsets, oldName, newName),
 				fieldBarPlacements: renameKey(dlc.fieldBarPlacements, oldName, newName),
@@ -686,6 +696,12 @@ const renameMeltedValueRefs = <T extends FieldNameConfigs>(
 									oldName,
 									newName
 								),
+								// Grid per-panel bounds: row value is the outer key.
+								gridPanelAxisOverrides: renameKey(
+									cc.facet.gridPanelAxisOverrides,
+									oldName,
+									newName
+								),
 							}
 						: {}),
 					...(drives(enc.facetCol)
@@ -695,6 +711,13 @@ const renameMeltedValueRefs = <T extends FieldNameConfigs>(
 									oldName,
 									newName
 								),
+								// Grid per-panel bounds: column value is the inner key.
+								gridPanelAxisOverrides: mapRecordValues(
+									cc.facet.gridPanelAxisOverrides,
+									(byCol) => renameKey(byCol, oldName, newName) ?? byCol
+								) as NonNullable<
+									ChannelConfigs["facet"]
+								>["gridPanelAxisOverrides"],
 								colRAxisOverrides: renameKey(
 									cc.facet.colRAxisOverrides,
 									oldName,
@@ -735,22 +758,30 @@ const renameMeltedValueRefs = <T extends FieldNameConfigs>(
 			: state.labelsConfig
 
 	const ac = state.annotationsConfig
-	const swapFacetKeys = <A extends { facetKeys?: string[] | null }>(
+	// A facet scope names panels by facet VALUE: a wrap value as a string,
+	// a grid panel as its row / column pair — each side moves only when its
+	// own facet field is the renamed (melted) variable.
+	const swapRef = (ref: FacetPanelRef): FacetPanelRef => {
+		if (typeof ref === "string") return ref === oldName ? newName : ref
+		const row = drives(enc.facetRow) && ref.row === oldName ? newName : ref.row
+		const col = drives(enc.facetCol) && ref.col === oldName ? newName : ref.col
+		return row === ref.row && col === ref.col ? ref : { row, col }
+	}
+	const swapFacetKeys = <A extends { facetKeys?: FacetPanelRef[] | null }>(
 		items: A[] | undefined
-	): A[] | undefined =>
-		items &&
-		(items.some((a) => a.facetKeys?.includes(oldName))
-			? items.map((a) =>
-					a.facetKeys?.includes(oldName)
-						? {
-								...a,
-								facetKeys: a.facetKeys.map((k) =>
-									k === oldName ? newName : k
-								),
-							}
-						: a
-				)
-			: items)
+	): A[] | undefined => {
+		if (!items) return items
+		let changed = false
+		const next = items.map((a) => {
+			const own = a.facetKeys
+			if (!own) return a
+			const keys = own.map(swapRef)
+			if (!keys.some((k, i) => k !== own[i])) return a
+			changed = true
+			return { ...a, facetKeys: keys }
+		})
+		return changed ? next : items
+	}
 	const annotationsConfig =
 		anyFacetDriven && ac
 			? patched(ac, {

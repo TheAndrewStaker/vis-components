@@ -1556,10 +1556,13 @@ Visible when `facet` is mapped. Controls:
 - **Axis range** — min / max inputs for the continuous axis, shaped by
   its share mode: one overall range under "All panels", one per row /
   column under "Per row" / "Per column", one per panel under "None"
-  (wrap mode keys these by facet value; the row / column panels key
-  them by the rendered panel, labeled "row · column", and with a single
-  panel across the other direction the per-row / per-column editor
-  already IS per panel). The rule across wrap, row, and column panels:
+  (wrap mode keys these by facet value in `panelAxisOverrides`; the row
+  / column panels list the rendered panels, labeled "row · column", and
+  store each one's bounds under its row value and then its column value
+  in `gridPanelAxisOverrides` — two keys, never a joined one — and with
+  a single panel across the other direction the per-row / per-column
+  editor already IS per panel). The rule across wrap, row, and column
+  panels:
   a continuous axis (quantitative or temporal — never categorical /
   ordinal) can always be bounded, shared or not. Blank = auto-fit; a typed
   bound is kept exact (no `.nice()` rounding). The editor gates on the
@@ -1611,9 +1614,11 @@ no-op case.
 
 Invariants that hold under compaction:
 
-- **Panel keys stay `${rowValue}|${colValue}`** — annotation scoping
-  (`facetKeys`), per-panel axis overrides, and `data-panel` selectors
-  are unchanged. An annotation scoped to a dropped panel simply
+- **Panel keys stay `${rowValue}|${colValue}`** in memory — the
+  `data-panel` selectors and the key every scope check matches against
+  are unchanged. (What is SAVED for a grid panel is its `{ row, col }`
+  pair — see "Saved keys are structured" under storage — which maps
+  onto that key.) An annotation scoped to a dropped panel simply
   doesn't render.
 - **Share groups and per-row/col axis overrides key on ORIGINAL facet
   values, never layout position.** With shareY = "Per row", two
@@ -2342,9 +2347,11 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   and Text properties (`DataLabelsConfig.pieceSplits[id]`, one flag per
   section). Checked, that section expands into one block per variable
   in the label and writes the variable's own entry
-  (`pieceKey(id, field)` in the same `fieldColors` / `fieldColorRules`
-  / `fieldSizes` / `fieldFonts` maps) laid over the LABEL's — so a
-  piece that only sets a weight keeps the label's family. That is the
+  (`DataLabelsConfig.pieces[id][field]` — `color` / `colorRules` /
+  `size` / `font`, keyed by the label's id and then the variable's name,
+  never a joined key) laid over the LABEL's `fieldColors` /
+  `fieldColorRules` / `fieldSizes` / `fieldFonts` entry — so a piece
+  that only sets a weight keeps the label's family. That is the
   recipe for a bold series name beside an unbolded value, or an
   all-black label whose value alone turns green when positive and red
   when negative (the variable's own color rules, compared against ITS
@@ -2442,9 +2449,11 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   of "all facets" overrides a layer-wide list rather than falling back
   to it. It is also the one Label-selection control a map or a sunburst
   keeps (they have no series ends to select or scope). The list uses the
-  same panel keys the annotations' "Apply to all facets" picker uses
-  (facet value in wrap mode, row · column in grid mode, the compact
-  panel title when empty panels are hidden). The selection is ignored
+  same panel references the annotations' "Apply to all facets" picker
+  stores (`FacetPanelRef`: the facet value in wrap mode, a `{ row, col }`
+  pair in grid mode), labeled as the rendered titles are (facet value,
+  row · column, the compact panel title when empty panels are hidden).
+  The selection is ignored
   — every label draws — when the chart stops being faceted, so a stored
   selection never blanks an unfaceted chart.
 - Bar charts get a **Placement** group (a hairline-topped group header,
@@ -3570,6 +3579,27 @@ consults the content-version gate below, so migrations and the
 newer-than-this-build refusal apply to the lazy paths exactly as they
 do to the eager one (one shared stamp-policy helper enforces both).
 
+**Thumbnails travel as files in server mode.** A visual's thumbnail is
+a PNG data URL everywhere in memory, but the base64 run inside the
+visual's JSON tripped the SQL-injection rules of the WAF in front of the
+hosted deployment, so the server-mode adapter never puts it in the
+item body. The visual's JSON goes up WITHOUT the key (the server reads
+an absent key as "leave the stored preview alone"), then the preview
+follows as a multipart file — `PUT /api/visuals/:id/thumbnail`, one
+`thumbnail` part named `thumbnail.png`, the browser's own boundary, no
+Content-Encoding — and only when it differs from what the server is
+known to hold, so a rename does not re-upload the preview. An explicit
+`thumbnail: null` stays in the JSON: that is the clear. The route takes
+a single PNG (signature-checked, 2 MB cap), 404s for a visual that is
+not stored (the JSON always lands first, and a thumbnail trailing a
+DELETE must not resurrect the row), and stores the same data URL the
+inline path always kept in the thumbnail column — so every reader,
+`?thumbnails=0` included, is unchanged, and an inline `thumbnail`
+string from a browser still running the previous bundle is still
+accepted. A failed upload leaves the JSON saved and the item out of the
+adapter's baseline, so the next save retries both (the repeated body
+PUT is idempotent).
+
 **Schema upgrades reach server-stored work too.** In browser-local
 mode every persisted key carries its own version stamp, so an app
 update that reshapes saved data migrates it on the next read. A
@@ -3594,6 +3624,50 @@ current*, not as version zero — the stamp shipped with the first
 server able to outlive an app update, so an unstamped server's rows
 were written at the current shape, and re-running migrations over them
 would corrupt data rather than repair it.
+
+**Saved keys are structured, never joined.** A saved setting name or
+value is never built by joining user values with a delimiter or a
+control character — a joined string is ambiguous when a value contains
+the joiner, and anything that inspects stored content judges it on its
+face (the hosting firewall flags a control character in a setting name,
+and read a `__all__|Type of System` panel key as a shell pipe). Where
+two user strings identify one thing, they stay two keys or a pair: a
+split composed label's per-variable styling lives under
+`dataLabelsConfig.pieces[labelId][field]`; a grid facet panel is
+referenced as a `{ row, col }` pair in every facet scope (`facetKeys` on
+annotations and data labels) and keyed row-then-column in
+`gridPanelAxisOverrides`; a wrap panel is its facet value, kept
+verbatim (what users type is theirs, pipes and control characters
+included — nothing is sanitized). In memory the renderer still keys
+panels `row|col` and a split piece `labelId + U+001F + field`; those
+keys never leave memory. The visuals v6→v7 migration rewrote the
+joined shapes once, and the same idempotent rewrite
+(`lib/savedKeyStructure.ts`) runs on every open, save, JSON import and
+example seed, so a chart in the old shape (an old export, a draft from
+an older build) keeps loading and is structured on its next save. Old
+exports import unchanged.
+
+**A build behind the server's content schema cannot write.** Chart
+saves carry no version of their own, so a tab still running the
+previous bundle after a deploy would otherwise write the previous shape
+back over migrated content, and nothing would migrate it again. Every
+write to a versioned collection (and a published embed, whose payload
+is a visual) names the content version its build writes
+(`x-vis-content-version`); the server refuses one behind the stored
+stamp — or naming none, which is every build before the header existed
+— with 409, and a stamp can only move forward. An unstamped collection
+(a server no build has written yet) takes any build's write; a build
+AHEAD of the stamp is the current build migrating before it moves the
+stamp. On a 409 the client stops attempting writes and shows a banner
+asking for a reload; the editor draft lives in localStorage, so the
+reload picks the unsaved work back up. Navigating within the old tab
+does not help — the library is a client-side route — only a reload (or
+a new tab) fetches the current build.
+A pre-pair grid key is split only where the split is certain: a
+row-only / col-only key (its `__all__` side gives it away) or a
+full-grid key with exactly one `|`. One with more pipes is never
+guessed at; it keeps naming its panel by key, and the editor's save,
+which can see the rendered panels, resolves it against the data.
 
 Visuals are listed in a Visuals library (separate page) — load,
 rename, duplicate, delete, organize into folders. Folder organization

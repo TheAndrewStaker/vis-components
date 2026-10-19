@@ -7,6 +7,7 @@ import {
 	type PaletteName,
 	type TextColorRule,
 } from "../../../lib/channelConfig"
+import { labelEntry, withLabelEntry } from "../../../lib/labelPieces"
 import { CATEGORICAL_HUE_PALETTE, parseValue } from "../../../lib/scales"
 import { resolveTextPickerPalette } from "../../../lib/themeConfig"
 import type { DatasetView, FieldType } from "../../../lib/types"
@@ -183,18 +184,20 @@ export const LabelColorPanel = ({
 								title={titles?.[name] ?? name}
 								changed={keys.some(
 									(k) =>
-										cfg.fieldColors?.[k] != null ||
-										(cfg.fieldColorRules?.[k]?.length ?? 0) > 0
+										labelEntry(cfg, "fieldColors", k) != null ||
+										(labelEntry(cfg, "fieldColorRules", k)?.length ?? 0) > 0
 								)}
 							>
 								{splitToggle?.(name)}
 								{keys.map((key) => {
+									const ownSlot = labelEntry(cfg, "fieldColors", key)
+									const ownRules = labelEntry(cfg, "fieldColorRules", key)
 									const slotBlock = (
 										<>
 											<ColorSlotControls
 												labelPrefix={titles?.[key] ?? key}
 												paletteKind="text"
-												slotCfg={cfg.fieldColors?.[key]}
+												slotCfg={ownSlot}
 												defaultColor={cfg.color}
 												// With a field mapped on the Color channel above, an
 												// unconfigured variable's segments follow that mapping
@@ -208,38 +211,39 @@ export const LabelColorPanel = ({
 														? `Main Color mapping${hueField ? ` (${hueField})` : ""}`
 														: undefined
 												}
-												clearSlot={() => {
-													const next = { ...(cfg.fieldColors ?? {}) }
-													delete next[key]
-													onChange({ fieldColors: next })
-												}}
+												clearSlot={() =>
+													onChange(withLabelEntry(cfg, "fieldColors", key, undefined))
+												}
 												updateSlot={(partial) => {
-													const existing = cfg.fieldColors?.[key]
 													const base: ColorSlotConfig = {
-														field: existing?.field ?? null,
-														singleColor: existing?.singleColor ?? cfg.color,
-														...existing,
+														field: ownSlot?.field ?? null,
+														singleColor: ownSlot?.singleColor ?? cfg.color,
+														...ownSlot,
 													}
-													onChange({
-														fieldColors: {
-															...(cfg.fieldColors ?? {}),
-															[key]: { ...base, ...partial },
-														},
-													})
+													onChange(
+														withLabelEntry(cfg, "fieldColors", key, {
+															...base,
+															...partial,
+														})
+													)
 												}}
 											/>
 											{/* The label's (or variable's) own conditional rules,
 											 *  compared against ITS value; the slot above is the
 											 *  "else". */}
 											<TextColorRulesRow
-												rules={cfg.fieldColorRules?.[key] ?? []}
-												onChange={(rules) => {
-													const next = { ...(cfg.fieldColorRules ?? {}) }
-													if (rules.length === 0) delete next[key]
-													else next[key] = rules
-													onChange({ fieldColorRules: next })
-												}}
-												defaultColor={cfg.fieldColors?.[key]?.singleColor ?? cfg.color}
+												rules={ownRules ?? []}
+												onChange={(rules) =>
+													onChange(
+														withLabelEntry(
+															cfg,
+															"fieldColorRules",
+															key,
+															rules.length === 0 ? undefined : rules
+														)
+													)
+												}
+												defaultColor={ownSlot?.singleColor ?? cfg.color}
 												theme={theme}
 												ruleLabel={titles?.[key] ?? key}
 												help={
@@ -259,8 +263,7 @@ export const LabelColorPanel = ({
 											boxed={false}
 											defaultOpen
 											changed={
-												cfg.fieldColors?.[key] != null ||
-												(cfg.fieldColorRules?.[key]?.length ?? 0) > 0
+												ownSlot != null || (ownRules?.length ?? 0) > 0
 											}
 										>
 											{slotBlock}

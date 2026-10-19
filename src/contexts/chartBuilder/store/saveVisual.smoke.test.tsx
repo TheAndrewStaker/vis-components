@@ -2,22 +2,33 @@ import { act, cleanup, renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { ReactNode } from "react"
 
+import { stringifyJsonDangerous } from "../../../lib/json"
 import { TestProvider, type TestStore } from "../../../testSupport/TestProvider"
+import { buildDataset as buildDatasetFixture } from "../../../testSupport/fixtures"
 import { installInMemoryLocalStorage } from "../../../testSupport/localStorageShim"
-import { DEFAULT_AXIS_CONFIG, EMPTY_CHANNEL_CONFIGS } from "../lib/channelConfig"
+import {
+	DEFAULT_AXIS_CONFIG,
+	DEFAULT_FACET_CONFIG,
+	EMPTY_CHANNEL_CONFIGS,
+} from "../lib/channelConfig"
 import type { ChannelConfigs, DataLabelsConfig } from "../lib/channelConfig"
 import type { LabelsConfig } from "../lib/labelsConfig"
 import { SYSTEM_LIGHT_THEME } from "../lib/systemThemes"
 import { dataLabelsConfigFromTheme, labelsFromTheme } from "../lib/themeConfig"
 import { emptyEncodings, type Encodings } from "../lib/types"
 
+import { pieceKey } from "../lib/labelPieces"
+import type { Visual } from "../lib/types"
 import {
+	currentAnnotationsAtom,
 	currentChannelConfigsAtom,
 	currentDataLabelsConfigAtom,
 	currentDatasetIdAtom,
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentLabelsAtom,
+	loadedDatasetsAtom,
+	previewVersionIdAtom,
 	currentThemeIdAtom,
 	currentVisualIdAtom,
 	currentVisualNameAtom,
@@ -219,6 +230,127 @@ describe("useSaveVisual → useLoadVisual round-trip", () => {
 			await loading.result.current(id)
 		})
 		expect(loading.store.get(currentVisualNameAtom)).toBe("Untitled")
+	})
+
+	it("structures the joined-key shape an older build saved, on load and again on save", async () => {
+		// A col-only grid chart as a pre-v7 build (a tab still running it)
+		// writes it back: joined panel keys and a control character inside a
+		// setting name. Chart saves aren't version-checked, so the editor
+		// must take it as is — and never persist it that way again.
+		const legacy = {
+			id: "vs-legacy",
+			name: "Legacy grid",
+			folderId: null,
+			datasetId: null,
+			createdAtVersionId: null,
+			fieldTypeOverrides: {},
+			encodings: { ...emptyEncodings(), facetCol: { field: "System" } },
+			channelConfigs: {
+				...EMPTY_CHANNEL_CONFIGS,
+				facet: {
+					...DEFAULT_FACET_CONFIG,
+					panelAxisOverrides: { "__all__|Type of System": { yMin: 0 } },
+				},
+			},
+			labelsConfig: LABELS,
+			dataLabelsConfig: {
+				...DATA_LABELS,
+				facetKeys: ["__all__|Type of System"],
+				fieldFonts: { [pieceKey("lbl", "Region")]: { fontWeight: 700 } },
+			},
+			annotationsConfig: {
+				rectangles: [],
+				circles: [],
+				lineSegments: [],
+				texts: [{ id: "t1", facetKeys: ["__all__|Type of System"] }],
+			},
+			thumbnail: null,
+			createdAt: 1,
+			updatedAt: 1,
+		} as unknown as Visual
+		const { result, store } = renderInStore(
+			() => ({ load: useLoadVisual(), save: useSaveVisual() }),
+			(s) => s.set(visualsAtom, [legacy])
+		)
+		await act(async () => {
+			await result.current.load("vs-legacy")
+		})
+		const pair = { row: "__all__", col: "Type of System" }
+		expect(store.get(currentDataLabelsConfigAtom).facetKeys).toEqual([pair])
+		expect(store.get(currentDataLabelsConfigAtom).fieldFonts).toEqual({})
+		expect(store.get(currentDataLabelsConfigAtom).pieces).toEqual({
+			lbl: { Region: { font: { fontWeight: 700 } } },
+		})
+		expect(store.get(currentAnnotationsAtom).texts[0]?.facetKeys).toEqual([pair])
+		expect(store.get(currentChannelConfigsAtom).facet).toMatchObject({
+			panelAxisOverrides: {},
+			gridPanelAxisOverrides: { __all__: { "Type of System": { yMin: 0 } } },
+		})
+
+		// The save half structures too — a draft slice restored from an older
+		// build can still carry the joined shape into the atoms.
+		store.set(currentDataLabelsConfigAtom, {
+			...store.get(currentDataLabelsConfigAtom),
+			fieldSizes: { [pieceKey("lbl", "Region")]: 9 },
+		})
+		await act(async () => {
+			await result.current.save()
+		})
+		const saved = store.get(visualsAtom).find((v) => v.id === "vs-legacy")!
+		expect(saved.dataLabelsConfig?.fieldSizes).toEqual({})
+		expect(saved.dataLabelsConfig?.pieces).toEqual({
+			lbl: { Region: { font: { fontWeight: 700 }, size: 9 } },
+		})
+		expect(saved.annotationsConfig?.texts[0]?.facetKeys).toEqual([pair])
+		// eslint-disable-next-line no-control-regex
+		expect(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]|__all__\|/.test(stringifyJsonDangerous(saved))).toBe(false)
+	})
+
+	it("a save resolves a pre-pair grid key against the rendered panels, never by guessing", async () => {
+		// Row value "a|b", column value "x": the old key "a|b|x" could split
+		// two ways. A migration leaves it alone; the editor, which can see the
+		// panels, resolves it exactly.
+		const ds = buildDatasetFixture({
+			id: "ds-grid",
+			name: "grid",
+			filename: "grid.csv",
+			fields: [
+				{ name: "r", inferredType: "categorical" },
+				{ name: "c", inferredType: "categorical" },
+				{ name: "v", inferredType: "quantitative" },
+			],
+			rows: [
+				{ r: "a|b", c: "x", v: "1" },
+				{ r: "c", c: "y", v: "2" },
+			],
+		})
+		const saving = renderInStore(() => useSaveVisual(), (s) => {
+			seedEditor(s)
+			s.set(currentDatasetIdAtom, "ds-grid")
+			s.set(loadedDatasetsAtom, { "ds-grid": ds })
+			s.set(previewVersionIdAtom, null)
+			s.set(currentEncodingsAtom, {
+				...emptyEncodings(),
+				x: { field: "v" },
+				facetRow: { field: "r" },
+				facetCol: { field: "c" },
+			})
+			s.set(currentAnnotationsAtom, {
+				rectangles: [],
+				circles: [],
+				lineSegments: [],
+				texts: [{ id: "t", facetKeys: ["a|b|x", "a|b|x|nope"] } as never],
+			})
+		})
+		await act(async () => {
+			await saving.result.current()
+		})
+		const saved = saving.store.get(visualsAtom)[0]!
+		expect(saved.annotationsConfig?.texts[0]?.facetKeys).toEqual([
+			{ row: "a|b", col: "x" },
+			// Not a rendered panel and more than one pipe: left as it is.
+			"a|b|x|nope",
+		])
 	})
 
 	it("loading an unknown id is a no-op that leaves the editor untouched", async () => {

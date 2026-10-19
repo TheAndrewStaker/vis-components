@@ -44,3 +44,23 @@ export const folderSubtreeIds = (
 	collect(folderId)
 	return ids
 }
+
+/** The folder's path from the root down to (and including) itself — the
+ *  editor's breadcrumb trail. Empty for a null/unknown id. Stops at a
+ *  missing parent or a parentId cycle rather than looping. */
+export const folderAncestors = (
+	folders: readonly Folder[],
+	folderId: string | null | undefined
+): Folder[] => {
+	const path: Folder[] = []
+	const seen = new Set<string>()
+	let cursor = folderId ?? null
+	while (cursor !== null && !seen.has(cursor)) {
+		seen.add(cursor)
+		const folder = folders.find((f) => f.id === cursor)
+		if (!folder) break
+		path.unshift(folder)
+		cursor = folder.parentId
+	}
+	return path
+}

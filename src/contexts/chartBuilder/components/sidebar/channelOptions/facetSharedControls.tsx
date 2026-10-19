@@ -5,7 +5,12 @@
  *  one panel importing UI from another. */
 
 import { useEffect, useMemo } from "react"
-import type { PanelAxisOverride } from "../../../lib/channelConfig"
+import {
+	gridPanelAxisOverride,
+	type FacetConfig,
+	type PanelAxisOverride,
+} from "../../../lib/channelConfig"
+import type { FacetPanelRef } from "../../../lib/facetPanelRef"
 
 import { LABEL_COL, LabelSpacer } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
@@ -403,20 +408,16 @@ export const withBoundInMap = (
 	return all
 }
 
-/** Apply one bound edit to the per-panel `panelAxisOverrides` map (keyed
- *  by panel key; each entry carries xMin / xMax / yMin / yMax). Empty
- *  input clears that bound; when every bound on the panel clears, the
- *  entry is dropped. Returns the next map, or null when the edit was
- *  invalid and should be ignored. Shared by the wrap panel (share =
- *  "None" per-panel editors) and the row / column panels (same editors
- *  when the other direction has 2+ panels). */
-export const withPanelBound = (
-	map: Record<string, PanelAxisOverride> | undefined,
-	panelKey: string,
+/** One bound edit applied to a panel's override entry (xMin / xMax /
+ *  yMin / yMax). Empty input clears that bound. Returns the next entry —
+ *  `undefined` when every bound has cleared, so the caller drops it — or
+ *  `null` when the edit was invalid and should be ignored. */
+const withPanelEntryBound = (
+	entry: PanelAxisOverride | undefined,
 	bound: keyof PanelAxisOverride,
 	raw: string,
-): Record<string, PanelAxisOverride> | null => {
-	const next: PanelAxisOverride = { ...(map?.[panelKey] ?? {}) }
+): PanelAxisOverride | undefined | null => {
+	const next: PanelAxisOverride = { ...(entry ?? {}) }
 	if (raw.trim() === "") {
 		delete next[bound]
 	} else {
@@ -424,18 +425,69 @@ export const withPanelBound = (
 		if (!Number.isFinite(n)) return null
 		next[bound] = n
 	}
-	const all = { ...(map ?? {}) }
 	const stillHasAny =
 		next.xMin !== undefined ||
 		next.xMax !== undefined ||
 		next.yMin !== undefined ||
 		next.yMax !== undefined
-	if (stillHasAny) {
-		all[panelKey] = next
-	} else {
-		delete all[panelKey]
-	}
+	return stillHasAny ? next : undefined
+}
+
+/** Apply one bound edit to the wrap panel's per-panel `panelAxisOverrides`
+ *  map (keyed by facet value). When every bound on the panel clears, the
+ *  entry is dropped. Returns the next map, or null when the edit was
+ *  invalid and should be ignored. */
+export const withPanelBound = (
+	map: Record<string, PanelAxisOverride> | undefined,
+	panelKey: string,
+	bound: keyof PanelAxisOverride,
+	raw: string,
+): Record<string, PanelAxisOverride> | null => {
+	const next = withPanelEntryBound(map?.[panelKey], bound, raw)
+	if (next === null) return null
+	const all = { ...(map ?? {}) }
+	if (next) all[panelKey] = next
+	else delete all[panelKey]
 	return all
+}
+
+/** Apply one bound edit to a GRID panel's entry — the row / column panels'
+ *  "range per panel" editor when the other direction has 2+ panels. Writes
+ *  `gridPanelAxisOverrides[row][col]` (dropping an emptied entry, and an
+ *  emptied row) and clears the joined-key entry a pre-structure build left
+ *  in `panelAxisOverrides` for the same panel, so the first edit after an
+ *  upgrade leaves one source of truth. Returns the config patch, or null
+ *  when the edit was invalid and should be ignored. A wrap-mode reference
+ *  (a bare facet value) goes through `withPanelBound` instead. */
+export const withGridPanelBound = (
+	cfg: Pick<FacetConfig, "gridPanelAxisOverrides" | "panelAxisOverrides">,
+	ref: FacetPanelRef,
+	bound: keyof PanelAxisOverride,
+	raw: string,
+): Partial<FacetConfig> | null => {
+	if (typeof ref === "string") {
+		const flat = withPanelBound(cfg.panelAxisOverrides, ref, bound, raw)
+		return flat ? { panelAxisOverrides: flat } : null
+	}
+	const next = withPanelEntryBound(
+		gridPanelAxisOverride(cfg, ref.row, ref.col),
+		bound,
+		raw,
+	)
+	if (next === null) return null
+	const grid = { ...(cfg.gridPanelAxisOverrides ?? {}) }
+	const byCol = { ...(grid[ref.row] ?? {}) }
+	if (next) byCol[ref.col] = next
+	else delete byCol[ref.col]
+	if (Object.keys(byCol).length > 0) grid[ref.row] = byCol
+	else delete grid[ref.row]
+	const legacyKey = `${ref.row}|${ref.col}`
+	if (cfg.panelAxisOverrides && legacyKey in cfg.panelAxisOverrides) {
+		const flat = { ...cfg.panelAxisOverrides }
+		delete flat[legacyKey]
+		return { gridPanelAxisOverrides: grid, panelAxisOverrides: flat }
+	}
+	return { gridPanelAxisOverrides: grid }
 }
 
 /** Invariant: an explicit panel width / height must not coexist with

@@ -9,7 +9,6 @@ import {
 	EMPTY_CHANNEL_CONFIGS,
 	type DataLabelsConfig,
 } from "../../lib/channelConfig"
-import { pieceKey } from "../../lib/dataLabelsSelection"
 import { DEFAULT_LABELS_CONFIG } from "../../lib/labelsConfig"
 import {
 	emptyDataLabelsEncodings,
@@ -167,7 +166,7 @@ describe("DataLabelsPanel — split a combined label into its variables", () => 
 		expect(readCfg().pieceSplits).toEqual({ "lbl-1": { size: true } })
 	})
 
-	it("expands into one row per variable, writing piece keys", () => {
+	it("expands into one row per variable, writing piece entries", () => {
 		const { container, readCfg } = mountPanel({
 			...COMBINED,
 			pieceSplits: { "lbl-1": { size: true } },
@@ -181,7 +180,10 @@ describe("DataLabelsPanel — split a combined label into its variables", () => 
 		expect(numberInputFor(combined, "g")).not.toBeNull()
 		fireEvent.change(yRow, { target: { value: "20" } })
 		fireEvent.blur(yRow)
-		expect(readCfg().fieldSizes).toEqual({ [pieceKey("lbl-1", "y")]: 20 })
+		// The piece's size lives under pieces[label][variable] — two keys, no
+		// joined one — and the label's own map stays untouched.
+		expect(readCfg().pieces).toEqual({ "lbl-1": { y: { size: 20 } } })
+		expect(readCfg().fieldSizes ?? {}).toEqual({})
 	})
 
 	it("Text properties splits into a block per variable", () => {

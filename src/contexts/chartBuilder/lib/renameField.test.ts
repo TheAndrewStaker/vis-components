@@ -269,6 +269,38 @@ describe("renameFieldInConfigs — standard (view-field) rewrite", () => {
 		)
 	})
 
+	it("renames inside the split-piece map: the label id, the variable, and a slot varying by it", () => {
+		const state = baseState()
+		state.dataLabelsConfig = {
+			...DEFAULT_DATA_LABELS_CONFIG,
+			pieces: {
+				// A default label's id IS the variable's name.
+				sales: { region: { size: 9 }, sales: { font: { fontWeight: 700 } } },
+				"lbl-1": {
+					sales: { color: { field: "sales", singleColor: "#000" } },
+					region: { size: 12 },
+				},
+			},
+		}
+		const next = renameFieldInConfigs(state, fields, "sales", "revenue")
+		expect(next.dataLabelsConfig.pieces).toEqual({
+			revenue: { region: { size: 9 }, revenue: { font: { fontWeight: 700 } } },
+			"lbl-1": {
+				revenue: { color: { field: "revenue", singleColor: "#000" } },
+				region: { size: 12 },
+			},
+		})
+		// Nothing to rename → same reference.
+		const untouched = baseState()
+		untouched.dataLabelsConfig = {
+			...DEFAULT_DATA_LABELS_CONFIG,
+			pieces: { "lbl-1": { region: { size: 12 } } },
+		}
+		expect(
+			renameFieldInConfigs(untouched, fields, "sales", "revenue").dataLabelsConfig.pieces
+		).toBe(untouched.dataLabelsConfig.pieces)
+	})
+
 	it("does not rewrite a template token that merely contains the name", () => {
 		const state = baseState()
 		state.dataLabelsConfig = {
@@ -397,6 +429,38 @@ describe("renameFieldInConfigs — melted (value-key) rewrite", () => {
 		})
 		// membership array follows too
 		expect(next.reshapeConfig.meltFields).toEqual(["January", "feb"])
+	})
+
+	it("follows a renamed value into a grid panel pair and the grid bounds, on the side that facet drives", () => {
+		const state = meltedState()
+		state.encodings = {
+			...state.encodings,
+			facet: { field: null },
+			facetRow: { field: "category" },
+			facetCol: { field: "region" },
+		}
+		state.channelConfigs = {
+			facet: {
+				...DEFAULT_FACET_CONFIG,
+				gridPanelAxisOverrides: { jan: { east: { yMin: 1 } }, feb: { jan: { yMin: 2 } } },
+			},
+		}
+		state.annotationsConfig = {
+			...DEFAULT_ANNOTATIONS_CONFIG,
+			rectangles: [
+				// Row side is the melted column's value → moves. Column side is a
+				// region that happens to be called "jan" → a coincidence, stays.
+				{ facetKeys: [{ row: "jan", col: "jan" }, "jan"] } as never,
+			],
+		}
+		const next = renameFieldInConfigs(state, fields, "jan", "January")
+		expect(next.annotationsConfig.rectangles[0]).toEqual({
+			facetKeys: [{ row: "January", col: "jan" }, "January"],
+		})
+		expect(next.channelConfigs.facet?.gridPanelAxisOverrides).toEqual({
+			January: { east: { yMin: 1 } },
+			feb: { jan: { yMin: 2 } },
+		})
 	})
 
 	it("leaves view-field surfaces alone for a melted rename", () => {

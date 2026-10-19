@@ -2,6 +2,7 @@ import type {
 	DataLabelsConfig,
 	LabelFontOverrides,
 } from "../../../lib/channelConfig"
+import { labelEntry, withLabelEntry } from "../../../lib/labelPieces"
 import { fontWeightOptionsFor } from "../../../lib/labelsConfig"
 import {
 	useFontFamilyOptions,
@@ -168,13 +169,16 @@ export const TextPropertiesPanel = ({
 	// inherit — the layer for a whole label, the LABEL's own font for a
 	// piece, so a piece that only bolds keeps the label's family.
 	const blockFor = (key: string, base: LabelFontOverrides) => {
-		const own: LabelFontOverrides = cfg.fieldFonts?.[key] ?? {}
-		const write = (next: LabelFontOverrides) => {
-			const map = { ...(cfg.fieldFonts ?? {}) }
-			if (Object.keys(next).length === 0) delete map[key]
-			else map[key] = next
-			onChange({ fieldFonts: map })
-		}
+		const own: LabelFontOverrides = labelEntry(cfg, "fieldFonts", key) ?? {}
+		const write = (next: LabelFontOverrides) =>
+			onChange(
+				withLabelEntry(
+					cfg,
+					"fieldFonts",
+					key,
+					Object.keys(next).length === 0 ? undefined : next
+				)
+			)
 		const unset = (...ks: (keyof LabelFontOverrides)[]) => {
 			const next = { ...own }
 			for (const k of ks) delete next[k]
@@ -210,14 +214,15 @@ export const TextPropertiesPanel = ({
 				// A split label's pieces lay over the LABEL's own font, so the
 				// pieces show what they'd actually render with.
 				const labelFont: LabelFontOverrides = split
-					? (cfg.fieldFonts?.[name] ?? {})
+					? (labelEntry(cfg, "fieldFonts", name) ?? {})
 					: {}
 				return (
 					<CollapsibleSubsection
 						key={name}
 						title={titles?.[name] ?? name}
 						changed={keys.some(
-							(k) => Object.keys(cfg.fieldFonts?.[k] ?? {}).length > 0
+							(k) =>
+								Object.keys(labelEntry(cfg, "fieldFonts", k) ?? {}).length > 0
 						)}
 					>
 						{splitToggle?.(name)}
@@ -229,7 +234,8 @@ export const TextPropertiesPanel = ({
 										boxed={false}
 										defaultOpen
 										changed={
-											Object.keys(cfg.fieldFonts?.[key] ?? {}).length > 0
+											Object.keys(labelEntry(cfg, "fieldFonts", key) ?? {})
+												.length > 0
 										}
 									>
 										{blockFor(key, labelFont)}

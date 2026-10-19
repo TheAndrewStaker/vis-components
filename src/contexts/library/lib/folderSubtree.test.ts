@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import type { Folder } from "../../chartBuilder/lib/types"
 import {
 	UNFILED_FOLDER_ID,
+	folderAncestors,
 	folderSelectionPredicate,
 	folderSubtreeIds,
 } from "./folderSubtree"
@@ -65,5 +66,29 @@ describe("folderSelectionPredicate", () => {
 		expect(inSelection("C")).toBe(true)
 		expect(inSelection("E")).toBe(false)
 		expect(inSelection(null)).toBe(false)
+	})
+})
+
+describe("folderAncestors", () => {
+	it("returns the root-first path down to the folder", () => {
+		expect(folderAncestors(FOLDERS, "C").map((f) => f.id)).toEqual([
+			"A",
+			"B",
+			"C",
+		])
+	})
+
+	it("returns just the folder at the root", () => {
+		expect(folderAncestors(FOLDERS, "E").map((f) => f.id)).toEqual(["E"])
+	})
+
+	it("is empty for null or an unknown id", () => {
+		expect(folderAncestors(FOLDERS, null)).toEqual([])
+		expect(folderAncestors(FOLDERS, "nope")).toEqual([])
+	})
+
+	it("terminates on a parentId cycle", () => {
+		const cyclic = [mkFolder("X", "Y"), mkFolder("Y", "X")]
+		expect(folderAncestors(cyclic, "X").map((f) => f.id)).toEqual(["Y", "X"])
 	})
 })

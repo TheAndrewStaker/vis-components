@@ -2,9 +2,13 @@ import { useAtomCallback } from "jotai/utils"
 import { useCallback } from "react"
 import { DEFAULT_ANNOTATIONS_CONFIG } from "../lib/annotationsConfig"
 import { DEFAULT_CAPTION_CONFIG } from "../lib/captionConfig"
+import { knownFacetPanels, resolveFacetPanels } from "../lib/resolveFacetPanels"
+import { structureVisualKeys } from "../lib/savedKeyStructure"
+import { currentDatasetViewAtom } from "./useCurrentDatasetView"
 import { captureThumbnail } from "../lib/captureThumbnail"
 import {
 	DEFAULT_DATA_LABELS_CONFIG,
+	DEFAULT_FACET_CONFIG,
 	EMPTY_CHANNEL_CONFIGS,
 } from "../lib/channelConfig"
 import {
@@ -161,9 +165,28 @@ export const useSaveVisual = () => {
 			updatedAt: now,
 			}
 
+			// Saved keys are structured, never joined (`lib/savedKeyStructure`):
+			// the draft may still hold the joined shape a draft slice restored
+			// from an older build carried, so the stored copy is rewritten here
+			// — same reference when the draft is already structured. The
+			// rendered panels let a pre-pair grid key be resolved against the
+			// data, which a storage migration can't; without the data set
+			// loaded only the certain readings are taken.
+			const view = get(currentDatasetViewAtom)
+			const panels = knownFacetPanels(
+				resolveFacetPanels(
+					view,
+					encodings,
+					fieldLevelOrders,
+					overrides,
+					channelConfigs.facet ?? DEFAULT_FACET_CONFIG
+				)
+			)
+			const saved = structureVisualKeys(visual, panels)
+
 			const nextVisuals = existing
-			? visuals.map((v) => (v.id === id ? visual : v))
-			: [visual, ...visuals]
+			? visuals.map((v) => (v.id === id ? saved : v))
+			: [saved, ...visuals]
 
 			set(visualsAtom, nextVisuals)
 			set(currentVisualIdAtom, id)
@@ -182,11 +205,16 @@ export const useLoadVisual = () => {
 	return useAtomCallback(
 		useCallback(async (get, set, visualId: string) => {
 			const visuals = get(visualsAtom)
-			const visual = visuals.find((v) => v.id === visualId)
+			const stored = visuals.find((v) => v.id === visualId)
 			// A trashed visual reads as "not found": the editor bounces to the
 			// library and the in-app embed shows its missing state. Restore it
 			// from the Trash to open it again.
-			if (!visual || isTrashed(visual)) return false
+			if (!stored || isTrashed(stored)) return false
+			// Accept the joined-key shape a tab on an older build may still write
+			// back (chart saves aren't version-checked): structure it on the way
+			// in, so the editor and embed read one shape and the next save
+			// persists it (`lib/savedKeyStructure`).
+			const visual = structureVisualKeys(stored)
 			// Opening a DIFFERENT visual restarts the undo stack. Re-loading the
 			// same id (the route remount after autosave created a new visual)
 			// keeps it, so the first edits of a new visual stay undoable.

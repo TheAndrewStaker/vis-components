@@ -6,6 +6,7 @@ import {
 	migrateShareValue,
 	type ChannelConfigs,
 	type FacetConfig,
+	gridPanelAxisOverride,
 } from "../../../lib/channelConfig"
 import type { ChartModeDef } from "../../../lib/chartModes/types"
 import { evenlySpacedTicks, evenlySpacedTimeTicks } from "../../../lib/evenTicks"
@@ -489,14 +490,19 @@ export const buildSolverPanelInputs = ({
 			: undefined
 		const yOverallOverrideForWeight =
 			shareYMode === "all" ? facetCfg.overallYRange : undefined
-		// Per-panel map: wrap mode's legacy keying AND grid mode's
-		// "range per panel" editor (row / column panels, share = none
-		// with 2+ panels across) both write it, so read it under
-		// share "none" in either faceted mode.
+		// Per-panel bounds: wrap mode's `panelAxisOverrides` (keyed by the
+		// facet value) and grid mode's "range per panel" editor (row /
+		// column panels, share = none with 2+ panels across, writing
+		// `gridPanelAxisOverrides`) — read under share "none" in either
+		// faceted mode.
+		const panelOverrideForWeight =
+			panelData.mode === "grid"
+				? gridPanelAxisOverride(facetCfg, facetVals.rowValue, facetVals.colValue)
+				: panelData.mode === "wrap"
+					? facetCfg.panelAxisOverrides?.[key]
+					: undefined
 		const yLegacyOverrideForWeight =
-			shareYMode === "none" && panelData.mode !== "single"
-				? facetCfg.panelAxisOverrides?.[key]
-				: undefined
+			shareYMode === "none" ? panelOverrideForWeight : undefined
 		const yWeightOverrideMin =
 			yPerGroupOverrideForWeight?.min ??
 			yOverallOverrideForWeight?.min ??
@@ -520,9 +526,7 @@ export const buildSolverPanelInputs = ({
 		const xOverallOverrideForWeight =
 			shareXMode === "all" ? facetCfg.overallXRange : undefined
 		const xLegacyOverrideForWeight =
-			shareXMode === "none" && panelData.mode !== "single"
-				? facetCfg.panelAxisOverrides?.[key]
-				: undefined
+			shareXMode === "none" ? panelOverrideForWeight : undefined
 		const xWeightOverrideMin =
 			xPerGroupOverrideForWeight?.min ??
 			xOverallOverrideForWeight?.min ??

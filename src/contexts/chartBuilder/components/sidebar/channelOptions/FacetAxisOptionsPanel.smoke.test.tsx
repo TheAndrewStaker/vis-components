@@ -69,6 +69,10 @@ const facetConfigs = (facet: Partial<FacetConfig> = {}): Partial<ChannelConfigs>
 	facet: { ...DEFAULT_FACET_CONFIG, ...facet },
 })
 
+/** The Jotai store behind the most recent `mount`, for reading written
+ *  configs back. */
+let lastStore: TestStore | undefined
+
 const mount = (
 	encodings: Encodings,
 	configs: Partial<ChannelConfigs>,
@@ -86,6 +90,7 @@ const mount = (
 	set("vis-components:currentChannelConfigs", configs)
 	/* eslint-enable @th/use-wrapped-json-functions */
 	const init = (snap: TestStore) => {
+		lastStore = snap
 		snap.set(loadedDatasetsAtom, { [ID]: buildDataset() })
 		snap.set(currentDatasetIdAtom, ID)
 		snap.set(previewVersionIdAtom, null)
@@ -210,6 +215,31 @@ describe("FacetAxisOptionsPanel — both axes on both panels", () => {
 		expect(utils.getByText("Y axis range per panel")).toBeTruthy()
 		expect(utils.getByText("North · Left")).toBeTruthy()
 		expect(utils.getByText("South · Right")).toBeTruthy()
+	})
+
+	it("a grid panel's bound is stored under its row value, then its column value — never a joined key", () => {
+		const utils = mount(
+			scatterEncodings(),
+			facetConfigs({
+				shareY: "none",
+				// What a build before the nested map saved for the same panel:
+				// the first edit replaces it, so one source of truth remains.
+				panelAxisOverrides: { "North|Left": { yMax: 9 } },
+			}),
+			<FacetRowOptionsPanel />,
+		)
+		expand(utils, /rows/i)
+		const mins = utils.getAllByLabelText("min") as HTMLInputElement[]
+		// Four panels (North/South × Left/Right), listed row-major.
+		expect(mins).toHaveLength(4)
+		fireEvent.change(mins[0]!, { target: { value: "0" } })
+		const facet = lastStore!.get(currentChannelConfigsAtom).facet
+		expect(facet?.gridPanelAxisOverrides).toEqual({
+			North: { Left: { yMin: 0, yMax: 9 } },
+		})
+		expect(facet?.panelAxisOverrides).toEqual({})
+		// The editor reads the stored value back the same way.
+		expect(mins[0]!.value).toBe("0")
 	})
 
 	it("panel height input steps from the auto value, not from min=1", () => {

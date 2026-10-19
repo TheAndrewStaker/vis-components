@@ -3,7 +3,12 @@
  *  API semantics (mirrors the frontend's diffing HTTP storage adapter):
  *   - per-item PUT/DELETE, item-level last-write-wins, no ETags in v1
  *   - PUT is a full-item replace; DELETE of a missing id is a 204 no-op
- *   - collection GET returns everything (bodies included for datasets) */
+ *   - collection GET returns everything (bodies included for datasets)
+ *   - a visual's thumbnail travels as a multipart PNG file
+ *     (PUT /api/visuals/:id/thumbnail), never as base64 inside the JSON —
+ *     the base64 run trips the WAF's SQL-injection rules in front of the
+ *     hosted deployment. An inline `thumbnail` string is still accepted for
+ *     a browser running the previous bundle. */
 
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { Readable } from "node:stream"
@@ -24,6 +29,7 @@ import {
 	listDatasetVersionIds,
 	listRows,
 	setContentVersion,
+	setVisualThumbnail,
 	upsertBody,
 	deleteDatasetVersionRow,
 	upsertDatasetMeta,
@@ -54,8 +60,10 @@ import {
 	DATASET_BODY_CAP_BYTES,
 	EMBED_BODY_CAP_BYTES,
 	JSON_BODY_CAP_BYTES,
+	THUMBNAIL_BODY_CAP_BYTES,
 } from "./limits.js"
 import { logError } from "./log.js"
+import { findMultipartPart, multipartBoundary } from "./multipart.js"
 import { serveStatic } from "./staticFiles.js"
 
 export type HandlerDeps = {
@@ -107,8 +115,23 @@ const handleApi = async (
 	const [rawPath, rawQuery] = (req.url ?? "/").split("?")
 	const [, , collection, id, ...rest] = rawPath.split("/")
 	if (!collection) throw new HttpError(404, "Not found")
-	// Only the datasets collection has sub-resources; everything else keeps
-	// the original flat shape.
+	// A write from a build BEHIND the collection's content schema is refused
+	// outright — see `assertClientCurrent`. Published embeds carry a visual
+	// as their payload, so they are judged against the visuals stamp.
+	if (method === "PUT" || method === "DELETE") {
+		const guarded = collection === "embeds" ? "visuals" : collection
+		if (isContentVersionCollection(guarded)) {
+			assertClientCurrent(db, req, guarded)
+		}
+	}
+	// Sub-resources: the datasets collection has several, visuals exactly
+	// one (the thumbnail upload); every other collection keeps the original
+	// flat shape.
+	if (collection === "visuals" && rest.length === 1 && rest[0] === "thumbnail") {
+		if (!id || !isSafeId(id)) throw new HttpError(400, "Invalid id")
+		if (method !== "PUT") throw new HttpError(405, "Method not allowed")
+		return await putVisualThumbnail(req, res, db, id)
+	}
 	if (rest.length > 0 && collection !== "datasets") {
 		throw new HttpError(404, "Not found")
 	}
@@ -244,7 +267,19 @@ const handleApi = async (
 		if (method !== "PUT") throw new HttpError(405, "Method not allowed")
 		if (!isContentVersionCollection(id)) throw new HttpError(404, "Not found")
 		const raw = (await readBody(req, JSON_BODY_CAP_BYTES)).toString("utf-8")
-		setContentVersion(db, id, parseVersionBody(raw))
+		const version = parseVersionBody(raw)
+		// A stamp only moves forward: a build behind the stored schema must
+		// not be able to wind it back and so re-open the collection to its
+		// own writes.
+		const stored = listContentVersions(db)[id]
+		if (stored !== undefined && version < stored) {
+			throw new HttpError(
+				409,
+				`"${id}" is at content version ${stored}; a build writing ` +
+					`version ${version} is behind it. Reload to pick up the current build.`
+			)
+		}
+		setContentVersion(db, id, version)
 		return sendEmpty(res, 204)
 	}
 
@@ -268,6 +303,83 @@ const handleApi = async (
 		return sendEmpty(res, 204)
 	}
 	throw new HttpError(405, "Method not allowed")
+}
+
+/** The content version a writing client was built for, from its
+ *  `x-vis-content-version` header; `null` when absent or malformed. */
+const clientContentVersion = (req: IncomingMessage): number | null => {
+	const raw = req.headers["x-vis-content-version"]
+	return typeof raw === "string" && /^\d{1,9}$/.test(raw) ? Number(raw) : null
+}
+
+/** Refuse a write to a versioned collection from a build BEHIND the
+ *  collection's stored content schema (or one that names no version at all
+ *  — every build before the header existed). Chart saves carry no version
+ *  of their own, so such a write would put a previous shape back over
+ *  migrated content, and nothing would migrate it again: the stamp already
+ *  says the collection is current. An unstamped collection (a server no
+ *  build has written yet) is open to any build — the first load stamps it.
+ *  A build AHEAD of the stamp is the current build migrating the collection
+ *  before it moves the stamp, so it passes. 409 so the client can tell it
+ *  from a bad request and ask the user to reload. */
+const assertClientCurrent = (
+	db: DatabaseSync,
+	req: IncomingMessage,
+	collection: string
+): void => {
+	const stored = listContentVersions(db)[collection]
+	if (stored === undefined) return
+	const sent = clientContentVersion(req)
+	if (sent !== null && sent >= stored) return
+	throw new HttpError(
+		409,
+		`"${collection}" is at content version ${stored}; this build writes ` +
+			`${sent === null ? "an unversioned shape" : `version ${sent}`} and is ` +
+			`behind it. Reload to pick up the current build.`
+	)
+}
+
+/** The eight bytes every PNG starts with. */
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+/** PUT /api/visuals/<id>/thumbnail — one `thumbnail` file part in a
+ *  multipart/form-data body, a PNG. Stored as the same `data:image/png;base64`
+ *  URL the inline JSON path always kept in the thumbnail column, so every
+ *  reader (the collection GET, `?thumbnails=0`, the browser-local mirror of
+ *  the shape) is untouched. Only the signature is checked — the part's
+ *  declared type is client-controlled and says nothing a WAF or a reader
+ *  can rely on. 404 when the visual is not stored: the client saves the
+ *  visual's JSON first, and a thumbnail that trails a DELETE must not
+ *  recreate the row. */
+const putVisualThumbnail = async (
+	req: IncomingMessage,
+	res: ServerResponse,
+	db: DatabaseSync,
+	id: string
+): Promise<void> => {
+	const boundary = multipartBoundary(req.headers["content-type"])
+	if (boundary === null) {
+		throw new HttpError(400, "Expected a multipart/form-data body")
+	}
+	const body = await readBody(req, THUMBNAIL_BODY_CAP_BYTES)
+	let part
+	try {
+		part = findMultipartPart(body, boundary, "thumbnail")
+	} catch {
+		throw new HttpError(400, "Body is not well-formed multipart/form-data")
+	}
+	if (part === null || part.filename === null) {
+		throw new HttpError(400, 'Expected a "thumbnail" file part')
+	}
+	if (
+		part.data.length < PNG_SIGNATURE.length ||
+		!part.data.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+	) {
+		throw new HttpError(400, "Thumbnail must be a PNG")
+	}
+	const dataUrl = `data:image/png;base64,${part.data.toString("base64")}`
+	if (!setVisualThumbnail(db, id, dataUrl)) throw new HttpError(404, "Not found")
+	return sendEmpty(res, 204)
 }
 
 /** PUT /api/embeds/<publishId> — write the embed's public files and answer

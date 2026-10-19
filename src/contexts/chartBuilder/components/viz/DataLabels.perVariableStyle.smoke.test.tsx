@@ -8,7 +8,6 @@ import {
 	EMPTY_CHANNEL_CONFIGS,
 	type DataLabelsConfig,
 } from "../../lib/channelConfig"
-import { pieceKey } from "../../lib/dataLabelsSelection"
 import { ptToPx } from "../../lib/fontUnit"
 import { DEFAULT_LABELS_CONFIG } from "../../lib/labelsConfig"
 import {
@@ -193,9 +192,7 @@ describe("Data labels — per-label size / font / background / rules", () => {
 			...base,
 			composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
 			pieceSplits: { "lbl-both": { text: true } },
-			fieldFonts: {
-				[pieceKey("lbl-both", "region")]: { fontWeight: 700 },
-			},
+			pieces: { "lbl-both": { region: { font: { fontWeight: 700 } } } },
 		})
 		expect(texts.length).toBe(2)
 		for (const text of texts) {
@@ -211,9 +208,7 @@ describe("Data labels — per-label size / font / background / rules", () => {
 			...base,
 			composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
 			// No pieceSplits entry → the label styles as one.
-			fieldFonts: {
-				[pieceKey("lbl-both", "region")]: { fontWeight: 700 },
-			},
+			pieces: { "lbl-both": { region: { font: { fontWeight: 700 } } } },
 		})
 		expect(texts.length).toBe(2)
 		for (const text of texts) {
@@ -228,14 +223,13 @@ describe("Data labels — per-label size / font / background / rules", () => {
 			...base,
 			composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
 			pieceSplits: { "lbl-both": { color: true } },
-			fieldColors: {
-				[pieceKey("lbl-both", "region")]: {
-					field: null,
-					singleColor: "#00FF00",
+			pieces: {
+				"lbl-both": {
+					region: {
+						color: { field: null, singleColor: "#00FF00" },
+						font: { fontWeight: 700 },
+					},
 				},
-			},
-			fieldFonts: {
-				[pieceKey("lbl-both", "region")]: { fontWeight: 700 },
 			},
 		})
 		expect(texts.length).toBe(2)
@@ -253,10 +247,10 @@ describe("Data labels — per-label size / font / background / rules", () => {
 			...base,
 			composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
 			pieceSplits: { "lbl-both": { color: true } },
-			fieldColorRules: {
-				[pieceKey("lbl-both", "sales")]: [
-					{ condition: "< 0", color: "#FF0000" },
-				],
+			pieces: {
+				"lbl-both": {
+					sales: { colorRules: [{ condition: "< 0", color: "#FF0000" }] },
+				},
 			},
 		})
 		const reds = texts.map((t) =>
@@ -274,10 +268,8 @@ describe("Data labels — per-label size / font / background / rules", () => {
 			composedLabels: [{ id: "lbl-both", template: "{sales} {region}" }],
 			pieceSplits: { "lbl-both": { text: true } },
 			// The label picks the family; only the region piece bolds.
-			fieldFonts: {
-				"lbl-both": { fontFamily: "Georgia" },
-				[pieceKey("lbl-both", "region")]: { fontWeight: 700 },
-			},
+			fieldFonts: { "lbl-both": { fontFamily: "Georgia" } },
+			pieces: { "lbl-both": { region: { font: { fontWeight: 700 } } } },
 		})
 		expect(texts.length).toBe(2)
 		for (const text of texts) {

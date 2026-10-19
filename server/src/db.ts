@@ -266,6 +266,22 @@ export const upsertBody = (
 	).run(id, body, now)
 }
 
+/** Set a visual's thumbnail column directly — the multipart upload route's
+ *  write. The body JSON is untouched. Returns false when no such visual is
+ *  stored: the route answers 404 rather than inventing a row, because a
+ *  thumbnail trailing its visual's DELETE must not resurrect it (the same
+ *  anti-resurrection rule the dataset-version PUT follows). */
+export const setVisualThumbnail = (
+	db: DatabaseSync,
+	id: string,
+	thumbnail: string
+): boolean => {
+	const result = db
+		.prepare(`UPDATE visuals SET thumbnail=?, updated_at=? WHERE id=?`)
+		.run(thumbnail, new Date().toISOString(), id)
+	return Number(result.changes) > 0
+}
+
 /** Delete one item. Idempotent — deleting a missing id is a no-op. */
 export const deleteBody = (
 	db: DatabaseSync,

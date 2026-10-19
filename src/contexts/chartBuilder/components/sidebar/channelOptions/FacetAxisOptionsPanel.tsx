@@ -2,6 +2,7 @@ import { useAtom, useAtomValue } from "jotai"
 import { useMemo } from "react"
 import {
 	DEFAULT_FACET_CONFIG,
+	gridPanelAxisOverride,
 	migrateProportionalSizing,
 	migrateShareValue,
 	rowSizingMeaningful,
@@ -12,6 +13,7 @@ import {
 	facetPanelOptions,
 	resolveFacetPanels,
 } from "../../../lib/resolveFacetPanels"
+import type { FacetPanelRef } from "../../../lib/facetPanelRef"
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { axisFieldsFor, axisRangeIsContinuous } from "../../../lib/axisFields"
 import {
@@ -41,7 +43,7 @@ import {
 	useUniqueFieldValues,
 	withBound,
 	withBoundInMap,
-	withPanelBound,
+	withGridPanelBound,
 } from "./facetSharedControls"
 
 /** Everything that differs between the facetRow and facetCol option
@@ -182,9 +184,10 @@ const FacetAxisSubsection = ({
 	dataset: DatasetView | undefined
 	mode: ChartModeDef
 	axisMap: FacetAxisMapping
-	/** Every rendered panel (key + display label), from the same
-	 *  resolver PlotCanvas draws against — drives the per-panel editor. */
-	panelOptions: Array<{ key: string; label: string }>
+	/** Every rendered panel (key + display label + the reference its
+	 *  bounds are stored under), from the same resolver PlotCanvas draws
+	 *  against — drives the per-panel editor. */
+	panelOptions: Array<{ key: string; label: string; ref: FacetPanelRef }>
 	isOwnAxis: boolean
 }) => {
 	// Polar charts (radar / pie): the cartesian "Size … by …" toggle
@@ -315,10 +318,11 @@ const FacetAxisSubsection = ({
 		(share === "perGroup" || (share === "none" && perpCount === 1))
 	// share === "none" + 2+ perpendicular panels: every panel has its own
 	// axis and there's no row / column to key a group bound on, so the
-	// editor lists each panel (keyed by panel key, same as the wrap
-	// panel's per-panel editors) and writes `panelAxisOverrides`. Keeps
-	// the rule "a continuous axis can always be bounded, shared or not"
-	// consistent across the wrap, row, and column panels.
+	// editor lists each panel and writes `gridPanelAxisOverrides` (row
+	// value, then column value — the wrap panel's per-panel editors write
+	// `panelAxisOverrides` by facet value). Keeps the rule "a continuous
+	// axis can always be bounded, shared or not" consistent across the
+	// wrap, row, and column panels.
 	const showPanelOverrides =
 		axisIsContinuous &&
 		share === "none" &&
@@ -346,18 +350,18 @@ const FacetAxisSubsection = ({
 	}
 
 	const updatePanelOverride = (
-		panelKey: string,
+		ref: FacetPanelRef,
 		bound: "min" | "max",
 		raw: string,
 	) => {
-		const all = withPanelBound(
-			cfg.panelAxisOverrides,
-			panelKey,
-			spec.panelBoundKeys[bound],
-			raw,
-		)
-		if (all) updateCfg({ panelAxisOverrides: all })
+		const patch = withGridPanelBound(cfg, ref, spec.panelBoundKeys[bound], raw)
+		if (patch) updateCfg(patch)
 	}
+	/** The stored bounds for one listed panel. */
+	const panelOverrideOf = (ref: FacetPanelRef): PanelAxisOverride | undefined =>
+		typeof ref === "string"
+			? cfg.panelAxisOverrides?.[ref]
+			: gridPanelAxisOverride(cfg, ref.row, ref.col)
 
 	// The help text depends on which path activated the editor: under
 	// "perGroup" it pins the group's SHARED scale; under "none" with one
@@ -466,9 +470,9 @@ const FacetAxisSubsection = ({
 					entries={panelOptions.map((p) => ({
 						key: `${spec.valueKeyPrefix}panel-${p.key}`,
 						label: p.label,
-						min: cfg.panelAxisOverrides?.[p.key]?.[spec.panelBoundKeys.min],
-						max: cfg.panelAxisOverrides?.[p.key]?.[spec.panelBoundKeys.max],
-						onChange: (bound, raw) => updatePanelOverride(p.key, bound, raw),
+						min: panelOverrideOf(p.ref)?.[spec.panelBoundKeys.min],
+						max: panelOverrideOf(p.ref)?.[spec.panelBoundKeys.max],
+						onChange: (bound, raw) => updatePanelOverride(p.ref, bound, raw),
 					}))}
 				/>
 			)}

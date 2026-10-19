@@ -26,6 +26,11 @@ import {
 } from "../../../lib/textAnnotationGeometry"
 import { estimateLongestLineWidth } from "../../../lib/estimateMargins"
 import type { Rect } from "../../../lib/facetLayoutSolver"
+import {
+	FACET_PANEL_ALL,
+	facetScopeIncludes,
+	type FacetPanelRef,
+} from "../../../lib/facetPanelRef"
 import { ptToPx } from "../../../lib/fontUnit"
 import { lineCount } from "../../../lib/multilineText"
 import {
@@ -105,16 +110,17 @@ export type PlacedAnnotation =
 
 /** Whether an annotation is drawn on the panel with the given key.
  *  `facetKeys` null/undefined ⇒ all facets (legacy default); an array
- *  restricts to listed keys. The `"__all__"` panel is the non-faceted
- *  chart's single panel — always show there so scoping set on a previously
- *  faceted chart doesn't make annotations vanish after faceting is removed. */
+ *  restricts to the listed panels (`FacetPanelRef`, matched by key). The
+ *  `FACET_PANEL_ALL` panel is the non-faceted chart's single panel — always
+ *  show there so scoping set on a previously faceted chart doesn't make
+ *  annotations vanish after faceting is removed. */
 export const annotationOnPanel = (
-	a: { facetKeys?: string[] | null },
+	a: { facetKeys?: FacetPanelRef[] | null },
 	panelKey: string,
 ): boolean =>
 	a.facetKeys == null ||
-	panelKey === "__all__" ||
-	a.facetKeys.includes(panelKey)
+	panelKey === FACET_PANEL_ALL ||
+	facetScopeIncludes(a.facetKeys, panelKey)
 
 /** Coerce a stored xMin/yMin/etc. to a number. Stored values are
  *  `number | string` to accommodate categorical "values" mode; for the

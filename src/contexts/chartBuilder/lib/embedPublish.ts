@@ -15,6 +15,11 @@ import type {
 } from "../../../embedRuntime/payload"
 import { collectFontUsage, selectFaces, toBase64 } from "./fontEmbed"
 import { ensureFontBinary } from "./fontBinaries"
+import {
+	assertNotStale,
+	contentVersionHeader,
+	staleBuildErrorFrom,
+} from "./storage/staleBuild"
 import { userFontFaces } from "./fontRegistration"
 import { stringifyJsonDangerous } from "../../../lib/json"
 import type { Dataset, DatasetMeta } from "./types"
@@ -92,13 +97,19 @@ export const publishEmbedRequest = async (
 		parts: [...parts],
 		payload,
 	} as never)
+	// The payload is a visual, so the write names the visuals content version
+	// and is refused from a build behind the server's (`staleBuild.ts`).
+	assertNotStale("publish")
 	const response = await fetch(`/api/embeds/${encodeURIComponent(publishId)}`, {
 		method: "PUT",
-		headers: EMBED_JSON_HEADERS,
+		headers: { ...EMBED_JSON_HEADERS, ...contentVersionHeader("embeds") },
 		body: serialized,
 	})
 	if (!response.ok) {
-		throw new Error(`Publishing failed (HTTP ${response.status}). Try again.`)
+		throw (
+			staleBuildErrorFrom(response, "publish") ??
+			new Error(`Publishing failed (HTTP ${response.status}). Try again.`)
+		)
 	}
 	const parsed = (await response.json()) as { v?: number; urls?: EmbedPublishUrls }
 	if (parsed.v !== 1 || typeof parsed.urls !== "object" || parsed.urls === null) {
@@ -109,11 +120,16 @@ export const publishEmbedRequest = async (
 
 /** DELETE the published files. Idempotent server-side. */
 export const unpublishEmbedRequest = async (publishId: string): Promise<void> => {
+	assertNotStale("unpublish")
 	const response = await fetch(`/api/embeds/${encodeURIComponent(publishId)}`, {
 		method: "DELETE",
+		headers: contentVersionHeader("embeds"),
 	})
 	if (!response.ok) {
-		throw new Error(`Unpublishing failed (HTTP ${response.status}). Try again.`)
+		throw (
+			staleBuildErrorFrom(response, "unpublish") ??
+			new Error(`Unpublishing failed (HTTP ${response.status}). Try again.`)
+		)
 	}
 }
 

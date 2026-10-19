@@ -3,6 +3,7 @@ import {
 	type DataLabelsConfig,
 } from "../../../lib/channelConfig"
 
+import { labelEntry, withLabelEntry } from "../../../lib/labelPieces"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
@@ -148,20 +149,19 @@ export const SizePanel = ({
 					// same control either way, just a different key.
 					const keys = keysFor?.(name) ?? [name]
 					const split = keys.length > 1 || keys[0] !== name
-					const clear = (key: string) => () => {
-						const next = { ...(cfg.fieldSizes ?? {}) }
-						delete next[key]
-						onChange({ fieldSizes: next })
-					}
+					const clear = (key: string) => () =>
+						onChange(withLabelEntry(cfg, "fieldSizes", key, undefined))
 					return (
 						<CollapsibleSubsection
 							key={name}
 							title={titles?.[name] ?? name}
-							changed={keys.some((k) => cfg.fieldSizes?.[k] != null)}
+							changed={keys.some(
+								(k) => labelEntry(cfg, "fieldSizes", k) != null
+							)}
 						>
 							{splitToggle?.(name)}
 							{keys.map((key) => {
-								const own = cfg.fieldSizes?.[key] ?? null
+								const own = labelEntry(cfg, "fieldSizes", key) ?? null
 								return (
 									<div key={key} className="flex items-center gap-2">
 										<NumberInput
@@ -177,12 +177,7 @@ export const SizePanel = ({
 											max={128}
 											step={1}
 											onChange={(pt) =>
-												onChange({
-													fieldSizes: {
-														...(cfg.fieldSizes ?? {}),
-														[key]: pt,
-													},
-												})
+												onChange(withLabelEntry(cfg, "fieldSizes", key, pt))
 											}
 											inputClassName="w-16"
 											suffix="pt"

@@ -266,9 +266,10 @@ describe("resolvePanelRenderInputs", () => {
 			expect(r.yMaxOverride).toBe(20)
 		})
 
-		it("per-panel panelAxisOverrides apply in grid mode under share 'none' for that axis", () => {
-			// Row / column panels write this map (keyed "row|col") when an
-			// unshared axis has 2+ panels across — read it per axis.
+		it("grid per-panel bounds come from gridPanelAxisOverrides[row][col] under share 'none' for that axis", () => {
+			// Row / column panels write this map (row value, then column
+			// value) when an unshared axis has 2+ panels across — read it per
+			// axis.
 			const r = runPanel({
 				key: "g1|h1",
 				rows: gridRows,
@@ -278,8 +279,8 @@ describe("resolvePanelRenderInputs", () => {
 				axisFields: { ...AXIS_CAT_X_QUANT_Y, xType: "quantitative" },
 				facetCfg: {
 					...DEFAULT_FACET_CONFIG,
-					panelAxisOverrides: {
-						"g1|h1": { yMin: 2, yMax: 20, xMin: -1, xMax: 5 },
+					gridPanelAxisOverrides: {
+						g1: { h1: { yMin: 2, yMax: 20, xMin: -1, xMax: 5 } },
 					},
 				},
 			})
@@ -289,7 +290,24 @@ describe("resolvePanelRenderInputs", () => {
 			expect(r.xMaxOverride).toBe(5)
 		})
 
-		it("per-panel panelAxisOverrides are ignored in grid mode when that axis is shared", () => {
+		it("a joined 'row|col' entry left in panelAxisOverrides by an older build still applies in grid mode", () => {
+			// A draft slice restored from before the nested map existed; the
+			// next save moves it. Until then the renderer reads it as before.
+			const r = runPanel({
+				key: "g1|h1",
+				rows: gridRows,
+				encodings: gridEncodings(),
+				shareYMode: "none",
+				facetCfg: {
+					...DEFAULT_FACET_CONFIG,
+					panelAxisOverrides: { "g1|h1": { yMin: 2, yMax: 20 } },
+				},
+			})
+			expect(r.yMinOverride).toBe(2)
+			expect(r.yMaxOverride).toBe(20)
+		})
+
+		it("grid per-panel bounds are ignored when that axis is shared", () => {
 			const r = runPanel({
 				key: "g1|h1",
 				rows: gridRows,
@@ -297,7 +315,7 @@ describe("resolvePanelRenderInputs", () => {
 				shareYMode: "all",
 				facetCfg: {
 					...DEFAULT_FACET_CONFIG,
-					panelAxisOverrides: { "g1|h1": { yMin: 2, yMax: 20 } },
+					gridPanelAxisOverrides: { g1: { h1: { yMin: 2, yMax: 20 } } },
 				},
 			})
 			expect(r.yMinOverride).toBeUndefined()

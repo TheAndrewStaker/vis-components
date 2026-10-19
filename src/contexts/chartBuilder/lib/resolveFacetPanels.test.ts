@@ -5,6 +5,7 @@ import type { FacetConfig } from "./channelConfig"
 import {
 	compactNonEmptyGrid,
 	facetPanelOptions,
+	knownFacetPanels,
 	panelFacetValues,
 	resolveFacetPanels,
 } from "./resolveFacetPanels"
@@ -297,19 +298,46 @@ describe("facetPanelOptions", () => {
 		)
 		expect(panels.mode).toBe("wrap")
 		expect(facetPanelOptions(panels)).toEqual([
-			{ key: "a", label: "a" },
-			{ key: "b", label: "b" },
+			{ key: "a", label: "a", ref: "a" },
+			{ key: "b", label: "b", ref: "b" },
 		])
 	})
 
-	it("full-grid panels join row and column values; keys stay raw", () => {
+	it("full-grid panels join row and column values in the label; keys stay raw; refs are pairs", () => {
 		const panels = resolve([rec("a", "x"), rec("b", "y")], facetCfg())
 		expect(facetPanelOptions(panels)).toEqual([
-			{ key: "a|x", label: "a · x" },
-			{ key: "a|y", label: "a · y" },
-			{ key: "b|x", label: "b · x" },
-			{ key: "b|y", label: "b · y" },
+			{ key: "a|x", label: "a · x", ref: { row: "a", col: "x" } },
+			{ key: "a|y", label: "a · y", ref: { row: "a", col: "y" } },
+			{ key: "b|x", label: "b · x", ref: { row: "b", col: "x" } },
+			{ key: "b|y", label: "b · y", ref: { row: "b", col: "y" } },
 		])
+	})
+
+	it("labels a grid panel from its values, so a pipe inside a value survives", () => {
+		const panels = resolve([rec("a|b", "x")], facetCfg())
+		expect(facetPanelOptions(panels)).toEqual([
+			{ key: "a|b|x", label: "a|b · x", ref: { row: "a|b", col: "x" } },
+		])
+		// The same pairing is what a save resolves pre-pair keys against.
+		expect([...knownFacetPanels(panels)]).toEqual([["a|b|x", { row: "a|b", col: "x" }]])
+	})
+
+	it("knownFacetPanels leaves out a key two panels share, so it resolves to neither", () => {
+		const panels = resolve([rec("a|b", "x"), rec("a", "b|x")], facetCfg())
+		// The cross-product has four cells, two of which collide on "a|b|x".
+		expect(knownFacetPanels(panels).has("a|b|x")).toBe(false)
+		expect(knownFacetPanels(panels).get("a|b|b|x")).toEqual({ row: "a|b", col: "b|x" })
+	})
+
+	it("knownFacetPanels is empty outside grid mode", () => {
+		const wrap = resolveFacetPanels(
+			makeDataset([rec("a", "x")]),
+			{ ...emptyEncodings(), facet: { field: "r" } },
+			{},
+			{},
+			facetCfg(),
+		)
+		expect(knownFacetPanels(wrap).size).toBe(0)
 	})
 
 	it("row-only grids drop the internal __all__ placeholder from labels", () => {
@@ -321,8 +349,8 @@ describe("facetPanelOptions", () => {
 			facetCfg(),
 		)
 		expect(facetPanelOptions(panels)).toEqual([
-			{ key: "a|__all__", label: "a" },
-			{ key: "b|__all__", label: "b" },
+			{ key: "a|__all__", label: "a", ref: { row: "a", col: "__all__" } },
+			{ key: "b|__all__", label: "b", ref: { row: "b", col: "__all__" } },
 		])
 	})
 
@@ -341,6 +369,7 @@ describe("facetPanelOptions", () => {
 		expect(facetPanelOptions(panels).find((o) => o.key === "c|x")).toEqual({
 			key: "c|x",
 			label: "c",
+			ref: { row: "c", col: "x" },
 		})
 	})
 
@@ -354,7 +383,7 @@ describe("facetPanelOptions", () => {
 		)
 		expect(panels.mode).toBe("single")
 		expect(facetPanelOptions(panels)).toEqual([
-			{ key: "__all__", label: "__all__" },
+			{ key: "__all__", label: "__all__", ref: "__all__" },
 		])
 	})
 })

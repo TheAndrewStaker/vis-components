@@ -1,5 +1,6 @@
 import type { LineDashPattern } from "./channelConfig"
 import type { AnnotationCoordSystem } from "./annotationPixels"
+import type { FacetPanelRef } from "./facetPanelRef"
 
 /** A single user-defined rectangle drawn on top of (or behind) the plot.
  *  Position is expressed in plot-area-normalized coordinates:
@@ -80,10 +81,11 @@ export type RectangleAnnotation = {
 	/** Which facet panels the annotation is drawn on, when the chart is
 	 *  faceted. `null`/`undefined` (the default) means "all facets" — the
 	 *  legacy behavior, so saved annotations keep showing everywhere. An
-	 *  array restricts the annotation to panels whose key (e.g. `"A|1"`,
-	 *  matching the facet label) is listed; an empty array hides it from
-	 *  every panel. Ignored on non-faceted charts. */
-	facetKeys?: string[] | null
+	 *  array restricts the annotation to the panels it lists
+	 *  (`FacetPanelRef`: the facet value in wrap mode, a `{ row, col }` pair
+	 *  in grid mode); an empty array hides it from every panel. Ignored on
+	 *  non-faceted charts. */
+	facetKeys?: FacetPanelRef[] | null
 	/** Optional text label drawn INSIDE the rectangle. Empty/absent = no
 	 *  text. The text block is centered vertically within the box;
 	 *  horizontal placement follows `textAlign`, inset from the box edge by
@@ -267,7 +269,7 @@ export type TextAnnotation = {
 	coordSystem: AnnotationCoordSystem
 	/** Which facet panels the annotation is drawn on — see
 	 *  `RectangleAnnotation.facetKeys`. */
-	facetKeys?: string[] | null
+	facetKeys?: FacetPanelRef[] | null
 }
 
 /** The axis-free units a circle's radius can be read in when its radius
@@ -332,7 +334,7 @@ export type CircleAnnotation = {
 	coordSystem: AnnotationCoordSystem
 	/** Which facet panels the annotation is drawn on — see
 	 *  `RectangleAnnotation.facetKeys`. */
-	facetKeys?: string[] | null
+	facetKeys?: FacetPanelRef[] | null
 }
 
 /** A user-defined straight line segment drawn on top of (or behind) the
@@ -379,7 +381,7 @@ export type LineSegmentAnnotation = {
 	coordSystem: AnnotationCoordSystem
 	/** Which facet panels the annotation is drawn on — see
 	 *  `RectangleAnnotation.facetKeys`. */
-	facetKeys?: string[] | null
+	facetKeys?: FacetPanelRef[] | null
 }
 
 export type AnnotationsConfig = {

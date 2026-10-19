@@ -30,6 +30,7 @@ import {
 	type LabelPopulation,
 	type LabelSelection,
 } from "../../lib/dataLabelsSelection"
+import { labelEntries, labelEntry } from "../../lib/labelPieces"
 import {
 	buildLabelSegments,
 	labelHueScaleParts,
@@ -830,15 +831,16 @@ export const DataLabelsLayer = ({
 	const candidateRows = rowFilter ? rows.filter(rowFilter) : rows
 
 	// Per-variable label color (multi-field): one color slot per shown field
-	// (`cfg.fieldColors[field]`), mirroring the mark color slots. A slot with
-	// no field → its single color; a slot varying by a field → a hue scale
-	// over that field. Prebuild each slot's scale once (few slots), then look
-	// up per row. No slot for a field → that segment uses the label's base fill.
+	// (`cfg.fieldColors[field]`, plus each split piece's `pieces` entry),
+	// mirroring the mark color slots. A slot with no field → its single
+	// color; a slot varying by a field → a hue scale over that field.
+	// Prebuild each slot's scale once (few slots), then look up per row. No
+	// slot for a field → that segment uses the label's base fill.
 	const fieldColorScales = new Map<
 		string,
 		{ scale: HueScale; field: string; type: FieldType }
 	>()
-	for (const [fieldName, slotCfg] of Object.entries(cfg.fieldColors ?? {})) {
+	for (const [fieldName, slotCfg] of labelEntries(cfg, "fieldColors")) {
 		const varyField = slotCfg?.field
 		if (!varyField) continue
 		const t: FieldType = dataset
@@ -880,11 +882,11 @@ export const DataLabelsLayer = ({
 		const ruleField =
 			pieceField ?? (key in row ? key : firstFieldOfLabel.get(key))
 		const ruleColor = resolveRuleColor(
-			cfg.fieldColorRules?.[key],
+			labelEntry(cfg, "fieldColorRules", key),
 			ruleField === undefined ? undefined : row[ruleField]
 		)
 		if (ruleColor) return ruleColor
-		const slotCfg = cfg.fieldColors?.[key]
+		const slotCfg = labelEntry(cfg, "fieldColors", key)
 		if (!slotCfg) return baseFill
 		if (slotCfg.field) {
 			const s = fieldColorScales.get(key)

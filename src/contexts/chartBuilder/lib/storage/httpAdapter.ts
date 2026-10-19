@@ -67,7 +67,13 @@ import type {
 } from "../types"
 import type { StorageContentAdapter } from "./adapter"
 import { CONTENT_MIGRATIONS } from "./migrations"
+import {
+	assertNotStale,
+	contentVersionHeader,
+	staleBuildErrorFrom,
+} from "./staleBuild"
 import { syncDatasetVersions } from "./syncDatasetVersions"
+import { pngFileFromDataUrl, thumbnailFormData } from "./thumbnailUpload"
 import { migrateVersioned } from "./versioning"
 
 type Baseline = Map<string, string>
@@ -79,6 +85,10 @@ const DEFAULT_THEME_SETTING_ID = "default-theme"
 const serialize = (value: unknown): string =>
 	stringifyJsonDangerous(value as never)
 
+/** One write. Every write to a versioned collection names the content
+ *  version this build writes (`contentVersionHeader`); a 409 is the server
+ *  refusing a build behind its schema (`staleBuild.ts`), after which no
+ *  further write is attempted until the page reloads. */
 const request = async (
 	method: "PUT" | "DELETE",
 	collection: string,
@@ -86,12 +96,14 @@ const request = async (
 	body?: BodyInit,
 	headers?: Record<string, string>
 ): Promise<void> => {
+	const what = `${method} /api/${collection}/${id}`
+	assertNotStale(what)
 	const response = await fetch(
 		`/api/${collection}/${encodeURIComponent(id)}`,
-		{ method, body, headers }
+		{ method, body, headers: { ...contentVersionHeader(collection), ...headers } }
 	)
 	if (!response.ok) {
-		throw new Error(`${method} /api/${collection}/${id} failed: ${response.status}`)
+		throw staleBuildErrorFrom(response, what) ?? new Error(`${what} failed: ${response.status}`)
 	}
 }
 
@@ -304,6 +316,64 @@ export const createHttpStorageAdapter = (): StorageContentAdapter => {
 		request("PUT", collection, id, serialized, JSON_HEADERS)
 	const deleteFrom = (collection: string) => (id: string) =>
 		request("DELETE", collection, id)
+
+	/** The thumbnail data URL the server is known to hold per visual, from
+	 *  the last load and every upload since. A visual's thumbnail is not in
+	 *  the JSON it saves (see `putVisual`), so the diff over serialized
+	 *  visuals can't tell "the name changed" from "the preview changed"; this
+	 *  is what spares an unchanged preview a re-upload on every rename. */
+	const uploadedThumbnails = new Map<string, string>()
+
+	/** Save one visual. Its JSON goes up WITHOUT the thumbnail — the server
+	 *  reads an absent key as "leave the stored preview alone" — and the
+	 *  preview itself follows as a multipart PNG file when it differs from
+	 *  what the server holds. An explicit `thumbnail: null` stays in the
+	 *  JSON: that is the clear. The JSON lands first so the thumbnail route
+	 *  finds its row (a new visual) and so a failed upload leaves the body
+	 *  saved; the baseline only moves when BOTH land (`syncCollection`), so
+	 *  a failed upload retries on the next save — the body PUT it repeats is
+	 *  idempotent.
+	 *
+	 *  A thumbnail that is not a PNG data URL (nothing in the app produces
+	 *  one, but a bundle could carry one) goes up inline the old way rather
+	 *  than being dropped: the server still accepts that shape. */
+	const putVisual = async (id: string, serialized: string): Promise<void> => {
+		const { thumbnail, ...rest } = JSON.parse(serialized) as {
+			thumbnail?: string | null
+		}
+		if (typeof thumbnail !== "string") {
+			await putJson("visuals")(id, serialized)
+			if (thumbnail === null) uploadedThumbnails.delete(id)
+			return
+		}
+		const png = pngFileFromDataUrl(thumbnail)
+		if (png === null) {
+			await putJson("visuals")(id, serialized)
+			uploadedThumbnails.set(id, thumbnail)
+			return
+		}
+		await putJson("visuals")(id, serialize(rest))
+		if (uploadedThumbnails.get(id) === thumbnail) return
+		await request(
+			"PUT",
+			`visuals/${encodeURIComponent(id)}`,
+			"thumbnail",
+			thumbnailFormData(png)
+		)
+		uploadedThumbnails.set(id, thumbnail)
+	}
+	const deleteVisual = async (id: string): Promise<void> => {
+		await deleteFrom("visuals")(id)
+		uploadedThumbnails.delete(id)
+	}
+	/** What a fresh load says the server holds. Replaces, never merges: a
+	 *  stale entry would skip an upload the server actually needs. */
+	const adoptUploadedThumbnails = (visuals: Visual[]): void => {
+		uploadedThumbnails.clear()
+		for (const v of visuals) {
+			if (typeof v.thumbnail === "string") uploadedThumbnails.set(v.id, v.thumbnail)
+		}
+	}
 	const putDataset = async (id: string, serialized: string): Promise<void> => {
 		// The header tells the server this client manages the per-version
 		// bodies itself (the PUTs/DELETEs that follow this write). Without it —
@@ -627,15 +697,20 @@ export const createHttpStorageAdapter = (): StorageContentAdapter => {
 		capabilities: { remoteLoad: true },
 
 		loadVisuals: async () => {
+			const raw = await loadCollection<Visual[]>(
+				wantsThumbnails() ? "visuals" : "visuals?thumbnails=0"
+			)
+			// Before the migration pass: a migrated visual re-saves through
+			// `putVisual`, and knowing its preview is already up keeps that
+			// re-save to the JSON alone.
+			adoptUploadedThumbnails(raw)
 			const visuals = await upgraded({
 				collection: "visuals",
-				raw: await loadCollection<Visual[]>(
-					wantsThumbnails() ? "visuals" : "visuals?thumbnails=0"
-				),
+				raw,
 				baseline: baselines.visuals,
 				entries: toMap,
-				putOne: putJson("visuals"),
-				deleteOne: deleteFrom("visuals"),
+				putOne: putVisual,
+				deleteOne: deleteVisual,
 			})
 			adoptPersistedSeedIds(visuals.map((v) => v.id))
 			return overlayVisuals(visuals)
@@ -652,12 +727,7 @@ export const createHttpStorageAdapter = (): StorageContentAdapter => {
 			await ensureSeedAdoptionsKnown()
 			const own = stripSeedVisuals(visuals)
 			await persistSeedPromotions(promoteSeedReferences({ visuals: own }))
-			await syncCollection(
-				baselines.visuals,
-				toMap(own),
-				putJson("visuals"),
-				deleteFrom("visuals")
-			)
+			await syncCollection(baselines.visuals, toMap(own), putVisual, deleteVisual)
 		},
 
 		// Folders are the one collection the frontend never versioned (see
