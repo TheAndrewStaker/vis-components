@@ -9,7 +9,7 @@ import { AreasXMode } from "./areasX"
 import { AreasYMode } from "./areasY"
 import { BarsXMode } from "./barsX"
 import { BarsYMode } from "./barsY"
-import { FAMILY_MODE_IDS } from "./families"
+import { FAMILY_MODE_IDS, isFlowModeId, isStructureModeId } from "./families"
 import { MODE_REGISTRY } from "./index"
 import { PiesMode } from "./pies"
 import { PiesXMode } from "./piesX"
@@ -461,5 +461,114 @@ describe("mode families", () => {
 	it("every family id is a registered mode", () => {
 		const ids = new Set(MODE_REGISTRY.map((m) => m.id))
 		for (const id of FAMILY_MODE_IDS) expect(ids.has(id), id).toBe(true)
+	})
+})
+
+describe("sidebar traits (connection / shape / area / overlays / labels)", () => {
+	// The sidebar panels never branch on mode ids either — they read these.
+	// Every registered mode must declare a coherent set so a new mode can't
+	// silently fall through a panel's gate. (families.test.ts proves each
+	// trait gate matches the id list it replaced.)
+	it("every mode declares the channel-role, overlay and label traits", () => {
+		for (const mode of MODE_REGISTRY) {
+			const { connectionRole, shapeRole, areaRole, statOverlays } = mode.canvas
+			expect(["line", "layer", "polygon", "key", "none"], mode.id).toContain(
+				connectionRole,
+			)
+			expect(["glyph", "cell", "outline", "none"], mode.id).toContain(shapeRole)
+			expect(["mark", "layoutRadius", "proportional", "none"], mode.id).toContain(
+				areaRole,
+			)
+			expect(typeof statOverlays, mode.id).toBe("boolean")
+			expect(["mark", "ring", "layout"], mode.id).toContain(mode.labels.placement)
+			expect(typeof mode.labels.positionLockedToAxes, mode.id).toBe("boolean")
+			expect(typeof mode.labels.seriesEndpoints, mode.id).toBe("boolean")
+			expect(typeof mode.labels.containerRimLabels, mode.id).toBe("boolean")
+		}
+	})
+
+	it("polar modes declare polarAxes; non-polar modes don't", () => {
+		for (const mode of MODE_REGISTRY) {
+			if (mode.canvas.coordFamily === "polar") {
+				expect(typeof mode.canvas.polarAxes?.r, mode.id).toBe("boolean")
+				expect(typeof mode.canvas.polarAxes?.angle, mode.id).toBe("boolean")
+			} else {
+				expect(mode.canvas.polarAxes, mode.id).toBeUndefined()
+			}
+		}
+		// Only radar draws polar axes; the pie bands draw neither.
+		expect(RadarMode.canvas.polarAxes).toEqual({ r: true, angle: true })
+		for (const pie of [PiesMode, PiesXMode, PiesYMode])
+			expect(pie.canvas.polarAxes).toEqual({ r: false, angle: false })
+	})
+
+	it("geo modes declare the geo block; non-geo modes don't", () => {
+		for (const mode of MODE_REGISTRY) {
+			if (mode.canvas.coordFamily === "geo") {
+				expect(["regions", "symbols"], mode.id).toContain(mode.canvas.geo?.marks)
+				expect(["region", "lonLat"], mode.id).toContain(mode.canvas.geo?.position)
+			} else {
+				expect(mode.canvas.geo, mode.id).toBeUndefined()
+			}
+		}
+		// Region-placed marks need the connection join; lon/lat marks don't.
+		for (const mode of MODE_REGISTRY) {
+			if (mode.canvas.geo?.position === "region")
+				expect(mode.canvas.connectionRole, mode.id).toBe("key")
+			if (mode.canvas.geo?.position === "lonLat")
+				expect(mode.canvas.connectionRole, mode.id).toBe("none")
+		}
+	})
+
+	it("flow modes declare flowGeometry; nothing else does", () => {
+		for (const mode of MODE_REGISTRY) {
+			if (isFlowModeId(mode.id)) {
+				expect(["ring", "columns"], mode.id).toContain(mode.canvas.flowGeometry)
+			} else {
+				expect(mode.canvas.flowGeometry, mode.id).toBeUndefined()
+			}
+		}
+	})
+
+	it("connection is a structural KEY exactly in the structure layouts and the region-joined maps", () => {
+		for (const mode of MODE_REGISTRY) {
+			const expected =
+				isStructureModeId(mode.id) || mode.canvas.geo?.position === "region"
+			expect(mode.canvas.connectionRole === "key", mode.id).toBe(expected)
+		}
+	})
+
+	it("cell-shaped marks only occur on panels that draw both cartesian axes", () => {
+		for (const mode of MODE_REGISTRY) {
+			if (mode.canvas.shapeRole === "cell")
+				expect(mode.canvas.cartesianAxes, mode.id).toEqual({ x: true, y: true })
+		}
+	})
+
+	it("statistical overlays only exist where both position scales are drawn", () => {
+		for (const mode of MODE_REGISTRY) {
+			if (mode.canvas.statOverlays)
+				expect(mode.canvas.cartesianAxes, mode.id).toEqual({ x: true, y: true })
+		}
+	})
+
+	it("layout-driven area sizing covers exactly the structure layouts", () => {
+		for (const mode of MODE_REGISTRY) {
+			const layoutSized =
+				mode.canvas.areaRole === "layoutRadius" ||
+				mode.canvas.areaRole === "proportional"
+			expect(layoutSized, mode.id).toBe(isStructureModeId(mode.id))
+		}
+	})
+
+	it("label traits are coherent: rim labels are layout-placed, locked positions have two axes to lock to", () => {
+		for (const mode of MODE_REGISTRY) {
+			// Rim labels are a layout-placed concept.
+			if (mode.labels.containerRimLabels)
+				expect(mode.labels.placement, mode.id).toBe("layout")
+			// Locked positions need both chart axes to lock to.
+			if (mode.labels.positionLockedToAxes)
+				expect(mode.canvas.cartesianAxes, mode.id).toEqual({ x: true, y: true })
+		}
 	})
 })

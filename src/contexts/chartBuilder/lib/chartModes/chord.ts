@@ -33,10 +33,21 @@ export const ChordMode: ChartModeDef = {
 		yValueChannel: null,
 		polarValueCoords: false,
 	},
+	labels: {
+		placement: "mark",
+		positionLockedToAxes: false,
+		seriesEndpoints: true,
+		containerRimLabels: false,
+	},
 	canvas: {
 		coordFamily: "cartesian",
 		cartesianAxes: { x: false, y: false },
 		lengthRole: "none",
+		connectionRole: "key",
+		shapeRole: "outline",
+		areaRole: "proportional",
+		statOverlays: false,
+		flowGeometry: "ring",
 		measureAxis: null,
 	},
 }

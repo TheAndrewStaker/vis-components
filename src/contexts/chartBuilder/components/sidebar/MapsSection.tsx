@@ -228,8 +228,15 @@ export const MapsSection = () => {
 	const [mapConfig, setMapConfig] = useAtom(currentMapConfigAtom)
 
 	// Resolve the active mode the same way the render path does, so each
-	// geographic toggle can be contextual to the kind of map in play.
-	const modeId = useChartModeDef().id
+	// geographic toggle can be contextual to the kind of map in play. The
+	// kind is the mode's declared `canvas.geo` trait (absent off the map) —
+	// never a mode id.
+	const geo = useChartModeDef().canvas.geo
+	// The joined polygons ARE the marks (choropleth): unjoined regions are
+	// either filled with the no-data color or not drawn at all.
+	const regionMarks = geo?.marks === "regions"
+	// Point marks over an optional basemap (bubble map / dot map).
+	const symbolMarks = geo?.marks === "symbols"
 
 	const update = (next: Partial<MapConfig>) =>
 		setMapConfig((prev) => ({ ...prev, ...next }))
@@ -242,7 +249,7 @@ export const MapsSection = () => {
 	// they start from the view on screen rather than jumping to the level
 	// default, and gates the explanatory note under the Focus control.
 	const autoFitViewport = useAutoFitViewport(
-		modeId === "geo-choropleth" && !mapConfig.showNoDataRegions
+		regionMarks && !mapConfig.showNoDataRegions
 	)
 	const autoViewport = (): GeoViewport =>
 		autoFitViewport ?? levelDefaultViewport(mapConfig.geographyLevel)
@@ -268,12 +275,12 @@ export const MapsSection = () => {
 	// data frame when only data regions draw, else the level default).
 	const resetCustomView = () => update({ customViewport: autoViewport() })
 
-	// "Fill regions with no data" is a choropleth-only concern (filling unjoined
-	// polygons). "Show basemap" is a bubble/symbol-map concern (drawing the
-	// geography behind the marks). Both modes already imply geographic coords.
-	const showFillNoDataToggle = modeId === "geo-choropleth"
-	// Both the bubble map (geo-symbols) and the dot map (geo-points) draw a basemap.
-	const showBasemapToggle = ["geo-symbols", "geo-points"].includes(modeId)
+	// "Fill regions with no data" is a region-mark concern (filling unjoined
+	// polygons). "Show basemap" is a symbol-mark concern (drawing the
+	// geography behind the marks). Both already imply geographic coords.
+	const showFillNoDataToggle = regionMarks
+	// Both the bubble map and the dot map draw marks over a basemap.
+	const showBasemapToggle = symbolMarks
 	// The "No-data fill" COLOR is reachable wherever that color is actually
 	// painted on screen: choropleth (unjoined polygons) OR a bubble/symbol map
 	// whose basemap is on (GeoSymbolPlot paints the basemap with noDataFill). The
@@ -326,10 +333,10 @@ export const MapsSection = () => {
 		effectiveLevel !== "countries" &&
 		mapConfig.focusRegion === "auto"
 
-	// On a point map (geo-points) the x/y channels carry geographic
-	// coordinates, not arbitrary axes — spell out the convention so users map
-	// the right fields. Other map modes key off `connection`, not x/y.
-	const showLonLatHint = modeId === "geo-points"
+	// On a point map the x/y channels carry geographic coordinates, not
+	// arbitrary axes — spell out the convention so users map the right
+	// fields. The region-placed maps key off `connection`, not x/y.
+	const showLonLatHint = geo?.position === "lonLat"
 
 	// Point marks the projection silently drops: albersUsa returns null for
 	// anything outside the US, so world-wide dots (or joined-region centroids

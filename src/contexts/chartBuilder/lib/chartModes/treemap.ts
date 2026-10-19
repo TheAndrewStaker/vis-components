@@ -34,12 +34,22 @@ export const TreemapMode: ChartModeDef = {
 		yValueChannel: null,
 		polarValueCoords: false,
 	},
+	labels: {
+		placement: "layout",
+		positionLockedToAxes: false,
+		seriesEndpoints: true,
+		containerRimLabels: false,
+	},
 	canvas: {
 		// Axis-less cartesian panel (like packed circles / tile): the
 		// renderer passes null position scales so no axes draw.
 		coordFamily: "cartesian",
 		cartesianAxes: { x: false, y: false },
 		lengthRole: "none",
+		connectionRole: "key",
+		shapeRole: "outline",
+		areaRole: "proportional",
+		statOverlays: false,
 		measureAxis: null,
 	},
 }

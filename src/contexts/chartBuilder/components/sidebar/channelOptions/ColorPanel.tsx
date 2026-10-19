@@ -67,7 +67,8 @@ import { OutlineColorRow } from "./OutlineColorPanel"
 export const ColorPanel = () => {
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const configs = useAtomValue(currentChannelConfigsAtom)
-	const mode = useChartModeDef().id as ChartMode
+	const modeDef = useChartModeDef()
+	const mode = modeDef.id as ChartMode
 	const slots = applicableColorSlots(mode, encodings, configs)
 	// PURE density curve (standalone "Density" display, marks suppressed) → the
 	// mark Fill / Outline groups have nothing to style and are hidden; the
@@ -81,9 +82,11 @@ export const ColorPanel = () => {
 	const isRadarFilled = filledRadarOn(mode, configs)
 	const useLinkedOutline = isAreaMode || isRadarFilled
 	// Scatter-style independent outline (own field) for every other mode —
-	// except the pure density curve, whose marks (the styling target) are gone.
+	// the polygon mode (radar) keeps its linked panel even unfilled — except
+	// the pure density curve, whose marks (the styling target) are gone.
+	const isPolygonMode = modeDef.canvas.connectionRole === "polygon"
 	const showIndependentOutline =
-		!isAreaMode && mode !== "radar" && !pureDensityCurve
+		!isAreaMode && !isPolygonMode && !pureDensityCurve
 
 	// Subsection dots — reuse the SAME change data the top-level Color dot uses
 	// (so they can't disagree). The hue registry labels map to the subheaders.

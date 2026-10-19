@@ -108,11 +108,46 @@ export type ChartModeDef = {
 	/** Declarative traits the Annotations sidebar panel reads — see
 	 * `ChartModeAnnotationTraits`. */
 	annotations: ChartModeAnnotationTraits
-	/** Declarative traits PlotCanvas branches on. PlotCanvas must NEVER
-	 * compare mode ids — a new chart mode declares its traits here and the
-	 * canvas honors them without edits. (The sidebar equivalent is the
-	 * legend/facet blocks above.) */
+	/** Declarative traits PlotCanvas AND the sidebar panels branch on.
+	 * Neither may compare mode ids — a new chart mode declares its traits
+	 * here (plus the legend / facet / annotations / labels blocks above and
+	 * below) and every consumer honors them without edits. */
 	canvas: ChartModeCanvasTraits
+	/** Declarative traits the Data Labels sidebar panel reads — see
+	 * `ChartModeLabelTraits`. */
+	labels: ChartModeLabelTraits
+}
+
+/** How the Data Labels panel adapts to a mode. Like the annotation traits,
+ * the panel never compares mode ids: every placement / selection decision
+ * it makes is declared here. (Family-level decisions — bar placements,
+ * area layer position, pie polar nudges — read the mode families.) */
+export type ChartModeLabelTraits = {
+	/** How the mode positions its labels, which decides which fine-tuning
+	 * controls apply:
+	 *  - `"mark"`: the shared label layer anchors each label on its mark
+	 *    (cartesian nudges, bar / area placements, polar nudges on pies).
+	 *  - `"ring"`: the layout hands arc anchors to the shared layer — the
+	 *    Angle nudge applies and R is RING-relative (sunburst).
+	 *  - `"layout"`: the renderer draws its own labels where the layout
+	 *    puts them (leaf centers, container rims) — the position / overlap
+	 *    / background fine-tuning stands down (packed circles, treemap). */
+	placement: "mark" | "ring" | "layout"
+	/** True when the label position rows are locked to the chart's own x / y
+	 * fields: every mark is keyed by exactly those two (a heatmap cell), so
+	 * encoding a third field as a label position would be nonsense — picking
+	 * one auto-fills the other and the dropdowns offer only the chart's
+	 * fields. */
+	positionLockedToAxes: boolean
+	/** True when labels have per-series ENDPOINTS to select ("first and
+	 * last" along the series). False where there is no series to run along
+	 * — regions on a map, nodes in a sunburst — so the "Which labels"
+	 * selection hides and the renderer skips it. */
+	seriesEndpoints: boolean
+	/** True when the mode draws container (group) labels that can sit inside
+	 * the rim or wrap around the outside, per nesting level — the packed
+	 * circles' "Text position" subsection. */
+	containerRimLabels: boolean
 }
 
 /** How PlotCanvas lays out and adorns panels for a mode. */
@@ -141,6 +176,77 @@ export type ChartModeCanvasTraits = {
 	 * Distinct from `legend.hideLengthInThisMode` (a legend-display choice)
 	 * so the two can't be conflated. */
 	lengthRole: "mark" | "measure" | "none"
+	/** What the `connection` channel means here — the gate for every
+	 * line-styling control in the Connection / Color / Pattern / Tooltip
+	 * panels:
+	 *  - `"line"`: rows sharing a value join into a drawn polyline the
+	 *    pointer can wander along (scatter's line charts).
+	 *  - `"layer"`: rows sharing a value form a stacked series LAYER whose
+	 *    outline is colored with its fill (areas).
+	 *  - `"polygon"`: rows sharing a value close into a polygon (radar).
+	 *  - `"key"`: a structural key, never a drawn line — the tree parent /
+	 *    flow source (the structure layouts) or the region join (maps).
+	 *  - `"none"`: the renderer never draws or keys on it (bars, pies, tile,
+	 *    hexbin, the lon/lat point map). */
+	connectionRole: "line" | "layer" | "polygon" | "key" | "none"
+	/** What the `shape` channel's config means here — the gate for the
+	 * Shape panel's Default-shape glyph picker:
+	 *  - `"glyph"`: marks are point glyphs; `defaultShape` / per-category
+	 *    shapes pick the symbol and `shape.outlineWidth` strokes it (scatter,
+	 *    radar).
+	 *  - `"cell"`: marks are axis-gridded cells — bars, heatmap tiles, hex
+	 *    cells — that read only `shape.outlineWidth`, as the cell border.
+	 *    Nothing composes a glyph from `defaultShape` (the cell modes'
+	 *    legends are swatches / gradient bars), so the picker is inert.
+	 *  - `"outline"`: marks are shapes of their own (wedges, regions,
+	 *    bubbles, nested circles / rects / arcs, ribbons) stroked by
+	 *    `shape.outlineWidth`; no glyph is drawn on the canvas, but the Size
+	 *    / combined legend swatches still compose from `defaultShape`, so the
+	 *    picker stays live.
+	 *  - `"none"`: the renderer never reads the shape config (areas). */
+	shapeRole: "glyph" | "cell" | "outline" | "none"
+	/** What the `area` channel means here — the gate for the Area (size)
+	 * options panel:
+	 *  - `"mark"`: a per-mark pixel size through the min/max px range, with
+	 *    the Scale-by (area vs diameter) choice (scatter bubbles, radar, the
+	 *    geo point / bubble maps).
+	 *  - `"layoutRadius"`: the layout computes each circle's radius from the
+	 *    value, honoring Scale-by — the px range is inert (packed circles).
+	 *  - `"proportional"`: the layout maps the value straight to a rect
+	 *    area / arc span / ribbon or link width — neither the px range nor
+	 *    Scale-by applies (treemap, sunburst, chord, sankey).
+	 *  - `"none"`: the renderer never reads it (bars, areas, pies, tile,
+	 *    hexbin, the choropleth). */
+	areaRole: "mark" | "layoutRadius" | "proportional" | "none"
+	/** True when the renderer draws the statistical overlays configured on
+	 * the position axes — the violin / box distribution overlays, the
+	 * standalone density curve, and the regression line — so their styling
+	 * controls (overlay outline width, regression dash) apply. Scatter only:
+	 * the overlays sit on scatter's continuous position scales. */
+	statOverlays: boolean
+	/** Polar-only: which POLAR axes the panel draws. Radar draws an R axis
+	 * plus the angle spokes (the Angle panel's Spokes / Spoke-label
+	 * sections); the pie variants draw neither — the slice angle consumed
+	 * the measure and there is no R scale. */
+	polarAxes?: { r: boolean; angle: boolean }
+	/** Flow-only (chord / sankey): the figure's geometry. `"ring"` = nodes
+	 * on a circle with ribbons across it, which carries a graduated value
+	 * axis around the ring (the Connection panel's "Show axis"); `"columns"`
+	 * = nodes in left → right columns with links between them, no axis. */
+	flowGeometry?: "ring" | "columns"
+	/** Geo-only: what the map draws and where it places it.
+	 *  - `marks`: `"regions"` = the joined polygons ARE the marks, filled by
+	 *    their measure (choropleth) — "Fill regions with no data" applies and
+	 *    "Whole map (auto)" frames just the matched regions while it's off;
+	 *    `"symbols"` = point marks over an optional basemap (bubble / dot
+	 *    maps) — "Show basemap" applies.
+	 *  - `position`: `"region"` = marks are placed by the `connection`
+	 *    region join (polygon / centroid); `"lonLat"` = the `x` / `y`
+	 *    channels carry raw longitude / latitude. */
+	geo?: {
+		marks: "regions" | "symbols"
+		position: "region" | "lonLat"
+	}
 	/** Which ENCODING axis carries the continuous measure for bar/area-
 	 * style charts: the axis whose bounds PlotCanvas translates into
 	 * `measureMinOverride`/`measureMaxOverride` and whose share mode

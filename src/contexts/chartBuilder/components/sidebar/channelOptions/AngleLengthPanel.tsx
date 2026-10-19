@@ -49,11 +49,14 @@ export const AngleOptionsPanel = () => {
 	const themeAngle = angleConfigFromTheme(theme)
 	const cfg = configs.angle ?? themeAngle
 
-	// Radar mode owns the perimeter spokes + labels around the dial, so when
-	// the chart resolves to radar AND both r + angle are mapped, surface the
-	// Spokes / Spoke Labels sections below the Angle Extent section.
-	const modeId = useChartModeDef().id
-	const isRadarMode = modeId === "radar"
+	// A polar mode that draws its angle axis (radar — declared as
+	// `canvas.polarAxes.angle`) owns the perimeter spokes + labels around
+	// the dial, so when the chart resolves to one AND both r + angle are
+	// mapped, surface the Spokes / Spoke Labels sections below the Angle
+	// Extent section.
+	const modeDef = useChartModeDef()
+	const modeId = modeDef.id
+	const isRadarMode = modeDef.canvas.polarAxes?.angle === true
 	const showRadarAxisControls = isRadarMode && fieldMapped
 
 	// Pie/Donut toggle lives in the Angle panel for the three pie modes

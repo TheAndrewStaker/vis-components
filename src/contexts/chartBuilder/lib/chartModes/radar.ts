@@ -39,10 +39,21 @@ export const RadarMode: ChartModeDef = {
 		yValueChannel: "r",
 		polarValueCoords: true,
 	},
+	labels: {
+		placement: "mark",
+		positionLockedToAxes: false,
+		seriesEndpoints: true,
+		containerRimLabels: false,
+	},
 	canvas: {
 		coordFamily: "polar",
 		cartesianAxes: { x: false, y: false },
 		lengthRole: "none",
+		connectionRole: "polygon",
+		shapeRole: "glyph",
+		areaRole: "mark",
+		statOverlays: false,
+		polarAxes: { r: true, angle: true },
 		measureAxis: null,
 		polarUnit: "rAxisMax",
 		// RadarPlot draws value-mode circle / line-segment annotations itself

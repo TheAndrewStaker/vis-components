@@ -22,7 +22,9 @@ export const usePureDensityCurve = (): boolean => {
 	const configs = useAtomValue(currentChannelConfigsAtom)
 	const overrides = useAtomValue(currentFieldOverridesAtom)
 	const dataset = useCurrentDatasetView()
-	const mode = useChartModeDef().id
+	// The standalone curve is one of scatter's axis overlays — declared per
+	// mode as `canvas.statOverlays`, never compared by id.
+	const drawsStatOverlays = useChartModeDef().canvas.statOverlays
 	const loneQuantCurve = (axis: "x" | "y") => {
 		const field = encodings[axis]?.field ?? null
 		const other = encodings[axis === "x" ? "y" : "x"]?.field ?? null
@@ -34,5 +36,5 @@ export const usePureDensityCurve = (): boolean => {
 			configs[axis]?.distributionOverlay?.showDensityCurve === true
 		)
 	}
-	return mode === "scatter" && (loneQuantCurve("x") || loneQuantCurve("y"))
+	return drawsStatOverlays && (loneQuantCurve("x") || loneQuantCurve("y"))
 }

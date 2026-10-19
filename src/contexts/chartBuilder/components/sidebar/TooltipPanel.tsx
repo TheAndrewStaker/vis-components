@@ -34,11 +34,13 @@ export const TooltipPanel = () => {
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const merged: TooltipConfig = { ...DEFAULT_TOOLTIP_CONFIG, ...cfg }
 	// "Only at points" is a LINE-chart question: it exists because a line is
-	// hoverable between its points. That's the scatter renderer with a
-	// connection field mapped — the mode that snaps the hover to the nearest
-	// point. Nothing else draws a line the pointer can wander along.
+	// hoverable between its points. That's the mode whose connection draws a
+	// polyline (`canvas.connectionRole === "line"`) with a connection field
+	// mapped — the renderer that snaps the hover to the nearest point.
+	// Nothing else draws a line the pointer can wander along.
 	const isLineChart =
-		useChartModeDef().id === "scatter" && !!encodings.connection?.field
+		useChartModeDef().canvas.connectionRole === "line" &&
+		!!encodings.connection?.field
 
 	const update = (next: Partial<TooltipConfig>) =>
 		setCfg({ ...merged, ...next })

@@ -1042,7 +1042,9 @@ current chart type AND has a configurable default. Examples:
   channels aren't mapped. The Shape panel stays live for the outline
   width (cell borders read it, same chain as bars) but — like bar and
   hexbin modes — hides the Default-shape glyph picker, since these
-  modes draw no point glyphs.
+  modes draw no point glyphs. Which modes those are is a declared mode
+  trait (`canvas.shapeRole === "cell"`), like `canvas.lengthRole`
+  below; the sidebar never gates on mode ids.
 - Pie chart: length, connection, area panels hidden when those
   channels aren't mapped.
 

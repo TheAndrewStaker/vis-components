@@ -4,7 +4,6 @@ import {
 	PACKED_DERIVED_LABELS,
 	PACKED_MEASURE_OPTION_VALUE,
 	hierarchyDepthLevels,
-	isFlowModeId,
 	isHierarchyModeId,
 	packedDerivedOptions,
 	packedSourceForOptionValue,
@@ -133,36 +132,51 @@ const useAreaOrdinalCategories = (): string[] | null => {
 	return [...new Set(parsed.map(String))]
 }
 
+/** Helper copy for the proportional-size note, naming each layout's own
+ *  mark. Display wording only — the GATE is `canvas.areaRole ===
+ *  "proportional"`, so a new proportional mode without an entry here still
+ *  gets the generic line rather than a wrong panel. */
+const PROPORTIONAL_AREA_NOTE: Partial<Record<ChartMode, string>> = {
+	treemap:
+		"Rectangle areas are computed by the treemap layout, proportional to each row's value.",
+	sunburst:
+		"Arc spans are computed by the sunburst layout, proportional to each row's value.",
+	chord:
+		"Ribbon widths are computed by the chord layout, proportional to each flow's value.",
+	sankey:
+		"Link widths are computed by the sankey layout, proportional to each flow's value.",
+}
+const GENERIC_PROPORTIONAL_AREA_NOTE =
+	"Mark sizes are computed by the layout, proportional to each row's value."
+
 export const AreaOptionsPanel = () => {
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const theme = useCurrentTheme()
 	const fieldMapped = !!encodings.area?.field
-	const modeId = useChartModeDef().id
+	const modeDef = useChartModeDef()
 	const ordinalCategories = useAreaOrdinalCategories()
 	if (!fieldMapped) return <AreaDefaultPanel />
-	// Packed circles compute radii from the layout, so the min/max pixel
-	// range is inert there — only the Scale-by choice applies.
-	if (modeId === "packed-circles")
+	// What the area channel MEANS here is the mode's declared
+	// `canvas.areaRole` — the panel never compares mode ids.
+	//
+	// Layout-computed radii (packed circles): the min/max pixel range is
+	// inert — only the Scale-by choice applies.
+	if (modeDef.canvas.areaRole === "layoutRadius")
 		return (
 			<div className="vc-option-panel">
 				<ScaleByRow />
 			</div>
 		)
-	// Treemap / sunburst / chord / sankey: sizes are fully layout-computed
-	// AND inherently proportional (rect area / angle span / ribbon or link
-	// width ∝ value) — neither the px range nor Scale-by applies, so the
-	// panel just says so.
-	if (isHierarchyModeId(modeId) || isFlowModeId(modeId))
+	// Proportional layouts (treemap / sunburst / chord / sankey): sizes are
+	// fully layout-computed AND inherently proportional (rect area / angle
+	// span / ribbon or link width ∝ value) — neither the px range nor
+	// Scale-by applies, so the panel just says so.
+	if (modeDef.canvas.areaRole === "proportional")
 		return (
 			<div className="vc-option-panel">
 				<p className="vc-help">
-					{modeId === "treemap"
-						? "Rectangle areas are computed by the treemap layout, proportional to each row's value."
-						: modeId === "chord"
-							? "Ribbon widths are computed by the chord layout, proportional to each flow's value."
-							: modeId === "sankey"
-								? "Link widths are computed by the sankey layout, proportional to each flow's value."
-								: "Arc spans are computed by the sunburst layout, proportional to each row's value."}
+					{PROPORTIONAL_AREA_NOTE[modeDef.id as ChartMode] ??
+						GENERIC_PROPORTIONAL_AREA_NOTE}
 				</p>
 			</div>
 		)

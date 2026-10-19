@@ -20,10 +20,20 @@ export const ScatterMode: ChartModeDef = {
 		yValueChannel: "y",
 		polarValueCoords: false,
 	},
+	labels: {
+		placement: "mark",
+		positionLockedToAxes: false,
+		seriesEndpoints: true,
+		containerRimLabels: false,
+	},
 	canvas: {
 		coordFamily: "cartesian",
 		cartesianAxes: { x: true, y: true },
 		lengthRole: "mark",
+		connectionRole: "line",
+		shapeRole: "glyph",
+		areaRole: "mark",
+		statOverlays: true,
 		measureAxis: null,
 	},
 }

@@ -119,10 +119,15 @@ export const ConnectionOptionsPanel = () => {
 	}
 
 	const connectionFieldName = encodings.connection?.field ?? null
-	const modeId = useChartModeDef().id
+	const modeDef = useChartModeDef()
+	const modeId = modeDef.id
+	// What connection MEANS here is the mode's declared `canvas.connectionRole`
+	// (a drawn polyline, a series layer, a closed polygon, a structural key, or
+	// nothing) — the panel never compares mode ids.
+	const connectionRole = modeDef.canvas.connectionRole
 	const isAreaMode = isAreaModeId(modeId)
-	const isRadarMode = modeId === "radar"
-	const isScatterMode = modeId === "scatter"
+	const isPolygonMode = connectionRole === "polygon"
+	const isLineMode = connectionRole === "line"
 	// Hierarchy layouts (packed circles / treemap / sunburst): connection is
 	// the HIERARCHY key (which container each row nests in), not a drawn
 	// line — every line-styling section stands down and the panel offers
@@ -132,22 +137,24 @@ export const ConnectionOptionsPanel = () => {
 	// ribbons/links are drawn by the renderer with data-driven thickness,
 	// so line styling stands down here too.
 	const isFlowMode = isFlowModeId(modeId)
-	// Chord only: the ring's circular value axis (group ticks). Sankey has
-	// no meaningful "around the figure" axis, so the section doesn't show.
-	const isChordMode = modeId === "chord"
+	// Ring-shaped flows (chord) carry a circular value axis around the figure
+	// (group ticks). Column flows (sankey) have no meaningful "around the
+	// figure" axis, so the section doesn't show.
+	const isRingFlow = modeDef.canvas.flowGeometry === "ring"
 	// Every mode where connection is a structural key rather than a drawn
 	// line — the gate for the Structure section and the line-styling
 	// stand-down.
 	const isStructureMode = isStructureModeId(modeId)
-	// Connection lines are only DRAWN by the scatter (incl. line charts),
-	// area, and radar renderers. In every other mode — bars, pies, tile,
-	// hexbin, geo — the channel is either unmapped by construction (mapping
-	// connection on a bar chart flips detection to areas) or a join/region
-	// key, so every line-styling control would be inert and stands down.
-	const drawsConnectionLines = isScatterMode || isAreaMode || isRadarMode
-	// The scatter/area subset — the modes whose line styling this panel
-	// renders directly (radar's lives in its own Polygon subsection below).
-	const isLineOrAreaMode = isScatterMode || isAreaMode
+	// Connection lines are only DRAWN by the line (scatter incl. line
+	// charts), layer (area), and polygon (radar) roles. In every other mode
+	// — bars, pies, tile, hexbin, geo — the channel is either unmapped by
+	// construction (mapping connection on a bar chart flips detection to
+	// areas) or a join/region key, so every line-styling control would be
+	// inert and stands down.
+	const drawsConnectionLines = isLineMode || isAreaMode || isPolygonMode
+	// The line/layer subset — the modes whose line styling this panel
+	// renders directly (the polygon's lives in its own subsection below).
+	const isLineOrAreaMode = isLineMode || isAreaMode
 	// What "Auto" currently resolves to, for the option label. Mirrors the
 	// renderer's resolution exactly (full dataset rows; parent + area
 	// columns excluded as candidates).
@@ -210,7 +217,7 @@ export const ConnectionOptionsPanel = () => {
 	// level (the resolver finds no matching cells), so the dropdown reads
 	// that way.
 	const supportsThicknessVaryBy =
-		!!connectionFieldName && (isScatterMode || isRadarMode)
+		!!connectionFieldName && (isLineMode || isPolygonMode)
 	const typeOf = (name: string): FieldType =>
 		dataset ? effectiveType(dataset, name, fieldOverrides) : "categorical"
 	const thicknessByValue = configs.connection?.thicknessByValue
@@ -630,7 +637,7 @@ export const ConnectionOptionsPanel = () => {
 			 *  each node's flow total. The checkbox alone shows first; enabling
 			 *  it reveals the same Ticks / Tick Labels / Spine subheaders the
 			 *  x / y position panels use. */}
-			{isChordMode && connectionFieldName && (
+			{isRingFlow && connectionFieldName && (
 				<>
 					<Toggle
 						label="Show axis"
@@ -877,7 +884,7 @@ export const ConnectionOptionsPanel = () => {
 					</div>
 				</CollapsibleSubsection>
 			)}
-			{isScatterMode && (
+			{isLineMode && (
 				<CollapsibleSubsection title="Connect points to axis" changed={ch.axisStem}>
 					<div className="flex flex-col gap-1.5">
 						{(
@@ -947,7 +954,7 @@ export const ConnectionOptionsPanel = () => {
 					</div>
 				</CollapsibleSubsection>
 			)}
-			{isRadarMode && !!connectionFieldName && (
+			{isPolygonMode && !!connectionFieldName && (
 				<CollapsibleSubsection title="Polygon" changed={ch.fill}>
 					<div className="flex flex-col gap-2">
 						<label className="flex items-center gap-2 text-sm">
@@ -973,7 +980,7 @@ export const ConnectionOptionsPanel = () => {
 					</div>
 				</CollapsibleSubsection>
 			)}
-			{isRadarMode && !!connectionFieldName && (
+			{isPolygonMode && !!connectionFieldName && (
 				<CollapsibleSubsection title="Line properties" changed={ch.thickness}>
 					{lineThicknessRow}
 				</CollapsibleSubsection>

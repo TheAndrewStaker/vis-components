@@ -44,10 +44,20 @@ export const BarsYMode: ChartModeDef = {
 		yValueChannel: "y",
 		polarValueCoords: false,
 	},
+	labels: {
+		placement: "mark",
+		positionLockedToAxes: false,
+		seriesEndpoints: true,
+		containerRimLabels: false,
+	},
 	canvas: {
 		coordFamily: "cartesian",
 		cartesianAxes: { x: true, y: true },
 		lengthRole: "measure",
+		connectionRole: "none",
+		shapeRole: "cell",
+		areaRole: "none",
+		statOverlays: false,
 		// Horizontal bars: categories on y, continuous measure on x. The measure
 		// lives on the length channel — bars-y detection requires x unmapped.
 		measureAxis: "x",

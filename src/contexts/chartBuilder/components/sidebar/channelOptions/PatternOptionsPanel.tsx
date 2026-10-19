@@ -202,10 +202,10 @@ export const PatternOptionsPanel = () => {
 	// from their points — a "Polygon fill" subsection joins the panel with
 	// its own picks (`pattern.polygonOverrides` / `defaultPolygonPattern`),
 	// so a hatched polygon can sit under plain dots. Shown in dashOnly too
-	// (hiding the points leaves the polygons). Radar always maps
+	// (hiding the points leaves the polygons). The polygon mode always maps
 	// connection, so this never coincides with the plain fill form.
 	const radarPolygonFilled =
-		modeDef.id === "radar" &&
+		modeDef.canvas.connectionRole === "polygon" &&
 		connectionMapped &&
 		configs.connection?.fillPolygon === true
 
@@ -905,7 +905,7 @@ export const PatternOptionsPanel = () => {
 					underline
 					className="self-start"
 				/>
-				{modeDef.id === "scatter" && regressionOn(configs) && (
+				{modeDef.canvas.statOverlays && regressionOn(configs) && (
 					<RegressionDashSubsection />
 				)}
 			</div>
@@ -1323,7 +1323,7 @@ export const PatternOptionsPanel = () => {
 						{patternMode === "dashOnly" && polygonCategorySubsection}
 					</>
 				))}
-			{modeDef.id === "scatter" && regressionOn(configs) && (
+			{modeDef.canvas.statOverlays && regressionOn(configs) && (
 				<RegressionDashSubsection />
 			)}
 		</div>

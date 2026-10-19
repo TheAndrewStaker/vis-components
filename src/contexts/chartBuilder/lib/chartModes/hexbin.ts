@@ -25,10 +25,20 @@ export const HexbinMode: ChartModeDef = {
 		yValueChannel: "y",
 		polarValueCoords: false,
 	},
+	labels: {
+		placement: "mark",
+		positionLockedToAxes: false,
+		seriesEndpoints: true,
+		containerRimLabels: false,
+	},
 	canvas: {
 		coordFamily: "cartesian",
 		cartesianAxes: { x: true, y: true },
 		lengthRole: "none",
+		connectionRole: "none",
+		shapeRole: "cell",
+		areaRole: "none",
+		statOverlays: false,
 		measureAxis: null,
 	},
 }

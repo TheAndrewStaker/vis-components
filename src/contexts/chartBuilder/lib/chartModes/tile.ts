@@ -61,10 +61,20 @@ export const TileMode: ChartModeDef = {
 		yValueChannel: "y",
 		polarValueCoords: false,
 	},
+	labels: {
+		placement: "mark",
+		positionLockedToAxes: true,
+		seriesEndpoints: true,
+		containerRimLabels: false,
+	},
 	canvas: {
 		coordFamily: "cartesian",
 		cartesianAxes: { x: true, y: true },
 		lengthRole: "none",
+		connectionRole: "none",
+		shapeRole: "cell",
+		areaRole: "none",
+		statOverlays: false,
 		measureAxis: null,
 	},
 }

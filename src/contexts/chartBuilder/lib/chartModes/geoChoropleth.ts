@@ -38,10 +38,21 @@ export const GeoChoroplethMode: ChartModeDef = {
 		yValueChannel: null,
 		polarValueCoords: false,
 	},
+	labels: {
+		placement: "mark",
+		positionLockedToAxes: false,
+		seriesEndpoints: false,
+		containerRimLabels: false,
+	},
 	canvas: {
 		coordFamily: "geo",
 		cartesianAxes: { x: false, y: false },
 		lengthRole: "none",
+		connectionRole: "key",
+		shapeRole: "outline",
+		areaRole: "none",
+		statOverlays: false,
+		geo: { marks: "regions", position: "region" },
 		measureAxis: null,
 	},
 }

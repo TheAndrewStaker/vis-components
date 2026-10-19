@@ -43,6 +43,12 @@ export const PackedCirclesMode: ChartModeDef = {
 		yValueChannel: null,
 		polarValueCoords: false,
 	},
+	labels: {
+		placement: "layout",
+		positionLockedToAxes: false,
+		seriesEndpoints: true,
+		containerRimLabels: true,
+	},
 	canvas: {
 		// Axis-less cartesian panel (like tile): the renderer passes null
 		// position scales so no axes draw; the pack layout fills the inner
@@ -51,6 +57,10 @@ export const PackedCirclesMode: ChartModeDef = {
 		coordFamily: "cartesian",
 		cartesianAxes: { x: false, y: false },
 		lengthRole: "none",
+		connectionRole: "key",
+		shapeRole: "outline",
+		areaRole: "layoutRadius",
+		statOverlays: false,
 		measureAxis: null,
 	},
 }

@@ -35,10 +35,21 @@ export const GeoPointsMode: ChartModeDef = {
 		yValueChannel: null,
 		polarValueCoords: false,
 	},
+	labels: {
+		placement: "mark",
+		positionLockedToAxes: false,
+		seriesEndpoints: false,
+		containerRimLabels: false,
+	},
 	canvas: {
 		coordFamily: "geo",
 		cartesianAxes: { x: false, y: false },
 		lengthRole: "none",
+		connectionRole: "none",
+		shapeRole: "outline",
+		areaRole: "mark",
+		statOverlays: false,
+		geo: { marks: "symbols", position: "lonLat" },
 		measureAxis: null,
 	},
 }

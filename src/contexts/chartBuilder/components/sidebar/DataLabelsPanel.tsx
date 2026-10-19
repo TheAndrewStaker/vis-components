@@ -240,13 +240,16 @@ export const DataLabelsPanel = () => {
 	// modes both detect exactly like the render path.
 	const modeDef = useChartModeDef()
 	const chartMode = modeDef.id
-	// Tile (categorical × categorical heatmap) is the only chart type where
-	// label positions MUST match the chart's encoding — every cell is keyed
-	// by (chart.x, chart.y), so encoding a third field as the label's x or
-	// y would produce nonsense. When the user picks one position we
-	// auto-fill the other, and we restrict the dropdowns to just the
-	// chart's x/y fields so the user can't pick anything misleading.
-	const isTileMode = chartMode === "tile"
+	// Every per-mode decision below reads the mode's declared `labels` /
+	// `canvas` traits or a mode family — never a mode id.
+	//
+	// A heatmap is the one chart where label positions MUST match the
+	// chart's encoding — every cell is keyed by (chart.x, chart.y), so
+	// encoding a third field as the label's x or y would produce nonsense.
+	// When the user picks one position we auto-fill the other, and we
+	// restrict the dropdowns to just the chart's x/y fields so the user
+	// can't pick anything misleading.
+	const positionLocked = modeDef.labels.positionLockedToAxes
 	// Maps: labels anchor to REGIONS, not to x/y fields — the position rows
 	// are replaced by a single "Geography" row (the field whose values join
 	// to map regions; labels center on each matched region's centroid). The
@@ -260,16 +263,17 @@ export const DataLabelsPanel = () => {
 	// The sunburst hands its arc anchors to the shared label layer, so it
 	// keeps the full fine-tuning set (polar nudges included, like a pie).
 	// Chord / sankey label styling is a follow-up; their panel is unchanged.
+	// Which of those applies is the mode's declared `labels.placement`.
 	const isTreeMode = isHierarchyModeId(chartMode)
-	const isSunburstMode = chartMode === "sunburst"
-	const fineTuningApplies = !isTreeMode || isSunburstMode
+	const isRingLabels = modeDef.labels.placement === "ring"
+	const fineTuningApplies = modeDef.labels.placement !== "layout"
 	// Pie family — labels are placed in polar terms (distance from center +
 	// angular nudge) rather than the cartesian X/Y pixel offsets that make
 	// no sense around a wedge.
 	const isPolarMode = isPieModeId(chartMode)
 	// No per-series endpoints: regions on a map, nodes in a sunburst. The
 	// "Which labels" selection is hidden AND skipped by the renderer there.
-	const noSeriesEndpoints = isGeoMode || isSunburstMode
+	const noSeriesEndpoints = !modeDef.labels.seriesEndpoints
 	// Bar charts (incl. histograms, which are bars over binned categories) are
 	// the only mode where "Bar position" (label placement along the measure
 	// axis) applies — gate the control on it.
@@ -282,7 +286,8 @@ export const DataLabelsPanel = () => {
 	// vertical bar, above / below a horizontal one). On vertical bars a side
 	// also fixes the text alignment (the label hangs away from the bar), so
 	// the Alignment controls would be inert — they hide while a side is set.
-	const isVerticalBars = chartMode === "bars-x"
+	// Vertical bars = the bar mode whose measure runs on the y axis.
+	const isVerticalBars = isBarMode && modeDef.canvas.measureAxis === "y"
 	// Separate variables each resolve their own side (their entry, else the
 	// layer's) — the lock is per variable there, layer-wide otherwise.
 	const sideFor = (field: string | null) =>
@@ -301,12 +306,16 @@ export const DataLabelsPanel = () => {
 	// some "Which labels" choice is not "All labels". A channel mapped to
 	// the x field colors marks without forming groups or layers, so it
 	// doesn't count. A single pie has no series across pies, so the scope
-	// stands down there (every wedge is its own series, as before).
+	// stands down there (every wedge is its own series, as before) — the
+	// pies that line up along a band are the ones drawing a category axis.
+	const piesAlongBand =
+		isPolarMode &&
+		(modeDef.canvas.cartesianAxes.x || modeDef.canvas.cartesianAxes.y)
 	const scopeFamily: ScopeFamily | null = isBarMode
 		? "bars"
 		: isAreaMode
 			? "areas"
-			: chartMode === "pies-x" || chartMode === "pies-y"
+			: piesAlongBand
 				? "pies"
 				: null
 	const stackModes = resolveStackModes(chartConfigs, chartEncodings).filter(
@@ -595,7 +604,7 @@ export const DataLabelsPanel = () => {
 		(isPolarMode &&
 			((merged.polarLabelAngle ?? 0) !== 0 ||
 				(merged.polarLabelRadius ?? 100) !== 100)) ||
-		(isSunburstMode &&
+		(isRingLabels &&
 			((merged.polarLabelAngle ?? 0) !== 0 ||
 				(merged.ringLabelRadius ?? 50) !== 50)) ||
 		(splitEndpoints &&
@@ -681,7 +690,7 @@ export const DataLabelsPanel = () => {
 		}
 		setEncodings((prev) => {
 			const next = { ...prev, [channel]: { field: newField } }
-			if (isTileMode && newField !== null) {
+			if (positionLocked && newField !== null) {
 				if (channel === "x" && chartYField && !prev.y?.field) {
 					next.y = { field: chartYField }
 				} else if (channel === "y" && chartXField && !prev.x?.field) {
@@ -745,8 +754,8 @@ export const DataLabelsPanel = () => {
 	const tileYEligible = chartYField
 		? allEligible.filter((f) => f.name === chartYField)
 		: []
-	const xEligible = isTileMode ? tileXEligible : allEligible
-	const yEligible = isTileMode ? tileYEligible : allEligible
+	const xEligible = positionLocked ? tileXEligible : allEligible
+	const yEligible = positionLocked ? tileYEligible : allEligible
 
 	// Derived options for the Color / Size dropdowns — tree layouts with a
 	// mapped connection only (a flat pack is uniformly depth 1, and there
@@ -799,9 +808,9 @@ export const DataLabelsPanel = () => {
 	// (levels that draw grouping circles — every hierarchy level except the
 	// deepest, which is all leaves). Derived from the same tree the renderer
 	// builds so the checkbox list tracks the drawn nesting.
-	const isPackedMode = chartMode === "packed-circles"
+	const hasContainerRimLabels = modeDef.labels.containerRimLabels
 	const containerWrapLevels = (() => {
-		if (!isPackedMode || !dataset) return []
+		if (!hasContainerRimLabels || !dataset) return []
 		const parentField = chartEncodings.connection?.field ?? null
 		if (!parentField) return []
 		const areaField = chartEncodings.area?.field ?? null
@@ -831,7 +840,7 @@ export const DataLabelsPanel = () => {
 			 *  the pack / treemap / partition layout. */}
 			{isTreeMode && (
 				<p className="vc-help">
-					{isSunburstMode
+					{isRingLabels
 						? "Labels sit on each arc that can hold them; fine-tune placement under Adjust position. "
 						: "Labels are placed by the layout (leaf centers, container rims). "}
 					Value, Color, and Size apply — Value defaults to each row&apos;s
@@ -1453,7 +1462,7 @@ export const DataLabelsPanel = () => {
 						</p>
 					</>
 				)}
-				{(primaryLabel || isPolarMode || isSunburstMode) && (
+				{(primaryLabel || isPolarMode || isRingLabels) && (
 					<>
 						<hr className="border-stone-200 dark:border-stone-700" />
 						<span className="vc-group-header">Adjust position</span>
@@ -1496,7 +1505,7 @@ export const DataLabelsPanel = () => {
 				)}
 				{/* Sunburst: same Angle nudge; R is RING-relative (percent across
 				 *  the ring's thickness) since each ring sits at its own radius. */}
-				{isSunburstMode && (
+				{isRingLabels && (
 					<>
 						<div className="flex flex-col gap-2 text-sm">
 							<NumberInput
@@ -1617,7 +1626,7 @@ export const DataLabelsPanel = () => {
 			{/* Packed circles only: per-container-level choice between the
 			 *  default inside-the-rim placement and wrapping the group name
 			 *  around the OUTSIDE of the circle on an arc. */}
-			{isPackedMode && (
+			{hasContainerRimLabels && (
 				<CollapsibleSubsection title="Text position" changed={textPositionChanged}>
 					<TextPositionPanel
 						cfg={merged}

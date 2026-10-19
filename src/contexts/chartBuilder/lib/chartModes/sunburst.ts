@@ -38,10 +38,20 @@ export const SunburstMode: ChartModeDef = {
 		yValueChannel: null,
 		polarValueCoords: false,
 	},
+	labels: {
+		placement: "ring",
+		positionLockedToAxes: false,
+		seriesEndpoints: false,
+		containerRimLabels: false,
+	},
 	canvas: {
 		coordFamily: "cartesian",
 		cartesianAxes: { x: false, y: false },
 		lengthRole: "none",
+		connectionRole: "key",
+		shapeRole: "outline",
+		areaRole: "proportional",
+		statOverlays: false,
 		measureAxis: null,
 	},
 }

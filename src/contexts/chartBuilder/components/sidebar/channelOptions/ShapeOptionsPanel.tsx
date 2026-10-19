@@ -43,15 +43,12 @@ export const ShapeOptionsPanel = () => {
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const theme = useCurrentTheme()
 	const fieldMapped = !!encodings.shape?.field
-	// Bar, tile (heatmap), and hexbin charts open this panel for the outline
-	// width (bar / cell borders read it), but draw no point glyphs — the
-	// Default shape picker would be inert there, so it's hidden in those modes.
-	const modeId = useChartModeDef().id
-	const glyphsInert =
-		modeId === "bars-x" ||
-		modeId === "bars-y" ||
-		modeId === "tile" ||
-		modeId === "hexbin"
+	// Cell-mark modes (bars, heatmap tiles, hex cells) open this panel for
+	// the outline width (the cell border reads it) but draw no point glyphs
+	// and compose none in their legends — the Default shape picker would be
+	// inert there, so it's hidden. Declared per mode as `canvas.shapeRole`.
+	const modeDef = useChartModeDef()
+	const glyphsInert = modeDef.canvas.shapeRole === "cell"
 	// Same defensive merge: older visualizations may be missing outlineColor /
 	// outlineWidth / overrides when the config was first introduced.
 	const cfg: ShapeConfig = {
@@ -154,8 +151,9 @@ export const ShapeOptionsPanel = () => {
 			/>
 			{/* Border width for the violin outline / box strokes — its own knob,
 			 *  independent of the point marks' outline width above. Only shown
-			 *  while a violin/box overlay is actually rendering (scatter mode). */}
-			{modeId === "scatter" && overlayOn(configs) && (
+			 *  while a violin/box overlay is actually rendering — the mode draws
+			 *  the axis overlays (`canvas.statOverlays`) and one is on. */}
+			{modeDef.canvas.statOverlays && overlayOn(configs) && (
 				<NumberInput
 					label="Violin / box outline"
 					labelClassName={LABEL_COL}
