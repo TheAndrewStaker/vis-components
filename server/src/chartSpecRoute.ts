@@ -42,6 +42,7 @@ import type { SpecProblem } from "../../src/contexts/chartBuilder/lib/visualSpec
 import {
 	composeChartEdit,
 	composeChartSpec,
+	structuredVisual,
 	type ComposeContext,
 } from "../../src/contexts/chartBuilder/lib/visualSpec/composeVisual"
 import type { ServerConfig } from "./config.js"
@@ -277,7 +278,7 @@ export const listSettings = (
 		const stored = isSafeId(visualId) ? readVisualBody(db, visualId) : undefined
 		const parsed = stored === undefined ? undefined : (parseJson(stored) as Visual | undefined)
 		if (!parsed) throw new HttpError(404, "Not found")
-		visual = hydrateVisual(parsed)
+		visual = hydrateVisual(structuredVisual(parsed))
 	} else {
 		const themes = loadThemes(db)
 		const saved = themes.find((t) => t.id === defaultThemeId(db)) ?? SYSTEM_LIGHT_THEME

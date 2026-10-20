@@ -7,6 +7,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { datasetMetaFrom } from "../../src/contexts/chartBuilder/lib/datasetMeta"
+import { pieceKey } from "../../src/contexts/chartBuilder/lib/labelPieces"
 import { VISUALS_VERSION } from "../../src/contexts/chartBuilder/lib/storage/migrations"
 import { SYSTEM_DARK_THEME } from "../../src/contexts/chartBuilder/lib/systemThemes"
 import type { Dataset, Visual } from "../../src/contexts/chartBuilder/lib/types"
@@ -258,13 +259,13 @@ describe("POST /api/visuals", () => {
 	it("refuses with 409 when stored visuals are at another content version", async () => {
 		const base = await start()
 		await seedDataset(base, CAFE)
-		for (const v of [VISUALS_VERSION - 1, VISUALS_VERSION + 1]) {
-			await put(base, "/api/content-versions/visuals", { v })
-			const res = await post(base, cafe())
-			expect(res.status).toBe(409)
-		}
+		// A stamp only moves forward, so the versions are visited in order.
+		await put(base, "/api/content-versions/visuals", { v: VISUALS_VERSION - 1 })
+		expect((await post(base, cafe())).status).toBe(409)
 		await put(base, "/api/content-versions/visuals", { v: VISUALS_VERSION })
 		expect((await post(base, cafe())).status).toBe(201)
+		await put(base, "/api/content-versions/visuals", { v: VISUALS_VERSION + 1 })
+		expect((await post(base, cafe())).status).toBe(409)
 	})
 
 	it("keeps other collection-level writes at 405", async () => {
@@ -322,6 +323,22 @@ describe("PATCH /api/visuals/<id>", () => {
 		const [stored] = await visuals(base)
 		expect(stored).toEqual({ ...body.visual, thumbnail: null })
 		expect(hydrateVisual(stored as Visual)).toEqual(stored)
+	})
+
+	it("saves a visual stored in the old joined-key shape structured, as the editor does", async () => {
+		const base = await start()
+		const v0 = await created(base)
+		const joined = pieceKey("lbl-1", "flavor")
+		const legacy = {
+			...v0,
+			dataLabelsConfig: { ...v0.dataLabelsConfig, fieldSizes: { [joined]: 9 } },
+		}
+		expect((await put(base, `/api/visuals/${v0.id}`, legacy)).status).toBe(204)
+		const res = await patch(base, v0.id, { title: "x" }, { "if-match": String(v0.updatedAt) })
+		expect(res.status).toBe(200)
+		const [stored] = await visuals(base)
+		expect(stored.dataLabelsConfig?.fieldSizes).toEqual({})
+		expect(stored.dataLabelsConfig?.pieces?.["lbl-1"]?.flavor).toEqual({ size: 9 })
 	})
 
 	it("refuses when the chart changed since it was read", async () => {
