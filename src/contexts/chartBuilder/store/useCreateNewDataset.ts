@@ -49,10 +49,10 @@ const datasetCompareError = (message: string): Error => {
 
 export type { ParsedUpload }
 
-const newDatasetId = () =>
+export const newDatasetId = () =>
 	`ds-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
-const newDatasetVersionId = () =>
+export const newDatasetVersionId = () =>
 	`dv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 const inferFields = (

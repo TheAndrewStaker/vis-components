@@ -120,6 +120,76 @@ Headers are the fields' CURRENT names; a renamed variable re-imports
 through its `sourceNames` alias. The file is named after the dataset
 (slugified, `.csv`).
 
+**Edit data (the tray's Edit dialog).** The tray header carries
+**Edit** between Reshape and Collapse while a data set is loaded. It
+opens a dialog with the version shown as delimited text in an editable
+box — the same RAW text "download data" produces (current field
+names, cells as imported, no reshape / conversion / derived columns)
+— plus a data set name box. Editing a value by hand never touches
+imported data: the first edit of an imported data set **creates a new
+data set** (the dialog says so; the name box is prefilled `<name>
+(edited)`, and a colliding name warns as everywhere else) whose v1 is
+a copy of the version shown (same file name, note and upload time)
+and whose v2 is the edited rows, filename "Edited data", marked
+`editedFrom` v1 (`DatasetVersion.editedFrom`, optional and additive
+like `keyAliases`). The editor rebinds to the new data set and every
+draft atom is left alone, so the visualization simply continues on
+the edited data — encodings, reshape, field overrides and derived
+variables included — and the version badge reads `v2 of 2 · latest`.
+The imported data set is untouched; other visuals keep it, and the
+orphan sweep (§2.4) collects it if none does. An edit of a data set
+that is ALREADY a hand-edited copy **appends** a version to it
+(`editedFrom` the version shown) rather than forking again — the
+dialog says so and its button reads "Save new version"; the name box
+renames the data set when changed, and sibling visuals bound to it
+get any header rename.
+
+Columns are matched to fields by `planEditedFields`
+(`lib/datasetEdits.ts`): a header equal to a field's current name is
+that field, a header equal to a field's FORMER name is that field
+(the rows carry the former key and remap at view time, as for an
+upload), the remaining headers and remaining fields pair up in order
+as **renames** — a changed header renames the variable exactly like
+the Fields-panel rename (old name appended to `sourceNames`, the open
+editor's atoms rewritten through `renameFieldAcrossEditorAtoms`) —
+and what is left is an added column (edited side) or a dropped one
+(field side). A fork drops dropped columns and keeps a matched field's
+stored type only when the new inference is compatible with it (the
+version-upload leniency), taking the new inference otherwise; an
+append keeps dropped fields (the field list is shared across
+versions; they read empty for the new version) and pins every type.
+A dropped-and-added pair reads as a rename by design: a changed
+header is the common case in a text box, and a rename carries the
+encodings along where a drop would strand them.
+
+Under the box a live summary reads the parse complaint, "No changes
+yet." (Save disabled), or `N rows · M columns · X cells changed · Y
+rows added · Z rows removed · added/dropped/renamed: …`. Save is
+disabled until the text parses, differs from the seed, and a name is
+present; the size gate applies as for a paste.
+
+In the data table, every cell that differs from the chain's **base**
+— follow `editedFrom` until a version without it, i.e. the most
+recent IMPORTED version — is outlined with a dotted purple line
+(`.vc-edited-cell`, inset so it clears the cell borders; `title`
+"Changed by hand"). Highlights therefore accumulate across repeated
+edits of the copy and reset when a new version is uploaded.
+`alignEditedRows` (`lib/datasetEdits.ts`) pairs edited rows with base
+rows: rows exactly equal to a base row (over the columns the base
+has) anchor to it monotonically; the rows between two anchors pair by
+best cell similarity when the gap is small (≤ 48 × 48), positionally
+otherwise; a paired row outlines its differing cells, an edited row
+with no partner (an added row) outlines every cell, base rows without
+a partner count as removed (nothing to outline). A renamed column
+compares under its current name (base rows go through
+`resolveDatasetView`'s remap); an added column differs everywhere.
+The base rows load lazily through `ensureVersionRowsLoadedAtom`
+(`useEditedCells`); nothing is outlined until they arrive, and
+nothing is outlined while a reshape is applied (melted rows are new
+rows — the table outlines by RAW row index, sorting row indices
+rather than row copies so the mapping survives a sort). The version
+popover tags hand-edited versions "· edited by hand".
+
 **Data set names.** The id is a data set's identity; the name is a
 label, and two data sets MAY share one. Every path that names a new
 data set (the Add-data prompt's "start a new visualization" branch,
@@ -434,7 +504,12 @@ lists every version newest-first with its upload timestamp and filename:
   prompt warns that iframes pinned to that version will show a
   "version not found" error; deleting the latest promotes the
   previous one to latest. There is no version rename (variables CAN be
-  renamed — in the Fields panel, see §2.2).
+  renamed — in the Fields panel, see §2.2). Deleting the base of a
+  hand-edit chain (§2.1, "Edit data") leaves the edited versions'
+  `editedFrom` dangling: the table then outlines against the nearest
+  surviving ancestor, or nothing when none is left.
+- **Hand-edited versions** (the tray's Edit dialog, §2.1) list with
+  "· edited by hand" after their "Edited data" filename.
 
 New-version uploads check column compatibility via **`diffFields`**
 (`datasetCompat.ts`): every existing column must be present with the

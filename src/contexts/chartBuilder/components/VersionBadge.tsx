@@ -256,6 +256,7 @@ const VersionList = ({
 									</div>
 									<div className="text-sm vc-muted">
 										{formatTime(v.createdAt)} · {v.filename}
+										{v.editedFrom !== undefined && " · edited by hand"}
 									</div>
 								</button>
 								{canDelete && !isActive && (

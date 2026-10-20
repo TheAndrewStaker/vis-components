@@ -82,6 +82,13 @@ export type DatasetVersion = {
 	 * shadow the matched column at view time. Absent on almost every version;
 	 * `resolveDatasetView` prefers it over the generic former-name scan. */
 	keyAliases?: Record<string, string>
+	/** The id of the version IN THIS DATASET this one was hand-edited from
+	 * (the data tray's Edit dialog). Absent on every imported version — an
+	 * upload or a paste. The data table outlines the cells that differ from
+	 * the chain's base (follow this until a version without it: the most
+	 * recent import), see `lib/datasetEdits.ts`. Optional and additive, like
+	 * `keyAliases`: no storage version bump. */
+	editedFrom?: string
 }
 
 /** A data set is a named, versioned collection of CSV uploads sharing the same

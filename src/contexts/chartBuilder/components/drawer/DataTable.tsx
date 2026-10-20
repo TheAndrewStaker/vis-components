@@ -7,7 +7,12 @@ import {
 	currentDerivedVariablesAtom,
 	derivedVariableEditorAtom,
 } from "../../store/atoms"
-import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
+import {
+	currentRawDatasetViewAtom,
+	reshapeAppliedAtom,
+	useCurrentDatasetView,
+} from "../../store/useCurrentDatasetView"
+import { useEditedCells } from "../../store/useEditedCells"
 
 const MAX_ROWS_RENDERED = 500
 const MIN_COL_WIDTH = 40
@@ -100,6 +105,14 @@ export const DataTable = () => {
 		[derivedConfig]
 	)
 	const [sort, setSort] = useState<SortState>(null)
+	// Cells changed by hand since the last import (the tray's Edit dialog),
+	// keyed by RAW row index. The view's rows map 1:1 onto the raw rows
+	// through the cell conversions and derived columns, but not through a
+	// reshape (melted rows are new rows), so nothing is outlined while one
+	// applies; the length guard catches any other stage that reshapes rows.
+	const editedCells = useEditedCells()
+	const reshapeApplied = useAtomValue(reshapeAppliedAtom)
+	const rawRowCount = useAtomValue(currentRawDatasetViewAtom)?.rows.length
 	// Per-column width overrides keyed by field name. Unset entries fall back
 	// to the browser's auto-sizing (which honors `whitespace-nowrap` plus
 	// padding). State only — not persisted; the data tray is preview UI.
@@ -156,19 +169,26 @@ export const DataTable = () => {
 		return m
 	}, [dataset, rowsSource])
 
-	const sortedRows = useMemo(() => {
-		if (!dataset || !sort) return rowsSource
+	// Sorted ROW INDICES rather than row copies, so each rendered row still
+	// knows which raw row it is (the hand-edit outlines key on that).
+	const sortedIndices = useMemo(() => {
+		const indices = rowsSource.map((_, i) => i)
+		if (!dataset || !sort) return indices
 		const field = dataset.fields.find((f) => f.name === sort.field)
-		if (!field) return rowsSource
-		const cmp = (a: Record<string, string>, b: Record<string, string>) =>
+		if (!field) return indices
+		const cmp = (a: number, b: number) =>
 			compareByType(
-				a[sort.field] ?? "",
-				b[sort.field] ?? "",
+				rowsSource[a]?.[sort.field] ?? "",
+				rowsSource[b]?.[sort.field] ?? "",
 				field.inferredType
 			)
-		const sorted = [...rowsSource].sort(cmp)
+		const sorted = indices.sort(cmp)
 		return sort.dir === "desc" ? sorted.reverse() : sorted
 	}, [rowsSource, sort, dataset])
+	const outlines =
+		editedCells && !reshapeApplied && rawRowCount === rowsSource.length
+			? editedCells.cells
+			: null
 
 	if (!dataset) {
 		return (
@@ -178,8 +198,8 @@ export const DataTable = () => {
 		)
 	}
 
-	const rows = sortedRows.slice(0, MAX_ROWS_RENDERED)
-	const truncated = sortedRows.length > MAX_ROWS_RENDERED
+	const rowIndices = sortedIndices.slice(0, MAX_ROWS_RENDERED)
+	const truncated = sortedIndices.length > MAX_ROWS_RENDERED
 
 	// Click cycles: unsorted → asc → desc → unsorted.
 	const onHeaderClick = (fieldName: string) => {
@@ -315,47 +335,55 @@ export const DataTable = () => {
 					</tr>
 				</thead>
 				<tbody>
-					{rows.map((row, i) => (
-						<tr
-							// eslint-disable-next-line react/no-array-index-key -- rows are static snapshots of CSV
-							key={i}
-							className="odd:bg-white even:bg-stone-50 dark:odd:bg-stone-900 dark:even:bg-stone-900/50"
-						>
-							{dataset.fields.map((f) => {
-								const alignment = alignmentByField.get(f.name) ?? "default"
-								const width = colWidths[f.name]
-								return (
-									<td
-										key={f.name}
-										style={
-											width
-												? {
-														width,
-														minWidth: width,
-														maxWidth: width,
-														overflow: "hidden",
-														textOverflow: "ellipsis",
-													}
-												: undefined
-										}
-										className={`border-r border-b border-stone-100 px-3 py-1.5 whitespace-nowrap text-stone-700 dark:border-stone-800 dark:text-stone-200 ${alignmentClasses(
-											alignment
-										)}`}
-									>
-										{displayCell(f, row[f.name])}
-									</td>
-								)
-							})}
-							{/* Filler cell under the "+" header so row borders and
-							 * striping stay clean across the full table width. */}
-							<td className="border-b border-stone-100 dark:border-stone-800" />
-						</tr>
-					))}
+					{rowIndices.map((i) => {
+						const row = rowsSource[i] ?? {}
+						const edited = outlines?.get(i)
+						return (
+							<tr
+								// The raw row index: stable for a given version's rows.
+								key={i}
+								className="odd:bg-white even:bg-stone-50 dark:odd:bg-stone-900 dark:even:bg-stone-900/50"
+							>
+								{dataset.fields.map((f) => {
+									const alignment = alignmentByField.get(f.name) ?? "default"
+									const width = colWidths[f.name]
+									const isEdited = edited?.has(f.name) === true
+									return (
+										<td
+											key={f.name}
+											{...(isEdited
+												? { "data-edited": "true", title: "Changed by hand" }
+												: {})}
+											style={
+												width
+													? {
+															width,
+															minWidth: width,
+															maxWidth: width,
+															overflow: "hidden",
+															textOverflow: "ellipsis",
+														}
+													: undefined
+											}
+											className={`border-r border-b border-stone-100 px-3 py-1.5 whitespace-nowrap text-stone-700 dark:border-stone-800 dark:text-stone-200 ${alignmentClasses(
+												alignment
+											)}${isEdited ? " vc-edited-cell" : ""}`}
+										>
+											{displayCell(f, row[f.name])}
+										</td>
+									)
+								})}
+								{/* Filler cell under the "+" header so row borders and
+								 * striping stay clean across the full table width. */}
+								<td className="border-b border-stone-100 dark:border-stone-800" />
+							</tr>
+						)
+					})}
 				</tbody>
 			</table>
 			{truncated && (
 				<div className="border-t border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-stone-800 dark:bg-stone-900/50 vc-muted">
-					Showing first {MAX_ROWS_RENDERED} of {sortedRows.length} rows.
+					Showing first {MAX_ROWS_RENDERED} of {sortedIndices.length} rows.
 				</div>
 			)}
 		</div>

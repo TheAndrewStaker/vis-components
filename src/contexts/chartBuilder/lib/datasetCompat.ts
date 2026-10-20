@@ -13,7 +13,7 @@ export type ColumnDiff = {
  * stays authoritative, and quantitative values always render fine as
  * categories — the guard only matters in the other direction (a quantitative
  * column turning non-numeric would break every chart using it as a measure). */
-const typeCompatible = (prior: Field, got: Field): boolean =>
+export const typeCompatible = (prior: Field, got: Field): boolean =>
 	prior.inferredType === got.inferredType ||
 	(prior.inferredType === "categorical" && got.inferredType === "quantitative")
 

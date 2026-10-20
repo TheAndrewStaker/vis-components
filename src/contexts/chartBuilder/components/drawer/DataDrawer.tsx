@@ -15,6 +15,7 @@ import {
 } from "../../store/useCurrentDatasetView"
 
 import { DataTable } from "./DataTable"
+import { EditDataModal } from "./EditDataModal"
 import { PasteDataModal } from "./PasteDataModal"
 
 const MIN_HEIGHT = 80
@@ -47,6 +48,8 @@ export const DataDrawer = () => {
 		open: false,
 		text: "",
 	})
+	// The Edit data dialog: the version shown, as text the user can change.
+	const [editOpen, setEditOpen] = useState(false)
 
 	// Cmd/Ctrl+V anywhere that isn't a text field opens the dialog with the
 	// clipboard text already in it — "I have the data on my clipboard, just
@@ -222,6 +225,16 @@ export const DataDrawer = () => {
 							{reshapeApplied ? "Reshape ✓" : "Reshape"}
 						</button>
 					)}
+					{dataset && (
+						<button
+							type="button"
+							title="Edit the data by hand (saves as a new data set)"
+							onClick={() => setEditOpen(true)}
+							className="text-sm transition-colors hover:text-stone-900 pointer-coarse:px-2 pointer-coarse:py-1.5 dark:hover:text-white vc-muted"
+						>
+							Edit
+						</button>
+					)}
 					<button
 						type="button"
 						onClick={() => setOpen((v) => !v)}
@@ -241,6 +254,7 @@ export const DataDrawer = () => {
 				initialText={paste.text}
 				onClose={() => setPaste({ open: false, text: "" })}
 			/>
+			<EditDataModal open={editOpen} onClose={() => setEditOpen(false)} />
 			{dragOver && (
 				<div
 					aria-hidden="true"

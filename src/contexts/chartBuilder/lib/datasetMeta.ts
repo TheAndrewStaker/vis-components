@@ -29,6 +29,7 @@ export type DatasetLike = {
 		filename: string
 		createdAt: number
 		note?: string
+		editedFrom?: string
 	}>
 	latestVersionId: string
 	createdAt: number

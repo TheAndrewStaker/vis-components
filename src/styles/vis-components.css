@@ -200,6 +200,17 @@
 		color: var(--color-stone-400);
 	}
 
+	/* A data-table cell the user changed by hand (the tray's Edit dialog):
+	 * outlined, not filled, so the striping and alignment of the row stay
+	 * readable; inset so the dotted line sits clear of the cell borders. */
+	.vc-edited-cell {
+		outline: 1.5px dotted var(--color-vc-brand-text);
+		outline-offset: -2px;
+	}
+	.dark .vc-edited-cell {
+		outline-color: var(--color-brand-300);
+	}
+
 	/* Inline group header: titles a run of related control rows inside a
 	 * panel without being a collapsible subsection. Sits visually between
 	 * CollapsibleSubsection's uppercase text-xs header and a plain row label. */

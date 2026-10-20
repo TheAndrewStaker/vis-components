@@ -726,6 +726,46 @@ export const ensureDatasetLoadedAtom = atom(
 	}
 )
 
+/** Pull in the rows of one specific version of a dataset — not the one the
+ * view draws, which `ensureDatasetLoadedAtom` owns, but another the editor
+ * needs beside it: the base of a hand-edit chain the data table outlines
+ * changes against (see `useEditedCells`). A whole body in memory already
+ * holds every version, so nothing is fetched; otherwise the rows land in the
+ * per-version cache under the usual key, where the recency eviction treats
+ * them as the dataset's. Idempotent per version; a failure is logged and
+ * leaves nothing outlined. */
+export const ensureVersionRowsLoadedAtom = atom(
+	null,
+	(get, set, datasetId: string, versionId: string) => {
+		if (get(loadedDatasetsBaseAtom)[datasetId] || get(liveBootDatasetsAtom)[datasetId])
+			return
+		const key = versionRowsKey(datasetId, versionId)
+		if (get(loadedVersionRowsBaseAtom)[key]) return
+		const inFlight = get(datasetLoadsInFlightAtom)
+		if (inFlight.has(key)) return
+		set(datasetLoadsInFlightAtom, new Set(inFlight).add(key))
+		void getStorageAdapter()
+			.loadDatasetVersion(datasetId, versionId)
+			.then((rows) => {
+				if (rows) set(loadedVersionRowsBaseAtom, (prev) => ({ ...prev, [key]: rows }))
+			})
+			.catch((error) => {
+				// eslint-disable-next-line no-console
+				console.error(
+					`[vis-components] dataset ${datasetId} version ${versionId} failed to load:`,
+					error
+				)
+			})
+			.finally(() => {
+				set(datasetLoadsInFlightAtom, (prev) => {
+					const next = new Set(prev)
+					next.delete(key)
+					return next
+				})
+			})
+	}
+)
+
 /** Delete datasets outright — the only path that removes them from storage.
  * Explicit because absence from `loadedDatasetsAtom` means "not loaded", not
  * "deleted". */
