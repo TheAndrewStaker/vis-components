@@ -25,6 +25,8 @@ import { buildQuantHueConfigFromTheme } from "../hueDefaults"
 import type { ColorSlotConfig, ColorSlotKey } from "../channelConfig"
 import { COLOR_SLOT_DEFS } from "../colorSlots"
 import { seedColorSlot } from "../seedColorSlot"
+import { foldFlowNodeTitles } from "../foldFlowNodeTitles"
+import { structureVisualKeys } from "../savedKeyStructure"
 import { applyDerivedVariablesBeforeReshape, splitDerivedVariablesAroundReshape } from "../derivedReshapeStages"
 import { alphabeticalLevelOrder, orderLevelsByField } from "../orderLevelsByField"
 import {
@@ -116,7 +118,13 @@ export type ComposeContext = {
 /** The visuals storage version composed visuals are complete at: no
  *  migration step up to it changes them. Raise it only after checking
  *  `compose` against each new step in `visualsMigrations`. */
-export const COMPOSED_VISUALS_VERSION = 6
+export const COMPOSED_VISUALS_VERSION = 7
+
+/** The intake every opened and saved visual goes through
+ *  (`useLoadVisual`, `useSaveVisual`): saved keys structured, flow
+ *  Node-titles styling folded into Data Labels. */
+export const structuredVisual = (visual: Visual): Visual =>
+	foldFlowNodeTitles(structureVisualKeys(visual))
 
 export type ComposeVisualResult =
 	| { ok: true; visual: Visual; warnings: SpecProblem[] }
@@ -881,9 +889,10 @@ const compose = (
 		const problems = settingsProblems(spec.settings, visual, settingsDraft, fieldNames)
 		if (problems.length > 0) return { ok: false, errors: capProblems(problems) }
 		const patched = applySettings(visual, spec.settings as SettingsPatch)
-		return { ok: true, visual: seedPickedSlots(patched, spec.settings as SettingsPatch, typeOf, ctx.theme), warnings }
+		const seeded = seedPickedSlots(patched, spec.settings as SettingsPatch, typeOf, ctx.theme)
+		return { ok: true, visual: structuredVisual(seeded), warnings }
 	}
-	return { ok: true, visual, warnings }
+	return { ok: true, visual: structuredVisual(visual), warnings }
 }
 
 /** The family's quick-start variation these channels fill best: every
@@ -1101,7 +1110,8 @@ export const editVisual = (
 	visual: Visual,
 	edit: ChartEdit,
 	ctx: Omit<ComposeContext, "id">
-): ComposeVisualResult => compose({ ...edit, encodings: edit.encodings ?? {} }, [], { ...ctx, id: visual.id }, visual)
+): ComposeVisualResult =>
+	compose({ ...edit, encodings: edit.encodings ?? {} }, [], { ...ctx, id: visual.id }, structuredVisual(visual))
 
 /** Parse and apply an edit in one pass. */
 export const composeChartEdit = (
@@ -1111,5 +1121,5 @@ export const composeChartEdit = (
 ): ComposeVisualResult => {
 	const { draft, errors } = readChartSpec(input, "edit")
 	if (!draft) return { ok: false, errors: capProblems(errors) }
-	return compose(draft, errors, { ...ctx, id: visual.id }, visual)
+	return compose(draft, errors, { ...ctx, id: visual.id }, structuredVisual(visual))
 }
