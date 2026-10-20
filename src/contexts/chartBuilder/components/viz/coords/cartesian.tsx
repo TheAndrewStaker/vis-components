@@ -45,6 +45,10 @@ export type CartesianInput = {
 	 * `Axis.mirrored`). */
 	xMirrored?: boolean
 	yMirrored?: boolean
+	/** A facet panel's Custom breaks for this axis — they replace the
+	 * axis's whole tick layout (see `Axis.replaceTicks`). */
+	xReplaceTicks?: readonly number[]
+	yReplaceTicks?: readonly number[]
 	/** Toggles whether ticks, labels, spine, and title render. Gridlines still
 	 * render in the back layer even when this is false — used by faceted
 	 * panels to suppress interior axis decorations while keeping gridline
@@ -152,6 +156,7 @@ export const cartesian = (input: CartesianInput): CoordSystem => {
 							domainPinned={input.xDomainPinned}
 							rawTextByValue={input.xRawText}
 							mirrored={input.xMirrored}
+							replaceTicks={input.xReplaceTicks}
 							tickFont={input.tickFont}
 							titleFont={input.xAxisTitleFont}
 							showTicksAndLabels={input.showXAxis}
@@ -178,6 +183,7 @@ export const cartesian = (input: CartesianInput): CoordSystem => {
 							domainPinned={input.yDomainPinned}
 							rawTextByValue={input.yRawText}
 							mirrored={input.yMirrored}
+							replaceTicks={input.yReplaceTicks}
 							tickFont={input.tickFont}
 							titleFont={input.yAxisTitleFont}
 							showTicksAndLabels={input.showYAxis}

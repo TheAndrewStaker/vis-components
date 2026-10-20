@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useAtom, useAtomValue } from "jotai"
 import {
 	DEFAULT_DISTRIBUTION_OVERLAY_CONFIG,
@@ -16,8 +16,6 @@ import {
 	type SpineConfig,
 	type TickmarkConfig,
 } from "../../../lib/channelConfig"
-import { formatBreaksInput, parseBreaksInput } from "../../../lib/legendBreaks"
-import { formatLocalDate, parseLocalDate } from "../../../lib/localDate"
 import { naturalWrapAlignFor } from "../../../lib/tickLabelWrap"
 import { axisConfigFromTheme, spineThemeFor, valueChanged } from "../../../lib/themeConfig"
 import type { FontConfig, LabelAlignment } from "../../../lib/labelsConfig"
@@ -53,6 +51,7 @@ import { Toggle } from "../../../../../components/ui/Toggle"
 import { AlignmentControl, FontEditor } from "../LabelsPanel"
 import { Input } from "../../../../../components/ui/Input"
 import { DateInput } from "../../../../../components/ui/DateInput"
+import { BreaksField } from "./BreaksField"
 
 type Props = {
 	channel: "x" | "y" | "r"
@@ -394,6 +393,14 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 	const isContinuous =
 		effectiveType === "quantitative" || effectiveType === "temporal"
 
+	// On a faceted visual this Scale range is the GLOBAL default for every
+	// panel; a range set in the Facet panels (overall / per-group /
+	// per-panel) overrides it — see panelRenderInputs' precedence chain.
+	const isFaceted =
+		!!encodings.facet?.field ||
+		!!encodings.facetRow?.field ||
+		!!encodings.facetCol?.field
+
 	// Effective "Adjust position" nudge in screen px, applied to the tick
 	// labels. The legacy single `offset` was perpendicular-only (x-axis:
 	// positive = down/away, y-axis: positive = left/away); it's folded in
@@ -547,7 +554,9 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 							rangeHint={
 								isBinnedAxis
 									? "Limits the value range that gets binned (rows outside are dropped)."
-									: undefined
+									: isFaceted
+										? "Blank = auto-fit. Applies to every panel; a range set in the Facet panel below overrides it."
+										: undefined
 							}
 							changed={{ min: ch.min, max: ch.max }}
 						/>
@@ -1098,92 +1107,6 @@ const ScaleRangeControls = ({
 				</label>
 			</div>
 		</div>
-	)
-}
-
-/** Free-typed "Custom breaks" text box, shared by the Ticks section
- * and the Gridlines section. The text is mirrored locally (so the cursor
- * doesn't jump while typing) and the parsed array commits on blur / Enter,
- * matching the legend's break-values box. Values are plain numbers — epoch
- * milliseconds for temporal axes, surfaced/parsed as ISO dates. */
-const BreaksField = ({
-	isTemporal,
-	breaks,
-	onCommit,
-	hint,
-	changed,
-}: {
-	isTemporal: boolean
-	breaks: number[]
-	onCommit: (breaks: number[]) => void
-	/** Helper text shown under the box. */
-	hint: string
-	/** "Changed vs default" → bold-purple the label. */
-	changed?: boolean
-}) => {
-	const parseBreaks = (text: string): number[] =>
-		isTemporal
-			? text
-					.split(/[,;]+/)
-					.map((s) => s.trim())
-					.filter((s) => s !== "")
-					.map(parseLocalDate)
-					.filter((n) => Number.isFinite(n))
-			: parseBreaksInput(text)
-	const formatBreaks = (vals: number[]): string =>
-		isTemporal
-			? vals.map(formatLocalDate).join(", ")
-			: formatBreaksInput(vals)
-
-	const [breaksText, setBreaksText] = useState<string>(
-		breaks.length > 0 ? formatBreaks(breaks) : ""
-	)
-	// Re-sync when `breaks` changes from outside (e.g. loading another visual)
-	// and the local text doesn't already parse to it — preserves in-progress
-	// typing. Excludes `breaksText` to avoid a re-sync loop.
-	useEffect(() => {
-		const parsed = parseBreaks(breaksText)
-		const same =
-			parsed.length === breaks.length && parsed.every((n, i) => n === breaks[i])
-		if (!same) setBreaksText(breaks.length > 0 ? formatBreaks(breaks) : "")
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [breaks])
-	const commitBreaks = (text: string) => onCommit(parseBreaks(text))
-
-	return (
-		<>
-			<label className="flex items-center gap-2 text-sm">
-				<span
-					className={`w-24 shrink-0 ${
-						changed
-							? "font-semibold !text-vc-section-header"
-							: "vc-muted"
-					}`}
-				>
-					Custom breaks
-				</span>
-				<Input
-					type="text"
-					value={breaksText}
-					onChange={(e) => setBreaksText(e.target.value)}
-					onBlur={() => commitBreaks(breaksText)}
-					onKeyDown={(e) => {
-						if (e.key === "Enter") {
-							commitBreaks(breaksText)
-							e.currentTarget.blur()
-						}
-					}}
-					placeholder={isTemporal ? "e.g. 2024-01-01, 2024-07-01" : "e.g. 0, 50, 100, 150, 200"}
-					className="flex-1 font-mono"
-				/>
-			</label>
-			<div className="flex gap-2">
-				<LabelSpacer />
-				<span className="min-w-0 flex-1 vc-help">
-					{hint}
-				</span>
-			</div>
-		</>
 	)
 }
 

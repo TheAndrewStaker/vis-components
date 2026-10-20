@@ -74,9 +74,9 @@ const setup4x1 = async (page: Page): Promise<void> => {
 	// locate by accessible label, not a label>input descendant query.
 	await enc.getByLabel(/^Rows$/).first().fill("4")
 	await enc.getByLabel(/^Columns$/).first().fill("1")
-	// Gap Y lives under the "Custom sizing" subheader, which setGapY reaches
+	// Gap Y lives under the "Panel Spacing & Sizing" subheader, which setGapY reaches
 	// into across the sweep.
-	await expandSubsection(page, "Custom sizing")
+	await expandSubsection(page, "Panel Spacing & Sizing")
 	await page.waitForTimeout(400)
 }
 

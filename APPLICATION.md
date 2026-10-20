@@ -1578,6 +1578,20 @@ Visible when `facet` is mapped. Controls:
   histogram's count axis has no field at all). The size-by-unit toggle
   keeps the raw position-encoding gate, since its weights read that
   field.
+  **Custom breaks**: every cartesian range entry (overall, per row /
+  column, per panel) has a "Custom breaks" checkbox under its max.
+  Checking it opens a **Breaks** box (comma-separated values; dates on a
+  date axis) whose values REPLACE the tick layout of the panels that
+  entry covers — the automatic ticks and the X / Y Custom breaks alike,
+  unlike those breaks, which add to the automatic ticks. "Match tick
+  count" gridlines follow the replaced ticks; values outside the panel's
+  range aren't drawn (all outside → no ticks). Checked with the box
+  empty = the normal layout. Stored on the same entry as the bounds —
+  `ticks` on the overall / per-row / per-column entries, `xTicks` /
+  `yTicks` on a per-panel one — with the same precedence; unchecking
+  removes the list (and an entry left empty). The layout solver
+  measures the replaced labels for the axis margin. Polar R ranges
+  don't offer it.
 - **Horizontal gap / Vertical gap** — the distance in px between
   neighbouring panels' plot areas (default 60). **0 means the plot areas
   touch**; negative values slide them over each other (ridgeline plot
@@ -1593,12 +1607,12 @@ Visible when `facet` is mapped. Controls:
 
 ### 4.5a Hide empty panels (facet grid)
 The facet Row and Column option panels each carry a **Hide empty
-panels** checkbox in their "Custom sizing" subsection — one config
+panels** checkbox in their "Panel Spacing & Sizing" subsection — one config
 bit (`FacetConfig.hideEmptyPanels`) mirrored into both panels, shown
 only when BOTH `facetRow` and `facetCol` are mapped (the row × col
 cross-product is the only source of empty panels). Pie mode included:
 the row panel's "no row axis" hint replaces only its Rows subsection,
-not the Custom sizing block.
+not the Panel Spacing & Sizing block.
 
 Default off. Off — or on with no empty cross-product cell — the grid
 renders as always: full cross-product, top and left header strips, no
@@ -1716,6 +1730,12 @@ The X-axis and Y-axis panels (under Encodings) configure:
   range are dropped, and a break coinciding with an automatic tick
   draws once. Tick labels simply follow the ticks — every tick gets a
   label; there is no separate label-position control.
+  **Scale range and breaks on a faceted visual**: the X / Y Scale range
+  is the global default for every panel; a range set in the Facet
+  panels (overall, per row/column, or per panel) overrides it for the
+  panels it covers. The help text says so while the visual is faceted.
+  Custom breaks apply to every panel, except one whose facet range entry
+  has Custom breaks — those replace the panel's ticks outright.
   **Count composes with Scale range**: while the domain is auto-fit
   (either bound blank), Count is a density hint and the ticks snap to
   round "nice" values, so the exact number may differ. Once BOTH min
@@ -1723,7 +1743,11 @@ The X-axis and Y-axis panels (under Encodings) configure:
   axis lays out exactly Count evenly spaced ticks from min to max
   inclusive — 0.04–0.24 with Count 6 gives 0.04, 0.08, 0.12, 0.16,
   0.20, 0.24 — and "Match tick count" gridlines follow the same
-  layout. On a DATE axis the even ticks snap to the calendar unit the
+  layout. Exception: while Count is still at its default (5, never
+  touched) and the round "nice" ticks already land on both pinned
+  ends, the axis keeps those nice ticks, so a facet panel pinned to a
+  sibling panel's auto range shows the same breaks as that sibling.
+  On a DATE axis the even ticks snap to the calendar unit the
   step reads as (year starts for a ten-year step, month starts for a
   six-week one, midnight for a daily one), so 1949–2019 with Count 8
   reads 1949, 1959 … 2019 rather than the stray hours leap days would
@@ -3650,7 +3674,7 @@ A small catch-all panel:
   its normal position relative to the figure (the figure + legend
   pair centers in the viewport).
   Faceted charts apply the shape to each panel individually. While
-  on, the ratio overrides the Facet panel's Custom sizing (pixel
+  on, the ratio overrides the Facet panel's Panel Spacing & Sizing (pixel
   panel width/height), proportional panel weights — differently
   sized panels can't all honor one shape — and scroll-mode panel
   minimums (panels shrink to fit instead of scrolling over blank

@@ -1,3 +1,4 @@
+import { format as d3Format } from "d3-format"
 import { scaleLinear, scaleTime } from "d3-scale"
 import { autoLabelAngleFor } from "../../../lib/autoLabelAngle"
 import { axisFieldsFor } from "../../../lib/axisFields"
@@ -35,6 +36,10 @@ import type {
 } from "../../../lib/types"
 import { resolveStackModes } from "../../../lib/stackMode"
 import { measureLabelWidths, measureMaxLabelWidth } from "./measureText"
+import {
+	panelTicksOverrides,
+	resolvePanelRangeOverrides,
+} from "./panelRenderInputs"
 import {
 	computePanelMeasureMax,
 	computePanelMeasureMin,
@@ -129,6 +134,15 @@ export const buildSolverPanelInputs = ({
 	const yTickFmt = channelConfigs.y
 		? buildTickFormatter({ customFormat: channelConfigs.y.customFormat }, "quantitative", autoMarginLabel)
 		: autoMarginLabel
+	// Replaced ticks (facet Custom breaks) draw at their own precision
+	// with thousands separators (`Axis`'s ",~f" fallback), not d3's step
+	// precision — measure them the same way.
+	const replacedTickFmt = (axis: "x" | "y") =>
+		buildTickFormatter(
+			{ customFormat: channelConfigs[axis]?.customFormat ?? "" },
+			"quantitative",
+			(v) => d3Format(",~f")(Number(v)),
+		)
 	type Extent = { min: number; max: number }
 	const fieldExtent = (
 		field: string,
@@ -231,6 +245,7 @@ export const buildSolverPanelInputs = ({
 		pinMin: number | null,
 		pinMax: number | null,
 		rawText?: DateColumnText,
+		replaceTicks?: readonly number[],
 	): string[] => {
 		const scale = scaleTime()
 			.domain([new Date(extent.min), new Date(extent.max)])
@@ -252,7 +267,10 @@ export const buildSolverPanelInputs = ({
 		const breaks = (cfg?.breaks ?? [])
 			.filter((b) => b >= dLo && b <= dHi)
 			.map((b) => new Date(b))
-		const ticks = [...auto, ...breaks]
+		// A panel's Custom breaks replace the layout outright.
+		const ticks = replaceTicks
+			? replaceTicks.map((b) => new Date(b))
+			: [...auto, ...breaks]
 		const timeFmt = uniformTimeFormat(ticks)
 		const fmt = buildTickFormatter(
 			{ customFormat: cfg?.customFormat ?? "" },
@@ -266,7 +284,10 @@ export const buildSolverPanelInputs = ({
 	 *  way Axes.tsx lays them out: a user-pinned Scale range end replaces the
 	 *  data end, the auto ticks are d3's nice ticks at the axis's Count (or
 	 *  `count` evenly spaced values when BOTH ends are pinned), and Custom
-	 *  breaks inside the domain add their own labels. Sampling only the raw
+	 *  breaks inside the domain add their own labels — or, when the panel
+	 *  has facet "Custom breaks", exactly those (`replaceTicks`; not
+	 *  domain-filtered, since the per-panel bounds aren't known here, so an
+	 *  out-of-range value over-reserves rather than clips). Sampling only the raw
 	 *  data min / max under-measured here: "148.5" is narrower than the
 	 *  "150" d3 actually draws, and a nice'd top of "100" is a digit wider
 	 *  than a data max of "98". */
@@ -275,11 +296,16 @@ export const buildSolverPanelInputs = ({
 		extent: Extent,
 		type: FieldType | null = null,
 		rawText?: DateColumnText,
+		replaceTicks?: readonly number[],
 	): string[] => {
 		const cfg = axis === "x" ? channelConfigs.x : channelConfigs.y
 		const pinMin = typeof cfg?.min === "number" ? cfg.min : null
 		const pinMax = typeof cfg?.max === "number" ? cfg.max : null
-		if (type === "temporal") return timeTickLabelsFor(cfg, extent, pinMin, pinMax, rawText)
+		if (type === "temporal") {
+			return timeTickLabelsFor(cfg, extent, pinMin, pinMax, rawText, replaceTicks)
+		}
+		if (replaceTicks) return replaceTicks.map(replacedTickFmt(axis))
+		const fmtForMargin = axis === "x" ? xTickFmt : yTickFmt
 		const lo = pinMin ?? extent.min
 		const hi = pinMax ?? extent.max
 		if (!Number.isFinite(lo) || !Number.isFinite(hi)) return []
@@ -293,10 +319,13 @@ export const buildSolverPanelInputs = ({
 		const dLo = Math.min(lo, hi)
 		const dHi = Math.max(lo, hi)
 		const breaks = (cfg?.breaks ?? []).filter((b) => b >= dLo && b <= dHi)
-		const fmtForMargin = axis === "x" ? xTickFmt : yTickFmt
 		return [...auto, ...breaks].map(fmtForMargin)
 	}
-	const labelsAxisFor = (axis: "x" | "y", panelRows: Array<Record<string, unknown>>): string[] => {
+	const labelsAxisFor = (
+		axis: "x" | "y",
+		panelRows: Array<Record<string, unknown>>,
+		replaceTicks?: readonly number[],
+	): string[] => {
 		const field = axis === "x" ? xField : yField
 		const type = field ? effectiveType(ds, field, overrides) : null
 		if (field && (type === "categorical" || type === "ordinal")) {
@@ -323,6 +352,7 @@ export const buildSolverPanelInputs = ({
 			extent,
 			axisType,
 			field && axisType === "temporal" ? dateColumnText(panelRows, field) : undefined,
+			replaceTicks,
 		)
 	}
 	// Pre-compute the quantitative-axis data range per panel for
@@ -416,6 +446,12 @@ export const buildSolverPanelInputs = ({
 	// row's (for y) rows. Iterating once over panelData.values is
 	// cheaper than recomputing per panel.
 	const { colRowsByColKey, rowRowsByRowKey } = groupRowsByShareGroup(panelData)
+	// Same continuity gate the render loop applies to the facet range
+	// overrides: the measure axis is always continuous, field or not.
+	const xIsContinuous =
+		xType === "quantitative" || xType === "temporal" || measureAxis === "x"
+	const yIsContinuous =
+		yType === "quantitative" || yType === "temporal" || measureAxis === "y"
 	return panelData.values.map((key, idx) => {
 		const rows = panelData.rowsByValue.get(key) ?? []
 		const row = Math.floor(idx / panelData.grid.cols)
@@ -425,8 +461,23 @@ export const buildSolverPanelInputs = ({
 		// VALUE in grid mode (layout position elsewhere).
 		const { rowKey, colKey } = panelGroupKeys(panelData, key, idx)
 		const facetVals = panelFacetValues(panelData, key, idx)
-		const xLabels = labelsAxisFor("x", rows)
-		const yLabels = labelsAxisFor("y", rows)
+		// Facet "Custom breaks" replace a continuous axis's ticks —
+		// resolved exactly as the render loop resolves them.
+		const { xTicksOverride, yTicksOverride } = isFacetedHere
+			? panelTicksOverrides(
+					resolvePanelRangeOverrides({
+						p: { key, row, col },
+						panelData,
+						shareXMode,
+						shareYMode,
+						facetCfg,
+						xIsContinuous,
+						yIsContinuous,
+					}),
+				)
+			: {}
+		const xLabels = labelsAxisFor("x", rows, xTicksOverride)
+		const yLabels = labelsAxisFor("y", rows, yTicksOverride)
 		// For WEIGHTS only: use the appropriate row source per the
 		// tri-state mode so xWeight / yWeight are uniform across
 		// panels in the same sharing group. xLabels / yLabels (above)
@@ -444,9 +495,13 @@ export const buildSolverPanelInputs = ({
 					? rowRowsByRowKey.get(rowKey) ?? rows
 					: rows
 		const xWeightLabels =
-			shareXMode === "none" ? xLabels : labelsAxisFor("x", xWeightRows)
+			shareXMode === "none"
+				? xLabels
+				: labelsAxisFor("x", xWeightRows, xTicksOverride)
 		const yWeightLabels =
-			shareYMode === "none" ? yLabels : labelsAxisFor("y", yWeightRows)
+			shareYMode === "none"
+				? yLabels
+				: labelsAxisFor("y", yWeightRows, yTicksOverride)
 		// Axis-aware weights. Under "by unit" the weight is each
 		// axis's quantitative range (so per-unit spacing stays
 		// constant across panels); under "by category count" it's

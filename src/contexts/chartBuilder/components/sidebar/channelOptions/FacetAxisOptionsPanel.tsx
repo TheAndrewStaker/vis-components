@@ -44,6 +44,9 @@ import {
 	withBound,
 	withBoundInMap,
 	withGridPanelBound,
+	withGridPanelTicks,
+	withTicks,
+	withTicksInMap,
 } from "./facetSharedControls"
 
 /** Everything that differs between the facetRow and facetCol option
@@ -78,9 +81,11 @@ type FacetAxisSpec = {
 	overridesKey: "rowAxisOverrides" | "colAxisOverrides"
 	/** Which bounds of a `panelAxisOverrides` entry this axis reads. */
 	panelBoundKeys: {
-		min: keyof PanelAxisOverride
-		max: keyof PanelAxisOverride
+		min: "yMin" | "xMin"
+		max: "yMax" | "xMax"
 	}
+	/** Which custom-ticks list of a `panelAxisOverrides` entry it reads. */
+	panelTicksKey: "yTicks" | "xTicks"
 	subsectionTitle: string
 	perGroupLabel: string
 	/** Singular / plural nouns for user-facing copy. */
@@ -111,6 +116,7 @@ const ROW_SPEC: FacetAxisSpec = {
 	overallRangeKey: "overallYRange",
 	overridesKey: "rowAxisOverrides",
 	panelBoundKeys: { min: "yMin", max: "yMax" },
+	panelTicksKey: "yTicks",
 	subsectionTitle: "Rows",
 	perGroupLabel: "Per row",
 	noun: "row",
@@ -140,6 +146,7 @@ const COL_SPEC: FacetAxisSpec = {
 	overallRangeKey: "overallXRange",
 	overridesKey: "colAxisOverrides",
 	panelBoundKeys: { min: "xMin", max: "xMax" },
+	panelTicksKey: "xTicks",
 	subsectionTitle: "Columns",
 	perGroupLabel: "Per column",
 	noun: "column",
@@ -340,6 +347,19 @@ const FacetAxisSubsection = ({
 		}
 	}
 
+	const updateOverallTicks = (ticks: number[] | undefined) =>
+		updateCfg({
+			[spec.overallRangeKey]: withTicks(cfg[spec.overallRangeKey], ticks),
+		} as Partial<FacetConfig>)
+
+	const updateValueTicks = (value: string, ticks: number[] | undefined) =>
+		updateCfg({
+			[spec.overridesKey]: withTicksInMap(cfg[spec.overridesKey], value, ticks),
+		} as Partial<FacetConfig>)
+
+	const updatePanelTicks = (ref: FacetPanelRef, ticks: number[] | undefined) =>
+		updateCfg(withGridPanelTicks(cfg, ref, spec.panelTicksKey, ticks))
+
 	const updateValueOverride = (
 		value: string,
 		bound: "min" | "max",
@@ -444,8 +464,11 @@ const FacetAxisSubsection = ({
 							min: cfg[spec.overallRangeKey]?.min,
 							max: cfg[spec.overallRangeKey]?.max,
 							onChange: updateOverallRange,
+							ticks: cfg[spec.overallRangeKey]?.ticks,
+							onTicksChange: updateOverallTicks,
 						},
 					]}
+					isTemporal={drawnAxisType === "temporal"}
 				/>
 			)}
 
@@ -459,12 +482,16 @@ const FacetAxisSubsection = ({
 						min: cfg[spec.overridesKey]?.[v]?.min,
 						max: cfg[spec.overridesKey]?.[v]?.max,
 						onChange: (bound, raw) => updateValueOverride(v, bound, raw),
+						ticks: cfg[spec.overridesKey]?.[v]?.ticks,
+						onTicksChange: (ticks) => updateValueTicks(v, ticks),
 					}))}
+					isTemporal={drawnAxisType === "temporal"}
 				/>
 			)}
 
 			{showPanelOverrides && (
 				<AxisRangeSection
+					collapsible
 					title={`${axisLabel} range per panel`}
 					help="Blank = auto from each panel's data."
 					entries={panelOptions.map((p) => ({
@@ -473,7 +500,10 @@ const FacetAxisSubsection = ({
 						min: panelOverrideOf(p.ref)?.[spec.panelBoundKeys.min],
 						max: panelOverrideOf(p.ref)?.[spec.panelBoundKeys.max],
 						onChange: (bound, raw) => updatePanelOverride(p.ref, bound, raw),
+						ticks: panelOverrideOf(p.ref)?.[spec.panelTicksKey],
+						onTicksChange: (ticks) => updatePanelTicks(p.ref, ticks),
 					}))}
+					isTemporal={drawnAxisType === "temporal"}
 				/>
 			)}
 		</CollapsibleSubsection>
@@ -484,7 +514,7 @@ const FacetAxisSubsection = ({
  *  Each panel hosts BOTH axis subsections (its own axis first, then the
  *  perpendicular one) — share modes are grid-wide, so a user on the
  *  Facet (col) panel can unshare Y without hopping to Facet (row) — plus
- *  the "Custom sizing" block for its own direction: gap, panel
+ *  the "Panel Spacing & Sizing" block for its own direction: gap, panel
  *  dimension, and the hide-empty-panels toggle. The "own axis" channel
  *  depends on the chart mode (y / r for rows, x / angle for columns,
  *  none for pie rows) — see `facetAxisMapping`. The wrap panel
@@ -586,7 +616,7 @@ export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
 				isOwnAxis={false}
 			/>
 
-			<CollapsibleSubsection title="Custom sizing">
+			<CollapsibleSubsection title="Panel Spacing & Sizing">
 				<GapInput
 					label={spec.gapLabel}
 					value={cfg[spec.gapKey]}

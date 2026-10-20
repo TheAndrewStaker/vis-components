@@ -191,6 +191,30 @@ describe("buildSolverPanelInputs", () => {
 		expect(inputs[0].yLabels).toEqual(["2.5"])
 	})
 
+	it("samples a facet panel's Custom breaks in place of its auto ticks + breaks", () => {
+		// Row-only grid, share Y = none: each row panel reads its own row entry.
+		const inputs = build({
+			rows: [
+				{ cat: "a", val: "0", g: "g1" },
+				{ cat: "b", val: "10", g: "g1" },
+				{ cat: "a", val: "0", g: "g2" },
+				{ cat: "b", val: "10", g: "g2" },
+			],
+			encodings: xyEncodings("cat", "val", "g"),
+			isFaceted: true,
+			facetCfg: {
+				...DEFAULT_FACET_CONFIG,
+				shareY: "none",
+				rowAxisOverrides: { g1: { ticks: [1000000, 5] } },
+			},
+			channelConfigs: { y: { ...DEFAULT_AXIS_CONFIG, breaks: [2.5] } },
+		})
+		// Exactly the custom ticks, formatted as the Axis draws them.
+		expect(inputs[0].yLabels).toEqual(["1,000,000", "5"])
+		// The other row keeps the normal layout (auto + the 2.5 break).
+		expect(inputs[1].yLabels).toContain("2.5")
+	})
+
 	// Vertical bars / areas draw the `length` measure on y. Sampling
 	// `encodings.y` here found no field, measured a 0px label width, and
 	// let the y-title gap collapse onto the tick labels (the stacked-area

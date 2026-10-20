@@ -95,6 +95,8 @@ export const FacetPanel = ({
 		measureMinOverride,
 		measureMaxOverride,
 		measurePinnedBounds,
+		xTicksOverride,
+		yTicksOverride,
 		rMinOverride,
 		rMaxOverride,
 		radiusScale,
@@ -151,6 +153,10 @@ export const FacetPanel = ({
 		measureMinOverride,
 		measureMaxOverride,
 		measurePinnedBounds,
+		// Facet range editors' "Custom breaks" — replace this panel's
+		// tick layout on that axis.
+		xTicksOverride,
+		yTicksOverride,
 		// Histogram measure-color global domain max (undefined
 		// unless a Count/Density color/opacity source is active).
 		measureColorMaxOverride,

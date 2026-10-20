@@ -327,7 +327,7 @@ export const AestheticsPanel = () => {
 					<p className="vc-help">
 						Keeps every panel&apos;s plot area at a set width-to-height shape
 						no matter the viewport size. 1 : 1 makes the axes equal length. Faceted charts apply the
-						shape to each panel. Overrides Custom sizing in
+						shape to each panel. Overrides Panel Spacing & Sizing in
 						Facet, proportional panel weights, and
 						scroll-mode panel minimums.
 					</p>

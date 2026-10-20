@@ -155,91 +155,28 @@ export const resolvePanelRenderInputs = ({
 		axisFields.xType === "quantitative" ||
 		axisFields.xType === "temporal" ||
 		xIsMeasureAxis
-	const rowValueForPanel =
-		panelData.mode === "grid"
-			? panelFV.rowValue ?? undefined
-			: undefined
-	const colValueForPanel =
-		panelData.mode === "grid"
-			? panelFV.colValue ?? undefined
-			: undefined
-	// Group-axis overrides: grid mode keys by facet value (e.g.
-	// "Ideal"); wrap mode keys by layout row/col INDEX as string
-	// ("0", "1", …) because wrap layout rows don't have a value.
-	// Both modes consult the same `rowAxisOverrides` /
-	// `colAxisOverrides` maps — keys never collide because grid
-	// values are real names while wrap keys are bare integers.
-	const yPerGroupKey =
-		panelData.mode === "grid"
-			? rowValueForPanel !== undefined &&
-				rowValueForPanel !== "__all__"
-				? rowValueForPanel
-				: undefined
-			: String(p.row)
-	const xPerGroupKey =
-		panelData.mode === "grid"
-			? colValueForPanel !== undefined &&
-				colValueForPanel !== "__all__"
-				? colValueForPanel
-				: undefined
-			: String(p.col)
-	// Row-axis override applies under:
-	//   - shareY === "perGroup": pins the row's shared scale.
-	//   - shareY === "none" + grid mode + cols === 1: each row
-	//     is a single panel, so the row override = per-panel
-	//     bound (the row/col sidebar exposes the editor under
-	//     this case too).
-	// Wrap mode shareY=none uses `panelAxisOverrides` via
-	// `legacyPanelOverride` below, not this map.
-	const rowOverrideApplies =
-		shareYMode === "perGroup" ||
-		(shareYMode === "none" &&
-			panelData.mode === "grid" &&
-			panelData.grid.cols === 1)
-	const colOverrideApplies =
-		shareXMode === "perGroup" ||
-		(shareXMode === "none" &&
-			panelData.mode === "grid" &&
-			panelData.grid.rows === 1)
-	const yGroupOverride =
-		rowOverrideApplies && yIsContinuous && yPerGroupKey != null
-			? facetCfg.rowAxisOverrides?.[yPerGroupKey]
-			: undefined
-	const xGroupOverride =
-		colOverrideApplies && xIsContinuous && xPerGroupKey != null
-			? facetCfg.colAxisOverrides?.[xPerGroupKey]
-			: undefined
-	// Overall axis range: applies under share=="all" with a
-	// continuous axis. Lets the user pin the shared scale to a
-	// "pretty" start (e.g. 0) or fixed upper bound.
-	const yOverallOverride =
-		shareYMode === "all" && yIsContinuous
-			? facetCfg.overallYRange
-			: undefined
-	const xOverallOverride =
-		shareXMode === "all" && xIsContinuous
-			? facetCfg.overallXRange
-			: undefined
-	// Per-panel overrides. Wrap mode: `panelAxisOverrides`, keyed by the
-	// single facet value (== p.key). Grid mode: the row / column panels'
-	// "range per panel" editor writes `gridPanelAxisOverrides` (row value,
-	// then column value) when that axis is unshared and the other
-	// direction has 2+ panels — so it's read only under share "none" for
-	// the axis in question, never outranking a shared scale.
-	const panelOverride =
-		panelData.mode === "grid"
-			? gridPanelAxisOverride(facetCfg, panelFV.rowValue, panelFV.colValue)
-			: facetCfg.panelAxisOverrides?.[p.key]
-	const legacyPanelOverride =
-		panelData.mode === "wrap" ? panelOverride : undefined
-	const xPanelOverride =
-		panelData.mode === "grid" && shareXMode === "none" && xIsContinuous
-			? panelOverride
-			: legacyPanelOverride
-	const yPanelOverride =
-		panelData.mode === "grid" && shareYMode === "none" && yIsContinuous
-			? panelOverride
-			: legacyPanelOverride
+	const rangeOverrides = resolvePanelRangeOverrides({
+		p,
+		panelData,
+		shareXMode,
+		shareYMode,
+		facetCfg,
+		xIsContinuous,
+		yIsContinuous,
+	})
+	const {
+		xPerGroupKey,
+		yPerGroupKey,
+		xGroupOverride,
+		yGroupOverride,
+		xOverallOverride,
+		yOverallOverride,
+		xPanelOverride,
+		yPanelOverride,
+	} = rangeOverrides
+	// "Custom breaks" ride on the same entries as the bounds, in the
+	// same precedence.
+	const { xTicksOverride, yTicksOverride } = panelTicksOverrides(rangeOverrides)
 	// Per-encoding base bounds from the X / Y axis option panels.
 	// Lowest precedence — facet-level overrides above win where set,
 	// but on single-panel charts (and faceted panels without a more
@@ -360,8 +297,157 @@ export const resolvePanelRenderInputs = ({
 		measureMinOverride,
 		measureMaxOverride,
 		measurePinnedBounds,
+		xTicksOverride,
+		yTicksOverride,
 		rMinOverride,
 		rMaxOverride,
 		radiusScale,
 	}
 }
+
+/** The facet range-editor entries that bound one panel's x / y axis, each
+ *  gated the way the sidebar surfaces its editor: the per-row / per-column
+ *  entry (`rowAxisOverrides` / `colAxisOverrides`), the overall range under
+ *  share "all", and the per-panel entry (wrap mode's `panelAxisOverrides`,
+ *  grid mode's `gridPanelAxisOverrides` under share "none"). Earlier
+ *  sources win where several are set. Shared by the panel render inputs
+ *  and the layout solver's tick-label sampling so both read one panel's
+ *  overrides identically. */
+export const resolvePanelRangeOverrides = ({
+	p,
+	panelData,
+	shareXMode,
+	shareYMode,
+	facetCfg,
+	xIsContinuous,
+	yIsContinuous,
+}: {
+	p: Pick<SolverPanelOutput, "key" | "row" | "col">
+	panelData: FacetPanels
+	shareXMode: "none" | "perGroup" | "all"
+	shareYMode: "none" | "perGroup" | "all"
+	facetCfg: FacetConfig
+	xIsContinuous: boolean
+	yIsContinuous: boolean
+}) => {
+	const panelFV = panelFacetValues(
+		panelData,
+		p.key,
+		p.row * panelData.grid.cols + p.col,
+	)
+	const rowValueForPanel =
+		panelData.mode === "grid"
+			? panelFV.rowValue ?? undefined
+			: undefined
+	const colValueForPanel =
+		panelData.mode === "grid"
+			? panelFV.colValue ?? undefined
+			: undefined
+	// Group-axis overrides: grid mode keys by facet value (e.g.
+	// "Ideal"); wrap mode keys by layout row/col INDEX as string
+	// ("0", "1", …) because wrap layout rows don't have a value.
+	// Both modes consult the same `rowAxisOverrides` /
+	// `colAxisOverrides` maps — keys never collide because grid
+	// values are real names while wrap keys are bare integers.
+	const yPerGroupKey =
+		panelData.mode === "grid"
+			? rowValueForPanel !== undefined &&
+				rowValueForPanel !== "__all__"
+				? rowValueForPanel
+				: undefined
+			: String(p.row)
+	const xPerGroupKey =
+		panelData.mode === "grid"
+			? colValueForPanel !== undefined &&
+				colValueForPanel !== "__all__"
+				? colValueForPanel
+				: undefined
+			: String(p.col)
+	// Row-axis override applies under:
+	//   - shareY === "perGroup": pins the row's shared scale.
+	//   - shareY === "none" + grid mode + cols === 1: each row
+	//     is a single panel, so the row override = per-panel
+	//     bound (the row/col sidebar exposes the editor under
+	//     this case too).
+	// Wrap mode shareY=none uses `panelAxisOverrides` via
+	// `legacyPanelOverride` below, not this map.
+	const rowOverrideApplies =
+		shareYMode === "perGroup" ||
+		(shareYMode === "none" &&
+			panelData.mode === "grid" &&
+			panelData.grid.cols === 1)
+	const colOverrideApplies =
+		shareXMode === "perGroup" ||
+		(shareXMode === "none" &&
+			panelData.mode === "grid" &&
+			panelData.grid.rows === 1)
+	const yGroupOverride =
+		rowOverrideApplies && yIsContinuous && yPerGroupKey != null
+			? facetCfg.rowAxisOverrides?.[yPerGroupKey]
+			: undefined
+	const xGroupOverride =
+		colOverrideApplies && xIsContinuous && xPerGroupKey != null
+			? facetCfg.colAxisOverrides?.[xPerGroupKey]
+			: undefined
+	// Overall axis range: applies under share=="all" with a
+	// continuous axis. Lets the user pin the shared scale to a
+	// "pretty" start (e.g. 0) or fixed upper bound.
+	const yOverallOverride =
+		shareYMode === "all" && yIsContinuous
+			? facetCfg.overallYRange
+			: undefined
+	const xOverallOverride =
+		shareXMode === "all" && xIsContinuous
+			? facetCfg.overallXRange
+			: undefined
+	// Per-panel overrides. Wrap mode: `panelAxisOverrides`, keyed by the
+	// single facet value (== p.key). Grid mode: the row / column panels'
+	// "range per panel" editor writes `gridPanelAxisOverrides` (row value,
+	// then column value) when that axis is unshared and the other
+	// direction has 2+ panels — so it's read only under share "none" for
+	// the axis in question, never outranking a shared scale.
+	const panelOverride =
+		panelData.mode === "grid"
+			? gridPanelAxisOverride(facetCfg, panelFV.rowValue, panelFV.colValue)
+			: facetCfg.panelAxisOverrides?.[p.key]
+	const legacyPanelOverride =
+		panelData.mode === "wrap" ? panelOverride : undefined
+	const xPanelOverride =
+		panelData.mode === "grid" && shareXMode === "none" && xIsContinuous
+			? panelOverride
+			: legacyPanelOverride
+	const yPanelOverride =
+		panelData.mode === "grid" && shareYMode === "none" && yIsContinuous
+			? panelOverride
+			: legacyPanelOverride
+	return {
+		xPerGroupKey,
+		yPerGroupKey,
+		xGroupOverride,
+		yGroupOverride,
+		xOverallOverride,
+		yOverallOverride,
+		xPanelOverride,
+		yPanelOverride,
+	}
+}
+
+const nonEmpty = (ticks: number[] | undefined): number[] | undefined =>
+	ticks && ticks.length > 0 ? ticks : undefined
+
+/** A panel's "Custom breaks" per pixel axis, from the entries
+ *  `resolvePanelRangeOverrides` found — same precedence as the bounds
+ *  (group → overall → panel). An empty list (checkbox on, nothing typed)
+ *  falls through, and undefined means the axis keeps its normal layout. */
+export const panelTicksOverrides = (
+	o: ReturnType<typeof resolvePanelRangeOverrides>,
+): { xTicksOverride?: number[]; yTicksOverride?: number[] } => ({
+	xTicksOverride:
+		nonEmpty(o.xGroupOverride?.ticks) ??
+		nonEmpty(o.xOverallOverride?.ticks) ??
+		nonEmpty(o.xPanelOverride?.xTicks),
+	yTicksOverride:
+		nonEmpty(o.yGroupOverride?.ticks) ??
+		nonEmpty(o.yOverallOverride?.ticks) ??
+		nonEmpty(o.yPanelOverride?.yTicks),
+})

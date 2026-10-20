@@ -7,14 +7,17 @@
 import { useEffect, useMemo } from "react"
 import {
 	gridPanelAxisOverride,
+	type AxisRangeOverride,
 	type FacetConfig,
 	type PanelAxisOverride,
 } from "../../../lib/channelConfig"
 import type { FacetPanelRef } from "../../../lib/facetPanelRef"
 
+import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { LABEL_COL, LabelSpacer } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
+import { BreaksField } from "./BreaksField"
 
 /** Segmented control for one axis's share mode. Three options:
  *
@@ -214,74 +217,154 @@ export const SizeByCheckboxRow = ({
 
 /** One row of an axis-range editor: optional entry label (facet value,
  *  "Row 2", …) above a min / max input pair. Entries without a label
- *  render just the input pair (the "overall range" case). */
+ *  render just the input pair (the "overall range" case). An entry with
+ *  `onTicksChange` also offers "Custom breaks" under max: checking it
+ *  opens a box whose values REPLACE the ticks of the panels that entry
+ *  bounds (`AxisRangeOverride.ticks`). `ticks` present = checked. */
 export type AxisRangeEntry = {
 	key: string
 	label?: string
 	min?: number
 	max?: number
 	onChange: (bound: "min" | "max", raw: string) => void
+	ticks?: readonly number[]
+	/** `undefined` = unchecked (the entry's ticks are dropped). */
+	onTicksChange?: (ticks: number[] | undefined) => void
 }
+
+/** "Custom breaks" checkbox + its tick box for one range entry. */
+const CustomTicksControl = ({
+	entryLabel,
+	ticks,
+	isTemporal,
+	onChange,
+}: {
+	entryLabel?: string
+	ticks: readonly number[] | undefined
+	isTemporal: boolean
+	onChange: (ticks: number[] | undefined) => void
+}) => (
+	<>
+		<div className="flex items-center gap-2 text-sm">
+			<LabelSpacer />
+			<label className="flex items-center gap-2 vc-text">
+				<input
+					type="checkbox"
+					checked={ticks !== undefined}
+					onChange={(e) => onChange(e.target.checked ? [] : undefined)}
+					aria-label={
+						entryLabel ? `Custom breaks for ${entryLabel}` : undefined
+					}
+					className="cursor-pointer"
+				/>
+				Custom breaks
+			</label>
+		</div>
+		{ticks !== undefined && (
+			<BreaksField
+				label="Breaks"
+				isTemporal={isTemporal}
+				breaks={ticks}
+				onCommit={onChange}
+				changed={ticks.length > 0}
+				hint="Replaces the automatic ticks and any custom breaks. Ticks outside the range aren't shown."
+			/>
+		)}
+	</>
+)
 
 /** Bordered range-editor section: title, help copy, then one min / max
  *  editor per entry. Serves every share mode — pass a single unlabeled
  *  entry for an overall range, or one labeled entry per row / column /
- *  panel for the per-group modes. */
+ *  panel for the per-group modes. `collapsible` folds the body under a
+ *  chevron header (collapsed by default) for the long per-panel lists.
+ *  Every call site already sits inside a white subsection card, so the
+ *  nested subsection is unboxed — no purple card-in-card. */
 export const AxisRangeSection = ({
 	title,
 	help,
 	entries,
+	collapsible = false,
+	isTemporal = false,
 	className,
 }: {
 	title: string
 	help: string
 	entries: AxisRangeEntry[]
+	collapsible?: boolean
+	/** Date axis: custom tick values read and print as dates. */
+	isTemporal?: boolean
 	className?: string
-}) => (
-	<div
-		className={cls(
-			"vc-divider-group",
-			className,
-		)}
-	>
-		<div className="text-sm vc-text">
-			{title}
-		</div>
-		<div className="vc-help">{help}</div>
-		<div className="flex flex-col gap-2">
-			{entries.map((entry) => (
-				<div key={entry.key} className="flex flex-col gap-1 text-sm">
-					{entry.label !== undefined && (
-						<span
-							className="truncate vc-text"
-							title={entry.label}
-						>
-							{entry.label}
-						</span>
-					)}
-					<div className="flex flex-col gap-1">
-						<NumberInput
-							label="min"
-							labelClassName={LABEL_COL}
-							value={entry.min ?? null}
-							onChange={(n) => entry.onChange("min", String(n))}
-							onClear={() => entry.onChange("min", "")}
-							inputClassName="w-16"
-						/>
-						<NumberInput
-							label="max"
-							labelClassName={LABEL_COL}
-							value={entry.max ?? null}
-							onChange={(n) => entry.onChange("max", String(n))}
-							onClear={() => entry.onChange("max", "")}
-							inputClassName="w-16"
-						/>
+}) => {
+	const body = (
+		<>
+			<div className="vc-help">{help}</div>
+			<div className="flex flex-col gap-2">
+				{entries.map((entry) => (
+					<div key={entry.key} className="flex flex-col gap-1 text-sm">
+						{entry.label !== undefined && (
+							<span
+								className="truncate vc-group-header"
+								title={entry.label}
+							>
+								{entry.label}
+							</span>
+						)}
+						<div className="flex flex-col gap-1">
+							<NumberInput
+								label="min"
+								labelClassName={LABEL_COL}
+								value={entry.min ?? null}
+								onChange={(n) => entry.onChange("min", String(n))}
+								onClear={() => entry.onChange("min", "")}
+								inputClassName="w-16"
+							/>
+							<NumberInput
+								label="max"
+								labelClassName={LABEL_COL}
+								value={entry.max ?? null}
+								onChange={(n) => entry.onChange("max", String(n))}
+								onClear={() => entry.onChange("max", "")}
+								inputClassName="w-16"
+							/>
+							{entry.onTicksChange && (
+								<CustomTicksControl
+									entryLabel={entry.label}
+									ticks={entry.ticks}
+									isTemporal={isTemporal}
+									onChange={entry.onTicksChange}
+								/>
+							)}
+						</div>
 					</div>
-				</div>
-			))}
+				))}
+			</div>
+		</>
+	)
+	return (
+		<div className={cls("vc-divider-group", className)}>
+			{collapsible ? (
+				<CollapsibleSubsection
+					title={title}
+					boxed={false}
+					changed={entries.some(
+						(e) =>
+							e.min !== undefined ||
+							e.max !== undefined ||
+							(e.ticks?.length ?? 0) > 0,
+					)}
+				>
+					{body}
+				</CollapsibleSubsection>
+			) : (
+				<>
+					<div className="text-sm vc-text">{title}</div>
+					{body}
+				</>
+			)}
 		</div>
-	</div>
-)
+	)
+}
 
 /** Gap X / Gap Y input with a reset button that appears when the value
  *  differs from the default. The gap runs plot edge to plot edge, so 0
@@ -368,11 +451,11 @@ export const PanelDimInput = ({
  * Shared non-UI helpers.
  * ──────────────────────────────────────────────────────────────────── */
 
-type MinMax = { min?: number; max?: number }
+type MinMax = AxisRangeOverride
 
 /** Apply one min / max bound edit to an override entry. Empty input
  *  clears that bound; non-numeric garbage returns null (caller ignores
- *  the edit). */
+ *  the edit). Custom ticks on the entry ride along. */
 export const withBound = (
 	current: MinMax | undefined,
 	bound: "min" | "max",
@@ -389,9 +472,36 @@ export const withBound = (
 	return next
 }
 
-/** Apply one bound edit to a keyed override map. When both bounds on an
- *  entry clear, the entry is dropped entirely. Returns the next map, or
- *  null when the edit was invalid and should be ignored. */
+/** Set (or, with `undefined`, drop) an override entry's custom ticks. */
+export const withTicks = (
+	current: MinMax | undefined,
+	ticks: number[] | undefined,
+): MinMax => {
+	const next: MinMax = { ...(current ?? {}) }
+	if (ticks === undefined) delete next.ticks
+	else next.ticks = ticks
+	return next
+}
+
+const isEmptyEntry = (e: object): boolean =>
+	Object.values(e).every((v) => v === undefined)
+
+/** Store `next` under `key`, dropping the key once the entry is empty. */
+const withEntryInMap = <T extends object>(
+	map: Record<string, T> | undefined,
+	key: string,
+	next: T,
+): Record<string, T> => {
+	const all = { ...(map ?? {}) }
+	if (isEmptyEntry(next)) delete all[key]
+	else all[key] = next
+	return all
+}
+
+/** Apply one bound edit to a keyed override map. When the entry has
+ *  nothing left (no bounds, no custom ticks), it is dropped entirely.
+ *  Returns the next map, or null when the edit was invalid and should be
+ *  ignored. */
 export const withBoundInMap = (
 	map: Record<string, MinMax> | undefined,
 	key: string,
@@ -399,52 +509,59 @@ export const withBoundInMap = (
 	raw: string,
 ): Record<string, MinMax> | null => {
 	const next = withBound(map?.[key], bound, raw)
-	if (next === null) return null
-	const all = { ...(map ?? {}) }
-	if (next.min !== undefined || next.max !== undefined) {
-		all[key] = next
-	} else {
-		delete all[key]
-	}
-	return all
+	return next === null ? null : withEntryInMap(map, key, next)
 }
 
-/** One bound edit applied to a panel's override entry (xMin / xMax /
- *  yMin / yMax). Empty input clears that bound. Returns the next entry —
- *  `undefined` when every bound has cleared, so the caller drops it — or
- *  `null` when the edit was invalid and should be ignored. */
-const withPanelEntryBound = (
+/** Custom-ticks counterpart of `withBoundInMap`. */
+export const withTicksInMap = (
+	map: Record<string, MinMax> | undefined,
+	key: string,
+	ticks: number[] | undefined,
+): Record<string, MinMax> =>
+	withEntryInMap(map, key, withTicks(map?.[key], ticks))
+
+/** An edit to one panel's override entry: the next entry — `undefined`
+ *  once nothing is left on it, so the caller drops it — or `null` when the
+ *  edit was invalid and should be ignored. */
+type PanelEntryEdit = (
 	entry: PanelAxisOverride | undefined,
-	bound: keyof PanelAxisOverride,
-	raw: string,
-): PanelAxisOverride | undefined | null => {
-	const next: PanelAxisOverride = { ...(entry ?? {}) }
-	if (raw.trim() === "") {
-		delete next[bound]
-	} else {
-		const n = Number(raw)
-		if (!Number.isFinite(n)) return null
-		next[bound] = n
-	}
-	const stillHasAny =
-		next.xMin !== undefined ||
-		next.xMax !== undefined ||
-		next.yMin !== undefined ||
-		next.yMax !== undefined
-	return stillHasAny ? next : undefined
-}
+) => PanelAxisOverride | undefined | null
 
-/** Apply one bound edit to the wrap panel's per-panel `panelAxisOverrides`
- *  map (keyed by facet value). When every bound on the panel clears, the
- *  entry is dropped. Returns the next map, or null when the edit was
- *  invalid and should be ignored. */
-export const withPanelBound = (
+const compactPanelEntry = (
+	next: PanelAxisOverride,
+): PanelAxisOverride | undefined => (isEmptyEntry(next) ? undefined : next)
+
+/** One bound edit (xMin / xMax / yMin / yMax). Empty input clears it. */
+const panelBoundEdit =
+	(bound: "xMin" | "xMax" | "yMin" | "yMax", raw: string): PanelEntryEdit =>
+	(entry) => {
+		const next: PanelAxisOverride = { ...(entry ?? {}) }
+		if (raw.trim() === "") {
+			delete next[bound]
+		} else {
+			const n = Number(raw)
+			if (!Number.isFinite(n)) return null
+			next[bound] = n
+		}
+		return compactPanelEntry(next)
+	}
+
+/** Set (or, with `undefined`, drop) xTicks / yTicks. */
+const panelTicksEdit =
+	(field: "xTicks" | "yTicks", ticks: number[] | undefined): PanelEntryEdit =>
+	(entry) => {
+		const next: PanelAxisOverride = { ...(entry ?? {}) }
+		if (ticks === undefined) delete next[field]
+		else next[field] = ticks
+		return compactPanelEntry(next)
+	}
+
+const applyPanelEdit = (
 	map: Record<string, PanelAxisOverride> | undefined,
 	panelKey: string,
-	bound: keyof PanelAxisOverride,
-	raw: string,
+	edit: PanelEntryEdit,
 ): Record<string, PanelAxisOverride> | null => {
-	const next = withPanelEntryBound(map?.[panelKey], bound, raw)
+	const next = edit(map?.[panelKey])
 	if (next === null) return null
 	const all = { ...(map ?? {}) }
 	if (next) all[panelKey] = next
@@ -452,29 +569,45 @@ export const withPanelBound = (
 	return all
 }
 
-/** Apply one bound edit to a GRID panel's entry — the row / column panels'
+/** Apply one bound edit to the wrap panel's per-panel `panelAxisOverrides`
+ *  map (keyed by facet value). When nothing is left on the panel's entry,
+ *  it is dropped. Returns the next map, or null when the edit was invalid
+ *  and should be ignored. */
+export const withPanelBound = (
+	map: Record<string, PanelAxisOverride> | undefined,
+	panelKey: string,
+	bound: "xMin" | "xMax" | "yMin" | "yMax",
+	raw: string,
+): Record<string, PanelAxisOverride> | null =>
+	applyPanelEdit(map, panelKey, panelBoundEdit(bound, raw))
+
+/** Custom-ticks counterpart of `withPanelBound`. */
+export const withPanelTicks = (
+	map: Record<string, PanelAxisOverride> | undefined,
+	panelKey: string,
+	field: "xTicks" | "yTicks",
+	ticks: number[] | undefined,
+): Record<string, PanelAxisOverride> =>
+	applyPanelEdit(map, panelKey, panelTicksEdit(field, ticks)) ?? {}
+
+/** Apply one edit to a GRID panel's entry — the row / column panels'
  *  "range per panel" editor when the other direction has 2+ panels. Writes
  *  `gridPanelAxisOverrides[row][col]` (dropping an emptied entry, and an
  *  emptied row) and clears the joined-key entry a pre-structure build left
  *  in `panelAxisOverrides` for the same panel, so the first edit after an
  *  upgrade leaves one source of truth. Returns the config patch, or null
  *  when the edit was invalid and should be ignored. A wrap-mode reference
- *  (a bare facet value) goes through `withPanelBound` instead. */
-export const withGridPanelBound = (
+ *  (a bare facet value) edits `panelAxisOverrides` instead. */
+const applyGridPanelEdit = (
 	cfg: Pick<FacetConfig, "gridPanelAxisOverrides" | "panelAxisOverrides">,
 	ref: FacetPanelRef,
-	bound: keyof PanelAxisOverride,
-	raw: string,
+	edit: PanelEntryEdit,
 ): Partial<FacetConfig> | null => {
 	if (typeof ref === "string") {
-		const flat = withPanelBound(cfg.panelAxisOverrides, ref, bound, raw)
+		const flat = applyPanelEdit(cfg.panelAxisOverrides, ref, edit)
 		return flat ? { panelAxisOverrides: flat } : null
 	}
-	const next = withPanelEntryBound(
-		gridPanelAxisOverride(cfg, ref.row, ref.col),
-		bound,
-		raw,
-	)
+	const next = edit(gridPanelAxisOverride(cfg, ref.row, ref.col))
 	if (next === null) return null
 	const grid = { ...(cfg.gridPanelAxisOverrides ?? {}) }
 	const byCol = { ...(grid[ref.row] ?? {}) }
@@ -490,6 +623,25 @@ export const withGridPanelBound = (
 	}
 	return { gridPanelAxisOverrides: grid }
 }
+
+/** One bound edit to a grid (or wrap) panel's entry — see
+ *  `applyGridPanelEdit`. */
+export const withGridPanelBound = (
+	cfg: Pick<FacetConfig, "gridPanelAxisOverrides" | "panelAxisOverrides">,
+	ref: FacetPanelRef,
+	bound: "xMin" | "xMax" | "yMin" | "yMax",
+	raw: string,
+): Partial<FacetConfig> | null =>
+	applyGridPanelEdit(cfg, ref, panelBoundEdit(bound, raw))
+
+/** Custom-ticks counterpart of `withGridPanelBound`. */
+export const withGridPanelTicks = (
+	cfg: Pick<FacetConfig, "gridPanelAxisOverrides" | "panelAxisOverrides">,
+	ref: FacetPanelRef,
+	field: "xTicks" | "yTicks",
+	ticks: number[] | undefined,
+): Partial<FacetConfig> =>
+	applyGridPanelEdit(cfg, ref, panelTicksEdit(field, ticks)) ?? {}
 
 /** Invariant: an explicit panel width / height must not coexist with
  *  active proportional sizing on the same axis — they'd fight, and the

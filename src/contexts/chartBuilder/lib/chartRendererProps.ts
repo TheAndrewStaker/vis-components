@@ -70,6 +70,11 @@ export type CartesianRendererProps = ChartRendererBaseProps & {
 	 *  call for a smaller margin. */
 	extraMarginFloorLeft?: number
 	extraMarginFloorBottom?: number
+	/** A facet panel's "Custom breaks" for its x / y pixel axis (the
+	 *  facet range editors). A non-empty list REPLACES that continuous axis's
+	 *  tick layout (`Axis.replaceTicks`). Unset = the normal layout. */
+	xTicksOverride?: readonly number[]
+	yTicksOverride?: readonly number[]
 }
 
 /** Adds per-axis scale-row overrides — Scatter and Tile share one axis

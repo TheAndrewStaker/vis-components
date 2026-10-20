@@ -323,6 +323,92 @@ describe("resolvePanelRenderInputs", () => {
 		})
 	})
 
+	describe("Custom breaks (ticks overrides)", () => {
+		it("wrap panel: panelAxisOverrides xTicks / yTicks reach the renderer", () => {
+			const r = runPanel({
+				key: "g1",
+				rows: gridRows,
+				encodings: wrapEncodings(),
+				axisFields: { ...AXIS_CAT_X_QUANT_Y, xType: "quantitative" },
+				facetCfg: {
+					...DEFAULT_FACET_CONFIG,
+					panelAxisOverrides: { g1: { yTicks: [0, 5, 10], xTicks: [1] } },
+				},
+			})
+			expect(r.yTicksOverride).toEqual([0, 5, 10])
+			expect(r.xTicksOverride).toEqual([1])
+		})
+
+		it("grid panel: gridPanelAxisOverrides[row][col].yTicks under share 'none'", () => {
+			const r = runPanel({
+				key: "g1|h1",
+				rows: gridRows,
+				encodings: gridEncodings(),
+				shareYMode: "none",
+				facetCfg: {
+					...DEFAULT_FACET_CONFIG,
+					gridPanelAxisOverrides: { g1: { h1: { yTicks: [2, 4] } } },
+				},
+			})
+			expect(r.yTicksOverride).toEqual([2, 4])
+		})
+
+		it("overall range ticks apply to every panel under share 'all'", () => {
+			const r = runPanel({
+				key: "g2|h2",
+				rows: gridRows,
+				encodings: gridEncodings(),
+				shareYMode: "all",
+				facetCfg: {
+					...DEFAULT_FACET_CONFIG,
+					overallYRange: { min: 0, ticks: [0, 50, 100] },
+				},
+			})
+			expect(r.yTicksOverride).toEqual([0, 50, 100])
+		})
+
+		it("per-row ticks under share 'perGroup' key by the row value", () => {
+			const r = runPanel({
+				key: "g2|h1",
+				rows: gridRows,
+				encodings: gridEncodings(),
+				shareYMode: "perGroup",
+				facetCfg: {
+					...DEFAULT_FACET_CONFIG,
+					rowAxisOverrides: { g1: { ticks: [1] }, g2: { ticks: [3, 6] } },
+				},
+			})
+			expect(r.yTicksOverride).toEqual([3, 6])
+		})
+
+		it("an empty list (checkbox on, nothing typed) leaves the normal layout", () => {
+			const r = runPanel({
+				key: "g1",
+				rows: gridRows,
+				encodings: wrapEncodings(),
+				facetCfg: {
+					...DEFAULT_FACET_CONFIG,
+					panelAxisOverrides: { g1: { yTicks: [] } },
+				},
+			})
+			expect(r.yTicksOverride).toBeUndefined()
+		})
+
+		it("ignored on a categorical axis, like the bounds", () => {
+			const r = runPanel({
+				key: "g1|h1",
+				rows: gridRows,
+				encodings: gridEncodings(),
+				shareXMode: "none",
+				facetCfg: {
+					...DEFAULT_FACET_CONFIG,
+					gridPanelAxisOverrides: { g1: { h1: { xTicks: [1, 2] } } },
+				},
+			})
+			expect(r.xTicksOverride).toBeUndefined()
+		})
+	})
+
 	describe("measure-axis translation (bar / area family)", () => {
 		it("feeds groupMeasureMaxByKey into measureMaxOverride when no user bound is set", () => {
 			const r = runPanel({

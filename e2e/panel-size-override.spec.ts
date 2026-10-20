@@ -71,9 +71,9 @@ const setup4x1 = async (page: Page): Promise<void> => {
 	// locate by accessible label, not a label>input descendant query.
 	await enc.getByLabel(/^Rows$/).first().fill("4")
 	await enc.getByLabel(/^Columns$/).first().fill("1")
-	// Panel width / height live under the "Custom sizing" subheader, which
+	// Panel width / height live under the "Panel Spacing & Sizing" subheader, which
 	// setPanelHeight / setPanelWidth reach into next.
-	await expandSubsection(page, "Custom sizing")
+	await expandSubsection(page, "Panel Spacing & Sizing")
 	await page.waitForTimeout(400)
 }
 
@@ -247,7 +247,7 @@ test("panel-width override: 4 cols × 250 px wide on a 1×4 layout", async ({
 	// locate by accessible label, not a label>input descendant query.
 	await enc.getByLabel(/^Rows$/).first().fill("1")
 	await enc.getByLabel(/^Columns$/).first().fill("4")
-	await expandSubsection(page, "Custom sizing")
+	await expandSubsection(page, "Panel Spacing & Sizing")
 	await page.waitForTimeout(400)
 
 	await setPanelWidth(page, 250)

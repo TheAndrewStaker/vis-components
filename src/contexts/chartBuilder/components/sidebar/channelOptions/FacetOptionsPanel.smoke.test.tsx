@@ -67,6 +67,10 @@ const facetConfigs = (facet: Partial<FacetConfig> = {}): Partial<ChannelConfigs>
 	facet: { ...DEFAULT_FACET_CONFIG, ...facet },
 })
 
+/** The Jotai store behind the most recent `mount`, for reading written
+ *  configs back. */
+let lastStore: TestStore | undefined
+
 const mount = (
 	encodings: Encodings,
 	configs: Partial<ChannelConfigs>,
@@ -82,6 +86,7 @@ const mount = (
 	set("vis-components:currentChannelConfigs", configs)
 	/* eslint-enable @vc/use-wrapped-json-functions */
 	const init = (snap: TestStore) => {
+		lastStore = snap
 		snap.set(loadedDatasetsAtom, { [ID]: buildDataset() })
 		snap.set(currentDatasetIdAtom, ID)
 		snap.set(previewVersionIdAtom, null)
@@ -106,11 +111,29 @@ describe("FacetOptionsPanel — Y range editors on a length-encoded bar chart", 
 		)
 		expand(utils, /rows/i)
 		expect(utils.getByText("Y axis range per panel")).toBeTruthy()
+		expand(utils, /Y axis range per panel/i)
 		expect(utils.getByText("Home")).toBeTruthy()
 		expect(utils.getByText("Everything else")).toBeTruthy()
 		// The unit-range sizing toggle is offered on the Length measure axis:
 		// the solver weighs it by the measure extent, same as the renderer.
 		expect(utils.queryByText(/size (row|panel) heights by unit range/i)).toBeTruthy()
+	})
+
+	it("wrap mode per-panel Custom breaks store yTicks on that facet value's entry", () => {
+		const utils = mount(
+			lengthBarEncodings({ facet: { field: "panel" } }),
+			facetConfigs({ shareY: "none" }),
+			<FacetOptionsPanel />,
+		)
+		expand(utils, /rows/i)
+		expand(utils, /Y axis range per panel/i)
+		fireEvent.click(utils.getByLabelText("Custom breaks for Home"))
+		const ticks = utils.getByLabelText("Breaks") as HTMLInputElement
+		fireEvent.change(ticks, { target: { value: "0, 25, 50" } })
+		fireEvent.blur(ticks)
+		expect(
+			lastStore!.get(currentChannelConfigsAtom).facet?.panelAxisOverrides,
+		).toEqual({ Home: { yTicks: [0, 25, 50] } })
 	})
 
 	it("wrap mode, Share Y = none, panels side by side: offers per-panel sizing", () => {

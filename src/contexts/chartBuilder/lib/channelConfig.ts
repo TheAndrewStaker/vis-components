@@ -262,7 +262,7 @@ export type HexbinConfig = {
 /** Fixed panel shape (Aesthetics → Aspect ratio). When enabled, every
  * panel's inner plot rect is shrunk so height : width = length : width —
  * regardless of viewport size, and per panel when faceted. While on it
- * OVERRIDES the Facet panel's Custom sizing pixel dims and proportional
+ * OVERRIDES the Facet panel's Panel Spacing & Sizing pixel dims and proportional
  * panel weights (differently sized panels can't all honor one ratio
  * while sharing row/col tracks). */
 export type AspectRatioConfig = {
@@ -1350,6 +1350,24 @@ export type PanelAxisOverride = {
 	xMax?: number
 	yMin?: number
 	yMax?: number
+	/** "Custom breaks" for this panel's x / y axis — see
+	 *  `AxisRangeOverride.ticks`. */
+	xTicks?: number[]
+	yTicks?: number[]
+}
+
+/** One facet range-editor entry for a cartesian axis (overall, per row, per
+ *  column): the min / max bounds plus optional "Custom breaks". `ticks`
+ *  present (even empty) = the checkbox is on. A non-empty list REPLACES the
+ *  panel's whole tick layout on that axis — the auto ticks and the X / Y
+ *  Ticks section's Custom breaks alike — unlike those breaks, which add to
+ *  the auto ticks. Axis values (epoch ms for temporal); values outside the
+ *  panel's domain aren't drawn. Empty = checked but nothing typed yet → the
+ *  normal tick layout. */
+export type AxisRangeOverride = {
+	min?: number
+	max?: number
+	ticks?: number[]
 }
 
 /** Small-multiples layout. When a categorical field is mapped to the facet
@@ -1419,17 +1437,17 @@ export type FacetConfig = {
 	 *  for these overrides is hidden otherwise. The legacy
 	 *  `panelAxisOverrides` keyed by individual panel value stays for
 	 *  wrap-mode back-compat. */
-	rowAxisOverrides?: Record<string, { min?: number; max?: number }>
+	rowAxisOverrides?: Record<string, AxisRangeOverride>
 	/** Mirror of `rowAxisOverrides` for the x-axis per column. */
-	colAxisOverrides?: Record<string, { min?: number; max?: number }>
+	colAxisOverrides?: Record<string, AxisRangeOverride>
 	/** Overall y-axis range applied when `shareY === "all"` and y is
 	 *  quantitative or temporal. Lets the user pin the shared axis to
 	 *  a "pretty" start (e.g. 0) or an upper bound even though d3-nice
 	 *  would otherwise pick something larger. Either bound may be
 	 *  omitted to keep auto-fit on that side. */
-	overallYRange?: { min?: number; max?: number }
+	overallYRange?: AxisRangeOverride
 	/** Mirror of `overallYRange` for the x-axis. */
-	overallXRange?: { min?: number; max?: number }
+	overallXRange?: AxisRangeOverride
 	/** Polar-chart (radar / pie) share modes. Polar plots aren't
 	 *  cartesian — the R axis and the angle axis don't have a natural
 	 *  row vs col bias, so they each get a 4-way picker:

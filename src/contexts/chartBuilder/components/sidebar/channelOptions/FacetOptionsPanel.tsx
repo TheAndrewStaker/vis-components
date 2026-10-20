@@ -7,7 +7,6 @@ import {
 	migratePolarShareValue,
 	migrateShareValue,
 	type FacetConfig,
-	type PanelAxisOverride,
 } from "../../../lib/channelConfig"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
@@ -37,6 +36,9 @@ import {
 	withBound,
 	withBoundInMap,
 	withPanelBound,
+	withPanelTicks,
+	withTicks,
+	withTicksInMap,
 } from "./facetSharedControls"
 
 export const FacetOptionsPanel = () => {
@@ -66,12 +68,26 @@ export const FacetOptionsPanel = () => {
 	// when every bound on a panel is cleared, drop its entry entirely.
 	const updatePanelAxis = (
 		panelValue: string,
-		bound: keyof PanelAxisOverride,
+		bound: "xMin" | "xMax" | "yMin" | "yMax",
 		raw: string,
 	) => {
 		const all = withPanelBound(cfg.panelAxisOverrides, panelValue, bound, raw)
 		if (all) updateCfg({ panelAxisOverrides: all })
 	}
+	// "Custom breaks" for one panel; `undefined` unchecks.
+	const updatePanelTicks = (
+		panelValue: string,
+		field: "xTicks" | "yTicks",
+		ticks: number[] | undefined,
+	) =>
+		updateCfg({
+			panelAxisOverrides: withPanelTicks(
+				cfg.panelAxisOverrides,
+				panelValue,
+				field,
+				ticks,
+			),
+		})
 
 	const fieldName = encodings.facet?.field ?? null
 	const type =
@@ -195,6 +211,12 @@ export const FacetOptionsPanel = () => {
 	const getType = dataset
 		? (field: string) => effectiveType(dataset, field, overrides)
 		: null
+	// Date axes read and print their custom tick values as dates.
+	const drawnAxisFields = axisFieldsFor(mode, encodings)
+	const xIsTemporal =
+		!!drawnAxisFields.xField && getType?.(drawnAxisFields.xField) === "temporal"
+	const yIsTemporal =
+		!!drawnAxisFields.yField && getType?.(drawnAxisFields.yField) === "temporal"
 	const yRangeApplicable =
 		fieldName != null &&
 		values.length > 0 &&
@@ -264,6 +286,18 @@ export const FacetOptionsPanel = () => {
 		const next = withBound(cfg[key], bound, raw)
 		if (next) updateCfg({ [key]: next } as Partial<FacetConfig>)
 	}
+	// "Custom breaks" on the cartesian range entries (the polar R
+	// editors don't offer them).
+	const updateOverallTicks = (axis: "y" | "x", ticks: number[] | undefined) => {
+		const key = axis === "y" ? "overallYRange" : "overallXRange"
+		updateCfg({ [key]: withTicks(cfg[key], ticks) })
+	}
+	const updateGroupTicks = (
+		mapKey: "rowAxisOverrides" | "colAxisOverrides",
+		entryKey: string,
+		ticks: number[] | undefined,
+	) =>
+		updateCfg({ [mapKey]: withTicksInMap(cfg[mapKey], entryKey, ticks) })
 
 	// Individual cap: no single axis can exceed the number of facets.
 	const maxPerAxis = Math.max(1, facetCount)
@@ -445,6 +479,7 @@ export const FacetOptionsPanel = () => {
 						fieldName &&
 						values.length > 0 && (
 							<AxisRangeSection
+								collapsible
 								title="R axis range per panel"
 								help="Blank = auto from each panel's data."
 								entries={values.map((v) => ({
@@ -565,8 +600,11 @@ export const FacetOptionsPanel = () => {
 									max: cfg.overallYRange?.max,
 									onChange: (bound, raw) =>
 										updateOverallRange("y", bound, raw),
+									ticks: cfg.overallYRange?.ticks,
+									onTicksChange: (ticks) => updateOverallTicks("y", ticks),
 								},
 							]}
+							isTemporal={yIsTemporal}
 						/>
 					)}
 
@@ -581,12 +619,17 @@ export const FacetOptionsPanel = () => {
 								max: cfg.rowAxisOverrides?.[String(r)]?.max,
 								onChange: (bound, raw) =>
 									updateRowAxisOverride(String(r), bound, raw),
+								ticks: cfg.rowAxisOverrides?.[String(r)]?.ticks,
+								onTicksChange: (ticks) =>
+									updateGroupTicks("rowAxisOverrides", String(r), ticks),
 							}))}
+							isTemporal={yIsTemporal}
 						/>
 					)}
 
 					{yRangeKind === "panel" && (
 						<AxisRangeSection
+							collapsible
 							title="Y axis range per panel"
 							help="Blank = auto from each panel's data."
 							entries={values.map((v) => ({
@@ -596,7 +639,10 @@ export const FacetOptionsPanel = () => {
 								max: cfg.panelAxisOverrides[v]?.yMax,
 								onChange: (bound, raw) =>
 									updatePanelAxis(v, bound === "min" ? "yMin" : "yMax", raw),
+								ticks: cfg.panelAxisOverrides[v]?.yTicks,
+								onTicksChange: (ticks) => updatePanelTicks(v, "yTicks", ticks),
 							}))}
+							isTemporal={yIsTemporal}
 						/>
 					)}
 				</CollapsibleSubsection>
@@ -664,8 +710,11 @@ export const FacetOptionsPanel = () => {
 									max: cfg.overallXRange?.max,
 									onChange: (bound, raw) =>
 										updateOverallRange("x", bound, raw),
+									ticks: cfg.overallXRange?.ticks,
+									onTicksChange: (ticks) => updateOverallTicks("x", ticks),
 								},
 							]}
+							isTemporal={xIsTemporal}
 						/>
 					)}
 
@@ -680,12 +729,17 @@ export const FacetOptionsPanel = () => {
 								max: cfg.colAxisOverrides?.[String(c)]?.max,
 								onChange: (bound, raw) =>
 									updateColAxisOverride(String(c), bound, raw),
+								ticks: cfg.colAxisOverrides?.[String(c)]?.ticks,
+								onTicksChange: (ticks) =>
+									updateGroupTicks("colAxisOverrides", String(c), ticks),
 							}))}
+							isTemporal={xIsTemporal}
 						/>
 					)}
 
 					{xRangeKind === "panel" && (
 						<AxisRangeSection
+							collapsible
 							title="X axis range per panel"
 							help="Blank = auto from each panel's data."
 							entries={values.map((v) => ({
@@ -695,14 +749,17 @@ export const FacetOptionsPanel = () => {
 								max: cfg.panelAxisOverrides[v]?.xMax,
 								onChange: (bound, raw) =>
 									updatePanelAxis(v, bound === "min" ? "xMin" : "xMax", raw),
+								ticks: cfg.panelAxisOverrides[v]?.xTicks,
+								onTicksChange: (ticks) => updatePanelTicks(v, "xTicks", ticks),
 							}))}
+							isTemporal={xIsTemporal}
 						/>
 					)}
 				</CollapsibleSubsection>
 			)}
 
-			{/* ─── Custom sizing ──────────────────────────────────────── */}
-			<CollapsibleSubsection title="Custom sizing">
+			{/* ─── Panel Spacing & Sizing ──────────────────────────────────────── */}
+			<CollapsibleSubsection title="Panel Spacing & Sizing">
 				<GapInput
 					label="Horizontal gap"
 					value={cfg.gapX}

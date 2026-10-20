@@ -440,6 +440,8 @@ export const AreaPlot = (props: AreaPlotProps = {}) => {
 			xRawText: isVertical ? categoryRawText : undefined,
 			yRawText: isVertical ? undefined : categoryRawText,
 			xAxisConfig: channelConfigs.x,
+			xReplaceTicks: props.xTicksOverride,
+			yReplaceTicks: props.yTicksOverride,
 			yAxisConfig: channelConfigs.y,
 			xLabel: isVertical
 				? labels.xAxisTitle ?? categoryField

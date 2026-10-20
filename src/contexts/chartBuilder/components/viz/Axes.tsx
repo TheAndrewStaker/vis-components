@@ -4,6 +4,7 @@ import { autoLabelAngleFor } from "../../lib/autoLabelAngle"
 import { currentResolvedXTickLabelAngleAtom } from "../../store/atoms"
 import { measureLabelWidths } from "./plotCanvas/measureText"
 import {
+	DEFAULT_AXIS_CONFIG,
 	DEFAULT_GRIDLINE_CONFIG,
 	DEFAULT_SPINE_CONFIG,
 	DEFAULT_TICKMARK_CONFIG,
@@ -101,9 +102,12 @@ type Props = {
 	 * then places exactly `tickCount` evenly spaced ticks from min to max
 	 * inclusive instead of d3's "nice" density-hint ticks, so the Count and
 	 * Scale range controls compose the way users expect (0.04–0.24 with
-	 * Count 6 → 0.04, 0.08, …, 0.24). Gridlines in "match tick count" mode
-	 * (and explicit gridline counts) follow the same rule. Ignored on
-	 * categorical axes. */
+	 * Count 6 → 0.04, 0.08, …, 0.24). Exception: with Count still at its
+	 * default (never touched), a pinned range whose ends d3's nice ticks already land on
+	 * keeps those nice ticks, so a pinned axis reads the same as an auto
+	 * axis over the same range (facet panels pinned to a sibling's range).
+	 * Gridlines in "match tick count" mode (and explicit gridline counts)
+	 * follow the same rule. Ignored on categorical axes. */
 	domainPinned?: boolean
 	/** True when this is a bar chart's measure axis under "Use a mirrored
 	 * axis": the domain runs through 0 with one direction level's bars on
@@ -120,6 +124,13 @@ type Props = {
 	 * cells), the cell itself when a tick lands on one, and ISO text at the
 	 * tick set's granularity only when the shape isn't recognised. Only temporal axes with a field pass this. */
 	rawTextByValue?: DateColumnText
+	/** A facet panel's "Custom breaks" (the facet range editors —
+	 * `AxisRangeOverride.ticks`): these axis values REPLACE this continuous
+	 * axis's whole tick layout, the auto ticks and the Ticks section's
+	 * Custom breaks alike, and gridlines in "match tick count" mode follow
+	 * them. Values outside the domain aren't drawn. Empty / absent = the
+	 * normal layout. Ignored on categorical axes. */
+	replaceTicks?: readonly number[]
 }
 
 const DEFAULT_TICK_COUNT = 5
@@ -144,6 +155,7 @@ export const Axis = ({
 	domainPinned = false,
 	mirrored = false,
 	rawTextByValue,
+	replaceTicks,
 }: Props) => {
 	const drawBack = layer !== "front"
 	const drawFront = layer !== "back" && showTicksAndLabels
@@ -230,7 +242,9 @@ export const Axis = ({
 	// it), de-dup, sort, and convert to the scale's input type (Date for
 	// temporal). `null` when the user hasn't set breaks or the axis is
 	// categorical.
-	const resolveBreaks = (raw: number[] | undefined): unknown[] | null => {
+	const resolveBreaks = (
+		raw: readonly number[] | undefined
+	): unknown[] | null => {
 		if (!isContinuousScale || !raw || raw.length === 0) return null
 		const dom = (scale as unknown as { domain: () => unknown[] }).domain()
 		const toNum = (v: unknown) => (v instanceof Date ? v.getTime() : Number(v))
@@ -250,6 +264,13 @@ export const Axis = ({
 	const customBreaks = resolveBreaks(
 		mirrored ? mirrorTickBreaks(config?.mirror?.breaks) : config?.breaks
 	)
+	// A facet panel's Custom breaks stand in for the whole layout —
+	// auto + breaks — so a list wholly outside the domain draws no ticks
+	// rather than falling back. `null` = no replacement.
+	const replacedTicks =
+		isContinuousScale && replaceTicks && replaceTicks.length > 0
+			? (resolveBreaks(replaceTicks) ?? [])
+			: null
 
 	// The AUTOMATIC tick layout for a continuous axis, shared by the tick
 	// list and the gridlines' "match tick count" / explicit-count modes.
@@ -271,6 +292,16 @@ export const Axis = ({
 		const toNum = (v: unknown) => (v instanceof Date ? v.getTime() : Number(v))
 		const lo = toNum(dom[0])
 		const hi = toNum(dom[dom.length - 1])
+		// Count untouched + pinned ends that are already "nice": keep d3's
+		// ticks. Otherwise a panel pinned to its sibling's auto range lays
+		// out DEFAULT_TICK_COUNT even ticks while the sibling gets d3's
+		// denser nice set — same range, different breaks.
+		if (requestedCount === DEFAULT_AXIS_CONFIG.tickCount) {
+			const nice = s.ticks(count)
+			const eps = Math.abs(hi - lo) * 1e-9
+			const hits = (end: number) => nice.some((t) => Math.abs(toNum(t) - end) <= eps)
+			if (nice.length >= 2 && hits(lo) && hits(hi)) return nice
+		}
 		return fieldType === "temporal"
 			? evenlySpacedTimeTicks(lo, hi, count).map((ms) => new Date(ms))
 			: evenlySpacedTicks(lo, hi, count)
@@ -286,8 +317,8 @@ export const Axis = ({
 		if (typeof s.ticks === "function") {
 			// `tickCount: 0` is a valid "no automatic ticks" request — custom
 			// breaks (if any) then carry the whole tick list.
-			const auto = autoTicks(tickCount)
-			const values = [...auto, ...(customBreaks ?? [])]
+			const values =
+				replacedTicks ?? [...autoTicks(tickCount), ...(customBreaks ?? [])]
 			if (values.length === 0) return []
 			// A date axis labels EVERY tick in one format, chosen from the tick
 			// set's finest calendar component ("1949 … 2019" for year starts,
@@ -301,12 +332,13 @@ export const Axis = ({
 					: null
 			// Even ticks on a pinned quantitative axis can step by values d3's
 			// nice-step precision would truncate (0–1 in 4 → 0.333…), so
-			// format them at their own precision, trimming trailing zeros.
+			// format them at their own precision, trimming trailing zeros —
+			// as with replaced ticks, which follow no d3 step at all.
 			const fallback = dates
 				? ((f) => (v: unknown) => (v instanceof Date ? f(v) : String(v)))(
 						uniformTimeFormat(dates)
 					)
-				: useEvenTicks
+				: useEvenTicks || replacedTicks
 					? (v: unknown) => d3Format(",~f")(Number(v))
 					: s.tickFormat?.(
 							tickCount > 0 ? tickCount : Math.max(2, DEFAULT_TICK_COUNT)
@@ -485,6 +517,13 @@ export const Axis = ({
 				// section's custom breaks (add gridline breaks above to line a
 				// gridline up with a pinned tick). Specific numbers decouple
 				// gridlines from ticks entirely.
+				// Replaced ticks ARE the panel's tick layout, so matching
+				// gridlines follow them.
+				if (grid.count == null && replacedTicks) {
+					return replacedTicks.map((v) =>
+						(scale as unknown as (x: unknown) => number)(v)
+					)
+				}
 				const requestedGridCount = grid.count ?? tickCount
 				return autoTicks(requestedGridCount).map((v) =>
 					(scale as unknown as (x: unknown) => number)(v)

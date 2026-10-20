@@ -595,6 +595,8 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 			xMirrored: !isVertical && aggregation.mirrored,
 			yMirrored: isVertical && aggregation.mirrored,
 			xAxisConfig: channelConfigs.x,
+			xReplaceTicks: props.xTicksOverride,
+			yReplaceTicks: props.yTicksOverride,
 			yAxisConfig: channelConfigs.y,
 			xLabel: isVertical
 				? labels.xAxisTitle ?? categoryField

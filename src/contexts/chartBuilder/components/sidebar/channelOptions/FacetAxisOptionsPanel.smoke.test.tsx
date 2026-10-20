@@ -121,18 +121,18 @@ describe("FacetAxisOptionsPanel — both axes on both panels", () => {
 				<FacetColOptionsPanel />
 			</>,
 		)
-		// Own axis first: row panel = Rows, Columns, Custom sizing; col
-		// panel = Columns, Rows, Custom sizing.
+		// Own axis first: row panel = Rows, Columns, Panel Spacing & Sizing; col
+		// panel = Columns, Rows, Panel Spacing & Sizing.
 		const headers = utils
-			.getAllByRole("button", { name: /^(rows|columns|custom sizing)$/i })
+			.getAllByRole("button", { name: /^(rows|columns|panel spacing & sizing)$/i })
 			.map((b) => b.textContent?.trim())
 		expect(headers).toEqual([
 			"Rows",
 			"Columns",
-			"Custom sizing",
+			"Panel Spacing & Sizing",
 			"Columns",
 			"Rows",
-			"Custom sizing",
+			"Panel Spacing & Sizing",
 		])
 		expand(utils, /rows/i, 0)
 		expand(utils, /rows/i, 1)
@@ -196,6 +196,7 @@ describe("FacetAxisOptionsPanel — both axes on both panels", () => {
 		)
 		expand(utils, /columns/i)
 		expect(utils.getByText("X axis range per panel")).toBeTruthy()
+		expand(utils, /X axis range per panel/i)
 		expect(utils.getByText("North")).toBeTruthy()
 		expect(utils.getByText("South")).toBeTruthy()
 		// Two panels → two min inputs; editing the first commits a value.
@@ -213,6 +214,7 @@ describe("FacetAxisOptionsPanel — both axes on both panels", () => {
 		)
 		expand(utils, /rows/i)
 		expect(utils.getByText("Y axis range per panel")).toBeTruthy()
+		expand(utils, /Y axis range per panel/i)
 		expect(utils.getByText("North · Left")).toBeTruthy()
 		expect(utils.getByText("South · Right")).toBeTruthy()
 	})
@@ -229,6 +231,7 @@ describe("FacetAxisOptionsPanel — both axes on both panels", () => {
 			<FacetRowOptionsPanel />,
 		)
 		expand(utils, /rows/i)
+		expand(utils, /Y axis range per panel/i)
 		const mins = utils.getAllByLabelText("min") as HTMLInputElement[]
 		// Four panels (North/South × Left/Right), listed row-major.
 		expect(mins).toHaveLength(4)
@@ -242,13 +245,60 @@ describe("FacetAxisOptionsPanel — both axes on both panels", () => {
 		expect(mins[0]!.value).toBe("0")
 	})
 
+	it("Custom breaks: checking opens a Breaks box whose values store on that panel; unchecking drops them", () => {
+		const utils = mount(
+			scatterEncodings(),
+			facetConfigs({ shareY: "none" }),
+			<FacetRowOptionsPanel />,
+		)
+		expand(utils, /rows/i)
+		expand(utils, /Y axis range per panel/i)
+		// One checkbox per listed panel; no tick box until one is checked.
+		const boxes = utils.getAllByLabelText(/^Custom breaks for /)
+		expect(boxes).toHaveLength(4)
+		expect(utils.queryByLabelText("Breaks")).toBeNull()
+		fireEvent.click(utils.getByLabelText("Custom breaks for North · Left"))
+		// Checked with nothing typed: stored as an empty list (renders auto).
+		const facet = () => lastStore!.get(currentChannelConfigsAtom).facet
+		expect(facet()?.gridPanelAxisOverrides).toEqual({
+			North: { Left: { yTicks: [] } },
+		})
+		const ticks = utils.getByLabelText("Breaks") as HTMLInputElement
+		fireEvent.change(ticks, { target: { value: "0, 2.5, 5" } })
+		fireEvent.blur(ticks)
+		expect(facet()?.gridPanelAxisOverrides).toEqual({
+			North: { Left: { yTicks: [0, 2.5, 5] } },
+		})
+		// Unchecking clears the list — and the now-empty entry with it.
+		fireEvent.click(utils.getByLabelText("Custom breaks for North · Left"))
+		expect(facet()?.gridPanelAxisOverrides).toEqual({})
+		expect(utils.queryByLabelText("Breaks")).toBeNull()
+	})
+
+	it("Custom breaks on the overall range keep the bounds beside them", () => {
+		const utils = mount(
+			scatterEncodings(),
+			facetConfigs({ shareY: "all", overallYRange: { min: 0 } }),
+			<FacetRowOptionsPanel />,
+		)
+		expand(utils, /rows/i)
+		fireEvent.click(utils.getByRole("checkbox", { name: /custom breaks/i }))
+		const ticks = utils.getByLabelText("Breaks") as HTMLInputElement
+		fireEvent.change(ticks, { target: { value: "0, 10" } })
+		fireEvent.keyDown(ticks, { key: "Enter" })
+		expect(lastStore!.get(currentChannelConfigsAtom).facet?.overallYRange).toEqual({
+			min: 0,
+			ticks: [0, 10],
+		})
+	})
+
 	it("panel height input steps from the auto value, not from min=1", () => {
 		const utils = mount(
 			scatterEncodings(),
 			facetConfigs(),
 			<FacetRowOptionsPanel />,
 		)
-		expand(utils, /custom sizing/i)
+		expand(utils, /panel spacing & sizing/i)
 		const input = utils.getByLabelText(/Panel height/) as HTMLInputElement
 		// No solver-published dims in this jsdom mount → the placeholder reads
 		// "auto" and the step base falls back to 200. Focus commits nothing;
@@ -266,7 +316,7 @@ describe("FacetAxisOptionsPanel — both axes on both panels", () => {
 			facetConfigs(),
 			<FacetRowOptionsPanel />,
 		)
-		expand(utils, /custom sizing/i)
+		expand(utils, /panel spacing & sizing/i)
 		// Auto (null) → no reset link to click.
 		expect(utils.queryByLabelText("Reset panel height")).toBeNull()
 
@@ -302,7 +352,7 @@ describe("FacetAxisOptionsPanel — preserved asymmetries", () => {
 		expect(utils.getByText(/no row axis to configure/i)).toBeTruthy()
 		expect(utils.queryByRole("button", { name: /^rows$/i })).toBeNull()
 		// The row panel still surfaces Vertical gap (panel layout applies to pies).
-		expand(utils, /custom sizing/i, 0)
+		expand(utils, /panel spacing & sizing/i, 0)
 		expect(utils.getByLabelText(/Vertical gap/)).toBeTruthy()
 
 		// Both panels carry the Columns subsection with the angle picker:
@@ -334,8 +384,8 @@ describe("FacetAxisOptionsPanel — hide empty panels", () => {
 				<FacetColOptionsPanel />
 			</>,
 		)
-		expand(utils, /custom sizing/i, 0)
-		expand(utils, /custom sizing/i, 1)
+		expand(utils, /panel spacing & sizing/i, 0)
+		expand(utils, /panel spacing & sizing/i, 1)
 		const boxes = utils.getAllByLabelText(
 			"Hide empty panels",
 		) as HTMLInputElement[]
@@ -350,7 +400,7 @@ describe("FacetAxisOptionsPanel — hide empty panels", () => {
 			facetConfigs(),
 			<FacetRowOptionsPanel />,
 		)
-		expand(utils, /custom sizing/i)
+		expand(utils, /panel spacing & sizing/i)
 		// Empty cells only exist in the row × col cross-product; a single
 		// facet direction derives its domain from the data, so the toggle
 		// would be a no-op.
@@ -366,8 +416,8 @@ describe("FacetAxisOptionsPanel — hide empty panels", () => {
 				<FacetColOptionsPanel />
 			</>,
 		)
-		expand(utils, /custom sizing/i, 0)
-		expand(utils, /custom sizing/i, 1)
+		expand(utils, /panel spacing & sizing/i, 0)
+		expand(utils, /panel spacing & sizing/i, 1)
 		const [rowBox, colBox] = utils.getAllByLabelText(
 			"Hide empty panels",
 		) as HTMLInputElement[]

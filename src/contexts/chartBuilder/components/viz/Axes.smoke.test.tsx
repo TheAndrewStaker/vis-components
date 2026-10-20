@@ -1284,6 +1284,41 @@ describe("Axis domainPinned (Scale range min + max both set)", () => {
 	it("Count 0 + pinned domain → no automatic ticks", () => {
 		expect(tickLabels(mount(cfg({ tickCount: 0 }), true))).toEqual([])
 	})
+
+	it("default Count + pinned ends d3 already ticks → keeps the nice ticks", () => {
+		// A facet panel pinned to its sibling's auto range (0–70) must read
+		// the same as that sibling: d3's 0, 10, …, 70, not 0, 17.5, 35, ….
+		const scale = scaleLinear().domain([0, 70]).range([400, 0])
+		const at = (tickCount: number) =>
+			tickLabels(
+				render(
+					wrapInSvg(
+						<Axis
+							scale={scale}
+							orientation="y"
+							inner={inner}
+							label="Y"
+							fieldType="quantitative"
+							config={cfg({ tickCount, min: 0, max: 70 })}
+							domainPinned
+						/>
+					)
+				).container
+			)
+		expect(at(5)).toEqual(["0", "10", "20", "30", "40", "50", "60", "70"])
+		// A Count the user chose still lays out exactly that many.
+		expect(at(3)).toEqual(["0", "35", "70"])
+	})
+
+	it("default Count + pinned ends that aren't nice → even layout", () => {
+		expect(tickLabels(mount(cfg({ tickCount: 5 }), true))).toEqual([
+			"0.04",
+			"0.09",
+			"0.14",
+			"0.19",
+			"0.24",
+		])
+	})
 })
 
 describe("Axis mirrored measure axis (Use a mirrored axis)", () => {
@@ -1356,5 +1391,77 @@ describe("Axis mirrored measure axis (Use a mirrored axis)", () => {
 		const labels = tickLabels(cfg({ breaks: [25] }), false)
 		expect(labels.some(isNegative)).toBe(true)
 		expect(labels).not.toContain("25")
+	})
+})
+
+describe("Axis replaceTicks (facet panel Custom breaks)", () => {
+	// The facet range editors' "Custom breaks": unlike the Ticks
+	// section's additive Custom breaks, these REPLACE the panel's whole tick
+	// layout, and "Match tick count" gridlines follow them.
+	const yScale = scaleLinear().domain([0, 100]).range([400, 0])
+	const config = {
+		tickCount: 5,
+		customFormat: "",
+		tickLabelAngle: null,
+		jitterAmount: 0,
+		gridlines: { enabled: true, color: "#abcdef", thickness: 1, count: null },
+		tickmarks: { color: "#000", thickness: 1, length: 5 },
+		spine: { color: "#000", thickness: 1 },
+		distributionOverlay: {
+			showDensityViolin: false,
+			showBoxPlot: false,
+			showPoints: true,
+			color: "#000",
+			fillColor: "#000",
+			colorOverrides: {},
+			fillColorOverrides: {},
+		},
+		categoricalTickStride: 1,
+		breaks: [10, 90],
+	}
+	const renderAxis = (replaceTicks: number[] | undefined) =>
+		render(
+			wrapInSvg(
+				<Axis
+					scale={yScale}
+					orientation="y"
+					inner={inner}
+					label="Y"
+					fieldType="quantitative"
+					config={config}
+					replaceTicks={replaceTicks}
+				/>
+			)
+		).container
+	const labelsOf = (c: HTMLElement) =>
+		[...c.querySelectorAll("text")]
+			.map((t) => t.textContent)
+			.filter((s): s is string => !!s && s !== "Y")
+	const gridYsOf = (c: HTMLElement) =>
+		[...c.querySelectorAll("line")]
+			.filter((l) => l.getAttribute("stroke") === "#abcdef")
+			.map((l) => Math.round(Number(l.getAttribute("y1"))))
+
+	it("replaces the auto ticks AND the custom breaks, sorted, out-of-domain dropped", () => {
+		expect(labelsOf(renderAxis([75, 25, 250]))).toEqual(["25", "75"])
+	})
+
+	it("formats replaced ticks at their own precision", () => {
+		expect(labelsOf(renderAxis([0.5, 33.25]))).toEqual(["0.5", "33.25"])
+	})
+
+	it('"Match tick count" gridlines follow the replaced ticks', () => {
+		// 25 / 75 on [0,100] → [400,0] sit at 300 / 100.
+		expect(gridYsOf(renderAxis([25, 75]))).toEqual([300, 100])
+	})
+
+	it("a list wholly outside the domain draws no ticks (no fallback)", () => {
+		expect(labelsOf(renderAxis([500]))).toEqual([])
+	})
+
+	it("an empty list leaves the normal layout (auto + breaks)", () => {
+		expect(labelsOf(renderAxis([]))).toEqual([
+			"0", "10", "20", "40", "60", "80", "90", "100",
+		])
 	})
 })

@@ -277,6 +277,8 @@ export const TilePlot = (props: TilePlotProps = {}) => {
 			xScale,
 			yScale,
 			xAxisConfig: channelConfigs.x,
+			xReplaceTicks: props.xTicksOverride,
+			yReplaceTicks: props.yTicksOverride,
 			yAxisConfig: channelConfigs.y,
 			xLabel: labels.xAxisTitle ?? xField ?? "",
 			yLabel: labels.yAxisTitle ?? yField ?? "",
