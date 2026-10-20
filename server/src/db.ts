@@ -226,6 +226,19 @@ export const listRows = (
 	return db.prepare(`SELECT id, body FROM ${table}`).all() as ItemRow[]
 }
 
+/** One stored item's JSON body (for visuals, without the thumbnail column),
+ *  or null when no such item exists. */
+export const getBody = (
+	db: DatabaseSync,
+	collection: JsonCollection,
+	id: string
+): string | null => {
+	const row = db
+		.prepare(`SELECT body FROM ${JSON_TABLES[collection]} WHERE id = ?`)
+		.get(id) as { body: string } | undefined
+	return row?.body ?? null
+}
+
 /** Upsert one item. `body` must already be validated JSON text. For visuals,
  *  the (potentially large) thumbnail data URL is split into its own column so
  *  future list queries can skip it. */

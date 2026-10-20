@@ -1065,3 +1065,138 @@ describe("writes from a build behind the content schema", () => {
 		expect((await stamp("themes", 6)).status).toBe(204)
 	})
 })
+
+describe("identity from the host: config user, presence, saver stamps", () => {
+	// Its own server, with the host's `identify` hook. The test host names
+	// the user in a header; a real host reads its own session.
+	let own: Server
+	let base: string
+	beforeAll(async () => {
+		const dbDir = mkdtempSync(join(tmpdir(), "vis-routes-identity-db-"))
+		const distDir = mkdtempSync(join(tmpdir(), "vis-routes-identity-dist-"))
+		writeFileSync(join(distDir, "index.html"), "<title>spa</title>")
+		const handler = createHandler({
+			config: {
+				baseUrl: "https://charts.example.com",
+				dbDir,
+				dataDir: mkdtempSync(join(tmpdir(), "vis-routes-identity-data-")),
+				port: 0,
+				publishDir: mkdtempSync(join(tmpdir(), "vis-routes-identity-publish-")),
+				publishBaseUrl: "https://embeds.example.com",
+			},
+			db: openDb(dbDir),
+			distDir,
+			identify: (req) => {
+				const raw = req.headers["x-test-user"]
+				if (raw === "throw") throw new Error("session store down")
+				return typeof raw === "string" ? (JSON.parse(raw) as never) : null
+			},
+		})
+		own = createServer((req, res) => void handler(req, res))
+		await new Promise<void>((resolve) => own.listen(0, resolve))
+		base = `http://127.0.0.1:${(own.address() as AddressInfo).port}`
+	})
+	afterAll(() => {
+		own.close()
+	})
+
+	const JANE = { id: "jane@example.com", name: "Jane Doe" }
+	const NANCY = { id: "nancy@example.com", name: "Nancy Organ" }
+	const as = (user: { id: string; name: string } | null): Record<string, string> =>
+		user ? { "x-test-user": JSON.stringify(user) } : {}
+
+	it("names the signed-in user in /api/config, and nobody when anonymous", async () => {
+		const signedIn = await fetch(`${base}/api/config`, { headers: as(JANE) })
+		expect(await signedIn.json()).toEqual({
+			v: 1,
+			baseUrl: "https://charts.example.com",
+			user: JANE,
+		})
+		const anonymous = await fetch(`${base}/api/config`)
+		expect(await anonymous.json()).toEqual({ v: 1, baseUrl: "https://charts.example.com" })
+		// A hook that throws is anonymous, not a failed boot probe.
+		const broken = await fetch(`${base}/api/config`, { headers: { "x-test-user": "throw" } })
+		expect(broken.status).toBe(200)
+		expect(await broken.json()).toEqual({ v: 1, baseUrl: "https://charts.example.com" })
+	})
+
+	const beat = (tabId: string, visualId: string, user: typeof JANE | null) =>
+		fetch(`${base}/api/presence/${tabId}`, {
+			method: "PUT",
+			headers: { "content-type": "application/json", ...as(user) },
+			body: JSON.stringify({ visualId }),
+		})
+
+	it("presence: a heartbeat answers with everyone in that visual's editor", async () => {
+		expect(await (await beat("tab-n1", "v-shared", NANCY)).json()).toEqual({
+			editors: [NANCY],
+		})
+		// Jane, in two tabs on the same chart, appears once; a third person
+		// on another chart doesn't appear at all.
+		await beat("tab-j1", "v-shared", JANE)
+		await beat("tab-o1", "v-other", { id: "o", name: "Otto" })
+		const res = await beat("tab-j2", "v-shared", JANE)
+		expect(await res.json()).toEqual({ editors: [JANE, NANCY] })
+
+		// Leaving removes the tab — only its owner's DELETE counts.
+		await fetch(`${base}/api/presence/tab-n1`, { method: "DELETE", headers: as(JANE) })
+		expect(await (await beat("tab-j1", "v-shared", JANE)).json()).toEqual({
+			editors: [JANE, NANCY],
+		})
+		await fetch(`${base}/api/presence/tab-n1`, { method: "DELETE", headers: as(NANCY) })
+		expect(await (await beat("tab-j1", "v-shared", JANE)).json()).toEqual({
+			editors: [JANE],
+		})
+	})
+
+	it("presence: refuses anonymous and malformed heartbeats", async () => {
+		expect((await beat("tab-a", "v-shared", null)).status).toBe(401)
+		expect((await beat("tab-a", "../etc", JANE)).status).toBe(400)
+		expect((await beat("bad.id", "v-shared", JANE)).status).toBe(400)
+	})
+
+	const putVisual = (body: Record<string, unknown>, user: typeof JANE | null) =>
+		fetch(`${base}/api/visuals/${String(body.id)}`, {
+			method: "PUT",
+			headers: { "content-type": "application/json", ...as(user) },
+			body: JSON.stringify(body),
+		})
+	const storedVisual = async (id: string) =>
+		((await (await fetch(`${base}/api/visuals?thumbnails=0`)).json()) as {
+			id: string
+			updatedBy?: unknown
+		}[]).find((v) => v.id === id)
+
+	it("a save is credited to the requester, whatever the client claims", async () => {
+		await putVisual({ id: "v-stamp", name: "x", updatedAt: 1, updatedBy: JANE }, NANCY)
+		expect((await storedVisual("v-stamp"))?.updatedBy).toEqual(NANCY)
+	})
+
+	it("a write that leaves updatedBy alone (move, trash) keeps the saver", async () => {
+		await putVisual({ id: "v-move", name: "x", updatedAt: 1, updatedBy: JANE }, JANE)
+		// Nancy moves Jane's chart into a folder: same updatedBy as stored.
+		await putVisual(
+			{ id: "v-move", name: "x", folderId: "f1", updatedAt: 1, updatedBy: JANE },
+			NANCY
+		)
+		expect((await storedVisual("v-move"))?.updatedBy).toEqual(JANE)
+	})
+
+	it("an anonymous write can't change or invent the saver", async () => {
+		await putVisual({ id: "v-anon", name: "x", updatedBy: JANE }, JANE)
+		await putVisual({ id: "v-anon", name: "x", updatedBy: { id: "evil", name: "Evil" } }, null)
+		expect((await storedVisual("v-anon"))?.updatedBy).toEqual(JANE)
+		await putVisual({ id: "v-anon-new", name: "x", updatedBy: JANE }, null)
+		expect(await storedVisual("v-anon-new")).not.toHaveProperty("updatedBy")
+	})
+})
+
+describe("identity off (no identify hook)", () => {
+	it("has no presence endpoint", async () => {
+		const res = await fetch(`${base}/api/presence/tab-1`, {
+			method: "PUT",
+			body: JSON.stringify({ visualId: "v1" }),
+		})
+		expect(res.status).toBe(404)
+	})
+})

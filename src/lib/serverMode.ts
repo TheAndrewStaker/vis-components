@@ -7,12 +7,16 @@
  *  be declared JSON *and* parse to the exact config shape. Anything else,
  *  including timeouts and network errors, means local mode. */
 
+import { parseAppUser, type AppUser } from "./currentUser"
+
 export type ServerModeConfig = {
 	v: 1
 	baseUrl: string
 	/** Same-origin path the header's "Log out" form posts to, when the host
 	 *  has sessions to end. */
 	signOutUrl?: string
+	/** The signed-in user, when the host identifies its users. */
+	user?: AppUser
 }
 
 const PROBE_TIMEOUT_MS = 3000
@@ -31,6 +35,8 @@ export const parseServerModeConfig = (value: unknown): ServerModeConfig | null =
 	if (typeof record.signOutUrl === "string" && SAME_ORIGIN_PATH.test(record.signOutUrl)) {
 		config.signOutUrl = record.signOutUrl
 	}
+	const user = parseAppUser(record.user)
+	if (user) config.user = user
 	return config
 }
 

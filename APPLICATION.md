@@ -486,6 +486,38 @@ visual. An undo is an ordinary change to autosave, so the saved visual
 always matches the screen. (`store/editorHistory.ts`; the draft
 snapshot is the same 17 atoms `useSaveVisual` reads.)
 
+**Save status.** Beside the name, the top bar says when the open visual
+was last saved: "Saving…" mid-save, otherwise "Saved by Nancy at
+9:25 AM" (a time for a save today, "on Oct 14" for an earlier one). It
+reads the stored visual, so it is right the moment a visual opens, not
+only after this session saves. The saver's first name appears only when
+the server identifies its users (below); otherwise, and for visuals
+saved before that, it reads "Saved · 9:25 AM". Hovering shows the full
+name and date. An unsaved draft shows nothing.
+
+**Who's here, and who saved.** When the app runs under a host with its
+own sign-in, the host hands the server an `identify` hook
+(`server/src/identity.ts`) and three things switch on; on the standalone
+server and in browser-local mode none of them exist.
+- `/api/config` names the signed-in user (`{ id, name }`), and the boot
+  probe installs it (`lib/currentUser.ts`).
+- **Presence.** The header shows an initials circle ("JD", "NO") left of
+  New visualization for everyone with the same visual open in an editor,
+  you included and last; hover for the name, and past four the rest fold
+  into "+N". Each editor tab heartbeats `PUT /api/presence/:tabId` every
+  15 s and gets back who is there; the server keeps this in memory and
+  forgets a tab after 45 s of silence or when it closes. A never-saved
+  draft is private: it shows only you and sends nothing. Hidden on
+  phones, where the header has no room. Presence is a heads-up only —
+  two people editing one visual are still last-write-wins.
+- **`updatedBy`.** A save stamps the visual with its saver, and the
+  server overwrites the client's claim with the requesting user. Only a
+  write that CHANGES `updatedBy` is a save: a folder move or trash sends
+  the stored saver back unchanged and keeps it, so moving Jane's chart
+  doesn't credit you with her save. A duplicate is credited to whoever
+  made it. Someone else's save while you have the visual open shows up on
+  your next load, not live.
+
 ### 2.4 Dataset versions & cleanup
 The editor header carries a **version badge** — the dataset name plus
 `v2 of 3 · latest` — styled amber while a non-latest version is being

@@ -1,3 +1,4 @@
+import { getCurrentUser } from "../../../lib/currentUser"
 import type { Visual } from "./types"
 
 const newVisualId = () =>
@@ -15,8 +16,12 @@ export const duplicateVisual = (
 	visual: Visual,
 	now = Date.now(),
 	folderId: string | null = visual.folderId ?? null
-): Visual => ({
-	...window.structuredClone(visual),
+): Visual => {
+	// The copy is a new save, by whoever made it — never the original's saver.
+	const { updatedBy: _originalSaver, ...source } = window.structuredClone(visual)
+	const user = getCurrentUser()
+	return {
+	...source,
 	id: newVisualId(),
 	folderId,
 	name: `${visual.name} (copy)`,
@@ -27,4 +32,6 @@ export const duplicateVisual = (
 	// stale (stamp < updatedAt) and re-render an identical preview. A
 	// never-stamped original stays never-stamped.
 	...(visual.thumbnailAt !== undefined ? { thumbnailAt: now } : {}),
-})
+	...(user ? { updatedBy: user } : {}),
+	}
+}

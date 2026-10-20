@@ -32,6 +32,18 @@ describe("parseServerModeConfig", () => {
 		}
 	})
 
+	it("keeps a well-formed signed-in user and drops a malformed one", () => {
+		expect(
+			parseServerModeConfig({ v: 1, baseUrl: "https://x", user: { id: "j", name: "Jane Doe" } })
+		).toEqual({ v: 1, baseUrl: "https://x", user: { id: "j", name: "Jane Doe" } })
+		for (const user of [null, "Jane", { name: "Jane" }, { id: "", name: "Jane" }]) {
+			expect(parseServerModeConfig({ v: 1, baseUrl: "https://x", user })).toEqual({
+				v: 1,
+				baseUrl: "https://x",
+			})
+		}
+	})
+
 	it("rejects anything else", () => {
 		expect(parseServerModeConfig(null)).toBeNull()
 		expect(parseServerModeConfig("html")).toBeNull()

@@ -33,6 +33,7 @@ import {
 	type Visual,
 } from "../lib/types"
 import { isTrashed } from "../lib/visualTrash"
+import { getCurrentUser } from "../../../lib/currentUser"
 import { editorHistoryEpochAtom } from "./editorHistory"
 
 import {
@@ -56,7 +57,6 @@ import {
 	currentVisualIdAtom,
 	currentVisualNameAtom,
 	datasetIndexAtom,
-	lastSavedAtAtom,
 	previewVersionIdAtom,
 	saveStatusAtom,
 	themeAtom,
@@ -102,6 +102,7 @@ export const useSaveVisual = () => {
 			const derivedVariablesConfig = get(currentDerivedVariablesAtom)
 
 			const now = Date.now()
+			const user = getCurrentUser()
 
 			const existing = currentId
 			? visuals.find((v) => v.id === currentId)
@@ -164,6 +165,11 @@ export const useSaveVisual = () => {
 			thumbnailAt,
 			createdAt: existing?.createdAt ?? now,
 			updatedAt: now,
+			// The saver, when the server names one (it re-stamps this from the
+			// request anyway). Without a user the saver is unknown, so a
+			// previous saver's name is dropped rather than left on a save it
+			// didn't make.
+			...(user ? { updatedBy: user } : {}),
 			}
 
 			// Saved keys are structured, never joined (`lib/savedKeyStructure`):
@@ -191,7 +197,6 @@ export const useSaveVisual = () => {
 
 			set(visualsAtom, nextVisuals)
 			set(currentVisualIdAtom, id)
-			set(lastSavedAtAtom, now)
 			set(saveStatusAtom, "idle")
 			return id
 		}, [])

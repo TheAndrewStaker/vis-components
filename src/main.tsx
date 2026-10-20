@@ -12,6 +12,7 @@ import { runDatasetStoreCleanup } from "./contexts/chartBuilder/lib/datasetSweep
 import { createHttpStorageAdapter } from "./contexts/chartBuilder/lib/storage/httpAdapter"
 import { setStorageAdapter } from "./contexts/chartBuilder/lib/storage/registry"
 import { setSignOutUrl } from "./lib/signOutUrl"
+import { setCurrentUser } from "./lib/currentUser"
 import { setAppOrigin } from "./lib/appOrigin"
 import { probeServerMode } from "./lib/serverMode"
 import publicSeed from "./seed/examples.json"
@@ -80,6 +81,7 @@ const bootstrapStorage = async (): Promise<void> => {
 	if (serverConfig) {
 		setAppOrigin(serverConfig.baseUrl)
 		if (serverConfig.signOutUrl) setSignOutUrl(serverConfig.signOutUrl)
+		if (serverConfig.user) setCurrentUser(serverConfig.user)
 		setStorageAdapter(createHttpStorageAdapter())
 		if (seedIsPublic) await installEphemeralExamples(seed, [])
 		else await applyExampleSeed(seed)

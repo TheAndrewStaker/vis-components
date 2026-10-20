@@ -2,11 +2,12 @@ import { Fragment, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { useAtom, useAtomValue } from "jotai"
 import { nameCollides } from "../lib/nameUniqueness"
+import type { Visual } from "../lib/types"
+import { firstName } from "../../../lib/currentUser"
 import {
 	currentVisualIdAtom,
 	currentVisualNameAtom,
 	foldersAtom,
-	lastSavedAtAtom,
 	liveVisualsAtom,
 	saveStatusAtom,
 	visualsAtom,
@@ -18,12 +19,37 @@ import { DisclosureChevron } from "../../../components/ui/Chevron"
 import { EditorActions } from "./EditorActions"
 import { VersionBadge } from "./VersionBadge"
 
-const formatSavedTime = (ts: number) => {
+/** "9:25 AM" for a save today, "Oct 14" for an earlier one this year,
+ *  "Oct 14, 2025" before that. */
+const formatSavedWhen = (ts: number, now = Date.now()) => {
 	const d = new Date(ts)
-	return d.toLocaleTimeString(undefined, {
-		hour: "numeric",
-		minute: "2-digit",
+	const today = new Date(now)
+	if (d.toDateString() === today.toDateString()) {
+		return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+	}
+	return d.toLocaleDateString(undefined, {
+		month: "short",
+		day: "numeric",
+		...(d.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
 	})
+}
+
+/** The status beside the name: "Saving…" mid-save, else the stored visual's
+ *  last save — "Saved by Nancy at 9:25 AM" when the server named the saver,
+ *  "Saved · 9:25 AM" when it didn't (local mode, older visuals). Read off
+ *  the stored visual, so it's right from the moment a visual opens, not
+ *  only after this session saves it. Exported for tests. */
+export const saveIndicatorText = (
+	saving: boolean,
+	saved: Pick<Visual, "updatedAt" | "updatedBy"> | undefined,
+	now = Date.now()
+): string | null => {
+	if (saving) return "Saving…"
+	if (!saved) return null
+	const when = formatSavedWhen(saved.updatedAt, now)
+	if (!saved.updatedBy) return `Saved · ${when}`
+	const today = new Date(saved.updatedAt).toDateString() === new Date(now).toDateString()
+	return `Saved by ${firstName(saved.updatedBy.name)} ${today ? "at" : "on"} ${when}`
 }
 
 /** The saved visual's folder path, each crumb a link back to that folder's
@@ -62,7 +88,8 @@ export const SaveBar = () => {
 	// Live visuals only: a name sitting in the Trash is free to reuse (a
 	// restore renames the trashed one if it still collides).
 	const visuals = useAtomValue(liveVisualsAtom)
-	const lastSavedAt = useAtomValue(lastSavedAtAtom)
+	// Id lookup, so the full list — the editor's own visual.
+	const savedVisual = useAtomValue(visualsAtom).find((v) => v.id === visualId)
 	const saveStatus = useAtomValue(saveStatusAtom)
 	// NARROW: the bar collapses up into a slim strip (name in small type +
 	// chevron) so the chart can take the height back. Starts expanded;
@@ -77,11 +104,7 @@ export const SaveBar = () => {
 	// here; the Save button and ⌘S in EditorActions run the same check).
 	const nameTaken = nameCollides(name, visuals, visualId ?? undefined)
 
-	const indicator = (() => {
-		if (saveStatus === "saving") return "Saving…"
-		if (lastSavedAt) return `Saved · ${formatSavedTime(lastSavedAt)}`
-		return null
-	})()
+	const indicator = saveIndicatorText(saveStatus === "saving", savedVisual)
 
 	const nameField = (
 		<div className="flex min-w-32 flex-1 flex-col">
@@ -168,7 +191,16 @@ export const SaveBar = () => {
 			{nameField}
 			<VersionBadge />
 			{indicator && (
-				<span className="hidden text-sm sm:inline vc-muted">
+				<span
+					className="hidden text-sm sm:inline vc-muted"
+					title={
+						savedVisual && saveStatus !== "saving"
+							? `${savedVisual.updatedBy ? `${savedVisual.updatedBy.name}, ` : ""}${new Date(
+									savedVisual.updatedAt
+								).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`
+							: undefined
+					}
+				>
 					{indicator}
 				</span>
 			)}

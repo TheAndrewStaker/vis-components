@@ -14,6 +14,7 @@ import {
 	type ImportBundleOutcome,
 } from "../contexts/chartBuilder/store/importBundle"
 import { getSignOutUrl } from "../lib/signOutUrl"
+import { EditorPresence } from "./EditorPresence"
 import { Button } from "./ui/Button"
 import { Modal } from "./ui/Modal"
 
@@ -70,6 +71,7 @@ export const Header = () => {
 				</span>
 			</div>
 			<div className="flex items-center gap-3">
+				<EditorPresence />
 				{!inSettings && <NewVisualizationButton />}
 				<EditorOnlyBlackAndWhiteToggle />
 				<Link

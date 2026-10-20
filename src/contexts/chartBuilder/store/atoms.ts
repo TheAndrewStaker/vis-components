@@ -1304,8 +1304,6 @@ export const currentCaptionConfigAtom = persistedAtom<CaptionConfig>(
 	saveCurrentCaption
 )
 
-export const lastSavedAtAtom = atom<number | null>(null)
-
 export const saveStatusAtom = atom<"idle" | "saving">("idle")
 
 /** Last rendered panel inner dimensions (in px). PlotCanvas writes this

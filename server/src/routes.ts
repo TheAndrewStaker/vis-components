@@ -21,6 +21,7 @@ import {
 	datasetVersionStamp,
 	deleteBody,
 	deleteDatasetRow,
+	getBody,
 	isContentVersionCollection,
 	isJsonCollection,
 	listContentVersions,
@@ -57,6 +58,12 @@ import {
 } from "./embedFiles.js"
 import { HttpError, readBody, sendEmpty, sendError, sendJson } from "./http.js"
 import {
+	requestUser,
+	stampSaver,
+	type AppUser,
+	type IdentifyUser,
+} from "./identity.js"
+import {
 	DATASET_BODY_CAP_BYTES,
 	EMBED_BODY_CAP_BYTES,
 	JSON_BODY_CAP_BYTES,
@@ -64,17 +71,26 @@ import {
 } from "./limits.js"
 import { logError } from "./log.js"
 import { multipartBoundary, parseMultipart } from "./multipart.js"
+import { createPresenceTracker, type PresenceTracker } from "./presence.js"
 import { serveStatic } from "./staticFiles.js"
 
 export type HandlerDeps = {
 	config: ServerConfig
 	db: DatabaseSync
 	distDir: string
+	/** Optional, from a host with its own sign-in: who a request is from.
+	 *  With it, /api/config names the signed-in user, /api/presence tracks
+	 *  who is in which editor, and a visual's `updatedBy` is stamped from it.
+	 *  Without it (the standalone server) all three stay off. */
+	identify?: IdentifyUser
 }
 
-export const createHandler =
-	({ config, db, distDir }: HandlerDeps) =>
-	async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+type ApiDeps = HandlerDeps & { presence: PresenceTracker }
+
+export const createHandler = (deps: HandlerDeps) => {
+	const { config } = deps
+	const apiDeps: ApiDeps = { ...deps, presence: createPresenceTracker() }
+	return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
 		const method = req.method ?? "GET"
 		const path = (req.url ?? "/").split("?")[0]
 		try {
@@ -86,15 +102,21 @@ export const createHandler =
 			}
 			if (path === "/api/config" || path === "/api/config/") {
 				if (method !== "GET") return sendError(res, 405, "Method not allowed")
+				const user = requestUser(deps.identify, req)
 				return sendJson(
 					res,
 					200,
-					JSON.stringify({ v: 1, baseUrl: config.baseUrl, signOutUrl: config.signOutUrl })
+					JSON.stringify({
+						v: 1,
+						baseUrl: config.baseUrl,
+						signOutUrl: config.signOutUrl,
+						...(user ? { user } : {}),
+					})
 				)
 			}
-			if (path.startsWith("/api/")) return await handleApi(req, res, { config, db, distDir })
+			if (path.startsWith("/api/")) return await handleApi(req, res, apiDeps)
 			if (method !== "GET") return sendError(res, 405, "Method not allowed")
-			return await serveStatic(distDir, path, res)
+			return await serveStatic(deps.distDir, path, res)
 		} catch (error) {
 			if (error instanceof HttpError) {
 				if (!res.headersSent) sendError(res, error.status, error.message)
@@ -105,11 +127,12 @@ export const createHandler =
 			else res.destroy()
 		}
 	}
+}
 
 const handleApi = async (
 	req: IncomingMessage,
 	res: ServerResponse,
-	{ config, db, distDir }: HandlerDeps
+	{ config, db, distDir, identify, presence }: ApiDeps
 ): Promise<void> => {
 	const method = req.method ?? "GET"
 	const [rawPath, rawQuery] = (req.url ?? "/").split("?")
@@ -131,6 +154,9 @@ const handleApi = async (
 		if (!id || !isSafeId(id)) throw new HttpError(400, "Invalid id")
 		if (method !== "PUT") throw new HttpError(405, "Method not allowed")
 		return await putVisualThumbnail(req, res, db, id)
+	}
+	if (collection === "presence") {
+		return await handlePresence(req, res, identify, presence, id, rest)
 	}
 	if (rest.length > 0 && collection !== "datasets") {
 		throw new HttpError(404, "Not found")
@@ -294,8 +320,12 @@ const handleApi = async (
 	if (!isSafeId(id)) throw new HttpError(400, "Invalid id")
 	if (method === "PUT") {
 		const body = (await readBody(req, JSON_BODY_CAP_BYTES)).toString("utf-8")
-		assertItemJson(body, id)
-		upsertBody(db, collection, id, body)
+		const parsed = assertItemJson(body, id)
+		const stamped =
+			collection === "visuals" && identify
+				? stampSaver(parsed, storedUpdatedBy(db, id), requestUser(identify, req))
+				: null
+		upsertBody(db, collection, id, stamped ? JSON.stringify(stamped) : body)
 		return sendEmpty(res, 204)
 	}
 	if (method === "DELETE") {
@@ -304,6 +334,61 @@ const handleApi = async (
 	}
 	throw new HttpError(405, "Method not allowed")
 }
+
+/** The stored visual's `updatedBy`, undefined when there is no stored
+ *  visual or it names no saver. */
+const storedUpdatedBy = (db: DatabaseSync, id: string): unknown => {
+	const stored = getBody(db, "visuals", id)
+	if (stored === null) return undefined
+	try {
+		return (JSON.parse(stored) as Record<string, unknown>).updatedBy
+	} catch {
+		return undefined
+	}
+}
+
+/** Editor presence, only on a host that identifies users:
+ *   PUT    /api/presence/:tabId  {"visualId": "…"}  → {"editors": [AppUser…]}
+ *   DELETE /api/presence/:tabId                     → 204
+ *  The PUT is the editor's heartbeat AND its read: it answers with everyone
+ *  (the caller included) in that visual's editor. 404 without `identify`
+ *  so the client can tell "no presence here" from a failure; 401 for an
+ *  anonymous request on a host that does identify. */
+const handlePresence = async (
+	req: IncomingMessage,
+	res: ServerResponse,
+	identify: IdentifyUser | undefined,
+	presence: PresenceTracker,
+	tabId: string | undefined,
+	rest: string[]
+): Promise<void> => {
+	if (!identify) throw new HttpError(404, "Not found")
+	if (!tabId || rest.length > 0) throw new HttpError(404, "Not found")
+	if (!isSafeId(tabId)) throw new HttpError(400, "Invalid tab id")
+	const user: AppUser | null = requestUser(identify, req)
+	if (!user) throw new HttpError(401, "Not signed in")
+	const method = req.method ?? "GET"
+	if (method === "DELETE") {
+		presence.leave(tabId, user)
+		return sendEmpty(res, 204)
+	}
+	if (method !== "PUT") throw new HttpError(405, "Method not allowed")
+	const raw = (await readBody(req, PRESENCE_BODY_CAP_BYTES)).toString("utf-8")
+	let visualId: unknown
+	try {
+		visualId = (JSON.parse(raw) as Record<string, unknown> | null)?.visualId
+	} catch {
+		throw new HttpError(400, "Body must be valid JSON")
+	}
+	if (typeof visualId !== "string" || !isSafeId(visualId)) {
+		throw new HttpError(400, "Body must name a valid visualId")
+	}
+	presence.beat(tabId, user, visualId)
+	return sendJson(res, 200, JSON.stringify({ editors: presence.editorsOf(visualId) }))
+}
+
+/** A heartbeat body is one short id. */
+const PRESENCE_BODY_CAP_BYTES = 1024
 
 /** The content version a writing client was built for, from its
  *  `x-vis-content-version` header; `null` when absent or malformed. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { EMPTY_CHANNEL_CONFIGS } from "./channelConfig"
+import { setCurrentUser } from "../../../lib/currentUser"
 import { duplicateVisual } from "./duplicateVisual"
 import { DEFAULT_LABELS_CONFIG } from "./labelsConfig"
 import type { Visual } from "./types"
@@ -80,5 +81,16 @@ describe("duplicateVisual", () => {
 			Array.from({ length: 50 }, () => duplicateVisual(original, 999).id)
 		)
 		expect(ids.size).toBe(50)
+	})
+
+	// Last: installing a user is one-way for this module instance.
+	it("credits the copy to whoever made it, never the original's saver", () => {
+		const original = mkVisual({ updatedBy: { id: "jane", name: "Jane Doe" } })
+		expect(duplicateVisual(original, 999)).not.toHaveProperty("updatedBy")
+		setCurrentUser({ id: "nancy", name: "Nancy Organ" })
+		expect(duplicateVisual(original, 999).updatedBy).toEqual({
+			id: "nancy",
+			name: "Nancy Organ",
+		})
 	})
 })

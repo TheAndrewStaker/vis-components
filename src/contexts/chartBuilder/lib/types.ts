@@ -5,6 +5,7 @@
 import type { EncodingChannel, FieldType } from "./channelNames"
 import type { LegendSwatchShape } from "./labelsConfig"
 export type { EncodingChannel, FieldType }
+import type { AppUser } from "../../../lib/currentUser"
 
 // Re-exported from the channel registry so there's one source of truth.
 // Adding a new channel is a single entry in `lib/channels.ts`.
@@ -406,6 +407,12 @@ export type Visual = {
 	thumbnailAt?: number
 	createdAt: number
 	updatedAt: number
+	/** Who made the save `updatedAt` records, on a server that identifies
+	 * its users. Stamped by a real save only — a folder move or trash keeps
+	 * the previous saver — and the server overwrites the client's claim with
+	 * the requesting user. Absent in local mode and on visuals saved before
+	 * accounts. Sparse, so no storage version bump. */
+	updatedBy?: AppUser
 	/** When the visual was moved to the Trash (epoch ms). Absent = live.
 	 * A trashed visual keeps its row, thumbnail, embeds and data set until
 	 * the user purges it from the Trash; the library lists only live visuals

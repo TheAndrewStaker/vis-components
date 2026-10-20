@@ -74,7 +74,11 @@ stdout/stderr; SIGTERM drains in-flight requests and closes the database
 cleanly; run exactly one replica (SQLite is embedded). The same build served
 without the server behaves exactly like the local editor — the frontend
 detects the server at boot via `GET /api/config`. Users on the same server
-share one library; edits are last-write-wins per item. Dataset uploads warn
+share one library; edits are last-write-wins per item. A host that runs the
+handler (`createHandler` in `server/src/routes.ts`) behind its own sign-in can
+pass an `identify(req) → { id, name } | null` hook; with it, the editor shows
+who else has the same visual open and the top bar says who saved last. The
+standalone server has no accounts and leaves this off. Dataset uploads warn
 above 25 MB and are rejected above 100 MB (browser performance is the real
 constraint). Note: Node prints an `ExperimentalWarning` for `node:sqlite` on
 startup; it's expected.
