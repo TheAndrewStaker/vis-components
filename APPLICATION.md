@@ -3281,14 +3281,27 @@ mounts; a freshly added annotation starts expanded. Each rectangle
 has:
 
 - A name (free text, defaulted as above; shown in the card header).
-- **Adjust by** dropdown — Percent (0–100), Values (data units), or
-  Pixels from one of the plot's four corners (top-left, bottom-left,
-  top-right, bottom-right). One set of coordinate inputs; the dropdown
-  sets their unit, and switching converts the stored numbers (through
-  the axis span, or the rendered plot's size) so the annotation stays
-  where it is — including between the pixel corners.
-  - **Percent**: xMin/xMax/yMin/yMax are plot-area-normalized (0–1,
-    with 0,0 at the bottom-left spine corner).
+- **Adjust by** dropdown — Values, Pixels, or Percent. For Pixels and
+  Percent a second **From** dropdown picks the corner the coordinates
+  are measured from (Top left / Top right / Bottom left / Bottom right);
+  Values has no corner and hides it. One set of coordinate inputs; the
+  two dropdowns set their unit and origin, and switching either converts
+  the stored numbers (through the axis span, or the rendered plot's
+  size) so the annotation stays where it is. Switching unit keeps the
+  chosen corner; coming from Values, Percent starts at the bottom-left
+  and Pixels at the top-left. Saved as one flat `coordSystem` value
+  (`percent` = percent from the bottom-left, `percentTopLeft`,
+  `percentTopRight`, `percentBottomRight`, `pixels` = pixels from the
+  top-left, `pixelsBottomLeft`, `pixelsTopRight`, `pixelsBottomRight`,
+  `values`), so charts saved before the split read unchanged.
+  - **Percent**: xMin/xMax/yMin/yMax are fractions of the plot's width /
+    height (shown 0–100). From the default **bottom-left** corner 0,0 is
+    the bottom-left spine corner and 100,100 the top-right. The other
+    corners follow the pixel rule below — +x right and +y up from every
+    corner, only the origin moves — so from the **top-right** the inside
+    of the plot is negative x and y (−10% x is 10% of the width left of
+    the right edge). Percent is still a fraction of the plot, so a spot
+    outside it scales with the plot; use Pixels for that.
   - **Pixels**: whole px from the plot's **top-left corner**, +x right
     and +y up (so a negative y is inside the plot). This is the unit for
     anything placed **outside** the plot. A percent coordinate is a fraction of the plot, so one past

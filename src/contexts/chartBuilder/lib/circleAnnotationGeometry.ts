@@ -1,6 +1,8 @@
 import { radiusUnitOf, type CircleAnnotation } from "./annotationsConfig"
 import {
 	isPixelSystem,
+	percentToBaseX,
+	percentToBaseY,
 	pixelToCanvasX,
 	pixelToCanvasY,
 } from "./annotationPixels"
@@ -82,7 +84,9 @@ export const computeCirclePixels = (
 		if (px === null) return null
 		cx = px
 	} else {
-		cx = inner.x + inner.width * toNumber(circle.centerX)
+		cx =
+			inner.x +
+			inner.width * percentToBaseX(toNumber(circle.centerX), circle.coordSystem)
 	}
 
 	// Center Y. SVG is top-down; the percent convention has y=0 at the BOTTOM,
@@ -93,7 +97,10 @@ export const computeCirclePixels = (
 		if (py === null) return null
 		cy = py
 	} else {
-		cy = inner.y + inner.height * (1 - toNumber(circle.centerY))
+		cy =
+			inner.y +
+			inner.height *
+				(1 - percentToBaseY(toNumber(circle.centerY), circle.coordSystem))
 	}
 
 	// Radius.

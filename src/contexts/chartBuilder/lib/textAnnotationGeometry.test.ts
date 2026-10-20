@@ -78,6 +78,19 @@ describe("computeTextAnnotationAnchor", () => {
 		})
 	})
 
+	it("measures percent-corner coords from that corner, +x right / +y up", () => {
+		const anno = {
+			...newTextAnnotation("t1"),
+			coordSystem: "percentTopRight" as const,
+			x: -0.25,
+			y: -0.25,
+		}
+		expect(computeTextAnnotationAnchor(anno, inner, emptyScales)).toEqual({
+			x: 400, // right edge 500 − 400 * 0.25
+			y: 100, // top edge 50 + 200 * 0.25
+		})
+	})
+
 	it("projects value coords through the position scales", () => {
 		const xScale = makePositionScale(
 			[0, 100],

@@ -17,12 +17,13 @@ import {
 	cleanNumber,
 	type AxisInfo,
 } from "./axisInfo"
+import { isPercentSystem } from "../../../lib/annotationPixels"
 import { AnnotationCard, AxisValueInput, LayerRow } from "./controls"
 import {
 	BorderSection,
 	CoordSystemSelect,
 	FillSection,
-	pixelsHelpFor,
+	coordHelpFor,
 	usePlotDims,
 } from "./sections"
 
@@ -161,7 +162,7 @@ export const CircleEditor = ({
 						}}
 					/>
 
-					{circle.coordSystem === "percent" ? (
+					{isPercentSystem(circle.coordSystem) ? (
 						<div className="flex flex-col gap-2">
 							<NumberInput
 								label="center x %"
@@ -284,8 +285,10 @@ export const CircleEditor = ({
 								onChange={(v) => onChange({ radius: v })}
 								suffix="px"
 							/>
-							<p className="vc-help">{pixelsHelpFor(circle.coordSystem)}</p>
 						</div>
+					)}
+					{coordHelpFor(circle.coordSystem) && (
+						<p className="vc-help">{coordHelpFor(circle.coordSystem)}</p>
 					)}
 
 					{/* Radar radius is always measured on the r-axis, so the x/y

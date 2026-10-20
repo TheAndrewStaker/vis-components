@@ -50,6 +50,17 @@ describe("convertCoord", () => {
 		expect(convertCoord(-0.07, "percent", "pixelsBottomRight", axis, "y", dims)).toBe(-14)
 	})
 
+	it("percent corners convert without a plot size, pixels through it", () => {
+		// 90% from the left = 10% left of the right edge.
+		expect(convertCoord(0.9, "percent", "percentTopRight", axis, "x", null)).toBeCloseTo(-0.1)
+		// 112% up from the bottom = 12% above the top.
+		expect(convertCoord(1.12, "percent", "percentTopLeft", axis, "y", null)).toBeCloseTo(0.12)
+		expect(convertCoord(-0.2, "percentTopRight", "percent", axis, "y", null)).toBeCloseTo(0.8)
+		// 12% above the top of a 200px plot = 24px from the top-left corner.
+		expect(convertCoord(0.12, "percentTopLeft", "pixels", axis, "y", dims)).toBe(24)
+		expect(convertCoord(-40, "pixelsTopRight", "percentTopRight", axis, "x", dims)).toBeCloseTo(-0.1)
+	})
+
 	it("switching corners keeps the annotation where it is", () => {
 		// 24px above the top of a 200px plot = 224px above the bottom.
 		expect(convertCoord(24, "pixels", "pixelsBottomLeft", axis, "y", dims)).toBe(224)

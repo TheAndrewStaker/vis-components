@@ -1,6 +1,8 @@
 import type { TextAnnotation } from "./annotationsConfig"
 import {
 	isPixelSystem,
+	percentToBaseX,
+	percentToBaseY,
 	pixelToCanvasX,
 	pixelToCanvasY,
 } from "./annotationPixels"
@@ -142,13 +144,14 @@ export const computeTextAnnotationAnchor = (
 	const x =
 		useValues && ctx.xScale && ctx.xType
 			? applyPositionScale(ctx.xScale, anno.x, ctx.xType)
-			: inner.x + inner.width * toNumber(anno.x)
+			: inner.x + inner.width * percentToBaseX(toNumber(anno.x), anno.coordSystem)
 	// SVG is top-down; the percent convention has y=0 at the BOTTOM, so flip.
 	// The value scales are already built with an inverted range.
 	const y =
 		useValues && ctx.yScale && ctx.yType
 			? applyPositionScale(ctx.yScale, anno.y, ctx.yType)
-			: inner.y + inner.height * (1 - toNumber(anno.y))
+			: inner.y +
+				inner.height * (1 - percentToBaseY(toNumber(anno.y), anno.coordSystem))
 	if (x === null || y === null) return null
 	return { x, y }
 }

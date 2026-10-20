@@ -8,9 +8,10 @@ import type { AxisInfo } from "./axisInfo"
 import { EdgePositionSection, PointPositionSection } from "./sections"
 
 /** Every annotation's Position subsection: ONE set of coordinate inputs
- *  whose unit comes from "Adjust by" — Percent, Values, or Pixels (from one
- *  of the plot's four corners, +x right and +y up). Switching unit converts
- *  the stored numbers so the annotation stays where it is. */
+ *  whose unit comes from "Adjust by" — Values, Pixels, or Percent — and, for
+ *  pixels / percent, a "From" corner (+x right and +y up from every corner).
+ *  Switching unit or corner converts the stored numbers so the annotation
+ *  stays where it is. */
 
 const AXIS: AxisInfo = {
 	field: "val",
@@ -36,8 +37,8 @@ const select = (label: string, value: string) =>
 
 afterEach(cleanup)
 
-describe("annotation Position — Pixels unit", () => {
-	it("offers Pixels in Adjust by and keeps a single set of inputs", () => {
+describe("annotation Position — Adjust by + From", () => {
+	it("offers Values / Pixels / Percent, then a corner, with a single set of inputs", () => {
 		mount(
 			<PointPositionSection
 				coords={newTextAnnotation("t1")}
@@ -55,24 +56,46 @@ describe("annotation Position — Pixels unit", () => {
 		const options = Array.from(
 			screen.getByLabelText<HTMLSelectElement>("Adjust by").options
 		).map((o) => o.value)
-		expect(options).toEqual([
-			"percent",
-			"values",
-			"pixels",
-			"pixelsBottomLeft",
-			"pixelsTopRight",
-			"pixelsBottomRight",
+		expect(options).toEqual(["values", "pixels", "percent"])
+		// New text annotations are percent from the bottom-left.
+		expect(screen.getByLabelText<HTMLSelectElement>("Adjust by").value).toBe("percent")
+		const from = screen.getByLabelText<HTMLSelectElement>("From")
+		expect(from.value).toBe("bottomLeft")
+		expect(Array.from(from.options).map((o) => o.value)).toEqual([
+			"topLeft",
+			"topRight",
+			"bottomLeft",
+			"bottomRight",
 		])
-		// No second adjuster, no corner picker.
+		// No second adjuster.
 		expect(screen.queryByText("Adjust position")).toBeNull()
-		expect(screen.queryByLabelText("Measured from")).toBeNull()
 	})
 
-	it("switching to Pixels converts the coords from the plot's top-left", () => {
+	it("hides the corner picker for Values", () => {
+		mount(
+			<PointPositionSection
+				coords={{ ...newTextAnnotation("t1"), coordSystem: "values", x: 5, y: 5 }}
+				onChange={() => {}}
+				xAxis={AXIS}
+				yAxis={AXIS}
+				zOrder="front"
+				onZOrderChange={() => {}}
+			/>
+		)
+		expandPosition()
+		expect(screen.queryByLabelText("From")).toBeNull()
+	})
+
+	it("switching to Pixels keeps the corner and converts the coords", () => {
 		const onChange = vi.fn()
 		mount(
 			<PointPositionSection
-				coords={{ ...newTextAnnotation("t1"), x: -0.02, y: 1.12 }}
+				coords={{
+					...newTextAnnotation("t1"),
+					coordSystem: "percentTopLeft",
+					x: -0.02,
+					y: 0.12,
+				}}
 				onChange={onChange}
 				xAxis={AXIS}
 				yAxis={AXIS}
@@ -82,7 +105,7 @@ describe("annotation Position — Pixels unit", () => {
 		)
 		expandPosition()
 		select("Adjust by", "pixels")
-		// 400 × 200 plot: -2% → 8px left of the spine, 112% → 24px above the top.
+		// 400 × 200 plot: -2% → 8px left of the spine, 12% → 24px above the top.
 		expect(onChange).toHaveBeenCalledWith({
 			coordSystem: "pixels",
 			x: -8,
@@ -90,7 +113,7 @@ describe("annotation Position — Pixels unit", () => {
 		})
 	})
 
-	it("switching to bottom-left Pixels converts the coords from the plot's bottom-left", () => {
+	it("switching percent → Pixels from the bottom-left converts from the plot's bottom-left", () => {
 		const onChange = vi.fn()
 		mount(
 			<PointPositionSection
@@ -103,7 +126,7 @@ describe("annotation Position — Pixels unit", () => {
 			/>
 		)
 		expandPosition()
-		select("Adjust by", "pixelsBottomLeft")
+		select("Adjust by", "pixels")
 		// 400 × 200 plot: -2% → 8px left of the spine, -7% → 14px below the bottom.
 		expect(onChange).toHaveBeenCalledWith({
 			coordSystem: "pixelsBottomLeft",
@@ -116,7 +139,12 @@ describe("annotation Position — Pixels unit", () => {
 		const onChange = vi.fn()
 		mount(
 			<PointPositionSection
-				coords={{ ...newTextAnnotation("t1"), x: 1.03, y: -0.07 }}
+				coords={{
+					...newTextAnnotation("t1"),
+					coordSystem: "pixelsBottomLeft",
+					x: 412,
+					y: -14,
+				}}
 				onChange={onChange}
 				xAxis={AXIS}
 				yAxis={AXIS}
@@ -125,8 +153,8 @@ describe("annotation Position — Pixels unit", () => {
 			/>
 		)
 		expandPosition()
-		select("Adjust by", "pixelsBottomRight")
-		// 400 × 200 plot: 103% → 12px right of the right edge, -7% → 14px below.
+		select("From", "bottomRight")
+		// 400 × 200 plot: 412px from the left → 12px right of the right edge.
 		expect(onChange).toHaveBeenCalledWith({
 			coordSystem: "pixelsBottomRight",
 			x: 12,
@@ -180,7 +208,7 @@ describe("annotation Position — Pixels unit", () => {
 		expect(onChange).toHaveBeenCalledWith({ y: 14 })
 	})
 
-	it("switching back to Percent converts the other way", () => {
+	it("switching back to Percent keeps the corner and converts the other way", () => {
 		const onChange = vi.fn()
 		mount(
 			<PointPositionSection
@@ -200,9 +228,30 @@ describe("annotation Position — Pixels unit", () => {
 		expandPosition()
 		select("Adjust by", "percent")
 		const patch = onChange.mock.calls[0]![0]
-		expect(patch.coordSystem).toBe("percent")
+		expect(patch.coordSystem).toBe("percentTopLeft")
 		expect(patch.x).toBeCloseTo(-0.02)
-		expect(patch.y).toBeCloseTo(1.12)
+		expect(patch.y).toBeCloseTo(0.12)
+	})
+
+	it("a percent corner measures from that corner, +x right / +y up", () => {
+		const onChange = vi.fn()
+		mount(
+			<PointPositionSection
+				coords={{ ...newTextAnnotation("t1"), x: 0.9, y: 0.8 }}
+				onChange={onChange}
+				xAxis={AXIS}
+				yAxis={AXIS}
+				zOrder="front"
+				onZOrderChange={() => {}}
+			/>
+		)
+		expandPosition()
+		select("From", "topRight")
+		// 90% / 80% from the bottom-left = 10% left of / 20% below the top-right.
+		const patch = onChange.mock.calls[0]![0]
+		expect(patch.coordSystem).toBe("percentTopRight")
+		expect(patch.x).toBeCloseTo(-0.1)
+		expect(patch.y).toBeCloseTo(-0.2)
 	})
 
 	it("gives the edge-coordinate kinds the same unit", () => {
@@ -219,12 +268,13 @@ describe("annotation Position — Pixels unit", () => {
 		)
 		expandPosition()
 		select("Adjust by", "pixels")
+		// Percent from the bottom-left → pixels from the bottom-left.
 		expect(onChange).toHaveBeenCalledWith({
-			coordSystem: "pixels",
+			coordSystem: "pixelsBottomLeft",
 			xMin: 0,
 			xMax: 200,
-			yMin: 0,
-			yMax: 20,
+			yMin: 200,
+			yMax: 220,
 		})
 	})
 })

@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest"
 import {
+	baseToPercentX,
+	baseToPercentY,
+	coordCornerOf,
+	coordSystemFor,
+	coordUnitOf,
+	isPercentSystem,
 	isPixelSystem,
+	percentToBaseX,
+	percentToBaseY,
+	type AnnotationCoordSystem,
 	percentToPixelX,
 	percentToPixelY,
 	pixelToCanvasX,
@@ -128,5 +137,46 @@ describe("percent ↔ pixel conversion", () => {
 		expect(pixelToPercentX(14, 0)).toBe(0)
 		expect(pixelToPercentY(14, 0)).toBe(0)
 		expect(pixelToPercentY(14, 0, "pixelsBottomLeft")).toBe(0)
+	})
+})
+
+describe("percent corners", () => {
+	it("splits every system into a unit + corner and recombines it", () => {
+		const all: AnnotationCoordSystem[] = [
+			"values",
+			"percent",
+			"percentTopLeft",
+			"percentTopRight",
+			"percentBottomRight",
+			"pixels",
+			"pixelsBottomLeft",
+			"pixelsTopRight",
+			"pixelsBottomRight",
+		]
+		for (const s of all) {
+			expect(coordSystemFor(coordUnitOf(s), coordCornerOf(s))).toBe(s)
+		}
+		// Legacy "percent" is the bottom-left corner; "pixels" the top-left.
+		expect(coordCornerOf("percent")).toBe("bottomLeft")
+		expect(coordCornerOf("pixels")).toBe("topLeft")
+		expect(coordSystemFor("percent", null)).toBe("percent")
+		expect(coordSystemFor("pixels", null)).toBe("pixels")
+		expect(isPercentSystem("percentTopRight")).toBe(true)
+		expect(isPercentSystem("pixels")).toBe(false)
+	})
+
+	it("offsets a far-edge corner by one full plot, directions unchanged", () => {
+		// 10% left of the right edge, 20% below the top.
+		expect(percentToBaseX(-0.1, "percentTopRight")).toBeCloseTo(0.9)
+		expect(percentToBaseY(-0.2, "percentTopRight")).toBeCloseTo(0.8)
+		expect(percentToBaseX(-0.1, "percentBottomRight")).toBeCloseTo(0.9)
+		expect(percentToBaseY(0.2, "percentBottomRight")).toBeCloseTo(0.2)
+		expect(percentToBaseY(0.05, "percentTopLeft")).toBeCloseTo(1.05)
+		// Bottom-left percent and the values fallback read as-is.
+		expect(percentToBaseX(0.3, "percent")).toBe(0.3)
+		expect(percentToBaseY(0.3, "values")).toBe(0.3)
+		expect(baseToPercentX(0.9, "percentTopRight")).toBeCloseTo(-0.1)
+		expect(baseToPercentY(1.05, "percentTopLeft")).toBeCloseTo(0.05)
+		expect(baseToPercentY(0.4, "percent")).toBe(0.4)
 	})
 })

@@ -1,5 +1,9 @@
 import {
+	baseToPercentX,
+	baseToPercentY,
 	isPixelSystem,
+	percentToBaseX,
+	percentToBaseY,
 	percentToPixelX,
 	percentToPixelY,
 	pixelToPercentX,
@@ -183,7 +187,8 @@ const extentOf = (dims: PlotDims, dim: "x" | "y"): number | null =>
 
 /** Convert one stored coordinate between the three coordinate systems so
  *  the annotation stays where it is when the user switches "Adjust by".
- *  Every path goes through the percent (0–1) form: values ↔ percent via the
+ *  Every path goes through the bottom-left percent (0–1) form (the percent
+ *  corners offset from it by one plot extent, no plot size needed): values ↔ percent via the
  *  axis's data span (or category index), pixels ↔ percent via the plot's
  *  extent on that axis (pixels count from the chosen corner, +x right and
  *  +y up; the pixel corners convert between each other through percent
@@ -206,7 +211,9 @@ export const convertCoord = (
 				? pixelToPercentX(toNumber(value), extent, from)
 				: pixelToPercentY(toNumber(value), extent, from)
 		}
-		return toNumber(value)
+		return dim === "x"
+			? percentToBaseX(toNumber(value), from)
+			: percentToBaseY(toNumber(value), from)
 	}
 	const fraction = toPercent()
 	if (to === "values") return percentToValue(fraction, axis)
@@ -220,7 +227,9 @@ export const convertCoord = (
 			),
 		)
 	}
-	return cleanNumber(fraction)
+	return cleanNumber(
+		dim === "x" ? baseToPercentX(fraction, to) : baseToPercentY(fraction, to),
+	)
 }
 
 /** `convertCoord` for a circle's radius: a fraction of the radius axis's

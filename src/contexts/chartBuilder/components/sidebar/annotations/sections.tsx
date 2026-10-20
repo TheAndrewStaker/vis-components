@@ -7,8 +7,14 @@ import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
 import {
+	coordCornerOf,
+	coordSystemFor,
+	coordUnitOf,
+	isPercentSystem,
 	isPixelSystem,
 	type AnnotationCoordSystem,
+	type CoordCorner,
+	type CoordUnit,
 } from "../../../lib/annotationPixels"
 import type {
 	BoxAnnotationStyle,
@@ -37,24 +43,28 @@ import { Textarea } from "../../../../../components/ui/Input"
 export const usePlotDims = (): PlotDims =>
 	useAtomValue(currentRenderedPanelInnerDimsAtom)
 
-/** The "Adjust by" dropdown every annotation kind's Position subsection
- *  opens with: how the coordinate boxes below it are read.
+/** The "Adjust by" + "From" pair every annotation kind's Position
+ *  subsection opens with: how the coordinate boxes below it are read.
  *
- *  - **Percent (0–100)**: fractions of the plot rect, origin bottom-left.
- *  - **Values (data units)**: through the chart's position scales.
- *  - **Pixels (from top-left / bottom-left / top-right / bottom-right)**:
- *    whole px from that corner of the plot, +x right and +y up in every
- *    case — only the origin moves. These are the ones to use for anything
- *    placed OUTSIDE the plot: a percent past 0 or 100 is a fraction of the
- *    plot's size, so it drifts across the fixed-height chrome (panel titles,
- *    the title band) as the chart resizes, while "14px above the top-left
- *    corner" is 14px on every viewport. Pick the corner on the side the
- *    annotation hangs off: a note under the plot measured from the top
- *    scales with the plot height again (and lands at a different depth under
- *    each panel of a facet grid whose panels differ in height).
+ *  "Adjust by" picks the UNIT:
+ *  - **Values**: through the chart's position scales.
+ *  - **Pixels**: whole px from a corner of the plot.
+ *  - **Percent**: fractions of the plot's width / height from a corner.
  *
- *  The caller converts its stored coordinates on change (`convertCoord`) so
- *  the new boxes show the same position in the new unit. */
+ *  For pixels and percent a second "From" dropdown picks the CORNER
+ *  (top-left / top-right / bottom-left / bottom-right). In every corner +x
+ *  is right and +y is up — only the origin moves. Pixels are the ones to use
+ *  for anything placed OUTSIDE the plot: a percent past 0 or 100 is a
+ *  fraction of the plot's size, so it drifts across the fixed-height chrome
+ *  (panel titles, the title band) as the chart resizes, while "14px above
+ *  the top-left corner" is 14px on every viewport. Pick the corner on the
+ *  side the annotation hangs off.
+ *
+ *  Both dropdowns write ONE flat `coordSystem` (see `coordSystemFor`).
+ *  Switching unit keeps the corner; coming from Values each unit starts at
+ *  its original corner (percent bottom-left, pixels top-left). The caller
+ *  converts its stored coordinates on change (`convertCoord`) so the new
+ *  boxes show the same position in the new unit / corner. */
 export const CoordSystemSelect = ({
 	value,
 	onChange,
@@ -62,59 +72,73 @@ export const CoordSystemSelect = ({
 }: {
 	value: AnnotationCoordSystem
 	onChange: (next: AnnotationCoordSystem) => void
-	/** Gray out "Values (data units)" on polar charts (radar / pie), which
-	 *  have no cartesian axes for the coordinates to map against. */
+	/** Gray out "Values" on polar charts (radar / pie), which have no
+	 *  cartesian axes for the coordinates to map against. */
 	disableValues?: boolean
-}) => (
-	<SelectInput
-		label="Adjust by"
-		labelClassName={LABEL_COL}
-		value={value}
-		options={[
-			{ value: "percent", label: "Percent (0–100)" },
-			{
-				value: "values",
-				label: "Values (data units)",
-				disabled: disableValues,
-			},
-			{ value: "pixels", label: "Pixels (from top-left)" },
-			{ value: "pixelsBottomLeft", label: "Pixels (from bottom-left)" },
-			{ value: "pixelsTopRight", label: "Pixels (from top-right)" },
-			{ value: "pixelsBottomRight", label: "Pixels (from bottom-right)" },
-		]}
-		onChange={(v) => {
-			const next = v as AnnotationCoordSystem
-			if (next === value) return
-			if (next === "values" && disableValues) return
-			onChange(next)
-		}}
-	/>
-)
-
-export const PIXELS_HELP =
-	"Whole pixels from the plot's top-left corner — x to the right, y up (negative y is inside the plot). The spot holds still as the chart resizes."
-export const PIXELS_BOTTOM_LEFT_HELP =
-	"Whole pixels from the plot's bottom-left corner — x to the right, y up (negative y is below the plot). The spot holds still as the chart resizes, and sits the same distance under every facet panel."
-export const PIXELS_TOP_RIGHT_HELP =
-	"Whole pixels from the plot's top-right corner — x to the right, y up (negative x or y is inside the plot). The spot holds still as the chart resizes."
-export const PIXELS_BOTTOM_RIGHT_HELP =
-	"Whole pixels from the plot's bottom-right corner — x to the right, y up (negative x is inside the plot, negative y is below it). The spot holds still as the chart resizes."
-
-/** The helper line for whichever pixel corner is selected (null for the
- *  non-pixel units). */
-export const pixelsHelpFor = (system: AnnotationCoordSystem): string | null => {
-	switch (system) {
-		case "pixels":
-			return PIXELS_HELP
-		case "pixelsBottomLeft":
-			return PIXELS_BOTTOM_LEFT_HELP
-		case "pixelsTopRight":
-			return PIXELS_TOP_RIGHT_HELP
-		case "pixelsBottomRight":
-			return PIXELS_BOTTOM_RIGHT_HELP
-		default:
-			return null
+}) => {
+	const unit = coordUnitOf(value)
+	const corner = coordCornerOf(value)
+	const emit = (next: AnnotationCoordSystem) => {
+		if (next === value) return
+		if (next === "values" && disableValues) return
+		onChange(next)
 	}
+	return (
+		<>
+			<SelectInput
+				label="Adjust by"
+				labelClassName={LABEL_COL}
+				value={unit}
+				options={[
+					{ value: "values", label: "Values", disabled: disableValues },
+					{ value: "pixels", label: "Pixels" },
+					{ value: "percent", label: "Percent" },
+				]}
+				onChange={(v) => emit(coordSystemFor(v as CoordUnit, corner))}
+			/>
+			{corner !== null && (
+				<SelectInput
+					label="From"
+					labelClassName={LABEL_COL}
+					value={corner}
+					options={[
+						{ value: "topLeft", label: "Top left" },
+						{ value: "topRight", label: "Top right" },
+						{ value: "bottomLeft", label: "Bottom left" },
+						{ value: "bottomRight", label: "Bottom right" },
+					]}
+					onChange={(v) => emit(coordSystemFor(unit, v as CoordCorner))}
+				/>
+			)}
+		</>
+	)
+}
+
+const CORNER_NAMES: Record<CoordCorner, string> = {
+	topLeft: "top-left",
+	topRight: "top-right",
+	bottomLeft: "bottom-left",
+	bottomRight: "bottom-right",
+}
+
+/** Which way "inside the plot" points from each corner, in +x right / +y up
+ *  terms. */
+const CORNER_SIGNS: Record<CoordCorner, string> = {
+	topLeft: "negative y is inside the plot",
+	topRight: "negative x or y is inside the plot",
+	bottomLeft: "negative y is below the plot",
+	bottomRight: "negative x is inside the plot, negative y is below it",
+}
+
+/** The helper line for the selected unit + corner (null for Values, and for
+ *  plain bottom-left Percent — the original 0–100 reading needs none). */
+export const coordHelpFor = (system: AnnotationCoordSystem): string | null => {
+	const corner = coordCornerOf(system)
+	if (corner === null || system === "percent") return null
+	const where = `from the plot's ${CORNER_NAMES[corner]} corner — x to the right, y up (${CORNER_SIGNS[corner]}).`
+	return isPixelSystem(system)
+		? `Whole pixels ${where} The spot holds still as the chart resizes.`
+		: `Percent of the plot's width / height ${where}`
 }
 
 /** The coordinate fields rectangles and line segments share: four edge /
@@ -199,7 +223,7 @@ export const EdgePositionSection = ({
 					}}
 				/>
 
-				{coords.coordSystem === "percent" ? (
+				{isPercentSystem(coords.coordSystem) ? (
 					<div className="flex flex-col gap-2">
 						<NumberInput
 							label="left %"
@@ -271,8 +295,10 @@ export const EdgePositionSection = ({
 						{pxInput("xMax", "right")}
 						{pxInput("yMin", "bottom")}
 						{pxInput("yMax", "top")}
-						<p className="vc-help">{pixelsHelpFor(coords.coordSystem)}</p>
 					</div>
+				)}
+				{coordHelpFor(coords.coordSystem) && (
+					<p className="vc-help">{coordHelpFor(coords.coordSystem)}</p>
 				)}
 			</div>
 			<div className="vc-divider-group">
@@ -332,7 +358,7 @@ export const PointPositionSection = ({
 					})
 				}}
 			/>
-			{coords.coordSystem === "percent" ? (
+			{isPercentSystem(coords.coordSystem) ? (
 				<div className="flex flex-col gap-2">
 					<NumberInput
 						label="x %"
@@ -389,8 +415,8 @@ export const PointPositionSection = ({
 				</div>
 			)}
 			{help && <p className="vc-help">{help}</p>}
-			{isPixelSystem(coords.coordSystem) && (
-				<p className="vc-help">{pixelsHelpFor(coords.coordSystem)}</p>
+			{coordHelpFor(coords.coordSystem) && (
+				<p className="vc-help">{coordHelpFor(coords.coordSystem)}</p>
 			)}
 			<div className="vc-divider-group">
 				<LayerRow zOrder={zOrder} onChange={onZOrderChange} />

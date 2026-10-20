@@ -1,6 +1,8 @@
 import type { LineSegmentAnnotation } from "./annotationsConfig"
 import {
 	isPixelSystem,
+	percentToBaseX,
+	percentToBaseY,
 	pixelToCanvasX,
 	pixelToCanvasY,
 } from "./annotationPixels"
@@ -63,7 +65,7 @@ export const computeLineSegmentPixels = (
 		if (useValues && ctx.xScale && ctx.xType) {
 			return applyPositionScale(ctx.xScale, v, ctx.xType)
 		}
-		return inner.x + inner.width * toNumber(v)
+		return inner.x + inner.width * percentToBaseX(toNumber(v), line.coordSystem)
 	}
 	// SVG is top-down; the percent convention has y=0 at the BOTTOM, so flip.
 	// The value scales are already built with an inverted range.
@@ -72,7 +74,10 @@ export const computeLineSegmentPixels = (
 		if (useValues && ctx.yScale && ctx.yType) {
 			return applyPositionScale(ctx.yScale, v, ctx.yType)
 		}
-		return inner.y + inner.height * (1 - toNumber(v))
+		return (
+			inner.y +
+			inner.height * (1 - percentToBaseY(toNumber(v), line.coordSystem))
+		)
 	}
 
 	const x1 = projectX(line.xMin)

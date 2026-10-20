@@ -1,4 +1,4 @@
-/** The "Pixels" coordinate systems for annotations: whole-pixel coordinates
+/** The "Pixels" (and corner-relative "Percent") coordinate systems for annotations: whole-pixel coordinates
  *  measured from a corner of the panel's plot rect, +x to the right and +y
  *  UP (the same directions percent mode uses, so a positive y still reads
  *  "higher").
@@ -36,7 +36,18 @@ export type PixelCoordSystem =
 	| "pixelsBottomLeft"
 	| "pixelsTopRight"
 	| "pixelsBottomRight"
-export type AnnotationCoordSystem = "percent" | "values" | PixelCoordSystem
+/** The "Percent" coordinate systems: fractions of the plot rect measured
+ *  from a corner, +x right and +y up — the same corner rule as pixels, only
+ *  the unit is a fraction of the plot's width / height instead of px.
+ *  `"percent"` is the original, BOTTOM-LEFT origin (0 = left / bottom edge,
+ *  1 = right / top edge); the other three move only the origin, so from the
+ *  top-right corner the inside of the plot is negative x and negative y. */
+export type PercentCoordSystem =
+	| "percent"
+	| "percentTopLeft"
+	| "percentTopRight"
+	| "percentBottomRight"
+export type AnnotationCoordSystem = "values" | PercentCoordSystem | PixelCoordSystem
 
 const PIXEL_SYSTEMS: ReadonlySet<string> = new Set<PixelCoordSystem>([
 	"pixels",
@@ -51,11 +62,111 @@ export const isPixelSystem = (
 	system: AnnotationCoordSystem
 ): system is PixelCoordSystem => PIXEL_SYSTEMS.has(system)
 
+const PERCENT_SYSTEMS: ReadonlySet<string> = new Set<PercentCoordSystem>([
+	"percent",
+	"percentTopLeft",
+	"percentTopRight",
+	"percentBottomRight",
+])
+
+/** Whether a coordinate system is one of the percent corners. */
+export const isPercentSystem = (
+	system: AnnotationCoordSystem
+): system is PercentCoordSystem => PERCENT_SYSTEMS.has(system)
+
 /** Which edges the corner sits on. */
 export const pixelOriginIsRight = (system: PixelCoordSystem): boolean =>
 	system === "pixelsTopRight" || system === "pixelsBottomRight"
 export const pixelOriginIsBottom = (system: PixelCoordSystem): boolean =>
 	system === "pixelsBottomLeft" || system === "pixelsBottomRight"
+
+/** The sidebar splits a coordinate system into a UNIT ("Adjust by") and,
+ *  for pixels / percent, a CORNER ("From"). Stored as one flat value so
+ *  saved charts from before the split read unchanged. */
+export type CoordUnit = "values" | "percent" | "pixels"
+export type CoordCorner = "topLeft" | "bottomLeft" | "topRight" | "bottomRight"
+
+const SYSTEM_PARTS: Record<
+	AnnotationCoordSystem,
+	{ unit: CoordUnit; corner: CoordCorner | null }
+> = {
+	values: { unit: "values", corner: null },
+	percent: { unit: "percent", corner: "bottomLeft" },
+	percentTopLeft: { unit: "percent", corner: "topLeft" },
+	percentTopRight: { unit: "percent", corner: "topRight" },
+	percentBottomRight: { unit: "percent", corner: "bottomRight" },
+	pixels: { unit: "pixels", corner: "topLeft" },
+	pixelsBottomLeft: { unit: "pixels", corner: "bottomLeft" },
+	pixelsTopRight: { unit: "pixels", corner: "topRight" },
+	pixelsBottomRight: { unit: "pixels", corner: "bottomRight" },
+}
+
+export const coordUnitOf = (system: AnnotationCoordSystem): CoordUnit =>
+	SYSTEM_PARTS[system].unit
+/** The corner a pixel / percent system measures from; null for values. */
+export const coordCornerOf = (system: AnnotationCoordSystem): CoordCorner | null =>
+	SYSTEM_PARTS[system].corner
+
+/** Recombine a unit + corner. A missing corner takes each unit's original
+ *  default — percent from the bottom-left, pixels from the top-left. */
+export const coordSystemFor = (
+	unit: CoordUnit,
+	corner: CoordCorner | null
+): AnnotationCoordSystem => {
+	if (unit === "values") return "values"
+	if (unit === "percent") {
+		switch (corner ?? "bottomLeft") {
+			case "topLeft":
+				return "percentTopLeft"
+			case "topRight":
+				return "percentTopRight"
+			case "bottomRight":
+				return "percentBottomRight"
+			default:
+				return "percent"
+		}
+	}
+	switch (corner ?? "topLeft") {
+		case "bottomLeft":
+			return "pixelsBottomLeft"
+		case "topRight":
+			return "pixelsTopRight"
+		case "bottomRight":
+			return "pixelsBottomRight"
+		default:
+			return "pixels"
+	}
+}
+
+/** A percent-corner coordinate as the canonical BOTTOM-LEFT fraction the
+ *  renderers place (0 = left / bottom edge, 1 = right / top edge). Measured
+ *  from a far edge (right / top) the value is offset by one full plot.
+ *  Identity for anything that isn't a percent corner — "values" falls back
+ *  through the percent placement when its axis is missing, read as
+ *  bottom-left like it always has been. */
+export const percentToBaseX = (
+	fraction: number,
+	system: AnnotationCoordSystem
+): number => {
+	const c = isPercentSystem(system) ? coordCornerOf(system) : null
+	return c === "topRight" || c === "bottomRight" ? fraction + 1 : fraction
+}
+export const percentToBaseY = (
+	fraction: number,
+	system: AnnotationCoordSystem
+): number => {
+	const c = isPercentSystem(system) ? coordCornerOf(system) : null
+	return c === "topLeft" || c === "topRight" ? fraction + 1 : fraction
+}
+/** Inverses of `percentToBaseX` / `percentToBaseY`. */
+export const baseToPercentX = (
+	fraction: number,
+	system: AnnotationCoordSystem
+): number => fraction + (percentToBaseX(0, system) === 1 ? -1 : 0)
+export const baseToPercentY = (
+	fraction: number,
+	system: AnnotationCoordSystem
+): number => fraction + (percentToBaseY(0, system) === 1 ? -1 : 0)
 
 type Inner = { x: number; y: number; width: number; height: number }
 

@@ -13,6 +13,8 @@ import {
 } from "../../../lib/arrowheadGeometry"
 import {
 	isPixelSystem,
+	percentToBaseX,
+	percentToBaseY,
 	pixelToCanvasX,
 	pixelToCanvasY,
 	type AnnotationCoordSystem,
@@ -380,8 +382,10 @@ export const layoutPanelAnnotations = ({
 		} else {
 			// Percent fallback (also used when value-mode is selected but the
 			// axis field/type isn't available — e.g. pie chart's missing axis).
-			const x0 = Math.min(toNumber(r.xMin), toNumber(r.xMax))
-			const x1 = Math.max(toNumber(r.xMin), toNumber(r.xMax))
+			const xa = percentToBaseX(toNumber(r.xMin), r.coordSystem)
+			const xb = percentToBaseX(toNumber(r.xMax), r.coordSystem)
+			const x0 = Math.min(xa, xb)
+			const x1 = Math.max(xa, xb)
 			left = inner.x + inner.width * x0
 			width = inner.width * (x1 - x0)
 		}
@@ -401,8 +405,10 @@ export const layoutPanelAnnotations = ({
 		} else {
 			// Percent fallback. SVG y is top-down; data convention has y=0 at
 			// the BOTTOM of the plot — flip so yMax→top.
-			const y0 = Math.min(toNumber(r.yMin), toNumber(r.yMax))
-			const y1 = Math.max(toNumber(r.yMin), toNumber(r.yMax))
+			const ya = percentToBaseY(toNumber(r.yMin), r.coordSystem)
+			const yb = percentToBaseY(toNumber(r.yMax), r.coordSystem)
+			const y0 = Math.min(ya, yb)
+			const y1 = Math.max(ya, yb)
 			top = inner.y + inner.height * (1 - y1)
 			height = inner.height * (y1 - y0)
 		}
