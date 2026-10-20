@@ -10,7 +10,7 @@ import { datasetMetaFrom } from "../../src/contexts/chartBuilder/lib/datasetMeta
 import { pieceKey } from "../../src/contexts/chartBuilder/lib/labelPieces"
 import { VISUALS_VERSION } from "../../src/contexts/chartBuilder/lib/storage/migrations"
 import { SYSTEM_DARK_THEME } from "../../src/contexts/chartBuilder/lib/systemThemes"
-import type { Dataset, Visual } from "../../src/contexts/chartBuilder/lib/types"
+import type { Dataset, DatasetMeta, Visual } from "../../src/contexts/chartBuilder/lib/types"
 import { hydrateVisual } from "../../src/contexts/chartBuilder/lib/visualDefaults"
 import { MAX_PROBLEMS } from "../../src/contexts/chartBuilder/lib/visualSpec/chartSpec"
 import { CAFE, TRENDS } from "../../src/testSupport/chartSpecFixtures"
@@ -515,5 +515,131 @@ describe("GET /api/chart-spec/settings", () => {
 		const mine = (await (await fetch(`${base}/api/chart-spec/settings?visualId=${v0.id}&q=legendConfig.position`)).json()) as { settings: Array<{ path: string; value: unknown }> }
 		expect(mine.settings.find((s) => s.path === "legendConfig.position")?.value).toBe("top")
 		expect((await fetch(`${base}/api/chart-spec/settings?visualId=vs-none`)).status).toBe(404)
+	})
+})
+
+describe("POST /api/visuals/<id>/restore", () => {
+	const edited = async (base: string) => {
+		const v0 = await created(base)
+		const res = await patch(base, v0.id, { title: "Changed" }, { "if-match": String(v0.updatedAt) })
+		const body = (await res.json()) as { visual: Visual; undo: { visualsVersion: number; visual: Visual } }
+		return { v0, edit: body.visual, undo: body.undo }
+	}
+	const restore = (base: string, id: string, undo: unknown, ifMatch?: unknown) =>
+		fetch(`${base}/api/visuals/${id}/restore`, {
+			method: "POST",
+			headers: ifMatch === undefined ? {} : { "if-match": String(ifMatch) },
+			body: JSON.stringify(undo),
+		})
+
+	it("puts back the visual the edit replaced, under a new updatedAt", async () => {
+		const base = await start()
+		const { v0, edit, undo } = await edited(base)
+		expect(undo.visualsVersion).toBe(VISUALS_VERSION)
+		const res = await restore(base, v0.id, undo, edit.updatedAt)
+		expect(res.status).toBe(200)
+		const { updatedAt } = (await res.json()) as { updatedAt: number }
+		expect(updatedAt).toBeGreaterThan(edit.updatedAt)
+		const [stored] = await visuals(base)
+		expect(stored).toEqual({ ...v0, updatedAt, thumbnail: null })
+	})
+
+	it("refuses when the visual changed after the edit, and keeps the change", async () => {
+		const base = await start()
+		const { v0, edit, undo } = await edited(base)
+		const newer = { ...edit, name: "Someone else's save", updatedAt: edit.updatedAt + 5 }
+		expect((await put(base, `/api/visuals/${v0.id}`, newer)).status).toBe(204)
+		expect((await restore(base, v0.id, undo, edit.updatedAt)).status).toBe(412)
+		expect((await visuals(base))[0]?.name).toBe("Someone else's save")
+	})
+
+	it("refuses an undo from another content version, another visual, or without If-Match", async () => {
+		const base = await start()
+		const { v0, edit, undo } = await edited(base)
+		expect((await restore(base, v0.id, { ...undo, visualsVersion: VISUALS_VERSION - 1 }, edit.updatedAt)).status).toBe(409)
+		expect((await restore(base, v0.id, { ...undo, visual: { ...undo.visual, id: "vs-other" } }, edit.updatedAt)).status).toBe(400)
+		expect((await restore(base, v0.id, { visual: undo.visual }, edit.updatedAt)).status).toBe(400)
+		expect((await restore(base, v0.id, undo)).status).toBe(428)
+		expect((await visuals(base))[0]?.labelsConfig.title).toBe("Changed")
+	})
+
+	it("refuses a trashed or missing visual", async () => {
+		const base = await start()
+		const { v0, edit, undo } = await edited(base)
+		expect((await restore(base, "vs-none", { ...undo, visual: { ...undo.visual, id: "vs-none" } }, edit.updatedAt)).status).toBe(404)
+		expect((await put(base, `/api/visuals/${v0.id}`, { ...edit, deletedAt: Date.now() })).status).toBe(204)
+		expect((await restore(base, v0.id, undo, edit.updatedAt)).status).toBe(409)
+	})
+})
+
+describe("POST /api/datasets", () => {
+	const create = (base: string, body: unknown) =>
+		fetch(`${base}/api/datasets`, { method: "POST", body: JSON.stringify(body) })
+	const index = async (base: string) =>
+		(await (await fetch(`${base}/api/datasets?view=index`)).json()) as Record<string, DatasetMeta | null>
+
+	it("stores rows as text, infers types as an upload does, and lists the dataset whole", async () => {
+		const base = await start()
+		const res = await create(base, {
+			name: "Visits",
+			rows: [
+				{ when: "2026-01-05T10:00:00Z", count: "1e3", site: "North", open: true },
+				{ when: "2026-02-01T00:00:00Z", count: 25, site: null, open: false },
+			],
+			types: { site: "categorical" },
+		})
+		expect(res.status).toBe(201)
+		const made = (await res.json()) as { id: string; rowCount: number; fields: Array<{ name: string; type: string }> }
+		expect(made.rowCount).toBe(2)
+		expect(made.fields).toEqual([
+			{ name: "when", type: "temporal" },
+			{ name: "count", type: "quantitative" },
+			{ name: "site", type: "categorical" },
+			{ name: "open", type: "categorical" },
+		])
+		const meta = (await index(base))[made.id]
+		expect(meta?.name).toBe("Visits")
+		expect(meta?.contentHash).toEqual(expect.any(String))
+		expect(meta?.versions).toEqual([expect.objectContaining({ id: meta?.latestVersionId, rowCount: 2 })])
+		const body = (await (await fetch(`${base}/api/datasets/${made.id}`)).json()) as Dataset
+		expect(body.versions[0]?.rows[1]).toEqual({ when: "2026-02-01T00:00:00Z", count: "25", site: "", open: "false" })
+		const version = await fetch(`${base}/api/datasets/${made.id}/versions/${meta?.latestVersionId}`)
+		expect(version.status).toBe(200)
+	})
+
+	it("makes a dataset a chart spec can use", async () => {
+		const base = await start()
+		const res = await create(base, { name: "Muffins", rows: [{ month: "Jan", muffins: 3 }, { month: "Feb", muffins: 5 }] })
+		const { id } = (await res.json()) as { id: string }
+		const chart = await post(base, { datasetId: id, folderId: null, encodings: { x: "month", length: "muffins" } })
+		expect(chart.status).toBe(201)
+	})
+
+	it("reports every problem with its path and stores nothing", async () => {
+		const base = await start()
+		const res = await create(base, { name: " ", rows: [{ a: 1 }, "x", { b: { deep: 1 } }], types: [] })
+		expect(res.status).toBe(400)
+		const { errors } = (await res.json()) as { errors: Array<{ path: string }> }
+		expect(errors.map((e) => e.path)).toEqual(["name", "rows[1]", "rows[2].b", "types"])
+		const typed = await create(base, { name: "T", rows: [{ a: 1 }], types: { b: "quantitative", a: "money" } })
+		expect(((await typed.json()) as { errors: Array<{ path: string }> }).errors.map((e) => e.path)).toEqual(["types.b", "types.a"])
+		expect(await index(base)).toEqual({})
+	})
+
+	it("refuses a name already in the library", async () => {
+		const base = await start()
+		expect((await create(base, { name: "Visits", rows: [{ a: 1 }] })).status).toBe(201)
+		expect((await create(base, { name: " visits ", rows: [{ a: 2 }] })).status).toBe(409)
+		expect(Object.keys(await index(base))).toHaveLength(1)
+	})
+
+	it("lists nothing when publishing fails part way", async () => {
+		const base = await start()
+		const spy = vi.spyOn(dbModule, "upsertDatasetMeta").mockImplementationOnce(() => {
+			throw new Error("disk full")
+		})
+		expect((await create(base, { name: "Visits", rows: [{ a: 1 }] })).status).toBe(500)
+		spy.mockRestore()
+		expect(await index(base)).toEqual({})
 	})
 })
