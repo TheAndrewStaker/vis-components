@@ -646,12 +646,25 @@ container and cells compress.
 
 ---
 
-## 10. Negative gap (ridgeline)
+## 10. Gaps are plot edge to plot edge; negative gap (ridgeline)
 
-`gapY < 0` means cells overlap cumulatively in the vertical direction.
-`cellYForRow(r) = sum(cellHeights[0..r-1]) + r × gapY`. A negative gap
-pulls each successive cell BACK by `|gapY|` per row, so by row N the
-cell starts `N × |gapY|` above where it would under positive gap.
+`gapX` / `gapY` are measured between neighbouring PLOT RECTS (inner
+rects), not cells: 0 = the plots touch. The chrome between two
+neighbours — the first cell's right / bottom margin plus the next one's
+left / top (interior tick labels, the 4px shared spine reserve, wrap
+panel titles) — sits inside the gap. `computeGridChrome` turns the user's
+gap into per-boundary CELL gaps, `cellGapsY[r] = gapY − bottom(r) −
+top(r+1)` (negative whenever the gap is narrower than that chrome), and
+`cellOrigin` places cells with them. Panel sizing reserves chrome only on
+the grid's outer edges (`edgeX` / `edgeY`): span = Σ inner + edge chrome
++ (n−1) × gap. (Until 2026-10-20 the gap ran cell edge to cell edge, so 0
+still left the chrome between plots; visuals v8 shifted stored gaps by
++30 and stamps `facet.gapsFrom: "plot"`.)
+
+`gapY < 0` means plot rects overlap cumulatively in the vertical
+direction. A negative gap pulls each successive plot BACK by `|gapY|`
+per row, so by row N the plot starts `N × |gapY|` above where it would
+at gap 0.
 
 Same idea for `gapX < 0` across cols (rare but supported — true
 ridgeline charts are usually 1-col, but `gapX < 0` does the analogous
@@ -665,9 +678,9 @@ cells.
 feedback): once a gap turns negative, the panel SIZE no longer
 inflates with further-negative gap values. In `computeInnerDimsArrays`
 we use `Math.max(0, gap) × (n-1)` when distributing the inner space,
-so cell heights/widths stay at their gap=0 values once we cross into
-overlap territory. The negative gap then ONLY drives cumulative
-cell-position overlap (in `cellYForRow` / `cellXForCol`), without
+so cell heights/widths stay at their gap=0 (plots touching) values once
+we cross into overlap territory. The negative gap then ONLY drives
+cumulative cell-position overlap (in `cellOrigin`), without
 inflating panels. Pre-fix, more-negative gaps would "give back" space
 and visually inflate the panels — odd UX when dragging the gap slider.
 
@@ -717,7 +730,7 @@ inputs in the Facet panel. When set:
   in a scroll container. The floor is the grid the solver will really
   lay out — each row's / column's own chrome via `cellMargins` (an
   interior row under shareX carries the 4px spine reserve, not the
-  full x-axis band) placed with the SIGNED gap, measured from the grid
+  full x-axis band) placed with the SIGNED cell gaps, measured from the grid
   origin to the farthest cell edge (`gridFarEdge`). A ridgeline's
   overlapped rows therefore pull the floor back instead of stacking as
   if the gap were 0; spill above / left of the origin at extreme

@@ -34,6 +34,7 @@ import {
 } from "./storage/idb"
 import {
 	clearLegacyAutoTickLabelAngle,
+	measureFacetGapsFromPlotEdges,
 	resetVisualFontSizesV1ToV2,
 	themeFontSizesFromListV2,
 } from "./storage/migrations"
@@ -124,11 +125,16 @@ export const buildSeedBundle = async (): Promise<SeedBundle> => {
 const FONT_PT_CUTOVER = "2026-08-12T00:00:00.000Z"
 
 const seedVisualsAtCurrentFontUnit = (seed: SeedBundle): Visual[] => {
-	// Visuals v5→v6 (tickLabelAngle 0 → auto) and v6→v7 (joined keys →
-	// structure), plus the flow Node-titles fold, apply to EVERY seed: all
-	// are idempotent and there is no cutover stamp to gate on.
+	// Visuals v5→v6 (tickLabelAngle 0 → auto), v6→v7 (joined keys →
+	// structure) and v7→v8 (plot-edge facet gaps), plus the flow Node-titles
+	// fold, apply to EVERY seed: all are idempotent and there is no cutover
+	// stamp to gate on.
 	const visuals = seed.visuals.map((v) =>
-		foldFlowNodeTitles(structureVisualKeys(clearLegacyAutoTickLabelAngle(v)))
+		foldFlowNodeTitles(
+			structureVisualKeys(
+				measureFacetGapsFromPlotEdges(clearLegacyAutoTickLabelAngle(v))
+			)
+		)
 	)
 	if (seed.exportedAt === null || seed.exportedAt >= FONT_PT_CUTOVER) {
 		return visuals

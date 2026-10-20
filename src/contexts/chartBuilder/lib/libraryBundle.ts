@@ -24,7 +24,10 @@ import type { SeedBundle } from "./exampleSeed"
 import { loadUserDefaultThemeId, loadVisuals, mergeThumbnails } from "./storage"
 import { foldFlowNodeTitles } from "./foldFlowNodeTitles"
 import { structureVisualKeys } from "./savedKeyStructure"
-import { clearLegacyAutoTickLabelAngle } from "./storage/migrations"
+import {
+	clearLegacyAutoTickLabelAngle,
+	measureFacetGapsFromPlotEdges,
+} from "./storage/migrations"
 import { getStorageAdapter } from "./storage/registry"
 import { normalizeSavedTheme } from "./systemThemes"
 import type { Dataset, Folder, SavedTheme, Visual } from "./types"
@@ -667,13 +670,16 @@ export const mergeBundleIntoLibrary = (
 		// repointing a name-matched theme changes nothing about how it draws.
 		const themeId = v.themeId != null ? themeIdMap.get(v.themeId) ?? v.themeId : v.themeId
 		// Bundles carry no storage version, so pre-v6 `tickLabelAngle: 0`
-		// (then "auto") would land as today's explicit "keep level", and a
-		// pre-v7 export carries joined facet / piece keys, and a flow chart
-		// from before 2026-10-19 its Node-titles styling. All three steps are
-		// idempotent; apply them to every import.
+		// (then "auto") would land as today's explicit "keep level", a
+		// pre-v7 export carries joined facet / piece keys, a pre-v8 one
+		// cell-edge facet gaps, and a flow chart from before 2026-10-19 its
+		// Node-titles styling. All four steps are idempotent; apply them to
+		// every import.
 		imported.push({
 			...foldFlowNodeTitles(
-				structureVisualKeys(clearLegacyAutoTickLabelAngle(v))
+				structureVisualKeys(
+					measureFacetGapsFromPlotEdges(clearLegacyAutoTickLabelAngle(v))
+				)
 			),
 			id,
 			datasetId,

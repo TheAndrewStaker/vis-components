@@ -706,35 +706,34 @@ describe("PlotCanvas (flag ON) — legacy smoke-test invariants on SVG model", (
 		expect(xTitleTexts.length).toBe(1)
 	})
 
-	it("ridgeline gapY=-20 produces cumulative facet-label y-positions", () => {
-		// gapY was -50 originally, but the unmeasured-render path
-		// (useMeasure returns 0×0 in jsdom → solver falls back to
-		// minCanvasH=120) gives cells just barely larger than 50, so
-		// any growth in the bottom reserve (e.g. the TITLE_LABEL_GAP_PX
-		// fix in May 2026) tips them past the -50 threshold and labels
-		// go backward. -20 keeps the cumulative-effect invariant
-		// testable in jsdom without depending on exact pixel arithmetic.
-		seedWithLayout({ rows: 3, cols: 1, gapY: -20 })
-		const { container } = mountChartCanvas()
-		// Each panel's facet label is an SVG <text> inside its [data-facet-label]
-		// group (drawn after the marks, so it is NOT the panel's first <text>). Find them in panel
-		// order (data-panel-key groups), extract their y attribute.
-		const panels = [...container.querySelectorAll("[data-panel-key]")]
-		expect(panels.length).toBe(3)
-		const labelYs = panels.map((p) => {
-			const text = p.querySelector("[data-facet-label] text")
-			return Number(text?.getAttribute("y") ?? "NaN")
-		})
-		// Successive labels must DECREASE in spacing under negative gap:
-		// y[i+1] - y[i] is less than it would be without the negative gap.
-		// Stronger invariant: labels are STRICTLY MONOTONIC in canvas
-		// y-direction (cell.y values increase with row).
-		for (let i = 1; i < labelYs.length; i++) {
-			expect(labelYs[i]!).toBeGreaterThan(labelYs[i - 1]!)
+	it("ridgeline gapY=-20 pulls each facet label 20px closer to the one above", () => {
+		// gapY runs plot edge to plot edge, so the row-to-row stride is the
+		// plot height + gapY and a negative gap shortens it cumulatively.
+		// The unmeasured jsdom render (useMeasure returns 0×0 → the solver's
+		// minCanvasH floor) leaves the plots almost no height, so compare
+		// strides against the same fixture at gapY=0 rather than asserting
+		// order: -20 must shorten every stride by exactly 20px.
+		const facetLabelYs = (gapY: number): number[] => {
+			seedWithLayout({ rows: 3, cols: 1, gapY })
+			const { container, unmount } = mountChartCanvas()
+			// Each panel's facet label is an SVG <text> inside its
+			// [data-facet-label] group (drawn after the marks, so it is NOT
+			// the panel's first <text>), in panel (data-panel-key) order.
+			const panels = [...container.querySelectorAll("[data-panel-key]")]
+			expect(panels.length).toBe(3)
+			const ys = panels.map((p) =>
+				Number(p.querySelector("[data-facet-label] text")?.getAttribute("y") ?? "NaN")
+			)
+			unmount()
+			return ys
 		}
-		// The cumulative ridgeline effect: the stride between successive
-		// facet labels under gapY=-50 should be smaller than the stride
-		// under gapY=0 with the same fixture.
+		const touching = facetLabelYs(0)
+		const overlapped = facetLabelYs(-20)
+		for (let i = 1; i < 3; i++) {
+			const strideTouching = touching[i]! - touching[i - 1]!
+			const strideOverlapped = overlapped[i]! - overlapped[i - 1]!
+			expect(strideOverlapped).toBeCloseTo(strideTouching - 20, 1)
+		}
 	})
 
 	it("rotated y-title (default) has rotation -90 in transform attribute", () => {

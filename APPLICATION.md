@@ -1578,10 +1578,16 @@ Visible when `facet` is mapped. Controls:
   histogram's count axis has no field at all). The size-by-unit toggle
   keeps the raw position-encoding gate, since its weights read that
   field.
-- **Horizontal gap / Vertical gap** — moves panels further apart or closer together.
-  Panels expand or contract to keep total layout area constant, until
-  panels are touching; after that, they slide over each other into
-  overlap (ridgeline plot territory).
+- **Horizontal gap / Vertical gap** — the distance in px between
+  neighbouring panels' plot areas (default 60). **0 means the plot areas
+  touch**; negative values slide them over each other (ridgeline plot
+  territory). Tick labels, axis margins and panel titles that sit between
+  two panels live inside this distance, so a gap narrower than them lets
+  them overlap the neighbour. Panels expand or contract to keep the total
+  layout area constant down to 0; below 0 they keep their touching size
+  and only overlap. (Before 2026-10-20 the gap ran between whole cells,
+  plot plus axis chrome; saved visuals and imported bundles move onto the
+  new measure by adding 30px — visuals v8.)
 - **Panel order** — custom ordering of panels by the facet variable's
   levels.
 

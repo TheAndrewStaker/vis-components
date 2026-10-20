@@ -645,9 +645,9 @@ const estimateGlobalFloors = (
  *  they pass through untouched (the label stays in view via the scroll
  *  wrapper). A fixed aspect ratio shadows the input to fit mode first.
  *
- *  The chrome estimate is conservative (full per-cell margins for every
- *  column, though shared interior columns reserve less) — under-estimating
- *  the budget leaves the plot slightly wider than zero, never negative. */
+ *  The chrome is the grid's outer-edge margins plus the plot-to-plot gaps
+ *  (the chrome between neighbouring columns sits inside the gap — see
+ *  `GridChrome`). */
 const clampLabelReserves = (
 	input: SolverInput,
 	cellMargin: CellMargin,
@@ -663,7 +663,8 @@ const clampLabelReserves = (
 		!(input.panelWidthOverride != null && input.panelWidthOverride > 0)
 	if (!fitMode) return { left, right }
 	const chrome =
-		input.cols * (cellMargin.left + cellMargin.right) +
+		cellMargin.left +
+		cellMargin.right +
 		leftFloor +
 		Math.max(0, input.gapX) * (input.cols - 1)
 	const budget = Math.max(0, input.containerWidth - otherLeftReserve - chrome)
@@ -864,6 +865,53 @@ const cellMargins = (
 	return { top, right, bottom, left }
 }
 
+type CellMarginsAt = (
+	row: number,
+	col: number
+) => { top: number; right: number; bottom: number; left: number }
+
+/** The chrome a laid-out grid carries, split by where it sits. The user's
+ *  gap is measured PLOT EDGE TO PLOT EDGE (0 = neighbouring plot rects
+ *  touch, negative = they overlap — LAYOUT.md §10), so the chrome between
+ *  two neighbours (the first cell's right / bottom margin plus the next
+ *  one's left / top) lives inside the gap rather than on top of it:
+ *  `cellGapsX[i]` is the cell-edge gap between col i and col i+1 that puts
+ *  their plot rects exactly `gapX` apart, and goes negative whenever the
+ *  gap is narrower than that chrome. Only the grid's OUTER edges reserve
+ *  chrome of their own (`edgeX` / `edgeY`). Chrome is uniform per row
+ *  (bottom) and per column (left), so row 0 / col 0 stand in for the rest. */
+type GridChrome = {
+	readonly edgeX: number
+	readonly edgeY: number
+	readonly cellGapsX: readonly number[]
+	readonly cellGapsY: readonly number[]
+}
+
+const computeGridChrome = (
+	rows: number,
+	cols: number,
+	gapX: number,
+	gapY: number,
+	marginsAt: CellMarginsAt
+): GridChrome => {
+	const cellGapsX: number[] = []
+	for (let c = 0; c + 1 < cols; c++) {
+		cellGapsX.push(gapX - marginsAt(0, c).right - marginsAt(0, c + 1).left)
+	}
+	const cellGapsY: number[] = []
+	for (let r = 0; r + 1 < rows; r++) {
+		cellGapsY.push(gapY - marginsAt(r, 0).bottom - marginsAt(r + 1, 0).top)
+	}
+	const lastCol = Math.max(0, cols - 1)
+	const lastRow = Math.max(0, rows - 1)
+	return {
+		edgeX: marginsAt(0, 0).left + marginsAt(0, lastCol).right,
+		edgeY: marginsAt(0, 0).top + marginsAt(lastRow, 0).bottom,
+		cellGapsX,
+		cellGapsY,
+	}
+}
+
 /** Compute per-column inner widths and per-row inner heights. With
  *  uniform weights (the proportionalSizing=false case), every column gets
  *  the same width and every row gets the same height — identical to the
@@ -875,61 +923,36 @@ const cellMargins = (
  *  `rowWeight`. This makes per-category spacing consistent across panels
  *  even when they have different category counts.
  *
- *  Chrome (the BASE_MARGIN + leftFloor/bottomFloor reserves around each
- *  cell's plot rect) is subtracted FIRST, so weights govern the *inner*
- *  rect distribution — every column reserves the same per-side chrome
- *  regardless of how wide its plot rect ends up.
+ *  The grid's span is its plot rects plus the plot-to-plot gaps plus the
+ *  chrome on its OUTER edges (the chrome between neighbours sits inside
+ *  the gap — see `GridChrome`), so that edge chrome and the gaps come out
+ *  FIRST and the weights govern the *inner* rect distribution.
  *
  *  Negative gaps (ridgeline overlap, LAYOUT.md §10): once a gap turns
- *  negative the panel SIZE freezes at its gap=0 value. The negative
- *  gap then drives cumulative cell-position overlap (see
- *  `cellYForRow` / `cellXForCol`) WITHOUT inflating the per-panel
- *  height/width. Previously a more-negative gap also grew the panel
- *  ("gives back space"), which produced odd visual proportions as the
- *  user dragged the gap slider further negative. */
+ *  negative the panel SIZE freezes at its gap=0 (plots touching) value.
+ *  The negative gap then drives cumulative cell-position overlap (see
+ *  `cellOrigin`) WITHOUT inflating the per-panel height/width. Previously
+ *  a more-negative gap also grew the panel ("gives back space"), which
+ *  produced odd visual proportions as the user dragged the gap slider
+ *  further negative. */
 const computeInnerDimsArrays = (
 	innerGrid: { width: number; height: number },
 	rows: number,
 	cols: number,
 	gapX: number,
 	gapY: number,
-	shareX: boolean,
-	shareY: boolean,
-	facetLabelHeight: number,
-	leftFloor: number,
-	bottomFloor: number,
-	interiorBottomChromePerRow: readonly number[],
-	interiorLeftChromePerCol: readonly number[],
+	gridChrome: GridChrome,
 	colWeights: readonly number[],
 	rowWeights: readonly number[],
-	edges: ReturnType<typeof computeEdgePositions>,
-	cellMargin: CellMargin,
 	panelWidthOverride?: number | null,
 	panelHeightOverride?: number | null
 ): { innerWidths: number[]; innerHeights: number[] } => {
-	// Per-column horizontal chrome. A col contributes full left chrome
-	// (BASE_MARGIN.left + leftFloor) whenever ANY row would put a
-	// leftmost-filled panel here; otherwise interior chrome. For grid
-	// mode (fully populated) this reduces to "col 0 = full, others =
-	// interior" — same as before. For wrap with uneven rows it lets an
-	// interior column carry y-axis chrome when its row's left edge
-	// shifted into it.
-	let totalHorizChrome = 0
-	for (let c = 0; c < cols; c++) {
-		const carriesLeftAxis = edges.colsNeedingFullLeftChrome.has(c)
-		const leftChrome = carriesLeftAxis
-			? cellMargin.left + leftFloor
-			: shareY
-				? SHARED_INTERIOR_AXIS_RESERVE
-				: (interiorLeftChromePerCol[c] ?? 0)
-		totalHorizChrome += leftChrome + cellMargin.right
-	}
 	// LAYOUT.md §10: clamp negative gaps to 0 when sizing panels, so
 	// panels stay the SAME width they'd be at gap=0 once we cross into
 	// overlap territory. The cumulative overlap is applied at cell-
-	// positioning time (`cellXForCol` / `cellYForRow`), not here.
+	// positioning time (`cellOrigin`), not here.
 	const horizGapsForSizing = Math.max(0, gapX) * (cols - 1)
-	const availableInnerW = innerGrid.width - totalHorizChrome - horizGapsForSizing
+	const availableInnerW = innerGrid.width - gridChrome.edgeX - horizGapsForSizing
 	const colWeightSum =
 		colWeights.reduce((a, b) => a + b, 0) || cols || 1
 	// Pixel override (LAYOUT.md §10b): when the user has explicitly
@@ -944,27 +967,8 @@ const computeInnerDimsArrays = (
 					Math.max(0, availableInnerW * (w / colWeightSum)),
 				)
 
-	// Per-row vertical chrome. Three regimes (see cellMargins): bottom row
-	// gets full chrome; interior+shareX gets a tiny spine reserve;
-	// interior+!shareX gets just ticks+labels (no title space, sized to
-	// that row's actual labels).
-	const facetBand = facetLabelHeight + cellMargin.top
-	let totalVertChrome = 0
-	for (let r = 0; r < rows; r++) {
-		// A row contributes full bottom chrome whenever it's the last
-		// filled row in any column — that panel needs the title's
-		// reserve plus its own ticks/labels. Falls through to interior
-		// chrome for fully-interior rows.
-		const carriesBottomAxis = edges.rowsNeedingFullBottomChrome.has(r)
-		const bottomChrome = carriesBottomAxis
-			? cellMargin.bottom + bottomFloor
-			: shareX
-				? SHARED_INTERIOR_AXIS_RESERVE
-				: (interiorBottomChromePerRow[r] ?? 0)
-		totalVertChrome += facetBand + bottomChrome
-	}
 	const vertGapsForSizing = Math.max(0, gapY) * (rows - 1)
-	const availableInnerH = innerGrid.height - totalVertChrome - vertGapsForSizing
+	const availableInnerH = innerGrid.height - gridChrome.edgeY - vertGapsForSizing
 	const rowWeightSum =
 		rowWeights.reduce((a, b) => a + b, 0) || rows || 1
 	const innerHeights: number[] =
@@ -977,45 +981,36 @@ const computeInnerDimsArrays = (
 	return { innerWidths, innerHeights }
 }
 
-/** Sum of cell widths up to (but not including) `col`, then optionally
- *  plus visible gaps and cumulative negative gap (ridgeline). */
-const cellXForCol = (
-	col: number,
-	cellWidths: readonly number[],
-	gapX: number
+/** Offset of cell `index` from the grid origin along one axis: the sizes
+ *  of the cells before it plus the cell-edge gaps between them
+ *  (`GridChrome.cellGapsX` / `cellGapsY`). A negative cell gap
+ *  (ridgeline, or a plot gap narrower than the chrome between plots)
+ *  pulls each later cell back cumulatively. */
+const cellOrigin = (
+	index: number,
+	sizes: readonly number[],
+	cellGaps: readonly number[]
 ): number => {
-	let x = 0
-	for (let i = 0; i < col; i++) {
-		x += cellWidths[i] + gapX
+	let offset = 0
+	for (let i = 0; i < index; i++) {
+		offset += (sizes[i] ?? 0) + (cellGaps[i] ?? 0)
 	}
-	return x
-}
-
-const cellYForRow = (
-	row: number,
-	cellHeights: readonly number[],
-	gapY: number
-): number => {
-	let y = 0
-	for (let i = 0; i < row; i++) {
-		y += cellHeights[i] + gapY
-	}
-	return y
+	return offset
 }
 
 /** Extent of a run of cells measured from the grid origin to the farthest
- *  cell edge, with the SIGNED gap — the span the laid-out grid will really
- *  cover on that axis. A negative gap (ridgeline) pulls later cells back
- *  toward the origin; at extreme overlap they pass it, which the far-edge
- *  measure ignores (that spill is handled by the top / left grow). */
+ *  cell edge, with the SIGNED cell gaps — the span the laid-out grid will
+ *  really cover on that axis. A negative gap (ridgeline) pulls later cells
+ *  back toward the origin; at extreme overlap they pass it, which the
+ *  far-edge measure ignores (that spill is handled by the top / left
+ *  grow). */
 const gridFarEdge = (
 	sizes: readonly number[],
-	gap: number,
-	originOf: (index: number, sizes: readonly number[], gap: number) => number
+	cellGaps: readonly number[]
 ): number => {
 	let farEdge = 0
 	for (let i = 0; i < sizes.length; i++) {
-		const edge = originOf(i, sizes, gap) + (sizes[i] ?? 0)
+		const edge = cellOrigin(i, sizes, cellGaps) + (sizes[i] ?? 0)
 		if (edge > farEdge) farEdge = edge
 	}
 	return farEdge
@@ -1030,9 +1025,8 @@ const estimateNaturalDims = (
 	bottomFloor: number,
 	facetLabelHeight: number,
 	cellMargin: CellMargin,
-	edges: ReturnType<typeof computeEdgePositions>,
-	interiorBottomChromePerRow: readonly number[],
-	interiorLeftChromePerCol: readonly number[]
+	marginsAt: CellMarginsAt,
+	gridChrome: GridChrome
 ): { width: number; height: number } => {
 	const cols = input.cols
 	const rows = input.rows
@@ -1081,14 +1075,22 @@ const estimateNaturalDims = (
 	// into overlap; cells should compress to fit the container rather
 	// than enforcing minPanelPx and emitting scroll. Suppress the natural
 	// floor for the affected dimension.
+	// The grid's span is its plot rects + the plot-to-plot gaps + the
+	// chrome on its outer edges (`GridChrome`).
 	const naturalGridW =
 		fitMode || input.gapX < 0
 			? 0
-			: Math.max(naturalCellW, cols * naturalCellW + (cols - 1) * input.gapX)
+			: Math.max(
+					naturalCellW,
+					cols * naturalInnerW + gridChrome.edgeX + (cols - 1) * input.gapX
+				)
 	const naturalGridH =
 		fitMode || input.gapY < 0
 			? 0
-			: Math.max(naturalCellH, rows * naturalCellH + (rows - 1) * input.gapY)
+			: Math.max(
+					naturalCellH,
+					rows * naturalInnerH + gridChrome.edgeY + (rows - 1) * input.gapY
+				)
 	// When the user has specified pixel-precise panel dimensions, the
 	// canvas MUST grow to honor them (even in fit mode). Take the
 	// override-driven grid as a separate floor and use the larger.
@@ -1096,38 +1098,22 @@ const estimateNaturalDims = (
 	// The floor is the grid the solver will actually lay out, measured from
 	// the grid origin to the farthest cell edge: the exact per-row / per-col
 	// chrome (`cellMargins` — an interior row under shareX carries a 4px
-	// spine reserve, not the full x-axis band) and the SIGNED gap, so a
+	// spine reserve, not the full x-axis band) and the SIGNED cell gaps, so a
 	// ridgeline's overlapped rows pull the far edge back instead of stacking
 	// as if the gap were 0. Sizing it as `rows × (override + full chrome)`
 	// grew the canvas past the figure — scrollbars plus a band of empty
 	// canvas under the last row (user-reported Oct 2026). Any spill ABOVE /
 	// LEFT of the origin at extreme overlap is `ridgelineTopGrow` /
 	// `ridgelineLeftGrow`'s job, so the far-edge measure alone is right here.
-	const margins = (row: number, col: number) =>
-		cellMargins(
-			row,
-			col,
-			rows,
-			cols,
-			input.shareX,
-			input.shareY,
-			facetLabelHeight,
-			leftFloor,
-			bottomFloor,
-			interiorBottomChromePerRow,
-			interiorLeftChromePerCol,
-			edges,
-			cellMargin
-		)
 	const gridFromOverrideW =
 		widthOverride != null && widthOverride > 0
 			? (() => {
 					const widths: number[] = []
 					for (let c = 0; c < cols; c++) {
-						const m = margins(0, c)
+						const m = marginsAt(0, c)
 						widths.push(widthOverride + m.left + m.right)
 					}
-					return gridFarEdge(widths, input.gapX, cellXForCol)
+					return gridFarEdge(widths, gridChrome.cellGapsX)
 				})()
 			: 0
 	const gridFromOverrideH =
@@ -1135,10 +1121,10 @@ const estimateNaturalDims = (
 			? (() => {
 					const heights: number[] = []
 					for (let r = 0; r < rows; r++) {
-						const m = margins(r, 0)
+						const m = marginsAt(r, 0)
 						heights.push(heightOverride + m.top + m.bottom)
 					}
-					return gridFarEdge(heights, input.gapY, cellYForRow)
+					return gridFarEdge(heights, gridChrome.cellGapsY)
 				})()
 			: 0
 	const finalGridW = Math.max(naturalGridW, gridFromOverrideW)
@@ -1559,6 +1545,30 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 		cellMargin.bottom +
 		20
 
+	const marginsAt: CellMarginsAt = (row, col) =>
+		cellMargins(
+			row,
+			col,
+			input.rows,
+			input.cols,
+			input.shareX,
+			input.shareY,
+			facetLabelHeight,
+			leftFloor,
+			bottomFloor,
+			interiorBottomChromePerRow,
+			interiorLeftChromePerCol,
+			edges,
+			cellMargin
+		)
+	const gridChrome = computeGridChrome(
+		input.rows,
+		input.cols,
+		input.gapX,
+		input.gapY,
+		marginsAt
+	)
+
 	// Natural dims: if container is too small to honor minPanelPx etc., the
 	// canvas grows beyond container and scroll is emitted.
 	const natural = estimateNaturalDims(
@@ -1568,9 +1578,8 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 		bottomFloor,
 		facetLabelHeight,
 		cellMargin,
-		edges,
-		interiorBottomChromePerRow,
-		interiorLeftChromePerCol
+		marginsAt,
+		gridChrome
 	)
 	// `let` so we can grow these for ridgeline-overflow later (after we
 	// know how far above the natural top reserve the cumulative cells
@@ -1606,21 +1615,10 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 					}
 					requiredInner += rowRequired
 				}
-				let totalChrome = 0
-				for (let r = 0; r < input.rows; r++) {
-					const isBottomRow = r === input.rows - 1
-					const facetBand = facetLabelHeight + cellMargin.top
-					const bottomChrome = isBottomRow
-						? cellMargin.bottom + bottomFloor
-						: input.shareX
-							? SHARED_INTERIOR_AXIS_RESERVE
-							: (interiorBottomChromePerRow[r] ?? 0)
-					totalChrome += facetBand + bottomChrome
-				}
 				const totalGaps = Math.max(0, input.gapY) * (input.rows - 1)
 				return (
 					requiredInner +
-					totalChrome +
+					gridChrome.edgeY +
 					totalGaps +
 					outerReserves.top +
 					outerReserves.bottom
@@ -1645,20 +1643,10 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 					}
 					requiredInner += colRequired
 				}
-				let totalChrome = 0
-				for (let c = 0; c < input.cols; c++) {
-					const isLeftCol = c === 0
-					const leftChrome = isLeftCol
-						? cellMargin.left + leftFloor
-						: input.shareY
-							? SHARED_INTERIOR_AXIS_RESERVE
-							: (interiorLeftChromePerCol[c] ?? 0)
-					totalChrome += leftChrome + cellMargin.right
-				}
 				const totalGaps = Math.max(0, input.gapX) * (input.cols - 1)
 				return (
 					requiredInner +
-					totalChrome +
+					gridChrome.edgeX +
 					totalGaps +
 					outerReserves.left +
 					outerReserves.right
@@ -1736,17 +1724,9 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 		input.cols,
 		input.gapX,
 		input.gapY,
-		input.shareX,
-		input.shareY,
-		facetLabelHeight,
-		leftFloor,
-		bottomFloor,
-		interiorBottomChromePerRow,
-		interiorLeftChromePerCol,
+		gridChrome,
 		colWeights,
 		rowWeights,
-		edges,
-		cellMargin,
 		input.panelWidthOverride,
 		input.panelHeightOverride
 	)
@@ -1770,40 +1750,12 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 	// edge and interior cells under sharing).
 	const cellWidths: number[] = []
 	for (let c = 0; c < input.cols; c++) {
-		const m = cellMargins(
-			0,
-			c,
-			input.rows,
-			input.cols,
-			input.shareX,
-			input.shareY,
-			facetLabelHeight,
-			leftFloor,
-			bottomFloor,
-			interiorBottomChromePerRow,
-			interiorLeftChromePerCol,
-			edges,
-			cellMargin
-		)
+		const m = marginsAt(0, c)
 		cellWidths.push((safeInnerWidths[c] ?? 0) + m.left + m.right)
 	}
 	const cellHeights: number[] = []
 	for (let r = 0; r < input.rows; r++) {
-		const m = cellMargins(
-			r,
-			0,
-			input.rows,
-			input.cols,
-			input.shareX,
-			input.shareY,
-			facetLabelHeight,
-			leftFloor,
-			bottomFloor,
-			interiorBottomChromePerRow,
-			interiorLeftChromePerCol,
-			edges,
-			cellMargin
-		)
+		const m = marginsAt(r, 0)
 		cellHeights.push((safeInnerHeights[r] ?? 0) + m.top + m.bottom)
 	}
 
@@ -1815,10 +1767,10 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 	let figureSlackY = 0
 	if (aspectRatio != null && input.cols > 0 && input.rows > 0) {
 		const usedW =
-			cellXForCol(input.cols - 1, cellWidths, input.gapX) +
+			cellOrigin(input.cols - 1, cellWidths, gridChrome.cellGapsX) +
 			(cellWidths[input.cols - 1] ?? 0)
 		const usedH =
-			cellYForRow(input.rows - 1, cellHeights, input.gapY) +
+			cellOrigin(input.rows - 1, cellHeights, gridChrome.cellGapsY) +
 			(cellHeights[input.rows - 1] ?? 0)
 		figureSlackX = Math.max(0, innerGrid.width - usedW)
 		figureSlackY = Math.max(0, innerGrid.height - usedH)
@@ -1836,8 +1788,10 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 	let rawMinCellY = naturalGridOriginY
 	let rawMinCellX = gridOriginX
 	for (const p of input.panels) {
-		const rawCellX = gridOriginX + cellXForCol(p.col, cellWidths, input.gapX)
-		const rawCellY = naturalGridOriginY + cellYForRow(p.row, cellHeights, input.gapY)
+		const rawCellX =
+			gridOriginX + cellOrigin(p.col, cellWidths, gridChrome.cellGapsX)
+		const rawCellY =
+			naturalGridOriginY + cellOrigin(p.row, cellHeights, gridChrome.cellGapsY)
 		if (rawCellY < rawMinCellY) rawMinCellY = rawCellY
 		if (rawCellX < rawMinCellX) rawMinCellX = rawCellX
 	}
@@ -1867,29 +1821,17 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 	const weightFrac = (w: number, max: number | undefined): number =>
 		max != null && max > 0 ? Math.min(1, Math.max(0, w / max)) : 1
 	const panels: SolverPanelOutput[] = input.panels.map((p) => {
-		const cellX = adjustedGridOriginX + cellXForCol(p.col, cellWidths, input.gapX)
-		const cellY = gridOriginY + cellYForRow(p.row, cellHeights, input.gapY)
+		const cellX =
+			adjustedGridOriginX + cellOrigin(p.col, cellWidths, gridChrome.cellGapsX)
+		const cellY =
+			gridOriginY + cellOrigin(p.row, cellHeights, gridChrome.cellGapsY)
 		const cell: Rect = {
 			x: cellX,
 			y: cellY,
 			width: cellWidths[p.col] ?? 0,
 			height: cellHeights[p.row] ?? 0,
 		}
-		const m = cellMargins(
-			p.row,
-			p.col,
-			input.rows,
-			input.cols,
-			input.shareX,
-			input.shareY,
-			facetLabelHeight,
-			leftFloor,
-			bottomFloor,
-			interiorBottomChromePerRow,
-			interiorLeftChromePerCol,
-			edges,
-			cellMargin
-		)
+		const m = marginsAt(p.row, p.col)
 		// Per-panel sizing within a row / column: the row's height comes
 		// from its largest-weight panel (rowWeights is the max), so a panel
 		// with a smaller weight is drawn shorter than its cell —

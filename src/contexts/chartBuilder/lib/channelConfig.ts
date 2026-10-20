@@ -1369,10 +1369,11 @@ export type FacetConfig = {
 	 *  one per row; "none" = every panel its own y. */
 	shareY?: "none" | "perGroup" | "all" | boolean
 	/** Horizontal whitespace between panel plot rectangles, in pixels.
-	 * Measured plot-edge to plot-edge — does NOT include any axis labels,
-	 * tick labels, axis titles, or facet labels (those are chrome that
-	 * sits outside the panel). Negative values overlap panels (ridgeline
-	 * use case). */
+	 * Measured plot-edge to plot-edge: 0 = neighbouring plots touch,
+	 * negative values overlap them (ridgeline use case). Any axis labels,
+	 * tick labels or facet labels between two panels render INSIDE this
+	 * whitespace, so a gap narrower than them lets them overlap the
+	 * neighbour (LAYOUT.md §10). */
 	gapX: number
 	/** Vertical whitespace between panel plot rectangles, in pixels.
 	 * Same semantics as gapX. Facet labels for the row below render in
@@ -1380,6 +1381,13 @@ export type FacetConfig = {
 	 * height (~20px) to avoid the labels overlapping the row above's
 	 * plot. */
 	gapY: number
+	/** Marks gapX / gapY as plot-edge-to-plot-edge. Before 2026-10-20 they
+	 * were measured between whole cells (plot + axis chrome), so 0 still
+	 * left the chrome between plots; `measureFacetGapsFromPlotEdges`
+	 * (storage/migrations.ts) shifts an unmarked config onto the new
+	 * measure once and stamps this, which keeps that step idempotent on
+	 * every intake path. Always "plot" in anything written since. */
+	gapsFrom?: "plot"
 	/** Optional pixel-precise inner-width override for EVERY panel.
 	 * When set (positive number), the solver bypasses the
 	 * proportional / equal-split distribution and sizes every panel's
@@ -1499,8 +1507,9 @@ export const DEFAULT_FACET_CONFIG: FacetConfig = {
 	cols: null,
 	shareX: "all",
 	shareY: "all",
-	gapX: 30,
-	gapY: 30,
+	gapX: 60,
+	gapY: 60,
+	gapsFrom: "plot",
 	panelWidth: null,
 	panelHeight: null,
 	panelAxisOverrides: {},

@@ -153,7 +153,10 @@ describe("solveFacetLayout — alignment across grid", () => {
 })
 
 describe("solveFacetLayout — gap math", () => {
-	it("positive gapX puts whitespace between cells horizontally", () => {
+	// Gaps are measured PLOT EDGE TO PLOT EDGE (inner rect to inner rect):
+	// the chrome between neighbours (margins, tick labels, panel titles)
+	// sits inside the gap, so 0 means the plot rects touch.
+	it("positive gapX is the whitespace between plot rects horizontally", () => {
 		const spec = solveFacetLayout(
 			baseline({
 				rows: 1,
@@ -163,15 +166,14 @@ describe("solveFacetLayout — gap math", () => {
 				containerWidth: 1200,
 			})
 		)
-		const cells = spec.panels.map((p) => p.cell).sort((a, b) => a.x - b.x)
-		// gap between cell[0] and cell[1] = cell[1].x - (cell[0].x + cell[0].width) = 30
-		const gap1 = cells[1]!.x - (cells[0]!.x + cells[0]!.width)
-		const gap2 = cells[2]!.x - (cells[1]!.x + cells[1]!.width)
+		const plots = spec.panels.map((p) => p.inner).sort((a, b) => a.x - b.x)
+		const gap1 = plots[1]!.x - (plots[0]!.x + plots[0]!.width)
+		const gap2 = plots[2]!.x - (plots[1]!.x + plots[1]!.width)
 		expect(gap1).toBeCloseTo(30, 3)
 		expect(gap2).toBeCloseTo(30, 3)
 	})
 
-	it("positive gapY puts whitespace between cells vertically", () => {
+	it("positive gapY is the whitespace between plot rects vertically", () => {
 		const spec = solveFacetLayout(
 			baseline({
 				rows: 3,
@@ -181,14 +183,36 @@ describe("solveFacetLayout — gap math", () => {
 				containerHeight: 1200,
 			})
 		)
-		const cells = spec.panels.map((p) => p.cell).sort((a, b) => a.y - b.y)
-		const gap1 = cells[1]!.y - (cells[0]!.y + cells[0]!.height)
-		const gap2 = cells[2]!.y - (cells[1]!.y + cells[1]!.height)
+		const plots = spec.panels.map((p) => p.inner).sort((a, b) => a.y - b.y)
+		const gap1 = plots[1]!.y - (plots[0]!.y + plots[0]!.height)
+		const gap2 = plots[2]!.y - (plots[1]!.y + plots[1]!.height)
 		expect(gap1).toBeCloseTo(40, 3)
 		expect(gap2).toBeCloseTo(40, 3)
 	})
 
-	it("negative gapY overlaps cells cumulatively (ridgeline)", () => {
+	it("gap 0 makes neighbouring plot rects touch, shared or not", () => {
+		for (const share of [true, false]) {
+			const spec = solveFacetLayout(
+				baseline({
+					rows: 2,
+					cols: 2,
+					panels: makePanels(2, 2, { xLabels: ["a", "b"], yLabels: ["c", "d"] }),
+					gapX: 0,
+					gapY: 0,
+					shareX: share,
+					shareY: share,
+					containerWidth: 1200,
+					containerHeight: 900,
+				})
+			)
+			const at = (r: number, c: number) =>
+				spec.panels.find((p) => p.row === r && p.col === c)!.inner
+			expect(at(0, 1).x).toBeCloseTo(at(0, 0).x + at(0, 0).width, 3)
+			expect(at(1, 0).y).toBeCloseTo(at(0, 0).y + at(0, 0).height, 3)
+		}
+	})
+
+	it("negative gapY overlaps plot rects cumulatively (ridgeline)", () => {
 		const spec = solveFacetLayout(
 			baseline({
 				rows: 5,
@@ -198,10 +222,10 @@ describe("solveFacetLayout — gap math", () => {
 				containerHeight: 1500,
 			})
 		)
-		const cells = spec.panels.map((p) => p.cell).sort((a, b) => a.y - b.y)
-		// Each successive cell starts 50px earlier than where the previous ended.
-		for (let i = 1; i < cells.length; i++) {
-			const delta = cells[i]!.y - (cells[i - 1]!.y + cells[i - 1]!.height)
+		const plots = spec.panels.map((p) => p.inner).sort((a, b) => a.y - b.y)
+		// Each successive plot starts 50px above where the previous ended.
+		for (let i = 1; i < plots.length; i++) {
+			const delta = plots[i]!.y - (plots[i - 1]!.y + plots[i - 1]!.height)
 			expect(delta).toBeCloseTo(-50, 3)
 		}
 	})
@@ -303,7 +327,7 @@ describe("solveFacetLayout — gap math", () => {
 		expect(spec.canvas.height).toBeCloseTo(800, 3)
 	})
 
-	it("negative gapX overlaps cells cumulatively", () => {
+	it("negative gapX overlaps plot rects cumulatively", () => {
 		const spec = solveFacetLayout(
 			baseline({
 				rows: 1,
@@ -313,9 +337,9 @@ describe("solveFacetLayout — gap math", () => {
 				containerWidth: 1500,
 			})
 		)
-		const cells = spec.panels.map((p) => p.cell).sort((a, b) => a.x - b.x)
-		for (let i = 1; i < cells.length; i++) {
-			const delta = cells[i]!.x - (cells[i - 1]!.x + cells[i - 1]!.width)
+		const plots = spec.panels.map((p) => p.inner).sort((a, b) => a.x - b.x)
+		for (let i = 1; i < plots.length; i++) {
+			const delta = plots[i]!.x - (plots[i - 1]!.x + plots[i - 1]!.width)
 			expect(delta).toBeCloseTo(-30, 3)
 		}
 	})

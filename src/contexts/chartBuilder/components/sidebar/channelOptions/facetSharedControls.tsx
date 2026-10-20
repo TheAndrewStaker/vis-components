@@ -284,7 +284,8 @@ export const AxisRangeSection = ({
 )
 
 /** Gap X / Gap Y input with a reset button that appears when the value
- *  differs from the default. Negative values are intentional — pulling
+ *  differs from the default. The gap runs plot edge to plot edge, so 0
+ *  means neighbouring plots touch. Negative values are intentional — pulling
  *  panels on top of each other is how ridgeline-style facets get drawn. */
 export const GapInput = ({
 	label,

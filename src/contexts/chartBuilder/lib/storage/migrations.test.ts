@@ -12,6 +12,7 @@ import {
 	dataLabelsConfigMigrations,
 	datasetBodyMigrations,
 	datasetsMigrations,
+	measureFacetGapsFromPlotEdges,
 	readThemeFontSizesV2,
 	resetVisualFontSizesV1ToV2,
 	visualsMigrations,
@@ -602,6 +603,49 @@ describe("visualsMigrations v6 -> v7 (joined saved keys → structure)", () => {
 		expect(dataLabelsConfigMigrations[1]!(null)).toBeNull()
 		expect(annotationsMigrations[4]!(null)).toBeNull()
 		expect(channelConfigsMigrations[2]!(null)).toBeNull()
+	})
+})
+
+describe("visualsMigrations v7 -> v8 (facet gaps measured plot edge to plot edge)", () => {
+	const upgrade = visualsMigrations[7]!
+
+	it("shifts stored gaps by 30 and stamps the marker, keeping the rest", () => {
+		const [out] = upgrade([
+			{
+				id: "v",
+				channelConfigs: { facet: { gapX: 30, gapY: -20, rows: 2 }, other: 1 },
+			},
+		]) as Array<{ channelConfigs: Record<string, unknown> }>
+		expect(out!.channelConfigs).toEqual({
+			facet: { gapX: 60, gapY: 10, rows: 2, gapsFrom: "plot" },
+			other: 1,
+		})
+	})
+
+	it("leaves an absent gap absent (the new default moved by the same 30)", () => {
+		const [out] = upgrade([{ channelConfigs: { facet: { gapY: 0 } } }]) as Array<{
+			channelConfigs: { facet: Record<string, unknown> }
+		}>
+		expect(out!.channelConfigs.facet).toEqual({ gapY: 30, gapsFrom: "plot" })
+	})
+
+	it("is idempotent: a marked config comes back as the same reference", () => {
+		const visual = { channelConfigs: { facet: { gapX: 5, gapsFrom: "plot" } } }
+		expect(measureFacetGapsFromPlotEdges(visual)).toBe(visual)
+		const once = measureFacetGapsFromPlotEdges({ channelConfigs: { facet: { gapX: 5 } } })
+		expect(measureFacetGapsFromPlotEdges(once)).toBe(once)
+	})
+
+	it("tolerates sparse visuals and non-array input", () => {
+		const sparse = { id: "s" }
+		expect(upgrade([sparse, null])).toEqual([sparse, null])
+		expect(upgrade("nope")).toBe("nope")
+	})
+
+	it("channelConfigs v3 -> v4 runs the same step over the draft slice", () => {
+		expect(channelConfigsMigrations[3]!({ facet: { gapX: 0 } })).toEqual({
+			facet: { gapX: 30, gapsFrom: "plot" },
+		})
 	})
 })
 

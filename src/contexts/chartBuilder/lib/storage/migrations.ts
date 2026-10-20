@@ -28,9 +28,9 @@ import type { Migration } from "./versioning"
  *   v0 = pre-versioning (unwrapped JSON; no `_v` field). Existing user
  *        data lives here, so the v0→v1 migration must be tolerant of
  *        the existing on-disk shape. */
-export const VISUALS_VERSION = 7
+export const VISUALS_VERSION = 8
 export const DATASETS_VERSION = 1
-export const CHANNEL_CONFIGS_VERSION = 3
+export const CHANNEL_CONFIGS_VERSION = 4
 export const LABELS_VERSION = 1
 export const LEGEND_VERSION = 2
 export const TOOLTIP_VERSION = 1
@@ -392,7 +392,57 @@ export const visualsMigrations: Migration[] = [
 		// One argument: a map index must not land in the `panels` slot.
 		return raw.map((visual) => structureVisualKeys(visual))
 	},
+	// v7 -> v8: facet gaps are measured plot edge to plot edge instead of
+	// cell edge to cell edge — see `measureFacetGapsFromPlotEdges`.
+	(raw) => {
+		if (!Array.isArray(raw)) return raw
+		return raw.map((visual) => measureFacetGapsFromPlotEdges(visual))
+	},
 ]
+
+/** What the chrome between two panels added to a cell-edge gap: a shared
+ *  axis puts 28px (right margin + spine) between columns and ~20–40px
+ *  between rows, so one flat shift keeps old layouts close to how they
+ *  drew. Un-shared axes carried tick labels too, so those land a little
+ *  tighter. */
+const LEGACY_FACET_GAP_SHIFT = 30
+
+/** The visuals v7→v8 step for one visual-shaped record. Facet gaps used to
+ *  be measured between whole cells (plot rect + axis chrome), so 0 still
+ *  left margins and labels between the plots; they now run plot edge to
+ *  plot edge (0 = touching). A stored gap grows by
+ *  {@link LEGACY_FACET_GAP_SHIFT}; an absent one picks up the new default,
+ *  which moved by the same amount. Idempotent through the `gapsFrom`
+ *  marker — a marked config comes back as-is (same reference) — so it is
+ *  also safe on the unversioned intake paths (seed bundles, library-bundle
+ *  imports), which apply it to every visual. */
+export const measureFacetGapsFromPlotEdges = <T>(visual: T): T => {
+	if (typeof visual !== "object" || !visual) return visual
+	const vis = visual as Record<string, unknown>
+	const cc = vis.channelConfigs
+	if (typeof cc !== "object" || !cc) return visual
+	const next = measureFacetGapsFromPlotEdgesInConfigs(cc as Record<string, unknown>)
+	return next === cc ? visual : ({ ...vis, channelConfigs: next } as T)
+}
+
+/** Same step over a bare `ChannelConfigs` record (the editor's persisted
+ *  draft slice, channelConfigs v3→v4). */
+const measureFacetGapsFromPlotEdgesInConfigs = (
+	cc: Record<string, unknown>,
+): Record<string, unknown> => {
+	const facet = cc.facet
+	if (typeof facet !== "object" || !facet) return cc
+	const f = facet as Record<string, unknown>
+	if (f.gapsFrom === "plot") return cc
+	const next: Record<string, unknown> = { ...f, gapsFrom: "plot" }
+	for (const key of ["gapX", "gapY"] as const) {
+		const gap = f[key]
+		if (typeof gap === "number" && Number.isFinite(gap)) {
+			next[key] = gap + LEGACY_FACET_GAP_SHIFT
+		}
+	}
+	return { ...cc, facet: next }
+}
 
 /** The v5→v6 step for one visual-shaped record: drop `tickLabelAngle: 0`
  *  from each axis config under `channelConfigs`. Exported for the paths
@@ -520,6 +570,12 @@ export const channelConfigsMigrations: Migration[] = [
 	// key stays readable through `gridPanelAxisOverride`'s fallback and is
 	// moved by the next save, which structures the whole visual.
 	(raw) => structureChannelConfigKeys(raw, false),
+	// v3 -> v4: facet gaps measure plot edge to plot edge (the visuals
+	// v7→v8 step, for the draft slice).
+	(raw) => {
+		if (typeof raw !== "object" || !raw) return raw
+		return measureFacetGapsFromPlotEdgesInConfigs(raw as Record<string, unknown>)
+	},
 ]
 /** mapConfig v0 (pre-versioning) shape matched the original `MapConfig`, so
  *  the v0→v1 promotion is the identity. v1→v2 backfills `showNoDataRegions`
