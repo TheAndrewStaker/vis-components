@@ -182,12 +182,48 @@ curl -X PATCH https://charts.example.com/api/visuals/vs-… \
 without it the edit answers **428**, `*` answers **400**, and when the
 visual has changed since, **412**, changing nothing. A visual changed
 by another write while the edit runs also answers **412**. Responses are the
-create route's, with **200** `{id, visual, warnings, editorUrl}` for a saved
+create route's, with **200** `{id, visual, warnings, editorUrl, undo}` for a saved
 edit, **404** for an unknown visual and **409** for one in the trash. The
 saved visual's preview image is cleared, since it no longer shows the chart.
 
 An editor tab already open on the visual still holds the old version, and
 its next save replaces the edit.
+
+### Undoing an edit
+
+`undo` in a saved edit's answer is the visual as it was, with the content
+version it was stored at. `POST /api/visuals/<id>/restore` with that `undo` as
+the body, unchanged, puts it back, with `If-Match` carrying the `updatedAt`
+the edit answered:
+
+```
+curl -X POST https://charts.example.com/api/visuals/vs-…/restore \
+  -H 'content-type: application/json' -H 'if-match: 1760000000001' \
+  -d @undo.json
+```
+
+It answers **200** `{id, updatedAt, editorUrl}`; **412** when the visual
+changed after the edit, changing nothing; **409** for a visual in the trash or
+an `undo` from another content version; **428** without `If-Match`; **400**
+for a body that isn't an `undo` for this visual. The preview image is cleared.
+
+### Creating a dataset from rows
+
+`POST /api/datasets` with `{name, rows, types?}` stores rows as a new dataset,
+the same shape an upload makes. Values are kept as text; each column's type is
+inferred as an upload infers it unless `types` names it (`quantitative`,
+`categorical`, `temporal`, `ordinal`).
+
+```
+curl -X POST https://charts.example.com/api/datasets \
+  -H 'content-type: application/json' \
+  -d '{"name":"Muffins","rows":[{"month":"Jan","muffins":3},{"month":"Feb","muffins":5}]}'
+```
+
+It answers **201** `{id, name, rowCount, fields}`; **400** `{errors}` with every
+problem and its path; **409** when a dataset of that name exists; **413** past
+the upload size limit. The library lists the dataset only once all of it is
+stored.
 
 ### What a spec can say
 

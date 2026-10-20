@@ -5,6 +5,8 @@ import {
 	CAFE,
 	contextFor,
 	FOLDER,
+	RATIOS,
+	STATES,
 	THEME,
 	TRENDS,
 } from "../../../../testSupport/chartSpecFixtures"
@@ -19,11 +21,7 @@ import { themeOf } from "../systemThemes"
 import { ALL_ENCODING_CHANNELS, type Visual } from "../types"
 import { hydrateVisual } from "../visualDefaults"
 import { buildDataset } from "../../../../testSupport/fixtures"
-import {
-	COMPOSED_VISUALS_VERSION,
-	composeChartSpec,
-	composeVisual,
-} from "./composeVisual"
+import { composeChartSpec, composeVisual } from "./composeVisual"
 
 const compose = (input: unknown) => {
 	const spec = input as { datasetId?: unknown; datasetVersionId?: unknown }
@@ -83,23 +81,27 @@ describe("composeVisual — the Trends charts", () => {
 		}
 	)
 
-	it("targets the current visuals version", () => {
-		const update =
-			"visuals storage moved past COMPOSED_VISUALS_VERSION: check composeVisual against the new migration steps, then raise it"
-		expect(VISUALS_VERSION, update).toBe(COMPOSED_VISUALS_VERSION)
-		expect(visualsMigrations.length, update).toBe(COMPOSED_VISUALS_VERSION)
+	it("has one migration step per visuals version", () => {
+		expect(visualsMigrations.length).toBe(VISUALS_VERSION)
 	})
 
-	it.each(TRENDS.map((t) => [t.key, t] as const))(
-		"%s is unchanged by the latest migration step and any after it",
-		(_key, t) => {
-			const v = composed(t.spec)
-			const steps = visualsMigrations.slice(COMPOSED_VISUALS_VERSION - 1)
-			const migrated = steps.reduce<unknown>((raw, step) => step(raw), [v])
-			expect(migrated).toEqual([v])
-			expect(clearLegacyAutoTickLabelAngle(v)).toBe(v)
-		}
-	)
+	// Composed charts are already in the current shape: no migration step from
+	// the version the composer was written against onward may change one.
+	// A new step that does is the cue to update compose.
+	const COMPOSER_BASELINE = 6
+	const SAMPLES: Array<readonly [string, unknown]> = [
+		...TRENDS.map((t) => [t.key, t.spec] as const),
+		["map", { datasetId: STATES.id, folderId: null, family: "map", encodings: { connection: "State", hue: "Value" } }],
+		["sankey", { datasetId: CAFE.id, folderId: null, family: "sankey", encodings: { area: "muffins", connection: "flavor" } }],
+		["scatter", { datasetId: RATIOS.id, folderId: null, family: "scatter", encodings: { x: "Ratio", y: "Country" } }],
+	]
+	it.each(SAMPLES)("%s is unchanged by every migration step since the composer baseline", (_key, spec) => {
+		const v = composed(spec)
+		visualsMigrations.slice(COMPOSER_BASELINE - 1).forEach((step, i) => {
+			expect(step([v]), `step to v${COMPOSER_BASELINE + i}`).toEqual([v])
+		})
+		expect(clearLegacyAutoTickLabelAngle(v)).toBe(v)
+	})
 
 	it.each(TRENDS.map((t) => [t.key, t] as const))(
 		"%s maps every channel as { field }, never a bare string",

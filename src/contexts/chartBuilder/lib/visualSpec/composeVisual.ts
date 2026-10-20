@@ -115,11 +115,6 @@ export type ComposeContext = {
 	id: string
 }
 
-/** The visuals storage version composed visuals are complete at: no
- *  migration step up to it changes them. Raise it only after checking
- *  `compose` against each new step in `visualsMigrations`. */
-export const COMPOSED_VISUALS_VERSION = 7
-
 /** The intake every opened and saved visual goes through
  *  (`useLoadVisual`, `useSaveVisual`): saved keys structured, flow
  *  Node-titles styling folded into Data Labels. */
