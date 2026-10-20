@@ -617,7 +617,7 @@ export const CombinedGroupLegend = ({
 			)
 		}
 		return (
-			<div className="flex flex-col gap-1">
+			<div className="vc-legend-rows flex flex-col gap-1">
 				{stops.map((v, i) => {
 					const color = hueScale
 						? (applyHueScale(hueScale, v, type) ?? "#4f8eda")
@@ -693,7 +693,7 @@ export const CombinedGroupLegend = ({
 		)
 		const colWidth = Math.max(24, Math.ceil(maxLen) + 4)
 		return (
-			<div className="flex flex-col gap-1">
+			<div className="vc-legend-rows flex flex-col gap-1">
 				{stops.map((v, i) => {
 					const color = hueScale
 						? (applyHueScale(hueScale, v, type) ?? "#4f8eda")
@@ -798,7 +798,7 @@ export const CombinedGroupLegend = ({
 			)
 		}
 		return (
-			<div className="flex flex-col gap-1">
+			<div className="vc-legend-rows flex flex-col gap-1">
 				{stops.map((s, i) => {
 					const entry = buildEntry(String(s))
 					return (

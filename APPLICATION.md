@@ -2879,6 +2879,29 @@ wrapped line and the swatch placement. A section TITLE that wraps
 right / left legend lifts by the extra lines so the title's bottom line
 and the entries stay where a single-line title puts them (§7).
 
+**Legend height** (its own group right after Legend width) fixes the
+legend box's height, with the same px / in / cm picker, px-truth storage,
+and auto placeholder (the legend's natural height at the default 4 px
+between entry rows; the first step starts from it). The extra or missing
+height goes into the gap between STACKED entry rows — every vertical
+entry list, including entries wrapped into columns — so a smaller height
+pulls the entries closer together and a larger one spreads them out.
+Section titles, the title-to-entries gap and the gap between sections
+keep their spacing. The gap is solved by measurement (content height is
+linear in the gap, so the legend measures it at two gaps and solves) and
+may go negative, but never past 30% of the shortest row, so labels can't
+pile onto one another; past that floor the content overflows the box.
+Horizontal entries and gradient bars have no row gaps to adjust, so there
+the setting only sizes the box. Blank / reset returns to auto.
+
+Both inputs' spinners and arrow keys stop where the legend stops changing.
+Width bottoms out at the narrowest box in which every label still wraps
+only between words (the widest word or title, plus swatch and padding) and
+nothing spills out of the box; height bottoms out at the rows' tightest
+spacing (the natural height when there are no row gaps). The legend
+measures both after each render while the Legend panel is open. Typing
+a smaller number is still allowed.
+
 **Orientation and Legend columns are independent controls, and each
 owns exactly one axis of the layout.** Orientation (Stacked /
 Horizontal) governs how the ENTRIES flow inside a single legend

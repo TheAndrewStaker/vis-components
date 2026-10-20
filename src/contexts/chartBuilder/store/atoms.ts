@@ -1313,6 +1313,26 @@ export const currentRenderedGradientBarLengthAtom = atom<number | null>(null)
  *  instead of jumping to 0. Null until a legend has rendered. */
 export const currentRenderedLegendWidthAtom = atom<number | null>(null)
 
+/** Natural (auto) height (px) of the legend's inner box — its height with
+ *  the default entry-row spacing — published by `Legend` after each render
+ *  for the "Legend height" input's placeholder / first-step start, like
+ *  `currentRenderedLegendWidthAtom`. Null until a legend has rendered. */
+export const currentRenderedLegendHeightAtom = atom<number | null>(null)
+
+/** Smallest width / height (px) the legend box can shrink to before it stops
+ *  changing — narrower, its content overflows (swatches and padding can't
+ *  wrap); shorter, the entry rows hit their tightest spacing. Measured by
+ *  `Legend` after each render; the Legend panel's width / height inputs use
+ *  them as the stepper's `min`. Null until a legend has rendered. */
+export const currentLegendMinWidthAtom = atom<number | null>(null)
+export const currentLegendMinHeightAtom = atom<number | null>(null)
+
+/** True while the Legend panel is mounted — the only consumer of the min
+ *  width / height above. `Legend` runs those probes (a dozen synchronous
+ *  reflows) only while it's set, so embeds, thumbnails and an editor with
+ *  the panel closed never pay for them. */
+export const legendSizeProbeWantedAtom = atom(false)
+
 /** The angle (degrees) the x-axis RESOLVED for its tick labels while the
  *  stored `tickLabelAngle` is null (auto): -45 when the categorical
  *  auto-rotate kicked in, else 0. Published by `Axis` after each render so

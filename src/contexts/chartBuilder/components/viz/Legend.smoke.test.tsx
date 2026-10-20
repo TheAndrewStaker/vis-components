@@ -3,7 +3,7 @@ import { rgb as d3Rgb } from "d3-color"
 import { TestProvider, type TestStore } from "../../../../testSupport/TestProvider"
 import { installInMemoryLocalStorage } from "../../../../testSupport/localStorageShim"
 import { buildDataset as buildDatasetFixture } from "../../../../testSupport/fixtures"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 /** Controllable stand-in for the canvas text measurer the legend planner
  *  budgets its column from. `pxPerChar` 0 (the default for every other
@@ -2368,6 +2368,132 @@ describe("Legend — fixed legend width", () => {
  *  faces (Quicksand) clipped the last letter of titles like "Semester". A
  *  LEFT-aligned title is indented to the label column, so its budget also
  *  carries the swatch + gap indent. */
+describe("Legend — fixed legend height", () => {
+	const DATASET_ID = "ds-legend-fixed-height"
+	const buildDataset = (): Dataset =>
+		buildDatasetFixture({
+			id: DATASET_ID,
+			name: "tiers",
+			filename: "tiers.csv",
+			fields: [
+				{ name: "Tier", inferredType: "categorical" },
+				{ name: "Region", inferredType: "categorical" },
+			],
+			rows: [
+				{ Tier: "A", Region: "east" },
+				{ Tier: "B", Region: "west" },
+			],
+		})
+
+	const mountLegend = (legend: Partial<LegendConfig>) => {
+		const store = installInMemoryLocalStorage()
+		const encodings = {
+			...emptyEncodings(),
+			hue: { field: "Tier" },
+			shape: { field: "Region" },
+		}
+		const channelConfigs = {
+			...EMPTY_CHANNEL_CONFIGS,
+			shape: DEFAULT_SHAPE_CONFIG,
+		}
+		const legendCfg: LegendConfig = { ...DEFAULT_LEGEND_CONFIG, ...legend }
+		/* eslint-disable @vc/use-wrapped-json-functions */
+		store.set(
+			"vis-components:datasets",
+			JSON.stringify({ [DATASET_ID]: buildDataset() })
+		)
+		store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
+		store.set("vis-components:previewVersionId", JSON.stringify(null))
+		store.set("vis-components:currentEncodings", JSON.stringify(encodings))
+		store.set(
+			"vis-components:currentChannelConfigs",
+			JSON.stringify(channelConfigs)
+		)
+		store.set("vis-components:currentLegend", JSON.stringify(legendCfg))
+		/* eslint-enable @vc/use-wrapped-json-functions */
+		const init = (snap: TestStore) => {
+			snap.set(loadedDatasetsAtom, { [DATASET_ID]: buildDataset() })
+			snap.set(currentDatasetIdAtom, DATASET_ID)
+			snap.set(previewVersionIdAtom, null)
+			snap.set(currentEncodingsAtom, encodings)
+			snap.set(currentChannelConfigsAtom, channelConfigs)
+			snap.set(currentLabelsAtom, DEFAULT_LABELS_CONFIG)
+			snap.set(currentLegendConfigAtom, legendCfg)
+			snap.set(currentFieldOverridesAtom, {})
+			snap.set(currentFieldLevelOrdersAtom, {})
+		}
+		return render(
+			<TestProvider initializeState={init}>
+				<Legend />
+			</TestProvider>
+		)
+	}
+
+	const inner = (container: HTMLElement): HTMLElement =>
+		container.querySelector<HTMLElement>(
+			"[data-legend-root] > div"
+		) as HTMLElement
+
+	// happy-dom has no layout, so stand in a linear content model for the
+	// solve: the box's content is 100px plus 3 entry-row gaps, rows are 20px.
+	const GAP_VAR = "--vc-legend-row-gap"
+	const realOffsetHeight = Object.getOwnPropertyDescriptor(
+		HTMLElement.prototype,
+		"offsetHeight"
+	)
+	beforeEach(() => {
+		Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+			configurable: true,
+			get(this: HTMLElement) {
+				if (this.classList.contains("vc-legend-fixed-height")) {
+					if (this.style.height && this.style.height !== "auto")
+						return parseFloat(this.style.height)
+					return 100 + 3 * parseFloat(this.style.getPropertyValue(GAP_VAR) || "4")
+				}
+				if (this.parentElement?.classList.contains("vc-legend-rows")) return 20
+				return 0
+			},
+		})
+	})
+	afterEach(() => {
+		if (realOffsetHeight)
+			Object.defineProperty(HTMLElement.prototype, "offsetHeight", realOffsetHeight)
+	})
+
+	it("auto (null) leaves the box unpinned and the row gap unset", () => {
+		const { container } = mountLegend({ height: null })
+		const box = inner(container)
+		expect(box.classList.contains("vc-legend-fixed-height")).toBe(false)
+		expect(box.style.height).toBe("")
+		expect(box.style.getPropertyValue(GAP_VAR)).toBe("")
+	})
+
+	it("entry lists carry the row-list marker the CSS keys on", () => {
+		const { container } = mountLegend({ height: 120 })
+		expect(container.querySelectorAll(".vc-legend-rows").length).toBeGreaterThan(0)
+	})
+
+	it("pins the box and solves the row gap so the content fills it", () => {
+		// 112px natural (gap 4) → 88px: 3 gaps shed 24px → gap -4.
+		const { container } = mountLegend({ height: 88 })
+		const box = inner(container)
+		expect(box.classList.contains("vc-legend-fixed-height")).toBe(true)
+		expect(box.style.height).toBe("88px")
+		expect(box.style.getPropertyValue(GAP_VAR)).toBe("-4px")
+	})
+
+	it("a taller box spreads the rows out", () => {
+		const { container } = mountLegend({ height: 142 })
+		expect(inner(container).style.getPropertyValue(GAP_VAR)).toBe("14px")
+	})
+
+	it("never pulls rows tighter than 30% of one text line", () => {
+		// happy-dom: line-height "normal" → 16px font × 1.2 = 19.2px line.
+		const { container } = mountLegend({ height: 20 })
+		expect(inner(container).style.getPropertyValue(GAP_VAR)).toBe("-5.76px")
+	})
+})
+
 describe("Legend — auto width from measured text", () => {
 	const DATASET_ID = "ds-legend-measured-width"
 	const buildDataset = (): Dataset =>

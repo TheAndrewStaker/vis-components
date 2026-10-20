@@ -74,16 +74,20 @@ export const EntryHoverWrap = ({
 export const LegendColumns = ({
 	groups,
 	stackGapClass = "gap-1",
+	rowList = true,
 }: {
 	groups: React.ReactNode[][]
 	stackGapClass?: string
+	/** The columns hold legend ENTRY rows (default) — their gap follows a
+	 *  fixed "Legend height". `false` for columns of whole sections. */
+	rowList?: boolean
 }) => (
 	<div className="flex flex-row items-start">
 		{groups.map((group, ci) => (
 			<div
 				// eslint-disable-next-line react/no-array-index-key -- columns are positional chunks; never reordered
 				key={ci}
-				className={`flex min-w-0 flex-col ${stackGapClass}`}
+				className={`flex min-w-0 flex-col ${stackGapClass}${rowList ? " vc-legend-rows" : ""}`}
 				style={ci > 0 ? { marginLeft: "var(--vc-legend-col-gap, 24px)" } : undefined}
 			>
 				{group}
@@ -121,7 +125,7 @@ export const renderEntryList = (
 	cols && cols > 1 ? (
 		<LegendColumns groups={chunkColumns(rows, cols)} />
 	) : (
-		<div className="flex flex-col gap-1">{rows}</div>
+		<div className="vc-legend-rows flex flex-col gap-1">{rows}</div>
 	)
 
 /** Fallback style for callers (smoke tests prop-driving the sub-legends)

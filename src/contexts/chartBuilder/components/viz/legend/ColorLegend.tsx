@@ -194,7 +194,7 @@ export const ColorLegend = ({
 			)
 		}
 		return (
-			<div className="flex flex-col gap-1">
+			<div className="vc-legend-rows flex flex-col gap-1">
 				{breaks.map((v, i) => (
 					<Swatch
 						key={v}

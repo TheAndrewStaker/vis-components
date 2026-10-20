@@ -7,6 +7,9 @@ import { DEFAULT_LEGEND_CONFIG, type LegendConfig } from "../../lib/labelsConfig
 import { emptyEncodings, type Dataset } from "../../lib/types"
 import {
 	currentLegendConfigAtom,
+	currentLegendMinHeightAtom,
+	currentLegendMinWidthAtom,
+	currentRenderedLegendHeightAtom,
 	currentRenderedLegendWidthAtom,
 } from "../../store/atoms"
 
@@ -29,7 +32,10 @@ const buildDataset = (): Dataset =>
 
 afterEach(cleanup)
 
-const mount = (legend: Partial<LegendConfig> = {}) => {
+const mount = (
+	legend: Partial<LegendConfig> = {},
+	mins: { width?: number; height?: number } = {},
+) => {
 	const store = installInMemoryLocalStorage()
 	const encodings = { ...emptyEncodings(), hue: { field: "Tier" } }
 	const legendCfg: LegendConfig = { ...DEFAULT_LEGEND_CONFIG, ...legend }
@@ -46,6 +52,9 @@ const mount = (legend: Partial<LegendConfig> = {}) => {
 		s.set(currentLegendConfigAtom, legendCfg)
 		// Pretend the legend rendered 212px wide (the auto placeholder source).
 		s.set(currentRenderedLegendWidthAtom, 212)
+		s.set(currentRenderedLegendHeightAtom, 96)
+		if (mins.width != null) s.set(currentLegendMinWidthAtom, mins.width)
+		if (mins.height != null) s.set(currentLegendMinHeightAtom, mins.height)
 	}
 	const utils = render(
 		<TestProvider initializeState={init}>
@@ -130,5 +139,68 @@ describe("LegendPanel — Legend width", () => {
 		fireEvent.mouseDown(decrement)
 		fireEvent.mouseUp(decrement)
 		expect(cfg()?.width).toBe(202)
+	})
+})
+
+describe("LegendPanel — Legend height", () => {
+	const heightInputs = (utils: ReturnType<typeof mount>) => ({
+		input: utils.getByLabelText("Legend height") as HTMLInputElement,
+		unit: utils.getByLabelText("Legend height unit") as HTMLSelectElement,
+	})
+
+	it("starts blank (auto) with the natural height as placeholder, right after Legend width", () => {
+		const utils = mount()
+		const { input } = heightInputs(utils)
+		expect(input.value).toBe("")
+		expect(input.placeholder).toBe("96")
+		const text = utils.container.textContent ?? ""
+		expect(text.indexOf("Legend width")).toBeLessThan(text.indexOf("Legend height"))
+		expect(text.indexOf("Legend height")).toBeLessThan(text.indexOf("Orientation"))
+	})
+
+	it("stores px; the unit is display-only; clearing returns to auto", () => {
+		const utils = mount()
+		const { input, unit } = heightInputs(utils)
+		fireEvent.change(unit, { target: { value: "in" } })
+		expect(utils.cfg()?.heightUnit).toBe("in")
+		expect(input.placeholder).toBe("1")
+		fireEvent.change(input, { target: { value: "1.5" } })
+		expect(utils.cfg()?.height).toBe(144)
+		fireEvent.change(input, { target: { value: "" } })
+		expect(utils.cfg()?.height).toBeNull()
+	})
+
+	it("a blank field steps from the natural height, not from 0", () => {
+		const utils = mount()
+		const { input } = heightInputs(utils)
+		fireEvent.focus(input)
+		fireEvent.keyDown(input, { key: "ArrowDown" })
+		expect(utils.cfg()?.height).toBe(86)
+	})
+})
+
+describe("LegendPanel — width / height steppers stop where the legend stops", () => {
+	it("stepping down never passes the measured minimum width", () => {
+		const utils = mount({}, { width: 195 })
+		fireEvent.focus(utils.input)
+		for (let k = 0; k < 5; k++) fireEvent.keyDown(utils.input, { key: "ArrowDown" })
+		expect(utils.cfg()?.width).toBe(195)
+	})
+
+	it("stepping down never passes the measured minimum height", () => {
+		const utils = mount({ height: 100 }, { height: 83 })
+		const input = utils.getByLabelText("Legend height") as HTMLInputElement
+		fireEvent.focus(input)
+		for (let k = 0; k < 5; k++) fireEvent.keyDown(input, { key: "ArrowDown" })
+		expect(utils.cfg()?.height).toBe(83)
+	})
+
+	it("the floor converts to the display unit, rounded up", () => {
+		// 195px = 2.03125in → 2.0313; the step clamps there, never below.
+		const utils = mount({ widthUnit: "in" }, { width: 195 })
+		fireEvent.focus(utils.input)
+		for (let k = 0; k < 20; k++) fireEvent.keyDown(utils.input, { key: "ArrowDown" })
+		expect(utils.cfg()?.width).toBeGreaterThanOrEqual(195)
+		expect(utils.input.value).toBe("2.0313")
 	})
 })

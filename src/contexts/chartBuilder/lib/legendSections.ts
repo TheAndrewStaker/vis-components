@@ -1113,6 +1113,15 @@ export const planLegendSections = ({
 		legendCfg.width != null && legendCfg.width > 0
 			? Math.round(legendCfg.width)
 			: null
+	// User-fixed legend height ("Legend height"), px-truth. The inner box is
+	// pinned to it and gets `vc-legend-fixed-height`, which switches the
+	// stacked entry lists (`vc-legend-rows`) from a fixed 4 px gap to the
+	// `--vc-legend-row-gap` variable that `Legend` solves by measurement so
+	// the content fills exactly this height. ≤ 0 / null / absent = auto.
+	const fixedHeight =
+		legendCfg.height != null && legendCfg.height > 0
+			? Math.round(legendCfg.height)
+			: null
 	// If a horizontal-on-right/left legend's content still exceeds the
 	// capped column width (rare — would need a section with many breaks
 	// or unusually wide swatches), let the column scroll horizontally
@@ -1235,7 +1244,7 @@ export const planLegendSections = ({
 	// of overflowing past the legend column's right edge.
 	// A fixed width fills the outer's exact width (block) in every position
 	// and switches label overflow from truncate/overflow to wrapping.
-	const innerClass =
+	const baseInnerClass =
 		fixedWidth != null
 			? isInside
 				? "block p-3 vc-legend-fixed-width"
@@ -1245,6 +1254,10 @@ export const planLegendSections = ({
 				: wantsInnerXScroll
 					? "block p-4 overflow-x-auto"
 					: "block p-4"
+	const innerClass =
+		fixedHeight != null
+			? `${baseInnerClass} vc-legend-fixed-height`
+			: baseInnerClass
 	// One column of sections. Multi-column packing goes through
 	// `LegendColumns` instead (see `packSections`), and the single-section
 	// entry-wrap case renders its own columns — so this is always the stack.
@@ -1389,6 +1402,9 @@ export const planLegendSections = ({
 		// multi-column `fit-content`), so the border/background match the
 		// width the user typed and labels wrap against that edge.
 		...(fixedWidth != null ? { width: "100%", maxWidth: "100%" } : {}),
+		// Fixed height: the box (padding + border included — border-box) is
+		// exactly the typed height; the entry-row gap absorbs the difference.
+		...(fixedHeight != null ? { height: fixedHeight } : {}),
 	}
 
 	return {

@@ -32,7 +32,7 @@ export const AngleLegend = ({
 		if (unique.length === 0) return null
 		const lineLen = 10
 		return (
-			<div className="flex flex-col gap-1">
+			<div className="vc-legend-rows flex flex-col gap-1">
 				{unique.map((v) => {
 					const rad = scale(v) ?? 0
 					const dx = Math.cos(rad) * lineLen
@@ -110,7 +110,7 @@ export const AngleLegend = ({
 		)
 	}
 	return (
-		<div className="flex flex-col gap-1">
+		<div className="vc-legend-rows flex flex-col gap-1">
 			{breaks.map((s, i) => {
 				const { dx, dy, rawLabel } = angleSvgFor(s)
 				const label = decorateOpenEndLabel(rawLabel, i, breaks, dataExt)

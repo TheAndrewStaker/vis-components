@@ -426,6 +426,24 @@
 		flex-shrink: 1;
 		min-width: 0;
 	}
+	/* Probe-only (Legend's min-width search): wrap at word boundaries, so the
+	 * narrowest width found is the widest whole word / title — the stepper
+	 * stops there instead of breaking labels one letter per line. */
+	.vc-legend-fixed-width.vc-legend-word-floor .truncate,
+	.vc-legend-fixed-width.vc-legend-word-floor .vc-legend-label {
+		overflow-wrap: normal;
+	}
+	/* Fixed legend height ("Legend height"): stacked entry rows trade the
+	 * fixed `gap-1` for a margin driven by `--vc-legend-row-gap`, which
+	 * `Legend` solves by measurement so the content fills the box. A margin,
+	 * not `gap`, because the solve may go NEGATIVE to pull rows tighter than
+	 * the default spacing. */
+	.vc-legend-fixed-height .vc-legend-rows {
+		gap: 0;
+	}
+	.vc-legend-fixed-height .vc-legend-rows > * + * {
+		margin-top: var(--vc-legend-row-gap, 0.25rem);
+	}
 	/* A wrapped label's swatch sits on its FIRST line, not the vertical
 	 * middle of the whole block (which `items-center` would give, floating
 	 * the swatch between lines two and three of a long label). The entry

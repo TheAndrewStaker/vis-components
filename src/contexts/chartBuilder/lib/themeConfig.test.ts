@@ -505,6 +505,17 @@ describe("legend section changed dot", () => {
 		).toBe(0)
 	})
 
+	it("a fixed legend height lights the properties group; the display unit alone does not", () => {
+		expect(
+			explainLegendCustomization({ ...base, height: 120 }, STUB_THEME).has(
+				"properties",
+			),
+		).toBe(true)
+		expect(
+			explainLegendCustomization({ ...base, heightUnit: "in" }, STUB_THEME).size,
+		).toBe(0)
+	})
+
 	it("changing the column gap lights the properties group", () => {
 		expect(
 			explainLegendCustomization({ ...base, columnGap: -10 }, STUB_THEME).has(

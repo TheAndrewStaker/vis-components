@@ -27,6 +27,10 @@ import {
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
 	renderedLabelsAtom,
+	currentLegendMinHeightAtom,
+	currentLegendMinWidthAtom,
+	legendSizeProbeWantedAtom,
+	currentRenderedLegendHeightAtom,
 	currentRenderedLegendWidthAtom,
 	currentThemeIdAtom,
 	currentTooltipConfigAtom,
@@ -40,6 +44,12 @@ import {
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
 import { LegendSection } from "./legend/LegendSection"
 import { LegendColumns } from "./legend/swatches"
+import {
+	applyLegendRowGap,
+	measureLegendMinWidth,
+	probeRowGapLine,
+	rowGapMinHeight,
+} from "./legend/sizeProbe"
 import { liftLegendBox, measureLegendTitleGrowth } from "./legend/titleGrowth"
 import { measureMaxLabelWidth } from "./plotCanvas/measureText"
 import { useFontsVersion } from "./plotCanvas/useFontsVersion"
@@ -150,6 +160,30 @@ export const Legend = ({
 		if (!el) return
 		const px = el.offsetWidth
 		if (px > 0) setRenderedWidth(Math.round(px))
+	})
+	// Fixed "Legend height": solve the entry-row gap so the content fills the
+	// box exactly (`legend/sizeProbe`). The same probes publish the natural
+	// height (the "Legend height" placeholder) and — only while the Legend
+	// panel is open — the smallest width / height the box can still shrink
+	// to, which floor the sidebar steppers. No deps, like the measures around
+	// it: every commit can change the content.
+	const setRenderedHeight = useSetAtom(currentRenderedLegendHeightAtom)
+	const setMinWidth = useSetAtom(currentLegendMinWidthAtom)
+	const setMinHeight = useSetAtom(currentLegendMinHeightAtom)
+	const probeMinSize = useAtomValue(legendSizeProbeWantedAtom)
+	const fixedLegendHeight =
+		legendCfg.height != null && legendCfg.height > 0
+			? Math.round(legendCfg.height)
+			: null
+	useLayoutEffect(() => {
+		const el = innerRef.current
+		const outer = el?.parentElement
+		if (!el || !outer) return
+		if (probeMinSize) setMinWidth(measureLegendMinWidth(el, outer))
+		const line = probeRowGapLine(el)
+		if (line.h0 > 0) setRenderedHeight(line.h0)
+		if (line.h0 > 0 && probeMinSize) setMinHeight(rowGapMinHeight(line))
+		applyLegendRowGap(el, fixedLegendHeight, line)
 	})
 	// Wrapped section titles grow UP: the box lifts by the titles' extra
 	// height (`measureLegendTitleGrowth`) so their bottom lines and the
@@ -445,6 +479,7 @@ export const Legend = ({
 						<LegendColumns
 							groups={chunkColumns(sectionNodes, effectiveCols)}
 							stackGapClass="gap-4"
+							rowList={false}
 						/>
 					) : (
 						<div className={columnsApply ? undefined : sectionLayoutClass}>

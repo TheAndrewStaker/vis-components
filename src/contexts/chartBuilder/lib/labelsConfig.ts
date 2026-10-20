@@ -470,6 +470,18 @@ export type LegendConfig = {
 	/** Display unit for the "Legend width" input — px / in / cm at the
 	 * CSS-standard 96 px/inch. DISPLAY-ONLY: `width` stays px. Absent = px. */
 	widthUnit?: DisplayUnit
+	/** Fixed height of the legend box in PIXELS (the px-truth behind the
+	 * sidebar's "Legend height" input). `null` / absent = auto: the box hugs
+	 * its content with the historical 4 px between entry rows. When set, the
+	 * box is exactly this tall and the gap between stacked ENTRY rows is
+	 * solved (in `Legend`, by measuring) so the content fills it — a smaller
+	 * height pulls the rows closer together (down to a slight overlap of
+	 * their boxes), a larger one spreads them out. Section titles and the
+	 * gap between sections keep their spacing. Values ≤ 0 read as auto. */
+	height?: number | null
+	/** Display unit for the "Legend height" input. DISPLAY-ONLY, like
+	 * `widthUnit`. Absent = px. */
+	heightUnit?: DisplayUnit
 	/** Per-channel hide flags. A channel set to `true` is suppressed even
 	 * when its encoding is mapped (handy for hiding redundant hue legends
 	 * when hue and facet share a field). */
@@ -667,6 +679,7 @@ export const DEFAULT_LEGEND_CONFIG: LegendConfig = {
 	insideX: null,
 	insideY: 0.98,
 	width: null,
+	height: null,
 	hidden: {},
 	showBorder: false,
 	borderColor: "#e2e8f0",

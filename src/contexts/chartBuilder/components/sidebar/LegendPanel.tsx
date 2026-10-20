@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useAtom, useAtomValue } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { useChartModeDef } from "../../store/useChartModeDef"
 import { formatPresetSelection, formatPresetValueFor } from "../../lib/formatPresets"
 import { FormatPresetOptions } from "./FormatPresetOptions"
@@ -69,6 +69,10 @@ import {
 	currentLegendConfigAtom,
 	currentRenderedGradientBarLengthAtom,
 	currentRenderedInsideAutoXAtom,
+	currentLegendMinHeightAtom,
+	currentLegendMinWidthAtom,
+	legendSizeProbeWantedAtom,
+	currentRenderedLegendHeightAtom,
 	currentRenderedLegendWidthAtom,
 } from "../../store/atoms"
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
@@ -349,8 +353,48 @@ export const LegendPanel = () => {
 						: pxToUnit(autoLegendWidth, widthUnit)
 				)
 			: "Auto"
+	// Stepper floor: the narrowest width the legend can still shrink to
+	// (measured by Legend). Rounded UP in the display unit so a step never
+	// lands below it. Typing stays unclamped.
+	const minLegendWidth = useAtomValue(currentLegendMinWidthAtom)
+	const setProbeWanted = useSetAtom(legendSizeProbeWantedAtom)
+	useEffect(() => {
+		setProbeWanted(true)
+		return () => setProbeWanted(false)
+	}, [setProbeWanted])
+	const toUnitCeil = (px: number, unit: DisplayUnit): number =>
+		unit === "px"
+			? Math.ceil(px)
+			: Math.ceil((px / PX_PER_UNIT[unit]) * 10000) / 10000
+	const widthMin =
+		minLegendWidth != null ? toUnitCeil(minLegendWidth, widthUnit) : 0
 	const commitWidthUnit = (n: number) =>
 		update({ width: Math.max(0, n * PX_PER_UNIT[widthUnit]) })
+
+	// "Legend height": same px-truth / display-unit / auto-placeholder scheme
+	// as the width. The placeholder is the legend's natural height (default
+	// row spacing); a typed height re-spaces the entry rows to fill it.
+	const heightUnit: DisplayUnit = merged.heightUnit ?? "px"
+	const autoLegendHeight = useAtomValue(currentRenderedLegendHeightAtom)
+	const heightValue =
+		merged.height != null
+			? heightUnit === "px"
+				? Math.round(merged.height)
+				: Number((merged.height / PX_PER_UNIT[heightUnit]).toFixed(4))
+			: null
+	const heightPlaceholder =
+		autoLegendHeight != null
+			? String(
+					heightUnit === "px"
+						? Math.round(autoLegendHeight)
+						: pxToUnit(autoLegendHeight, heightUnit)
+				)
+			: "Auto"
+	const minLegendHeight = useAtomValue(currentLegendMinHeightAtom)
+	const heightMin =
+		minLegendHeight != null ? toUnitCeil(minLegendHeight, heightUnit) : 0
+	const commitHeightUnit = (n: number) =>
+		update({ height: Math.max(0, n * PX_PER_UNIT[heightUnit]) })
 
 	// Rendered auto length of the gradient bar, published by the legend's
 	// GradientBarRamp after each render. Placeholder + step start for the
@@ -952,7 +996,7 @@ export const LegendPanel = () => {
 							<NumberInput
 								label="Legend width"
 								labelClassName={LABEL_COL}
-								min={0}
+								min={widthMin}
 								step={UNIT_STEP[widthUnit]}
 								value={widthValue}
 								placeholder={widthPlaceholder}
@@ -982,6 +1026,45 @@ export const LegendPanel = () => {
 							blank to size it to its content. Labels that no longer fit
 							wrap onto extra lines. Inches and cm convert at the standard
 							96 px/inch.
+						</p>
+					</div>
+
+					{/* Legend height group — a fixed box height; the gap between
+					 *  stacked entries stretches or tightens to fill it. */}
+					<div className="vc-divider-group">
+						<div className="flex items-center gap-2">
+							<NumberInput
+								label="Legend height"
+								labelClassName={LABEL_COL}
+								min={heightMin}
+								step={UNIT_STEP[heightUnit]}
+								value={heightValue}
+								placeholder={heightPlaceholder}
+								onChange={commitHeightUnit}
+								onClear={() => update({ height: null })}
+								inputClassName="w-20"
+							/>
+							<Select
+								aria-label="Legend height unit"
+								value={heightUnit}
+								onChange={(e) =>
+									update({ heightUnit: e.target.value as DisplayUnit })
+								}
+							>
+								{UNIT_OPTIONS.map((u) => (
+									<option key={u} value={u}>
+										{u}
+									</option>
+								))}
+							</Select>
+							{merged.height != null && (
+								<ResetLink onClick={() => update({ height: null })} />
+							)}
+						</div>
+						<p className="vc-help">
+							Fixes the legend box at this height. Stacked entries move
+							closer together or further apart to fill it; leave blank for
+							the default spacing.
 						</p>
 					</div>
 

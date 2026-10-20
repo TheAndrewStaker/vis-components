@@ -124,7 +124,7 @@ export const AreaLegend = ({
 	// Vertical (stacked): one swatch per row, label sits to the right.
 	// All circles share the same SVG width so labels align in a column.
 	return (
-		<div className="flex flex-col gap-1">
+		<div className="vc-legend-rows flex flex-col gap-1">
 			{entries.map((e) => {
 				const rowH = Math.max(24, Math.ceil(e.r * 2) + 4)
 				return (

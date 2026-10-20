@@ -48,7 +48,7 @@ export const LengthLegend = ({
 		const maxLen = unique.reduce((m, v) => Math.max(m, scale(v) ?? 10), 0)
 		const svgWidth = Math.max(24, maxLen + pad * 2)
 		return (
-			<div className="flex flex-col gap-1">
+			<div className="vc-legend-rows flex flex-col gap-1">
 				{unique.map((v) => {
 					const len = scale(v) ?? 10
 					return (
@@ -116,7 +116,7 @@ export const LengthLegend = ({
 	}
 	// Vertical (stacked): label sits to the right of each segment.
 	return (
-		<div className="flex flex-col gap-1">
+		<div className="vc-legend-rows flex flex-col gap-1">
 			{breaks.map((s, i) => {
 				const len = scale(s) ?? 10
 				return (
