@@ -81,6 +81,8 @@ import {
 	saveLibraryCollapsedFolders,
 	saveEditorSidebarHidden,
 	saveLibraryRailCollapsed,
+	watchLibraryCollapsedFolders,
+	watchLibraryRailCollapsed,
 	saveLibrarySidebarWidth,
 	savePreviewVersionId,
 	saveSidebarCollapsed,
@@ -138,9 +140,19 @@ const resolveUpdate = <T>(update: T | ((prev: T) => T), prev: T): T =>
  * (Jotai caches the read until the first write, so `load` runs once per
  * store), and every write saves through `save`. This mirrors the old Recoil
  * `persistEffect` — storage is read on first `get`, not at module load, so
- * tests that seed localStorage before mounting keep working. */
-const persistedAtom = <T>(load: () => T, save: (v: T) => void) => {
+ * tests that seed localStorage before mounting keep working.
+ *
+ * `watch` (optional) opts a device-local UI preference into cross-tab sync:
+ * while mounted, another tab's write re-reads storage, so this tab's next
+ * write starts from the current value rather than clobbering it. Never pass
+ * it for draft atoms — two tabs can be editing two different visuals. */
+const persistedAtom = <T>(
+	load: () => T,
+	save: (v: T) => void,
+	watch?: (onChange: () => void) => () => void
+) => {
 	const base = atom<T | Unset>(UNSET)
+	if (watch) base.onMount = (setSelf) => watch(() => setSelf(load()))
 	return atom(
 		(get) => {
 			const v = get(base)
@@ -911,7 +923,8 @@ export const librarySidebarWidthAtom = persistedAtom<number>(
  * from its width so re-opening restores the dragged size. */
 export const libraryRailCollapsedAtom = persistedAtom<boolean>(
 	loadLibraryRailCollapsed,
-	saveLibraryRailCollapsed
+	saveLibraryRailCollapsed,
+	watchLibraryRailCollapsed
 )
 
 /** Collapsed state for named sidebar sections, keyed by the section's title
@@ -922,10 +935,12 @@ export const sidebarCollapsedAtom = persistedAtom<Record<string, boolean>>(
 )
 
 /** Which library folders are collapsed. Missing id = expanded. Persisted so
- * the tree keeps its shape across editor round-trips and reloads. */
+ * the tree keeps its shape across editor round-trips and reloads, and synced
+ * across tabs so a stale library tab can't save its old set over a newer one. */
 export const libraryCollapsedFoldersAtom = persistedAtom<ReadonlySet<string>>(
 	loadLibraryCollapsedFolders,
-	saveLibraryCollapsedFolders
+	saveLibraryCollapsedFolders,
+	watchLibraryCollapsedFolders
 )
 
 /** The default theme — same object the "System (Light)" theme is built

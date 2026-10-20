@@ -238,6 +238,22 @@ const safeSet = (key: string, value: unknown): void => {
 	}
 }
 
+/** Subscribe to writes of `key` made by ANOTHER tab of this origin (the
+ *  `storage` event never fires in the tab that wrote). Lets a persisted
+ *  atom drop its in-memory copy instead of later saving that stale copy
+ *  over the other tab's change. Returns the unsubscribe. No-op in
+ *  ephemeral mode, which never reads localStorage. */
+const watchOtherTabs =
+	(key: string) =>
+	(onChange: () => void): (() => void) => {
+		if (ephemeralStorage() || typeof window === "undefined") return () => {}
+		const onStorage = (e: StorageEvent) => {
+			if (e.key === key || e.key === null) onChange()
+		}
+		window.addEventListener("storage", onStorage)
+		return () => window.removeEventListener("storage", onStorage)
+	}
+
 /** Write an already-serialized string back verbatim (or remove the key when
  *  `null`) — the restore half of `snapshotDraftState`. */
 const safeRawSet = (key: string, raw: string | null): void => {
@@ -1038,6 +1054,9 @@ export const loadLibraryCollapsedFolders = (): ReadonlySet<string> =>
 	new Set(safeGet<string[]>(KEY_LIBRARY_COLLAPSED_FOLDERS, []))
 export const saveLibraryCollapsedFolders = (v: ReadonlySet<string>): void =>
 	safeSet(KEY_LIBRARY_COLLAPSED_FOLDERS, [...v])
+export const watchLibraryCollapsedFolders = watchOtherTabs(
+	KEY_LIBRARY_COLLAPSED_FOLDERS
+)
 
 /** Whether the library's folder rail is collapsed fully away (the grid then
  * takes the whole width). Device-local UI state; the rail's width survives
@@ -1046,6 +1065,9 @@ export const loadLibraryRailCollapsed = (): boolean =>
 	safeGet<boolean>(KEY_LIBRARY_RAIL_COLLAPSED, false)
 export const saveLibraryRailCollapsed = (v: boolean): void =>
 	safeSet(KEY_LIBRARY_RAIL_COLLAPSED, v)
+export const watchLibraryRailCollapsed = watchOtherTabs(
+	KEY_LIBRARY_RAIL_COLLAPSED
+)
 
 /** Whether the editor's left menu is collapsed away (wide layout only; the
  * narrow-layout sheet is transient and never persisted). Width is stored
