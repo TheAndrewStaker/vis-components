@@ -1070,6 +1070,22 @@ palette section branches on field type:
   **Ordinal Palettes** (a separate palette set from Categorical).
   Same per-value override grid and stack-mode toggle. Same separate
   "Line color" section for area charts.
+- **Other color encodings inherit Color's palette positions.** Any
+  other categorical color encoding that varies by the SAME variable as
+  Color — data labels (layer color and per-variable label colors), the
+  color slots (connection line, rug, violin/box, density curve, stem,
+  regression, map points), Outline, and the area/radar line palette —
+  defaults each value to the entry at the same POSITION in its own
+  palette as the value's Color pick holds in the Color palette. Color
+  using the 2nd and 4th categorical colors gives the labels the 2nd and
+  4th text colors; when the second encoding uses the same palette, it
+  simply matches Color. A value with no Color pick, or a custom color
+  that isn't in the Color palette, keeps its default position. The
+  secondary encoding's swatch grid shows these inherited colors as its
+  defaults (reset returns to them), and its own per-value edits still
+  win. Nothing is stored: the inheritance is derived at render time
+  (`linkColorConfigs`, `lib/linkedHueColors.ts`), so later Color edits
+  flow through.
 - **Quantitative** — gradient picker (viridis, plasma, etc.) plus
   custom 2-stop or 3-stop gradients with explicit low/mid/high colors
   and optional pinned domain values. Each stop's value box shows the

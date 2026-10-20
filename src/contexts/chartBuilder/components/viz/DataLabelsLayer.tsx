@@ -49,6 +49,11 @@ import { ptToPx } from "../../lib/fontUnit"
 import { effectiveType } from "../../lib/fieldType"
 import { composedLabelOnPanel, dataLabelsOnPanel } from "../../lib/facetScope"
 import {
+	colorLinkSource,
+	linkedCategoryColors,
+	withLinkedColors,
+} from "../../lib/linkedHueColors"
+import {
 	renderMultilineTspans,
 	wrapByCharCount,
 	wrapSegments,
@@ -769,6 +774,23 @@ export const DataLabelsLayer = ({
 		chartChannelConfigs
 	)
 	const hueConfig: HueConfig | null = hueField ? partsHueConfig : null
+	// A label color varying by the chart's Color variable takes each value's
+	// palette POSITION from the Color mapping (see `linkedCategoryColors`).
+	const chartHueField = chartEncodings.hue?.field ?? null
+	const colorLink =
+		dataset && chartHueField
+			? colorLinkSource(
+					chartEncodings,
+					chartChannelConfigs,
+					effectiveType(dataset, chartHueField, overrides)
+				)
+			: null
+	const linkHue = (
+		hue: HueConfig | undefined,
+		field: string,
+		palette: readonly string[] | undefined
+	): HueConfig | undefined =>
+		withLinkedColors(hue, linkedCategoryColors(colorLink, field, palette))
 
 	// Gate: data labels only render when the user has explicitly mapped
 	// the position field(s) AND the value field. Without this, labels would
@@ -851,7 +873,13 @@ export const DataLabelsLayer = ({
 			scale: makeHueScale(
 				values,
 				t,
-				slotCfg.hue,
+				linkHue(
+					slotCfg.hue,
+					varyField,
+					slotCfg.palette && slotCfg.palette.length > 0
+						? slotCfg.palette
+						: undefined
+				),
 				slotCfg.palette && slotCfg.palette.length > 0
 					? slotCfg.palette
 					: undefined
@@ -1174,7 +1202,12 @@ export const DataLabelsLayer = ({
 			const values = dataset?.rows
 				? dataset.rows.map((r) => r[hueField])
 				: anchors.map((a) => a.hueValue)
-			hueScale = makeHueScale(values, hueFieldType, hueConfig, customPalette)
+			hueScale = makeHueScale(
+				values,
+				hueFieldType,
+				linkHue(hueConfig, hueField, customPalette),
+				customPalette
+			)
 		}
 		const sizeValues = sizeField
 			? anchors
@@ -1339,11 +1372,13 @@ export const DataLabelsLayer = ({
 		// stayed correctly varied. Falls back to the panel rows when the full
 		// dataset view isn't available.
 		const hueValues = (dataset?.rows ?? candidateRows).map((r) => r[hueField])
+		const rowPalette =
+			!isHueQuant && cfg.palette.length > 0 ? cfg.palette : undefined
 		hueScale = makeHueScale(
 			hueValues,
 			hueFieldType,
-			hueConfig,
-			!isHueQuant && cfg.palette.length > 0 ? cfg.palette : undefined
+			linkHue(hueConfig, hueField, rowPalette),
+			rowPalette
 		)
 	}
 	const sizeValues: number[] = sizeField

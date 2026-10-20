@@ -9,6 +9,7 @@ import { COLOR_SLOT_REGISTRY } from "../lib/colorSlots"
 import { MODULATION_SLOT_REGISTRY } from "../lib/modulationSlots"
 import { OPACITY_SLOT_REGISTRY } from "../lib/opacitySlots"
 import { effectiveType } from "../lib/fieldType"
+import { linkColorConfigs } from "../lib/linkedHueColors"
 import { resolveLegendDomain } from "../lib/legendBreaks"
 import { patternCategoriesFor, type ThemeInkFallback } from "../lib/patterns"
 import {
@@ -209,6 +210,12 @@ export const useAestheticScales = (): AestheticScales => {
 				undefined)
 			: undefined
 
+		// Secondary color encodings varying by the Color variable inherit its
+		// per-value palette positions — the same seeding the render configs
+		// apply (`linkColorConfigs`).
+		const linked = hue
+			? linkColorConfigs(channelConfigs, encodings, hue.field.type)
+			: channelConfigs
 		const colorSlots: AestheticScales["colorSlots"] = {}
 		for (const def of COLOR_SLOT_REGISTRY) {
 			const built = buildSlot(def.key)
@@ -226,7 +233,7 @@ export const useAestheticScales = (): AestheticScales => {
 				scale: makeHueScale(
 					built.values,
 					built.field.type,
-					slotCfg?.hue,
+					linked.colorSlots?.[def.key]?.hue,
 					slotCfg?.palette ?? undefined,
 					slotDomain
 				),
@@ -301,7 +308,7 @@ export const useAestheticScales = (): AestheticScales => {
 						scale: makeHueScale(
 							outlineHue.values,
 							outlineHue.field.type,
-							channelConfigs.outlineHue,
+							linked.outlineHue,
 							outlinePaletteForHueType(outlineHue.field.type, channelConfigs),
 						),
 						field: outlineHue.field,

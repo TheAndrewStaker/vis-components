@@ -17,6 +17,8 @@ import {
 	type AtomValueType,
 	themeAtom,
 } from "../../../store/atoms"
+import { linkedCategoryColors } from "../../../lib/linkedHueColors"
+import { useColorLink } from "../../../store/useColorLink"
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
 
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
@@ -307,6 +309,7 @@ const LabelSwatchList = ({
 	chartConfigs: AtomValueType<typeof currentChannelConfigsAtom>
 	valuesOverride?: string[]
 }) => {
+	const colorLink = useColorLink()
 	if (!dataset || (!hueField && !valuesOverride)) return null
 	const values =
 		valuesOverride ??
@@ -333,6 +336,13 @@ const LabelSwatchList = ({
 			values={values}
 			scheme={scheme}
 			colors={cfg.colorOverrides}
+			// Labels varying by the Color variable take each value's palette
+			// position from the Color mapping — as `DataLabelsLayer` draws.
+			defaults={
+				cfg.paletteId === DATA_LABELS_SINGLE_COLOR_ID
+					? undefined
+					: linkedCategoryColors(colorLink, hueField, scheme)
+			}
 			onSetColor={(value, color) =>
 				onChange({
 					colorOverrides: { ...cfg.colorOverrides, [value]: color },

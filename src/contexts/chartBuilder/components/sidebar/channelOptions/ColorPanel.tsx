@@ -25,6 +25,8 @@ import {
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
 } from "../../../store/atoms"
+import { linkedCategoryColors } from "../../../lib/linkedHueColors"
+import { useColorLink } from "../../../store/useColorLink"
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
@@ -473,6 +475,7 @@ const SlotCategoricalControls = ({
 	const theme = useCurrentTheme()
 	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
 	const levelOrder = levelOrders[fieldName]
+	const colorLink = useColorLink()
 
 	const isOrdinal = fieldType === "ordinal"
 	const palettes = isOrdinal ? theme.ordinalPalettes : theme.categoricalPalettes
@@ -518,6 +521,7 @@ const SlotCategoricalControls = ({
 				values={uniqueValues}
 				scheme={scheme}
 				colors={catCfg.colors}
+				defaults={linkedCategoryColors(colorLink, fieldName, scheme)}
 				onSetColor={setColor}
 				onResetColor={resetColor}
 				labelPrefix={labelPrefix}

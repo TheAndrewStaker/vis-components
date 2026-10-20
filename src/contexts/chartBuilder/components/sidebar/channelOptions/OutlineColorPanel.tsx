@@ -23,6 +23,8 @@ import {
 	type AtomValueType,
 	themeAtom,
 } from "../../../store/atoms"
+import { linkedCategoryColors } from "../../../lib/linkedHueColors"
+import { useColorLink } from "../../../store/useColorLink"
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
 import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 
@@ -328,6 +330,7 @@ const OutlineCategoricalControls = ({
 	const [configs, setConfigs] = useAtom(currentChannelConfigsAtom)
 	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
 	const levelOrder = levelOrders[fieldName]
+	const colorLink = useColorLink()
 
 	const cfg =
 		configs.outlineHue?.kind === "categorical"
@@ -400,6 +403,7 @@ const OutlineCategoricalControls = ({
 				values={uniqueValues}
 				scheme={scheme}
 				colors={cfg.colors}
+				defaults={linkedCategoryColors(colorLink, fieldName, scheme)}
 				onSetColor={setColor}
 				onResetColor={resetColor}
 				labelPrefix="Outline color"

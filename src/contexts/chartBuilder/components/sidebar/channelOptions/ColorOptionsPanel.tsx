@@ -67,6 +67,8 @@ import {
 } from "../../../store/atoms"
 import { orderedLevels } from "../../../lib/smartSort"
 import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
+import { linkedCategoryColors } from "../../../lib/linkedHueColors"
+import { useColorLink } from "../../../store/useColorLink"
 import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
 
@@ -136,10 +138,14 @@ export const CategoricalSwatchList = ({
 	labelPrefix,
 	order,
 	orderType = "categorical",
+	defaults,
 }: {
 	values: string[]
 	scheme: readonly string[]
 	colors: Record<string, string>
+	/** Per-value defaults that beat the `scheme` cycle — the palette
+	 *  positions inherited from the Color mapping (`linkedCategoryColors`). */
+	defaults?: Record<string, string>
 	onSetColor: (value: string, color: string) => void
 	onResetColor: (value: string) => void
 	/** a11y label stem, e.g. "Color" → "Color for X" / "Pick palette color for X". */
@@ -154,7 +160,7 @@ export const CategoricalSwatchList = ({
 	<div className="flex flex-col gap-1.5">
 		{orderedLevels(values, orderType, order).map(({ value: v, index: i }) => {
 			const defaultColor =
-				scheme[i % scheme.length] ?? CATEGORICAL_HUE_PALETTE[0]
+				defaults?.[v] ?? scheme[i % scheme.length] ?? CATEGORICAL_HUE_PALETTE[0]
 			const active = colors[v] ?? defaultColor
 			const isOverridden = colors[v] !== undefined
 			return (
@@ -739,6 +745,7 @@ export const AreaRadarOutlinePanel = () => {
 	const [configs, setConfigs] = useAtom(currentChannelConfigsAtom)
 	const theme = useCurrentTheme()
 	const dataset = useCurrentDatasetView()
+	const colorLink = useColorLink()
 
 	const hueFieldName = encodings.hue?.field ?? null
 	const field = dataset?.fields.find((f) => f.name === hueFieldName)
@@ -842,6 +849,11 @@ export const AreaRadarOutlinePanel = () => {
 	// `strokeColor` means single-color mode, so no extra mode field is stored.
 	const strokeColor = configs.connection?.strokeColor ?? null
 	const isSingleColor = strokeColor !== null
+	const linkedLineDefaults = linkedCategoryColors(
+		colorLink,
+		hueFieldName,
+		configs.connection?.linePalette
+	)
 	const linePaletteOptions = [
 		{ value: "", label: "Match fill" },
 		{ value: SINGLE_OUTLINE_COLOR, label: "Single color" },
@@ -908,8 +920,12 @@ export const AreaRadarOutlinePanel = () => {
 			)}
 			{!isSingleColor && orderedLevels(uniqueValues, type, levelOrder).map(({ value: v, index: i }) => {
 				const linePaletteColors = configs.connection?.linePalette ?? null
+				// A picked line palette takes each layer's palette position from
+				// its fill pick — the same seeding the renderer draws.
 				const paletteLineColor = linePaletteColors
-					? (linePaletteColors[i % linePaletteColors.length] ?? null)
+					? (linkedLineDefaults[v] ??
+						linePaletteColors[i % linePaletteColors.length] ??
+						null)
 					: null
 				const fillDefault = cfg.colors[v] ?? scheme[i % scheme.length]
 				const lineColor = lineColors[v] ?? paletteLineColor ?? fillDefault
