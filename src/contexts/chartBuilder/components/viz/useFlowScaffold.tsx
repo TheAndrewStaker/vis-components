@@ -42,7 +42,7 @@ import { emptyDataLabelsEncodings } from "../../lib/types"
 import {
 	currentDataLabelsEncodingsAtom,
 	currentEncodingsAtom,
-	currentLabelsAtom,
+	renderedLabelsAtom,
 } from "../../store/atoms"
 import {
 	renderChannelConfigsAtom,
@@ -86,7 +86,7 @@ export type FlowLabelPlacement = {
 export const useFlowScaffold = (props: ChartRendererBaseProps = {}) => {
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
-	const labels = useAtomValue(currentLabelsAtom)
+	const labels = useAtomValue(renderedLabelsAtom)
 	const dataLabelsCfg: DataLabelsConfig = {
 		...DEFAULT_DATA_LABELS_CONFIG,
 		...useAtomValue(renderDataLabelsConfigAtom),

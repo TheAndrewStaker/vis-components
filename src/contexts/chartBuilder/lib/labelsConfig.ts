@@ -1071,6 +1071,16 @@ export type LabelsConfig = {
 	 * left-aligned title starts at the same x with or without its prefix.
 	 * See `chartTitlePrefixOf` / `resolveTitlePrefixFont`. */
 	titlePrefix?: TitlePrefixConfig
+	/** "Titles shown" unchecks: a title slot set to `true` is not drawn and
+	 * reserves no space, whatever text it holds. Sparse — showing a title
+	 * deletes its entry, so absent = shown (the default). The typed text,
+	 * font and offsets survive a hidden title, so re-checking restores it.
+	 * Covers the chart title (prefix included), subtitle, axis titles,
+	 * per-channel legend titles (`legend:<channel>`) and facet titles (the
+	 * facet slots — see `hiddenFacetTitles`). Read through `visibleLabels` /
+	 * `shownLegendTitle` / `hiddenFacetTitles`, never directly by a
+	 * renderer. */
+	hiddenTitles?: Partial<Record<LabelFontKey, true>>
 }
 
 export const DEFAULT_LABELS_CONFIG: LabelsConfig = {
@@ -1153,6 +1163,74 @@ export const chartTitlePrefixOf = (labels: LabelsConfig): string | null => {
 	if (!p || p.enabled !== true) return null
 	const text = p.text.trim()
 	return text.length > 0 ? text : null
+}
+
+/** Whether the "Titles shown" checkbox for a title slot is unchecked. */
+export const isTitleHidden = (labels: LabelsConfig, key: LabelFontKey): boolean =>
+	labels.hiddenTitles?.[key] === true
+
+/** The labels a renderer draws from: hidden chart / subtitle / axis titles
+ * collapse to `""` — the existing "no title, no space" state every layout
+ * path already honors — and a hidden chart title takes its prefix with it.
+ * Legend titles are NOT blanked here: their text also drives which
+ * same-field legends combine, so hiding one must not regroup them; the
+ * legend's header reads `shownLegendTitle` instead. Returns `labels` itself
+ * when nothing is hidden. */
+export const visibleLabels = (labels: LabelsConfig): LabelsConfig => {
+	const hidden = labels.hiddenTitles
+	if (!hidden) return labels
+	const next: LabelsConfig = { ...labels }
+	let changed = false
+	if (hidden.title) {
+		next.title = ""
+		delete next.titlePrefix
+		changed = true
+	}
+	if (hidden.subtitle) {
+		next.subtitle = ""
+		changed = true
+	}
+	if (hidden.xAxisTitle) {
+		next.xAxisTitle = ""
+		changed = true
+	}
+	if (hidden.yAxisTitle) {
+		next.yAxisTitle = ""
+		changed = true
+	}
+	return changed ? next : labels
+}
+
+/** A legend section's title override as drawn: `""` (no header, no space)
+ * when its "Titles shown" box is unchecked, else the stored three-state
+ * `legendTitles` entry (undefined = fall back to the field name). */
+export const shownLegendTitle = (
+	labels: LabelsConfig,
+	ch: LegendChannel
+): string | undefined =>
+	isTitleHidden(labels, legendFontKey(ch)) ? "" : labels.legendTitles?.[ch]
+
+/** Which facet-title areas "Titles shown" has switched off. The checkboxes
+ * mirror the Titles panel's facet subsections: a wrap / single-axis facet
+ * has ONE "Facet titles" box (`facetTitle`) covering whatever it draws;
+ * a both-axes grid (`split`) has separate Column / Row (+ Panel, under
+ * hide-empty compaction) boxes on the per-strip slots. Each area reads
+ * only the key its own mode offers, so a box unchecked in one shape can't
+ * hide titles in the other shape with no checkbox left to undo it. A
+ * hidden area neither draws nor reserves its band / strip. */
+export const hiddenFacetTitles = (
+	labels: LabelsConfig,
+	split: boolean
+): { panel: boolean; col: boolean; row: boolean } => {
+	if (!split) {
+		const all = isTitleHidden(labels, "facetTitle")
+		return { panel: all, col: all, row: all }
+	}
+	return {
+		panel: isTitleHidden(labels, "facetPanelTitle"),
+		col: isTitleHidden(labels, "facetColTitle"),
+		row: isTitleHidden(labels, "facetRowTitle"),
+	}
 }
 
 /** Whether the chart draws a title band at all: typed title text OR an
@@ -1412,5 +1490,8 @@ export const migrateLabelsConfig = (
 		// Sparse: only carried when the visual stored one (same dropped-on-
 		// re-hydration hazard as titleOffsets above).
 		...(raw.titlePrefix ? { titlePrefix: raw.titlePrefix } : {}),
+		...(raw.hiddenTitles && Object.keys(raw.hiddenTitles).length > 0
+			? { hiddenTitles: raw.hiddenTitles }
+			: {}),
 	}
 }

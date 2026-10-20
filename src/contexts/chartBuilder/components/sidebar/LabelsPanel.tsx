@@ -9,6 +9,7 @@ import {
 	baseTitleAlignmentOf,
 	fontWeightDisplayName,
 	fontWeightOptionsFor,
+	isTitleHidden,
 	LEGEND_CHANNELS,
 	LEGEND_FRIENDLY_NAME,
 	legendFontKey,
@@ -405,21 +406,72 @@ export const LabelsPanel = () => {
 			titleVerticalAlignments[key] !== "middle") ||
 		!!titleAngles[key] ||
 		!!labels.titleOffsets?.[key]
-	// An active prefix is a rendered deviation (like "Color by facet"); text
-	// retained under an unchecked box doesn't dot.
-	const primaryChanged =
-		keyChanged("title") || keyChanged("subtitle") || titlePrefixOn
 	// An axis title the chart can't draw greys out: flow diagrams, the tree
 	// layouts and maps have no x / y axes. Polar charts stay live — the pie
 	// bands and the radar's R axis draw from these titles.
 	const isPolar = modeDef.canvas.coordFamily === "polar"
 	const xTitleInert = !isPolar && !modeDef.canvas.cartesianAxes.x
 	const yTitleInert = !isPolar && !modeDef.canvas.cartesianAxes.y
+	// "Titles shown": unchecking a title stops the chart drawing it (no
+	// reserved space either — see `visibleLabels`) and drops its editor row
+	// below, like "Legends shown" on the Legend panel. Inert axis titles
+	// aren't offered (there's nothing to show), and keep their greyed row.
+	const showTitle = !isTitleHidden(labels, "title")
+	const showSubtitle = !isTitleHidden(labels, "subtitle")
+	const showXTitle = !xTitleInert && !isTitleHidden(labels, "xAxisTitle")
+	const showYTitle = !yTitleInert && !isTitleHidden(labels, "yAxisTitle")
+	// A shared-field legend group is one row, so one checkbox; it reads as
+	// shown while any member is.
+	const legendGroupShown = (group: LegendChannel[]) =>
+		group.some((ch) => !isTitleHidden(labels, legendFontKey(ch)))
+	const shownLegendTitleGroups = legendTitleGroups.filter(legendGroupShown)
+	// Facet boxes mirror the facet subsections below (one "Facet titles", or
+	// Column / Row / Panel on a both-axes grid) — see `hiddenFacetTitles`.
+	const facetBoxes: { key: LabelFontKey; label: string }[] = !isFaceted
+		? []
+		: facetGridSplit
+			? [
+					{ key: "facetColTitle", label: "Facet titles (column)" },
+					{ key: "facetRowTitle", label: "Facet titles (row)" },
+					...(hideEmptyOn
+						? [{ key: "facetPanelTitle" as const, label: "Facet titles (panel)" }]
+						: []),
+				]
+			: [{ key: "facetTitle", label: "Facet titles" }]
+	const showFacet = (key: LabelFontKey) => !isTitleHidden(labels, key)
+	const titlesShownChanged =
+		!showTitle ||
+		!showSubtitle ||
+		(!xTitleInert && !showXTitle) ||
+		(!yTitleInert && !showYTitle) ||
+		shownLegendTitleGroups.length < legendTitleGroups.length ||
+		facetBoxes.some((b) => !showFacet(b.key))
+	// Sparse: a shown title deletes its entry, and the block drops away
+	// entirely once nothing is hidden.
+	const setTitlesShown = (keys: LabelFontKey[], shown: boolean) => {
+		setLabels((prev) => {
+			const hidden = { ...prev.hiddenTitles }
+			for (const k of keys) {
+				if (shown) delete hidden[k]
+				else hidden[k] = true
+			}
+			const { hiddenTitles: _prev, ...rest } = prev
+			return Object.keys(hidden).length > 0
+				? { ...rest, hiddenTitles: hidden }
+				: rest
+		})
+	}
+	// An active prefix is a rendered deviation (like "Color by facet"); text
+	// retained under an unchecked box doesn't dot. Neither does styling on a
+	// hidden title — its row isn't on screen to clear it from.
+	const primaryChanged =
+		(showTitle && (keyChanged("title") || titlePrefixOn)) ||
+		(showSubtitle && keyChanged("subtitle"))
 	// A stored value on a greyed-out title can't be cleared from here, so it
 	// doesn't light the dot.
 	const axisChanged =
-		(!xTitleInert && keyChanged("xAxisTitle")) ||
-		(!yTitleInert &&
+		(showXTitle && keyChanged("xAxisTitle")) ||
+		(showYTitle &&
 			(keyChanged("yAxisTitle") || !!labels.yAxisTitleHorizontal))
 	// Wrap/single-axis renders one unified "Facet titles" subsection; a
 	// both-axes grid renders per-strip row / column (+ optional panel)
@@ -506,16 +558,93 @@ export const LabelsPanel = () => {
 	const facetTitleBaseColor =
 		overrides.facetTitle?.color ??
 		secondaryInheritColor(labels.baseFont.titles)
-	const legendChanged = activeLegendChannels.some((ch) =>
-		keyChanged(legendFontKey(ch))
+	const legendChanged = shownLegendTitleGroups.some((group) =>
+		group.some((ch) => keyChanged(legendFontKey(ch)))
+	)
+	const subtitleRow = (
+		<LabelRow
+			label="Subtitle"
+			fontKey="subtitle"
+			value={labels.subtitle}
+			onChange={(v) => updateText("subtitle", v)}
+			override={overrides.subtitle}
+			onOverride={(patch) => setOverride("subtitle", patch)}
+			alignment={titleAlignments.subtitle}
+			onAlignment={(a) => setAlignment("subtitle", a)}
+			baseAlignment={labels.baseFont.titles.subtitleAlignment}
+			baseColor={labels.baseFont.titles.color}
+			baseSize={labels.baseFont.titles.subtitleSize}
+			baseFamily={
+				labels.baseFont.titles.subtitleFamily ?? labels.baseFont.titles.family
+			}
+			baseWeight={subtitleInheritWeight(labels.baseFont.titles)}
+			extraActive={!!labels.titleOffsets?.subtitle}
+			extraControls={
+				<OffsetControl
+					value={labels.titleOffsets?.subtitle ?? {}}
+					onChange={(axis, n) => setOffset("subtitle", axis, n)}
+				/>
+			}
+		/>
 	)
 	return (
 		/* Purple option-panel wrapper + gap-3 so the subsection headers here
 		 * match every other panel's boxed subheaders (Legend, Data Labels,
 		 * Aesthetics all wrap their CollapsibleSubsections the same way). */
 		<div className="vc-option-panel">
+			{/* "Titles shown" comes first — every editor below is for a title
+			 *  checked here. Replaces typing a space to blank a title, which
+			 *  still drew (and reserved room for) an invisible one. */}
+			<CollapsibleSubsection title="Titles shown" changed={titlesShownChanged}>
+				<Toggle
+					label="Title"
+					checked={showTitle}
+					onChange={(show) => setTitlesShown(["title"], show)}
+				/>
+				<Toggle
+					label="Subtitle"
+					checked={showSubtitle}
+					onChange={(show) => setTitlesShown(["subtitle"], show)}
+				/>
+				{!xTitleInert && (
+					<Toggle
+						label="X-axis title"
+						checked={showXTitle}
+						onChange={(show) => setTitlesShown(["xAxisTitle"], show)}
+					/>
+				)}
+				{!yTitleInert && (
+					<Toggle
+						label="Y-axis title"
+						checked={showYTitle}
+						onChange={(show) => setTitlesShown(["yAxisTitle"], show)}
+					/>
+				)}
+				{facetBoxes.map((b) => (
+					<Toggle
+						key={b.key}
+						label={b.label}
+						checked={showFacet(b.key)}
+						onChange={(show) => setTitlesShown([b.key], show)}
+					/>
+				))}
+				{legendTitleGroups.map((group) => (
+					<Toggle
+						key={group.join("+")}
+						label={`${group
+							.map((c) => LEGEND_FRIENDLY_NAME[c])
+							.join(" · ")} legend title`}
+						checked={legendGroupShown(group)}
+						onChange={(show) =>
+							setTitlesShown(group.map(legendFontKey), show)
+						}
+					/>
+				))}
+			</CollapsibleSubsection>
+			{(showTitle || showSubtitle) && (
 			<CollapsibleSubsection title="Primary titles" changed={primaryChanged}>
 				<div className="flex flex-col gap-2">
+			{showTitle && (
 			<LabelRow
 				label="Title"
 				fontKey="title"
@@ -570,41 +699,28 @@ export const LabelsPanel = () => {
 					</>
 				}
 			/>
+			)}
 			{/* Divider above Subtitle so the two primary title rows read as
 			 * separate groups rather than one run of controls. */}
-			<div className="vc-divider-group">
-				<LabelRow
-					label="Subtitle"
-					fontKey="subtitle"
-					value={labels.subtitle}
-					onChange={(v) => updateText("subtitle", v)}
-					override={overrides.subtitle}
-					onOverride={(patch) => setOverride("subtitle", patch)}
-					alignment={titleAlignments.subtitle}
-					onAlignment={(a) => setAlignment("subtitle", a)}
-					baseAlignment={labels.baseFont.titles.subtitleAlignment}
-					baseColor={labels.baseFont.titles.color}
-					baseSize={labels.baseFont.titles.subtitleSize}
-					baseFamily={
-						labels.baseFont.titles.subtitleFamily ?? labels.baseFont.titles.family
-					}
-					baseWeight={subtitleInheritWeight(labels.baseFont.titles)}
-					extraActive={!!labels.titleOffsets?.subtitle}
-					extraControls={
-						<OffsetControl
-							value={labels.titleOffsets?.subtitle ?? {}}
-							onChange={(axis, n) => setOffset("subtitle", axis, n)}
-						/>
-					}
-				/>
-			</div>
+			{showSubtitle &&
+				(showTitle ? (
+					<div className="vc-divider-group">{subtitleRow}</div>
+				) : (
+					subtitleRow
+				))}
 				</div>
 			</CollapsibleSubsection>
+			)}
+			{/* An inert axis keeps its greyed row (and the "no axis" note);
+			 *  a live one the user unchecked drops out, and the subsection
+			 *  goes when no row is left. */}
+			{(xTitleInert || yTitleInert || showXTitle || showYTitle) && (
 			<CollapsibleSubsection title="Axis titles" changed={axisChanged}>
 				<div className="flex flex-col gap-2">
 			{xTitleInert && yTitleInert && (
 				<p className="vc-help">This chart has no x or y axis to title.</p>
 			)}
+			{(xTitleInert || showXTitle) && (
 			<LabelRow
 				label="X-axis title"
 				disabled={xTitleInert}
@@ -628,6 +744,8 @@ export const LabelsPanel = () => {
 					/>
 				}
 			/>
+			)}
+			{(yTitleInert || showYTitle) && (
 			<LabelRow
 				label="Y-axis title"
 				disabled={yTitleInert}
@@ -661,8 +779,10 @@ export const LabelsPanel = () => {
 					</>
 				}
 			/>
+			)}
 				</div>
 			</CollapsibleSubsection>
+			)}
 			{/* Facet titles are populated from the dataset's facet values, so
 			 *  there's no text to type — each subsection exposes only the
 			 *  alignment / font / offset styling controls, inline the moment it
@@ -679,6 +799,7 @@ export const LabelsPanel = () => {
 			 *  single-axis facet carries through as the baseline. */}
 			{isFaceted && facetGridSplit && (
 				<>
+					{showFacet("facetRowTitle") && (
 					<CollapsibleSubsection
 						title="Facet titles (row)"
 						changed={facetRowChanged}
@@ -723,6 +844,8 @@ export const LabelsPanel = () => {
 							}
 						/>
 					</CollapsibleSubsection>
+					)}
+					{showFacet("facetColTitle") && (
 					<CollapsibleSubsection
 						title="Facet titles (column)"
 						changed={facetColChanged}
@@ -763,7 +886,8 @@ export const LabelsPanel = () => {
 							}
 						/>
 					</CollapsibleSubsection>
-					{hideEmptyOn && (
+					)}
+					{hideEmptyOn && showFacet("facetPanelTitle") && (
 						<CollapsibleSubsection
 							title="Facet titles (panel)"
 							changed={facetPanelChanged}
@@ -804,7 +928,7 @@ export const LabelsPanel = () => {
 					)}
 				</>
 			)}
-			{isFaceted && !facetGridSplit && (
+			{isFaceted && !facetGridSplit && showFacet("facetTitle") && (
 				<CollapsibleSubsection title="Facet titles" changed={facetChanged}>
 					<LabelStyleControls
 						override={overrides.facetTitle}
@@ -836,10 +960,10 @@ export const LabelsPanel = () => {
 					/>
 				</CollapsibleSubsection>
 			)}
-			{activeLegendChannels.length > 0 && (
+			{shownLegendTitleGroups.length > 0 && (
 				<CollapsibleSubsection title="Legend titles" changed={legendChanged}>
 					<div className="flex flex-col gap-2">
-					{legendTitleGroups.map((group) => {
+					{shownLegendTitleGroups.map((group) => {
 						// One row per shared-field group. Reads come from the first
 						// member that carries a value (so titles set before combining
 						// still surface); every write fans out to ALL members, keeping

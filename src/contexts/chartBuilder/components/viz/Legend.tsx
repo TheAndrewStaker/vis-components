@@ -15,6 +15,7 @@ import {
 	resolveGradientBarStyle,
 	resolveLegendHidden,
 	resolveTitleFont,
+	shownLegendTitle,
 	titleAlignmentOf,
 	type LegendChannel,
 	type LegendConfig,
@@ -25,7 +26,7 @@ import {
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
-	currentLabelsAtom,
+	renderedLabelsAtom,
 	currentRenderedLegendWidthAtom,
 	currentThemeIdAtom,
 	currentTooltipConfigAtom,
@@ -95,7 +96,7 @@ export const Legend = ({
 	const overrides = useAtomValue(currentFieldOverridesAtom)
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const configs = useAtomValue(renderChannelConfigsAtom)
-	const labels = useAtomValue(currentLabelsAtom)
+	const labels = useAtomValue(renderedLabelsAtom)
 	// Legend-hover highlighting is on only when BOTH the "Show hover" master
 	// toggle and its "highlight visual elements" sub-option are enabled (both
 	// default on; back-compat undefined → on). When off, entries never publish
@@ -293,11 +294,10 @@ export const Legend = ({
 								textItalic={textFont.italic}
 								textUnderline={textFont.underline}
 								entryTextAlign={legendCfg.textAlign ?? null}
-								titleOverride={
-									labels.legendTitles?.[
-										keyChannel as keyof typeof labels.legendTitles
-									]
-								}
+								titleOverride={shownLegendTitle(
+									labels,
+									keyChannel as LegendChannel
+								)}
 								titleFont={perLegendFont}
 								titleAlignment={titleAlignmentOf(
 									labels,

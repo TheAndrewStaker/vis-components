@@ -39,7 +39,7 @@ import {
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
-	currentLabelsAtom,
+	renderedLabelsAtom,
 } from "../../store/atoms"
 import {
 	renderChannelConfigsAtom,
@@ -101,7 +101,7 @@ export const RadarPlot = (props: RadarPlotProps = {}) => {
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const annotations = useAtomValue(currentAnnotationsAtom)
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
-	const labels = useAtomValue(currentLabelsAtom)
+	const labels = useAtomValue(renderedLabelsAtom)
 	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
 	const dataset = useCurrentDatasetView()
 	const aestheticScales = useAestheticScales()

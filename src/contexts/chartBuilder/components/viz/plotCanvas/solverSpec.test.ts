@@ -188,6 +188,38 @@ describe("buildSolverInput", () => {
 		expect(input.facetLabel).toBeUndefined()
 	})
 
+	it("'Titles shown' drops a hidden grid strip from the input, per strip", () => {
+		const labels = {
+			...DEFAULT_LABELS_CONFIG,
+			hiddenTitles: { facetColTitle: true as const },
+		}
+		const input = build({ encodings: gridEncodings(), isFaceted: true, labels })
+		expect(input.columnHeaders).toBeUndefined()
+		expect(input.rowHeaders?.map((h) => h.text)).toEqual(["r1", "r2"])
+		// A both-axes grid offers no single "Facet titles" box, so a stale
+		// `facetTitle` flag from a wrap layout hides nothing here.
+		const stale = build({
+			encodings: gridEncodings(),
+			isFaceted: true,
+			labels: { ...DEFAULT_LABELS_CONFIG, hiddenTitles: { facetTitle: true } },
+		})
+		expect(stale.columnHeaders).toBeDefined()
+		expect(stale.rowHeaders).toBeDefined()
+	})
+
+	it("'Titles shown' drops a hidden wrap facet's label band", () => {
+		const e = emptyEncodings()
+		e.x = { field: "cat" }
+		e.y = { field: "val" }
+		e.facet = { field: "r" }
+		const input = build({
+			encodings: e,
+			isFaceted: true,
+			labels: { ...DEFAULT_LABELS_CONFIG, hiddenTitles: { facetTitle: true } },
+		})
+		expect(input.facetLabel).toBeUndefined()
+	})
+
 	it("wrap facets get a per-panel label band instead of strips", () => {
 		const e = emptyEncodings()
 		e.x = { field: "cat" }

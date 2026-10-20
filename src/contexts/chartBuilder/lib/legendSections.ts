@@ -30,6 +30,7 @@ import {
 	type QuantitativeLegendChannel,
 	resolveLegendTextFont,
 	resolveTitleFont,
+	shownLegendTitle,
 	type SwatchShapeChannel,
 	type TextFontConfig,
 	titleAlignmentOf,
@@ -971,8 +972,7 @@ export const planLegendSections = ({
 				: s.kind === "combined"
 					? (s.titleChannel ?? s.channels[0])
 					: s.legendKey
-		const override =
-			labels.legendTitles?.[keyChannel as keyof typeof labels.legendTitles]
+		const override = shownLegendTitle(labels, keyChannel as LegendChannel)
 		const fallback =
 			s.kind === "slot" ? LEGEND_FRIENDLY_NAME[s.legendKey] : s.field
 		// Three-state: undefined → fallback name, "" → no header (0 width).

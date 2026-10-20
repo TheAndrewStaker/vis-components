@@ -32,7 +32,7 @@ import {
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
-	currentLabelsAtom,
+	renderedLabelsAtom,
 	currentTooltipConfigAtom,
 } from "../../store/atoms"
 import {
@@ -88,7 +88,7 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 	const drawOrderLevels = channelConfigs.drawOrder?.field
 		? levelOrders[channelConfigs.drawOrder.field]
 		: undefined
-	const labels = useAtomValue(currentLabelsAtom)
+	const labels = useAtomValue(renderedLabelsAtom)
 	// "Show tooltips only at points": a bare stretch of line reports the
 	// line's connection value alone instead of the nearest point's row.
 	const tooltipPointsOnly = !!useAtomValue(currentTooltipConfigAtom).pointsOnly

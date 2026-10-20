@@ -133,3 +133,48 @@ describe("PlotCanvas — facet row-title vertical alignment re-solves live", () 
 		bottom.forEach((y, i) => expect(y).toBeGreaterThan(middle[i]!))
 	})
 })
+
+/** Toggles the row-only facet's "Facet titles" box the way the Labels
+ *  panel's "Titles shown" checkbox does (sparse `hiddenTitles`). */
+const FacetShownProbe = () => {
+	const setLabels = useSetAtom(currentLabelsAtom)
+	return (
+		<button
+			type="button"
+			data-testid="toggle-facet-shown"
+			onClick={() =>
+				setLabels((prev) => {
+					const { hiddenTitles: _h, ...rest } = prev
+					return prev.hiddenTitles?.facetTitle
+						? rest
+						: { ...rest, hiddenTitles: { facetTitle: true } }
+				})
+			}
+		/>
+	)
+}
+
+/** Same stale-memo hazard as above: `hiddenTitles` changes no other label
+ *  field, so the layout memo must list it or re-checking the box leaves the
+ *  strip gone until an unrelated change forces a re-solve. */
+describe("PlotCanvas — 'Titles shown' facet toggle re-solves live", () => {
+	it("hides the row strip, then redraws it when re-checked", () => {
+		seedRowOnly()
+		const { container } = render(
+			<TestProvider>
+				<div style={{ width: 800, height: 600 }}>
+					<ChartCanvas />
+				</div>
+				<FacetShownProbe />
+			</TestProvider>
+		)
+		const toggle = container.querySelector(
+			'[data-testid="toggle-facet-shown"]'
+		)!
+		expect(rowHeaderYs(container).length).toBe(2)
+		fireEvent.click(toggle)
+		expect(rowHeaderYs(container).length).toBe(0)
+		fireEvent.click(toggle)
+		expect(rowHeaderYs(container).length).toBe(2)
+	})
+})

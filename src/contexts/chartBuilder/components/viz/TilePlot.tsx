@@ -27,7 +27,7 @@ import {
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
-	currentLabelsAtom,
+	renderedLabelsAtom,
 } from "../../store/atoms"
 import {
 	renderChannelConfigsAtom,
@@ -161,7 +161,7 @@ export const TilePlot = (props: TilePlotProps = {}) => {
 	const overrides = useAtomValue(currentFieldOverridesAtom)
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
-	const labels = useAtomValue(currentLabelsAtom)
+	const labels = useAtomValue(renderedLabelsAtom)
 	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
 	const dataLabels = useAtomValue(currentDataLabelsEncodingsAtom)
 	const dataLabelsCfg = useAtomValue(renderDataLabelsConfigAtom)

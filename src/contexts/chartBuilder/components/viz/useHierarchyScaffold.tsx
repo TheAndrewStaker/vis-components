@@ -58,7 +58,7 @@ import {
 	currentDataLabelsEncodingsAtom,
 	currentEncodingsAtom,
 	currentFieldOverridesAtom,
-	currentLabelsAtom,
+	renderedLabelsAtom,
 } from "../../store/atoms"
 import {
 	renderChannelConfigsAtom,
@@ -158,7 +158,7 @@ export type HierarchyMarkStyle = {
 export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
-	const labels = useAtomValue(currentLabelsAtom)
+	const labels = useAtomValue(renderedLabelsAtom)
 	const dataLabelsCfg: DataLabelsConfig = {
 		...DEFAULT_DATA_LABELS_CONFIG,
 		...useAtomValue(renderDataLabelsConfigAtom),

@@ -26,7 +26,7 @@ import {
 import {
 	currentEncodingsAtom,
 	currentFieldOverridesAtom,
-	currentLabelsAtom,
+	renderedLabelsAtom,
 } from "../../store/atoms"
 import {
 	renderChannelConfigsAtom,
@@ -39,7 +39,7 @@ export const HexbinPlot = (props: UniversalRendererProps = {}) => {
 	const overrides = useAtomValue(currentFieldOverridesAtom)
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
-	const labels = useAtomValue(currentLabelsAtom)
+	const labels = useAtomValue(renderedLabelsAtom)
 	const dataset = useCurrentDatasetView()
 
 	const rowsForChart = props.rowsOverride ?? dataset?.rows ?? []

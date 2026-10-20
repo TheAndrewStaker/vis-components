@@ -16,6 +16,7 @@ import type {
 import {
 	chartTitlePrefixOf,
 	hasChartTitle,
+	hiddenFacetTitles,
 	titleAlignmentOf,
 	type FontConfig,
 	type LabelAlignment,
@@ -215,6 +216,14 @@ export const buildSolverInput = ({
 		compactStrip === undefined || compactStrip === "cols"
 	const rowStripSurvives =
 		compactStrip === undefined || compactStrip === "rows"
+	// "Titles shown" facet unchecks: a hidden area is dropped from the
+	// solver input, so it neither draws nor reserves its band / strip.
+	// Unlike the compaction veto above, this is display-only — the
+	// share-scale gates below keep reading the *StripSurvives booleans.
+	const facetHidden = hiddenFacetTitles(
+		labels,
+		Boolean(encodings.facetCol?.field) && Boolean(encodings.facetRow?.field),
+	)
 	// The chart title's prefix run rides its first line in its own font, so
 	// the measured width below includes it (see measureTitleWidth).
 	const prefixText = chartTitlePrefixOf(labels)
@@ -289,8 +298,9 @@ export const buildSolverInput = ({
 			channelConfigs.x?.tickmarks?.length ?? DEFAULT_TICKMARK_CONFIG.length,
 		yTickLength:
 			channelConfigs.y?.tickmarks?.length ?? DEFAULT_TICKMARK_CONFIG.length,
-		facetLabel:
-			panelData.mode === "grid"
+		facetLabel: facetHidden.panel
+			? undefined
+			: panelData.mode === "grid"
 				? panelData.compact !== undefined
 					? facetPanelLabelInput
 					: undefined
@@ -313,7 +323,8 @@ export const buildSolverInput = ({
 		columnHeaders:
 			panelData.mode === "grid" &&
 			Boolean(encodings.facetCol?.field) &&
-			colStripSurvives
+			colStripSurvives &&
+			!facetHidden.col
 				? panelData.colValues.map((v) => ({
 						text: v,
 						fontSize: facetColTitleFont.size,
@@ -325,7 +336,8 @@ export const buildSolverInput = ({
 		rowHeaders:
 			panelData.mode === "grid" &&
 			Boolean(encodings.facetRow?.field) &&
-			rowStripSurvives
+			rowStripSurvives &&
+			!facetHidden.row
 				? panelData.rowValues.map((v) => ({
 						text: v,
 						fontSize: facetRowTitleFont.size,
@@ -350,7 +362,8 @@ export const buildSolverInput = ({
 		rowHeaderWidth:
 			panelData.mode === "grid" &&
 			Boolean(encodings.facetRow?.field) &&
-			rowStripSurvives
+			rowStripSurvives &&
+			!facetHidden.row
 				? Math.max(
 						80,
 						Math.ceil(

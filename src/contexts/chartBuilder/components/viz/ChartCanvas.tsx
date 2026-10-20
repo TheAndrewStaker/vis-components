@@ -23,7 +23,7 @@ import { BASE_MARGIN, subtitleReserve, titleReserve } from "../../lib/plotLayout
 import { resolveCanvasMargins } from "../../lib/themeConfig"
 import { useCurrentTheme } from "../../store/useCurrentTheme"
 import {
-	currentLabelsAtom,
+	renderedLabelsAtom,
 	currentRenderedCanvasSlackAtom,
 	currentRenderedFigureSlackAtom,
 	currentRenderedInsideAutoXAtom,
@@ -425,7 +425,7 @@ const InsideLegendLayout = ({
 	// then be scaled down again. Same in PlotCanvas.
 	const [canvasRef, canvasBounds] = useMeasure({ offsetSize: true })
 	const [legendRef, legendBounds] = useMeasure({ offsetSize: true })
-	const labels = useAtomValue(currentLabelsAtom)
+	const labels = useAtomValue(renderedLabelsAtom)
 	const hasTitle = hasChartTitle(labels)
 	const hasSubtitle = !!(labels.subtitle ?? DEFAULT_LABELS_CONFIG.subtitle)
 	// Font-derived, matching the solver's bands (see plotLayout.titleReserve)

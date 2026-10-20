@@ -40,7 +40,7 @@ import {
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
-	currentLabelsAtom,
+	renderedLabelsAtom,
 	currentMapConfigAtom,
 	currentRenderedFigureSlackAtom,
 	currentRenderedLayoutVersionAtom,
@@ -126,7 +126,7 @@ export const PlotCanvas = ({
 	const overrides = useAtomValue(currentFieldOverridesAtom)
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
 	const mapConfig = useAtomValue(currentMapConfigAtom)
-	const labels = useAtomValue(currentLabelsAtom)
+	const labels = useAtomValue(renderedLabelsAtom)
 	const dataLabels = {
 		...DEFAULT_DATA_LABELS_CONFIG,
 		...useAtomValue(renderDataLabelsConfigAtom),
@@ -685,6 +685,9 @@ export const PlotCanvas = ({
 			labels.titleOffsets,
 			labels.titleVerticalAlignments,
 			labels.yAxisTitleHorizontal,
+			// "Titles shown" facet unchecks gate the strips / panel bands
+			// (`hiddenFacetTitles`) without changing any other label field.
+			labels.hiddenTitles,
 			titleFont.size,
 			subtitleFont.size,
 			// The chart title / subtitle are canvas-measured (keep-in-view clamp),

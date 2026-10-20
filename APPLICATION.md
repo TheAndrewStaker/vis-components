@@ -2772,7 +2772,32 @@ directions to run in:
   that box. Parking an upright title at the top or bottom of the axis
   is the position offset's job (below), not alignment's.
 
-The panel is organized into four collapsed-by-default subsections:
+The panel opens with a **Titles shown** subsection: one checkbox per
+title the chart can draw — Title, Subtitle, X-axis title, Y-axis title
+(each axis only when the chart has that axis), the facet titles when
+faceted, and one per legend-title row (a shared-field legend group is
+one checkbox). Facet boxes mirror the facet subsections: a wrap or
+single-axis facet has one **Facet titles** box; a both-axes grid has
+**Facet titles (column)** and **(row)** boxes, plus **(panel)** when
+Hide empty panels is on. Each layout reads only its own boxes, so a
+box unchecked in one shape never hides titles in the other. A hidden
+facet strip or panel band reserves no space (scale sharing is
+unaffected). All are checked by
+default. Unchecking a title stops the chart drawing it AND reserving
+space for it (the layout treats it exactly like a blank title — no
+title band, no axis-title gap, no legend header), and removes that
+title's editor row from the subsections below; a subsection whose rows
+are all unchecked disappears. A hidden chart title takes its prefix
+with it. The typed text, font, alignment and offsets are kept, so
+re-checking restores the title as it was. Stored as a sparse
+`labels.hiddenTitles` map keyed by title slot (absent = shown);
+renderers read titles through `visibleLabels` / `shownLegendTitle`.
+Hiding a legend title blanks only its header: same-field legends that
+were split apart by distinct titles stay split. The subsection's
+changed dot lights while any offered title is unchecked, and styling
+on a hidden title doesn't dot its own subsection.
+
+After it come four collapsed-by-default subsections:
 **Primary titles** (the Shift+Enter hint, Title, Subtitle), **Axis
 titles** (X-axis, Y-axis), **Facet titles** (present only when a
 facet channel is mapped; a grid split shows the Column and Row title

@@ -15,6 +15,7 @@ import {
 	type LabelsConfig,
 	type LegendConfig,
 	type TooltipConfig,
+	visibleLabels,
 } from "../lib/labelsConfig"
 import { type MapConfig } from "../lib/mapConfig"
 import { type DerivedVariablesConfig } from "../lib/derivedVariables"
@@ -1204,6 +1205,14 @@ export const derivedVariableEditorAtom = atom<
 export const currentLabelsAtom = persistedAtom<LabelsConfig>(
 	loadCurrentLabels,
 	saveCurrentLabels
+)
+
+/** The labels the chart DRAWS: `currentLabelsAtom` with every title
+ * unchecked under "Titles shown" blanked (see `visibleLabels`). Renderers
+ * read this; the sidebar edits `currentLabelsAtom` so hidden titles keep
+ * their text for when they're re-checked. */
+export const renderedLabelsAtom = atom((get) =>
+	visibleLabels(get(currentLabelsAtom))
 )
 
 export const currentLegendConfigAtom = persistedAtom<LegendConfig>(

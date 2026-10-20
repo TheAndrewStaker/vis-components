@@ -25,6 +25,8 @@ import {
 	resolveLegendTextFont,
 	resolveTitleFont,
 	resolveTitlePrefixFont,
+	shownLegendTitle,
+	visibleLabels,
 } from "./labelsConfig"
 
 /** Migration regressions on this code path are silent — the user clicks
@@ -843,5 +845,64 @@ describe("theme-default swatch resolvers", () => {
 		expect(
 			resolveLegendSwatchShape({ hueLegendSwatchShape: null }, theme, "hue")
 		).toBe(2)
+	})
+})
+
+/** "Titles shown" unchecks blank the drawn title (the "" no-title-no-space
+ * state) without touching the stored text; legend titles blank only at the
+ * header so same-field legend grouping (driven by title text) is unchanged. */
+describe("visibleLabels / shownLegendTitle", () => {
+	const typed = {
+		...DEFAULT_LABELS_CONFIG,
+		title: "Sales",
+		subtitle: "By region",
+		xAxisTitle: "Month",
+		yAxisTitle: "Revenue",
+		legendTitles: { hue: "Region" },
+		titlePrefix: { enabled: true, text: "FIGURE 1." },
+	}
+
+	it("returns the same object when nothing is hidden", () => {
+		expect(visibleLabels(typed)).toBe(typed)
+		expect(visibleLabels({ ...typed, hiddenTitles: {} })).toEqual({
+			...typed,
+			hiddenTitles: {},
+		})
+	})
+
+	it("blanks each hidden title, and a hidden chart title drops its prefix", () => {
+		const out = visibleLabels({
+			...typed,
+			hiddenTitles: { title: true, xAxisTitle: true },
+		})
+		expect(out.title).toBe("")
+		expect(out.titlePrefix).toBeUndefined()
+		expect(hasChartTitle(out)).toBe(false)
+		expect(out.xAxisTitle).toBe("")
+		expect(out.subtitle).toBe("By region")
+		expect(out.yAxisTitle).toBe("Revenue")
+		// Legend text is left for the header-level helper.
+		expect(out.legendTitles).toEqual({ hue: "Region" })
+	})
+
+	it("hides an untouched axis title too (would otherwise fall back to the field)", () => {
+		const { xAxisTitle: _x, ...untouched } = typed
+		const out = visibleLabels({ ...untouched, hiddenTitles: { xAxisTitle: true } })
+		expect(out.xAxisTitle).toBe("")
+	})
+
+	it("shownLegendTitle blanks a hidden legend and keeps the three-state value otherwise", () => {
+		const labels = { ...typed, hiddenTitles: { "legend:hue": true as const } }
+		expect(shownLegendTitle(labels, "hue")).toBe("")
+		expect(shownLegendTitle(labels, "shape")).toBeUndefined()
+		expect(shownLegendTitle(typed, "hue")).toBe("Region")
+	})
+
+	it("migrateLabelsConfig carries hiddenTitles, and stays sparse when absent", () => {
+		expect(
+			migrateLabelsConfig({ ...typed, hiddenTitles: { subtitle: true } })
+				.hiddenTitles
+		).toEqual({ subtitle: true })
+		expect("hiddenTitles" in migrateLabelsConfig(typed)).toBe(false)
 	})
 })
