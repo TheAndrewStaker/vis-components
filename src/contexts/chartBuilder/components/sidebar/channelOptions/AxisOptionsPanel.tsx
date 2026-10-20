@@ -118,6 +118,10 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 			configs[channel]?.wrapTickLabelAlign,
 			undefined
 		),
+		wrapTickLabelChars: valueChanged(
+			configs[channel]?.wrapTickLabelChars ?? undefined,
+			undefined
+		),
 		spine: valueChanged(configs[channel]?.spine, themeAxis.spine),
 		spineAtZero: valueChanged(configs[channel]?.spineAtZero, undefined),
 		gridlines: valueChanged(configs[channel]?.gridlines, themeAxis.gridlines),
@@ -157,6 +161,7 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 			ch.tickLabelColor ||
 			ch.wrapTickLabels ||
 			ch.wrapTickLabelAlign ||
+			ch.wrapTickLabelChars ||
 			ch.offset,
 		Spine: ch.spine || ch.spineAtZero,
 		Gridlines: ch.gridlines,
@@ -634,6 +639,32 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 						onChange={(wrapTickLabels) => update({ wrapTickLabels })}
 						changed={ch.wrapTickLabels}
 					/>
+					{config.wrapTickLabels === true && (
+						<div className="flex items-center gap-2 text-sm">
+							<NumberInput
+								label="Characters"
+								labelClassName={LABEL_COL}
+								value={config.wrapTickLabelChars ?? null}
+								placeholder="Auto"
+								stepBase={14}
+								min={1}
+								step={1}
+								clamp
+								onChange={(wrapTickLabelChars) =>
+									update({ wrapTickLabelChars })
+								}
+								onClear={() => update({ wrapTickLabelChars: null })}
+								inputClassName="w-20"
+								changed={ch.wrapTickLabelChars}
+							/>
+							{config.wrapTickLabelChars != null && (
+								<ResetLink
+									onClick={() => update({ wrapTickLabelChars: null })}
+									underline
+								/>
+							)}
+						</div>
+					)}
 					{config.wrapTickLabels === true && (
 						<WrapAlignmentControl
 							channel={channel}

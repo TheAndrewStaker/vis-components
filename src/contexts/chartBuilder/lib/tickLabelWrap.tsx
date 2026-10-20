@@ -2,7 +2,11 @@ import type { ReactNode } from "react"
 
 import { estimateLongestLineWidth } from "./estimateMargins"
 import type { LabelAlignment } from "./labelsConfig"
-import { renderMultilineTspans, wrapTextToWidth } from "./multilineText"
+import {
+	renderMultilineTspans,
+	wrapByCharCount,
+	wrapTextToWidth,
+} from "./multilineText"
 
 /** Tick-label wrapping (the per-axis "Wrap text" toggle).
  *
@@ -35,12 +39,21 @@ export const tickWrapMaxPx = (fontSize: number): number => fontSize * 8
  *  consume). Wraps on spaces and after internal hyphens; a single word too
  *  long for a line is hard-broken mid-word. Labels that already fit come back unchanged.
  *  A non-positive `maxPx` (e.g. an empty axis's 0 band width) is a no-op
- *  rather than a one-character-per-line explosion. */
+ *  rather than a one-character-per-line explosion.
+ *
+ *  A positive `maxChars` (the axis's `wrapTickLabelChars`) overrides the
+ *  pixel budget: lines break at the space / hyphen nearest that character
+ *  count (`wrapByCharCount`, same rule as Data Labels' Wrap text) and an
+ *  over-long word is left whole rather than split. */
 export const wrapTickLabel = (
 	text: string,
 	maxPx: number,
-	fontSize: number
+	fontSize: number,
+	maxChars?: number | null
 ): string => {
+	if (maxChars != null && maxChars > 0) {
+		return wrapByCharCount(text, maxChars).join("\n")
+	}
 	if (maxPx <= 0) return text
 	return wrapTextToWidth(text, maxPx, fontSize, { breakWords: true }).join("\n")
 }

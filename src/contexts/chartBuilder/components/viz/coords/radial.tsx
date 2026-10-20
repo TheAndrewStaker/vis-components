@@ -202,7 +202,12 @@ export const radial = (input: RadialInput): CoordSystem => {
 							...t,
 							label:
 								rAxisConfig?.wrapTickLabels === true
-									? wrapTickLabel(t.label, tickWrapMaxPx(rTickSize), rTickSize)
+									? wrapTickLabel(
+											t.label,
+											tickWrapMaxPx(rTickSize),
+											rTickSize,
+											rAxisConfig?.wrapTickLabelChars
+										)
 									: t.label,
 						}))
 						// All labels — single-line and wrapped — align within the

@@ -1807,6 +1807,14 @@ The X-axis and Y-axis panels (under Encodings) configure:
   replaces rotation as the overflow strategy); an explicit tick label
   angle still applies. The layout solver reserves matching multi-line
   room (line count below the x-axis, widest line left of the y-axis).
+- **Characters** (Tick labels) — shown while Wrap text is on. Blank
+  ("Auto") keeps the width-based wrap above. A number sets a target
+  line length instead: each line breaks at the space or internal
+  hyphen NEAREST that many characters (same rule as Data Labels'
+  Wrap text → Characters), explicit line breaks are honored, and a
+  single word longer than the target stays whole rather than being
+  split. Applies to x, y and radar r axes; the solver pre-wraps with
+  the same target so reserved room matches.
 - **Alignment** (Tick labels) — a left / center / right row (same
   glyph buttons as the Labels panel), shown while Wrap text is on.
   Wrapped labels align their lines within the wrapped

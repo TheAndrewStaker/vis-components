@@ -401,7 +401,12 @@ export const Axis = ({
 		const slotPx = isX ? xSlotPx : tickWrapMaxPx(tickFontSize)
 		return ticks.map((t) => ({
 			...t,
-			label: wrapTickLabel(t.label, slotPx, tickFontSize),
+			label: wrapTickLabel(
+				t.label,
+				slotPx,
+				tickFontSize,
+				config?.wrapTickLabelChars
+			),
 		}))
 	})()
 	// Auto-rotate categorical x-axis labels when neighboring labels would

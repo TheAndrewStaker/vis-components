@@ -686,6 +686,19 @@ describe("Axis wrapTickLabels (Wrap text toggle)", () => {
 		expect(label?.getAttribute("transform") ?? "").not.toContain("rotate")
 	})
 
+	it("wraps to the Characters target when wrapTickLabelChars is set", () => {
+		// 9 chars → "Internal" / "Medicine" even though "Internal Medicine"
+		// would fit the ~90px slot on one line.
+		const c = renderX({ wrapTickLabels: true, wrapTickLabelChars: 9 })
+		const label = [...c.querySelectorAll("text")].find((t) =>
+			t.textContent?.includes("Internal")
+		)
+		const lines = [...(label?.querySelectorAll("tspan") ?? [])].map(
+			(t) => t.textContent
+		)
+		expect(lines).toEqual(["Internal", "Medicine"])
+	})
+
 	it("auto-rotates the same labels when wrapping is off (baseline)", () => {
 		const c = renderX()
 		const label = [...c.querySelectorAll("text")].find((t) =>

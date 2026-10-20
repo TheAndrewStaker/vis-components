@@ -35,6 +35,35 @@ describe("wrapTickLabel", () => {
 	})
 })
 
+describe("wrapTickLabel with a character target", () => {
+	it("breaks at the space nearest the target, ignoring the pixel budget", () => {
+		// Pixel budget alone would keep this on one line.
+		expect(wrapTickLabel("Internal Medicine Group", 1000, 10, 10)).toBe(
+			"Internal\nMedicine\nGroup"
+		)
+	})
+
+	it("breaks after an internal hyphen", () => {
+		expect(wrapTickLabel("Ear-Nose-Throat", 1000, 10, 4)).toBe(
+			"Ear-\nNose-\nThroat"
+		)
+	})
+
+	it("leaves an over-long word whole instead of splitting it", () => {
+		expect(wrapTickLabel("Pneumonoultramicroscopic", 40, 10, 5)).toBe(
+			"Pneumonoultramicroscopic"
+		)
+	})
+
+	it("falls back to the pixel wrap when unset or non-positive", () => {
+		for (const chars of [undefined, null, 0]) {
+			expect(wrapTickLabel("Cardiothoracic Surgery", 90, 10, chars)).toBe(
+				"Cardiothoracic\nSurgery"
+			)
+		}
+	})
+})
+
 describe("tickWrapMaxPx", () => {
 	it("scales with the tick font size", () => {
 		expect(tickWrapMaxPx(20)).toBe(tickWrapMaxPx(10) * 2)

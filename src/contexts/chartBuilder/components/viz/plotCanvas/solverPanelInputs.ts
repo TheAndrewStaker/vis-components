@@ -631,12 +631,22 @@ export const buildSolverPanelInputs = ({
 		// slot estimate; y labels to the fixed font-relative max width.
 		const xChromeLabels = wrapX
 			? xWeightLabels.map((l) =>
-					wrapTickLabel(l, bandWidthPx * TICK_WRAP_SLOT_FRACTION, xTickSize),
+					wrapTickLabel(
+						l,
+						bandWidthPx * TICK_WRAP_SLOT_FRACTION,
+						xTickSize,
+						channelConfigs.x?.wrapTickLabelChars,
+					),
 				)
 			: xWeightLabels
 		const yChromeLabels = wrapY
 			? yWeightLabels.map((l) =>
-					wrapTickLabel(l, tickWrapMaxPx(yTickSize), yTickSize),
+					wrapTickLabel(
+						l,
+						tickWrapMaxPx(yTickSize),
+						yTickSize,
+						channelConfigs.y?.wrapTickLabelChars,
+					),
 				)
 			: yWeightLabels
 		// Pre-measure the widest label per axis via canvas measureText.

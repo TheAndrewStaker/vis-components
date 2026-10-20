@@ -421,6 +421,13 @@ export type AxisConfig = {
 	 * Optional so visuals saved before this existed load unchanged (absent
 	 * reads as `false`). */
 	wrapTickLabels?: boolean
+	/** "Characters" under Wrap text: a target line length in characters.
+	 * When set, tick labels wrap at the space / internal hyphen NEAREST that
+	 * count (`wrapByCharCount`, the Data Labels rule) instead of filling the
+	 * axis's pixel budget, and a single over-long word stays whole. Absent /
+	 * `null` = auto (the slot / font-relative width wrap above). Only read
+	 * while `wrapTickLabels` is on. */
+	wrapTickLabelChars?: number | null
 	/** Horizontal alignment of the LINES within a wrapped tick label's block
 	 * (only meaningful while `wrapTickLabels` is on — single-line labels have
 	 * nothing to align). The block itself stays anchored to its tick; absent
