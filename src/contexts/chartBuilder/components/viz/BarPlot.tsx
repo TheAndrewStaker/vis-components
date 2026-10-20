@@ -63,7 +63,6 @@ import { formatSingleLabel } from "../../lib/dataLabelsStyle"
 import { formatTextValue } from "../../lib/textEncoding"
 import type { Encodings, FieldType } from "../../lib/types"
 import {
-	currentDataLabelsEncodingsAtom,
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
@@ -72,6 +71,7 @@ import {
 import {
 	renderChannelConfigsAtom,
 	renderDataLabelsConfigAtom,
+	renderDataLabelsEncodingsAtom,
 } from "../../store/renderConfigs"
 import {
 	useAestheticScales,
@@ -151,7 +151,7 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
 	const labels = useAtomValue(renderedLabelsAtom)
 	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
-	const dataLabels = useAtomValue(currentDataLabelsEncodingsAtom)
+	const dataLabels = useAtomValue(renderDataLabelsEncodingsAtom)
 	const dataLabelsCfg = useAtomValue(renderDataLabelsConfigAtom)
 	const dataLabelsDecimals = dataLabelsCfg?.decimals ?? null
 	// The mapped value field's Label format spec — slice labels show that

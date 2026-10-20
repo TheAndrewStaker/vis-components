@@ -94,6 +94,10 @@ import { Toggle } from "../../../../components/ui/Toggle"
 import { AlignmentControl } from "./LabelsPanel"
 import { FacetScopeControl } from "./FacetScopeControl"
 import { DataLabelChannelRow } from "./dataLabels/DataLabelChannelRow"
+import {
+	DATA_LABEL_POSITION_CHANNELS,
+	resolveDataLabelPositions,
+} from "../../lib/dataLabelsPosition"
 import { LabelColorPanel } from "./dataLabels/LabelColorPanel"
 import { PositionRulesEditor } from "./dataLabels/PositionRulesEditor"
 import { SizePanel } from "./dataLabels/SizePanel"
@@ -200,10 +204,15 @@ export const DataLabelsPanel = () => {
 	// rename (or any future channel addition) wouldn't have all keys, so
 	// reads like `encodings.value.field` would crash. Spreading defaults
 	// underneath guarantees every channel slot exists.
-	const encodings: DataLabelsEncodings = {
-		...emptyDataLabelsEncodings(),
-		...storedEncodings,
-	}
+	// Unset position rows show the chart's own X / Y (Angle / R on a pie)
+	// selected — what the labels inherit (`resolveDataLabelPositions`).
+	// Writes stay functional over the stored atom, so the inherited field is
+	// never persisted unless the user picks it.
+	const chartEncodings = useAtomValue(currentEncodingsAtom)
+	const encodings: DataLabelsEncodings = resolveDataLabelPositions(
+		{ ...emptyDataLabelsEncodings(), ...storedEncodings },
+		chartEncodings,
+	)
 	const [cfg, setCfg] = useAtom(currentDataLabelsConfigAtom)
 	// Normalized like the layer: a visual saved before composed labels gets
 	// its label list derived from the legacy state, so the panel shows the
@@ -219,7 +228,6 @@ export const DataLabelsPanel = () => {
 	const themeDefaults = dataLabelsConfigFromTheme(theme)
 	const overrides = useAtomValue(currentFieldOverridesAtom)
 	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
-	const chartEncodings = useAtomValue(currentEncodingsAtom)
 	const chartConfigs = useAtomValue(currentChannelConfigsAtom)
 	// The visualization's own background (null = transparent canvas → white)
 	// is the default fill for the text-background rect, so labels mask the
@@ -256,9 +264,9 @@ export const DataLabelsPanel = () => {
 	// A heatmap is the one chart where label positions MUST match the
 	// chart's encoding — every cell is keyed by (chart.x, chart.y), so
 	// encoding a third field as the label's x or y would produce nonsense.
-	// When the user picks one position we auto-fill the other, and we
-	// restrict the dropdowns to just the chart's x/y fields so the user
-	// can't pick anything misleading.
+	// We restrict the dropdowns to just the chart's x/y fields so the user
+	// can't pick anything misleading. (Unset rows inherit the chart's x/y,
+	// so both start filled.)
 	const positionLocked = modeDef.labels.positionLockedToAxes
 	// Maps: labels anchor to REGIONS, not to x/y fields — the position rows
 	// are replaced by a single "Geography" row (the field whose values join
@@ -706,17 +714,18 @@ export const DataLabelsPanel = () => {
 		) {
 			seedTextPalette()
 		}
-		setEncodings((prev) => {
-			const next = { ...prev, [channel]: { field: newField } }
-			if (positionLocked && newField !== null) {
-				if (channel === "x" && chartYField && !prev.y?.field) {
-					next.y = { field: chartYField }
-				} else if (channel === "y" && chartXField && !prev.x?.field) {
-					next.x = { field: chartXField }
-				}
-			}
-			return next
-		})
+		// Position rows inherit the chart's mapping when unset, so "— none —"
+		// there is recorded as `none` — an unset slot would inherit again.
+		const isPosition = (DATA_LABEL_POSITION_CHANNELS as readonly string[]).includes(
+			channel,
+		)
+		setEncodings((prev) => ({
+			...prev,
+			[channel]:
+				isPosition && newField === null
+					? { field: null, none: true }
+					: { field: newField },
+		}))
 	}
 
 	// The Value row is special: besides picking a single field it can switch

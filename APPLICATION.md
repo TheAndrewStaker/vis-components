@@ -2140,8 +2140,20 @@ the axes' tick-label Angle: positive = clockwise) that rotates each
 label — together with its text-background rect — around its own anchor
 point. Rotation is paint-time only: the overlap-avoidance pass and the
 solver's margin reserve still measure the unrotated footprint, and it
-is layer-wide (no first/last split). The layer also has these
-controls:
+is layer-wide (no first/last split).
+
+The position rows (**X / Y**, or **Angle / R** on a pie) start on the
+chart's own encodings: an unset row INHERITS the chart's field for that
+channel, live (re-map the chart's X and the labels follow), and the
+dropdown shows it selected. Picking a field overrides it; picking
+**— none —** is stored as `none: true` (an unset row would inherit
+again). The inherited value is resolved at read time
+(`resolveDataLabelPositions`, renderers via
+`renderDataLabelsEncodingsAtom`) and never written into the visual.
+Labels still draw only once a **Value** is mapped, so nothing appears
+until the user picks one.
+
+The layer also has these controls:
 
 In the TREE layouts (packed circles / treemap / sunburst) labels are
 placed by the layout itself, so the panel hides its position rows and

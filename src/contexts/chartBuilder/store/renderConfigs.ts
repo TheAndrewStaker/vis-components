@@ -8,9 +8,11 @@ import {
 	hintedFormats,
 	type HintedFormats,
 } from "../lib/formatHintDefaults"
+import { resolveDataLabelPositions } from "../lib/dataLabelsPosition"
 import { effectiveType } from "../lib/fieldType"
 import { linkColorConfigs } from "../lib/linkedHueColors"
 import type { LegendConfig } from "../lib/labelsConfig"
+import { emptyDataLabelsEncodings, type DataLabelsEncodings } from "../lib/types"
 import {
 	tooltipFieldFormats,
 	type TooltipFormats,
@@ -19,6 +21,7 @@ import {
 import {
 	currentChannelConfigsAtom,
 	currentDataLabelsConfigAtom,
+	currentDataLabelsEncodingsAtom,
 	currentEncodingsAtom,
 	currentFieldOverridesAtom,
 	currentLegendConfigAtom,
@@ -79,6 +82,18 @@ export const renderDataLabelsConfigAtom = atom(
 		applyFormatHintsToDataLabels(
 			get(currentDataLabelsConfigAtom),
 			get(hintedFormatsAtom),
+		),
+)
+
+/** RENDER-side data-labels encodings: every channel slot present (visuals
+ * saved before a channel existed lack its key), and unset position slots
+ * filled from the chart's own X / Y / Angle / R — see
+ * `resolveDataLabelPositions`. The Data Labels shelf writes the raw atom. */
+export const renderDataLabelsEncodingsAtom = atom(
+	(get): DataLabelsEncodings =>
+		resolveDataLabelPositions(
+			{ ...emptyDataLabelsEncodings(), ...get(currentDataLabelsEncodingsAtom) },
+			get(currentEncodingsAtom),
 		),
 )
 

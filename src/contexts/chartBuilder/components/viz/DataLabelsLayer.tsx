@@ -72,13 +72,13 @@ import {
 	type FieldType,
 } from "../../lib/types"
 import {
-	currentDataLabelsEncodingsAtom,
 	currentEncodingsAtom,
 	currentFieldOverridesAtom,
 } from "../../store/atoms"
 import {
 	renderChannelConfigsAtom,
 	renderDataLabelsConfigAtom,
+	renderDataLabelsEncodingsAtom,
 } from "../../store/renderConfigs"
 import { rowHighlight, useLegendHighlight } from "../../store/useLegendHighlight"
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
@@ -690,7 +690,7 @@ export const DataLabelsLayer = ({
 }: Props) => {
 	const encodings: DataLabelsEncodings = {
 		...emptyDataLabelsEncodings(),
-		...useAtomValue(currentDataLabelsEncodingsAtom),
+		...useAtomValue(renderDataLabelsEncodingsAtom),
 	}
 	// Normalized: a visual saved before composed labels derives its label
 	// list (and the derived labels' which-labels / overrides) here, so the

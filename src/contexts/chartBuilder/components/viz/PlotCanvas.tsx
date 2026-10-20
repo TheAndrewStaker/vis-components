@@ -36,7 +36,6 @@ import {
 	currentAnnotationsAtom,
 	currentCaptionConfigAtom,
 	currentRenderedCaptionBoxAtom,
-	currentDataLabelsEncodingsAtom,
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
@@ -49,6 +48,7 @@ import {
 import {
 	renderChannelConfigsAtom,
 	renderDataLabelsConfigAtom,
+	renderDataLabelsEncodingsAtom,
 } from "../../store/renderConfigs"
 import { DEFAULT_DATA_LABELS_CONFIG } from "../../lib/channelConfig"
 import type { FieldType } from "../../lib/types"
@@ -131,7 +131,7 @@ export const PlotCanvas = ({
 		...DEFAULT_DATA_LABELS_CONFIG,
 		...useAtomValue(renderDataLabelsConfigAtom),
 	}
-	const dataLabelsEncodings = useAtomValue(currentDataLabelsEncodingsAtom)
+	const dataLabelsEncodings = useAtomValue(renderDataLabelsEncodingsAtom)
 	const annotations = useAtomValue(currentAnnotationsAtom)
 	const caption: CaptionConfig = {
 		...DEFAULT_CAPTION_CONFIG,
@@ -193,6 +193,10 @@ export const PlotCanvas = ({
 			// Stored array / map — stable references unless the rules are edited.
 			dataLabels.positionRules,
 			dataLabels.fieldPositionRules,
+			// The render gate reads the (inherited or picked) position fields.
+			dataLabelsEncodings.x?.field,
+			dataLabelsEncodings.y?.field,
+			dataLabelsEncodings.angle?.field,
 			dataLabelsEncodings.value?.field,
 			dataLabelsEncodings.value?.multiField,
 			dataLabelsEncodings.value?.fields,

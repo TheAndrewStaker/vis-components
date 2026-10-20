@@ -208,12 +208,17 @@ export const emptyEncodings = (): Encodings => ({
  * `angle`/`r` are the polar position channels — the panel swaps the `x`/`y`
  * rows for these when the chart is a pie. They mirror `x`/`y`: mapping them
  * gates the layer on. The actual placement still comes from slice geometry,
- * nudged by `polarLabelAngle` / `polarLabelRadius` in the config. */
+ * nudged by `polarLabelAngle` / `polarLabelRadius` in the config.
+ *
+ * An unset position slot INHERITS the chart's own encoding of that channel
+ * (`resolveDataLabelPositions`; renderers read `renderDataLabelsEncodingsAtom`).
+ * `none: true` records the user picking "— none —", which an unset slot
+ * can't express. Optional so saved visuals load unchanged. */
 export type DataLabelsEncodings = {
-	x: { field: string | null }
-	y: { field: string | null }
-	angle: { field: string | null }
-	r: { field: string | null }
+	x: { field: string | null; none?: boolean }
+	y: { field: string | null; none?: boolean }
+	angle: { field: string | null; none?: boolean }
+	r: { field: string | null; none?: boolean }
 	/** `measureSource` (tree layouts only — packed circles / treemap /
 	 * sunburst): label color varies by a hierarchy-derived value instead
 	 * of a dataset column — "rootGroup" (the node's outermost ancestor,

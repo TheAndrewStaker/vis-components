@@ -59,7 +59,6 @@ import { resolveStackMode } from "../../lib/stackMode"
 import { formatSingleLabel } from "../../lib/dataLabelsStyle"
 import type { DatasetView, Encodings, FieldType } from "../../lib/types"
 import {
-	currentDataLabelsEncodingsAtom,
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
@@ -68,6 +67,7 @@ import {
 import {
 	renderChannelConfigsAtom,
 	renderDataLabelsConfigAtom,
+	renderDataLabelsEncodingsAtom,
 } from "../../store/renderConfigs"
 import {
 	useAestheticScales,
@@ -136,7 +136,7 @@ export const AreaPlot = (props: AreaPlotProps = {}) => {
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
 	const labels = useAtomValue(renderedLabelsAtom)
 	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
-	const dataLabels = useAtomValue(currentDataLabelsEncodingsAtom)
+	const dataLabels = useAtomValue(renderDataLabelsEncodingsAtom)
 	const dataLabelsCfg = useAtomValue(renderDataLabelsConfigAtom)
 	const dataLabelsDecimals = dataLabelsCfg?.decimals ?? null
 	// The mapped value field's Label format spec — layer labels show that

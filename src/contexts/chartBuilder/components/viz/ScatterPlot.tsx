@@ -28,7 +28,6 @@ import {
 } from "../../lib/scales"
 import type { Encodings } from "../../lib/types"
 import {
-	currentDataLabelsEncodingsAtom,
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
@@ -38,6 +37,7 @@ import {
 import {
 	renderChannelConfigsAtom,
 	renderDataLabelsConfigAtom,
+	renderDataLabelsEncodingsAtom,
 } from "../../store/renderConfigs"
 import { useAestheticScales } from "../../store/useAestheticScales"
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
@@ -97,7 +97,7 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 	// below — react-hooks/rules-of-hooks won't accept them inline beside
 	// the margin computation later.
 	const _dataLabelsCfg = useAtomValue(renderDataLabelsConfigAtom)
-	const _dataLabelsEncodings = useAtomValue(currentDataLabelsEncodingsAtom)
+	const _dataLabelsEncodings = useAtomValue(renderDataLabelsEncodingsAtom)
 	const dataset = useCurrentDatasetView()
 	const aestheticScales = useAestheticScales()
 	const legendHighlight = useLegendHighlight()
