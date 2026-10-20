@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtempSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readdirSync, writeFileSync } from "node:fs"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { datasetMetaFrom } from "../../src/contexts/chartBuilder/lib/datasetMeta"
 import { pieceKey } from "../../src/contexts/chartBuilder/lib/labelPieces"
-import { VISUALS_VERSION } from "../../src/contexts/chartBuilder/lib/storage/migrations"
+import { DATASETS_VERSION, VISUALS_VERSION } from "../../src/contexts/chartBuilder/lib/storage/migrations"
 import { SYSTEM_DARK_THEME } from "../../src/contexts/chartBuilder/lib/systemThemes"
 import type { Dataset, DatasetMeta, Visual } from "../../src/contexts/chartBuilder/lib/types"
 import { hydrateVisual } from "../../src/contexts/chartBuilder/lib/visualDefaults"
@@ -21,15 +21,18 @@ import { createHandler } from "./routes.js"
 
 /** A fresh server per test: these assert on whole collections. */
 const servers: Server[] = []
+/** The data dir of the server `start` made last. */
+let dataDir = ""
 const start = async (mintVisualId?: () => string): Promise<string> => {
 	const dbDir = mkdtempSync(join(tmpdir(), "vis-spec-db-"))
+	dataDir = mkdtempSync(join(tmpdir(), "vis-spec-data-"))
 	const distDir = mkdtempSync(join(tmpdir(), "vis-spec-dist-"))
 	writeFileSync(join(distDir, "index.html"), "<title>spa</title>")
 	const handler = createHandler({
 		config: {
 			baseUrl: "https://charts.example.com",
 			dbDir,
-			dataDir: mkdtempSync(join(tmpdir(), "vis-spec-data-")),
+			dataDir,
 			port: 0,
 			publishDir: mkdtempSync(join(tmpdir(), "vis-spec-publish-")),
 			publishBaseUrl: "https://embeds.example.com",
@@ -641,5 +644,17 @@ describe("POST /api/datasets", () => {
 		expect((await create(base, { name: "Visits", rows: [{ a: 1 }] })).status).toBe(500)
 		spy.mockRestore()
 		expect(await index(base)).toEqual({})
+		expect(readdirSync(dataDir)).toEqual([])
+	})
+
+	it("takes rows while visuals await migration, and refuses before writing when datasets do", async () => {
+		const base = await start()
+		await put(base, "/api/content-versions/visuals", { v: VISUALS_VERSION - 1 })
+		expect((await create(base, { name: "Visits", rows: [{ a: 1 }] })).status).toBe(201)
+		await put(base, "/api/content-versions/datasets", { v: DATASETS_VERSION + 1 })
+		const refused = await create(base, { name: "More", rows: [{ a: 1 }] })
+		expect(refused.status).toBe(409)
+		expect(Object.keys(await index(base))).toHaveLength(1)
+		expect(readdirSync(dataDir)).toHaveLength(2)
 	})
 })
