@@ -7,6 +7,7 @@ import {
 	type AnnotationsConfig,
 } from "../lib/annotationsConfig"
 import { type CaptionConfig } from "../lib/captionConfig"
+import { type CanvasZoom } from "../lib/canvasZoom"
 import {
 	type ChannelConfigs,
 	type DataLabelsConfig,
@@ -1146,6 +1147,12 @@ export const editorSheetOpenAtom = atom<boolean>(false)
  * accessibility pass. Intentionally NOT persisted: this is a transient
  * "what would this look like in B&W?" check, not a saved theme setting. */
 export const blackAndWhiteModeAtom = atom<boolean>(false)
+
+/** Editor display zoom for a fixed canvas (the zoom controls over the gray
+ * viewport). View-only and NOT persisted or saved with the visual: the
+ * canvas lays out at its true size whatever this says. Reset to automatic
+ * whenever a different visual opens (EditorLayout). */
+export const fixedCanvasZoomAtom = atom<CanvasZoom>(null)
 
 /** The categorical legend entry the pointer is currently hovering, used to
  * highlight matching marks and dim the rest (the "hover over legend to

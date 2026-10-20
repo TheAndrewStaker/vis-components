@@ -3,19 +3,23 @@ import { useAtom, useAtomValue } from "jotai"
 import {
 	blackAndWhiteModeAtom,
 	currentChannelConfigsAtom,
+	currentVisualIdAtom,
 	currentVisualPublishedAtom,
 	editorSheetOpenAtom,
 	editorSidebarHiddenAtom,
+	fixedCanvasZoomAtom,
 	sidebarWidthAtom,
 } from "../store/atoms"
 import { useAutoSave } from "../store/useAutoSave"
 import { useEditorHistory } from "../store/editorHistory"
 import { RailTab } from "../../../components/ui/RailTab"
 import { useNarrowLayout } from "../../../lib/useMediaQuery"
+import { resolveCanvasZoom } from "../lib/canvasZoom"
 
 import { DataDrawer } from "./drawer/DataDrawer"
 import { DerivedVariableModal } from "./drawer/DerivedVariableModal"
 import { ErrorBoundary } from "./ErrorBoundary"
+import { CanvasZoomControls } from "./CanvasZoomControls"
 import { SaveBar } from "./SaveBar"
 import { Sidebar } from "./sidebar/Sidebar"
 import { ChartCanvas } from "./viz/ChartCanvas"
@@ -103,20 +107,31 @@ export const EditorLayout = () => {
 		canvasSizeCfg?.enabled && canvasSizeCfg.width > 0 && canvasSizeCfg.height > 0
 			? canvasSizeCfg
 			: null
-	// NARROW: a fixed canvas wider than the phone would otherwise show 1:1
-	// and need panning. It still LAYS OUT at its true size (the whole point
-	// of a fixed canvas) and is shrunk to the viewport width with a CSS
-	// transform — display only. DOM measurements that feed exports,
-	// embeds and thumbnails read layout size (offsetWidth / offsetParent
-	// math), not transformed rects, so they're unaffected. Wide layouts
-	// keep the true-size, scrolling canvas.
+	// Display zoom for a fixed canvas (the zoom pill, lib/canvasZoom.ts).
+	// The canvas still LAYS OUT at its true size (the whole point of a fixed
+	// canvas) and is shrunk with a CSS transform — display only. DOM
+	// measurements that feed exports, embeds and thumbnails read layout size
+	// (offsetWidth / offsetParent math), not transformed rects, so they're
+	// unaffected. Automatic zoom: wide layouts show the true-size, scrolling
+	// canvas; NARROW ones shrink it to the viewport width, since a canvas
+	// wider than a phone would otherwise need panning. Zoom never goes past
+	// 100%, and it resets to automatic when a different visual opens.
+	const [canvasZoom, setCanvasZoom] = useAtom(fixedCanvasZoomAtom)
+	const currentVisualId = useAtomValue(currentVisualIdAtom)
+	useEffect(() => setCanvasZoom(null), [currentVisualId, setCanvasZoom])
 	const [chartHost, setChartHost] = useState<HTMLDivElement | null>(null)
 	const chartHostSize = useElementSize(chartHost)
-	const fixedScale = (() => {
-		if (!fixedCanvas || !narrow || chartHostSize.width === 0) return 1
-		const avail = Math.max(120, chartHostSize.width - FIXED_CANVAS_PAD)
-		return Math.min(1, avail / fixedCanvas.width)
-	})()
+	const fixedScale = fixedCanvas
+		? resolveCanvasZoom(canvasZoom, {
+				narrow,
+				avail: {
+					width: chartHostSize.width && chartHostSize.width - FIXED_CANVAS_PAD,
+					height:
+						chartHostSize.height && chartHostSize.height - FIXED_CANVAS_PAD,
+				},
+				canvas: fixedCanvas,
+			})
+		: 1
 	// Fluid chart on a narrow screen: compose at the design width and scale
 	// down so the viewport shows the whole figure. Height is the host's
 	// height in layout units, so the scaled chart fills the host exactly.
@@ -256,42 +271,51 @@ export const EditorLayout = () => {
 							// keeps the gray backdrop covering the full scroll range,
 							// and `m-auto` (not justify/align-center) keeps the
 							// rectangle's top-left reachable when it overflows.
-							<div
-								ref={setChartHost}
-								className={`min-h-0 flex-1 overflow-auto bg-stone-200 dark:bg-stone-800${publishedFrame}`}
-								style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
-							>
-								<div className="flex min-h-full w-max min-w-full p-6">
-									{/* Outer box takes the SCALED footprint so centering
-									 *  and scrolling see the shrunken size; the inner
-									 *  canvas keeps its true dimensions and is
-									 *  transformed from its top-left corner. */}
-									<div
-										// overflow-hidden: the inner canvas's LAYOUT box is
-										// still true-size (transforms don't change layout),
-										// and without clipping it would widen the `w-max`
-										// wrapper and make the host scroll into blank space.
-										className="m-auto shrink-0 overflow-hidden"
-										style={{
-											width: fixedCanvas.width * fixedScale,
-											height: fixedCanvas.height * fixedScale,
-										}}
-									>
+							// The relative wrapper pins the zoom pill to the viewport's
+							// corner while the gray host beneath it scrolls.
+							<div className="relative flex min-h-0 flex-1 flex-col">
+								<div
+									ref={setChartHost}
+									className={`min-h-0 flex-1 overflow-auto bg-stone-200 dark:bg-stone-800${publishedFrame}`}
+									style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
+								>
+									<div className="flex min-h-full w-max min-w-full p-6">
+										{/* Outer box takes the SCALED footprint so centering
+										 *  and scrolling see the shrunken size; the inner
+										 *  canvas keeps its true dimensions and is
+										 *  transformed from its top-left corner. */}
 										<div
-											data-editor-chart-viewport
-											className="overflow-hidden bg-white shadow-md"
+											// overflow-hidden: the inner canvas's LAYOUT box is
+											// still true-size (transforms don't change layout),
+											// and without clipping it would widen the `w-max`
+											// wrapper and make the host scroll into blank space.
+											className="m-auto shrink-0 overflow-hidden"
 											style={{
-												width: fixedCanvas.width,
-												height: fixedCanvas.height,
-												transform:
-													fixedScale < 1 ? `scale(${fixedScale})` : undefined,
-												transformOrigin: "top left",
+												width: fixedCanvas.width * fixedScale,
+												height: fixedCanvas.height * fixedScale,
 											}}
 										>
-											<ChartCanvas />
+											<div
+												data-editor-chart-viewport
+												className="overflow-hidden bg-white shadow-md"
+												style={{
+													width: fixedCanvas.width,
+													height: fixedCanvas.height,
+													transform:
+														fixedScale < 1 ? `scale(${fixedScale})` : undefined,
+													transformOrigin: "top left",
+												}}
+											>
+												<ChartCanvas />
+											</div>
 										</div>
 									</div>
 								</div>
+								<CanvasZoomControls
+									zoom={canvasZoom}
+									scale={fixedScale}
+									onChange={setCanvasZoom}
+								/>
 							</div>
 						) : fluid ? (
 							<div

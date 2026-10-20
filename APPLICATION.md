@@ -3610,6 +3610,15 @@ A small catch-all panel:
   centered in a gray viewport; exports default to its dimensions. Scroll
   mode and the aspect ratio operate within the rectangle. Published
   embeds ignore the size (the iframe is its own canvas).
+  **Zoom** (editor only): a floating pill in the gray viewport's
+  top-right corner — − / percentage / + / Fit. − and + step through
+  10–100%; zoom never exceeds 100% (the canvas is shown at most 1:1),
+  clicking the percentage resets to 100%, and Fit shrinks the whole
+  canvas into view and keeps it fitted as the viewport resizes. Zoom is a
+  display-only CSS scale — the canvas still lays out at its true size,
+  so exports, embeds, thumbnails and margins are unaffected — and it is
+  not saved: it resets to automatic (100%, or fit-to-width on narrow
+  screens) when a different visual opens.
   **Margins** (shown only with a canvas size): Top / Right / Bottom /
   Left inputs in the canvas unit. A margin is the white space between
   the canvas edge and the nearest *painted* content on that side — the
