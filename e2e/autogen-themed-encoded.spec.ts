@@ -1047,7 +1047,7 @@ const setTitle = async (
 	value: string,
 ): Promise<void> => {
 	const labelsPanel = page.locator(
-		'[id="aside-section-Axis Labels and Titles"]',
+		'[id="aside-section-Titles"]',
 	)
 	const textarea = labelsPanel.getByLabel(label, { exact: true })
 	if ((await textarea.count()) === 0) return

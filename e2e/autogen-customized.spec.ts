@@ -136,7 +136,7 @@ const applyCustomizations = async (page: Page): Promise<void> => {
 	}
 
 	// ─── (3) Left-align every title in the Labels panel ──────────────
-	// The Labels section ("Axis Labels and Titles") is open by default,
+	// The Labels section ("Titles") is open by default,
 	// but its rows now sit two levels deep:
 	//   CollapsibleSubsection ("Primary titles" / "Axis titles" /
 	//   "Facet titles" / "Legend titles") → per-row Disclosure
@@ -148,7 +148,7 @@ const applyCustomizations = async (page: Page): Promise<void> => {
 	// whole customization silently no-ops — which made the
 	// `title-not-left-aligned` check assert an alignment nobody set.)
 	const labelsPanel = page.locator(
-		'[id="aside-section-Axis Labels and Titles"]',
+		'[id="aside-section-Titles"]',
 	)
 	const subsections = labelsPanel.getByRole("button", {
 		name: /^(Primary|Axis|Facet|Legend) titles$/,

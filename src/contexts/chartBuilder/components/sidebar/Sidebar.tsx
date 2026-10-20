@@ -61,7 +61,7 @@ export const Sidebar = () => {
 					<LegendPanel />
 				</AsideSection>
 				<hr className="mx-3 border-stone-200 dark:border-stone-700" />
-				<AsideSection title="Axis Labels and Titles">
+				<AsideSection title="Titles">
 					<LabelsPanel />
 				</AsideSection>
 				<hr className="mx-3 border-stone-200 dark:border-stone-700" />
