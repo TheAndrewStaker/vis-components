@@ -737,7 +737,10 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 					publishHover,
 					markedIndices,
 					tooltipPointsOnly,
-					slotModulationResolver("line", channelConfigs, aestheticScales)
+					slotModulationResolver("line", channelConfigs, aestheticScales),
+					(row) =>
+						resolveMarkAesthetics(row, aestheticScales, channelConfigs)
+							.preModulationHue
 				)}
 				{renderMarkPaths({
 					marks: sortByDrawOrder(

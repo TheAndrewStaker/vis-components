@@ -400,13 +400,13 @@ describe("resolveLayerColor", () => {
 describe("layerFillProp", () => {
 	it("returns the base fill when no pattern is applied", () => {
 		expect(
-			layerFillProp({ fill: "#123456", opacity: 1, patternId: null, outline: null })
+			layerFillProp({ fill: "#123456", preModulationHue: "#123456", opacity: 1, patternId: null, outline: null })
 		).toBe("#123456")
 	})
 
 	it("returns a url(#id) reference when a pattern is applied", () => {
 		expect(
-			layerFillProp({ fill: "#123456", opacity: 1, patternId: "pat-7", outline: null })
+			layerFillProp({ fill: "#123456", preModulationHue: "#123456", opacity: 1, patternId: "pat-7", outline: null })
 		).toBe("url(#pat-7)")
 	})
 })

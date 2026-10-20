@@ -262,12 +262,24 @@ export const PatternOptionsPanel = () => {
 		const { [value]: _removed, ...rest } = dashAltColors
 		updateConnectionCfg({ dashAlternateColors: rest })
 	}
-	const defaultGapColorFor = (categoryIdx: number): string =>
-		(palettePatternInks.length > 0
-			? palettePatternInks[categoryIdx % palettePatternInks.length]
-			: null) ??
-		configs.defaultPatternInk ??
-		DEFAULT_PATTERN_INK
+	// Mirrors the renderer (`resolveDashGapColor`): a per-value hue override
+	// moves the category off its palette slot, and the gap pairs with THAT
+	// color's ink (cross-palette table included).
+	const defaultGapColorFor = (categoryIdx: number, value?: string): string => {
+		const overrideColor =
+			value === undefined ? undefined : hueOverrideColors?.[value]
+		const paired = overrideColor
+			? inkForHueColor(
+					overrideColor,
+					huePalette.palette,
+					huePalette.inks,
+					themeInkFallback
+				)
+			: palettePatternInks.length > 0
+				? palettePatternInks[categoryIdx % palettePatternInks.length]
+				: null
+		return paired ?? configs.defaultPatternInk ?? DEFAULT_PATTERN_INK
+	}
 	const gapColorRow = (args: {
 		key: string
 		label: string
@@ -317,7 +329,7 @@ export const PatternOptionsPanel = () => {
 					key: v,
 					label: hueCategoryValues.labels?.[i] ?? v,
 					override: dashAltColors[v] ?? null,
-					fallback: defaultGapColorFor(i),
+					fallback: defaultGapColorFor(i, v),
 					onChange: (color) =>
 						color === null
 							? resetGapColorOverride(v)

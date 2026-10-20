@@ -94,6 +94,22 @@ describe("resolveDashGapColor", () => {
 		)
 	})
 
+	it("pairs the COLOR-ENCODING color first, even when the stroke comes from elsewhere", () => {
+		// Stroke from the line palette / Line color slot (not a hue swatch):
+		// the gap still pairs with the hue color's ink.
+		expect(
+			resolveDashGapColor({
+				...base,
+				hueColor: "#e2726e",
+				lineColor: "#888888",
+			})
+		).toBe("#8f1d1d")
+		// Hue color without a paired ink → falls through to the stroke.
+		expect(
+			resolveDashGapColor({ ...base, hueColor: "#777777" })
+		).toBe("#1d4f8f")
+	})
+
 	it("falls back to the default pattern ink when the line color isn't a palette color", () => {
 		expect(resolveDashGapColor({ ...base, lineColor: "#888888" })).toBe(
 			"#101010"

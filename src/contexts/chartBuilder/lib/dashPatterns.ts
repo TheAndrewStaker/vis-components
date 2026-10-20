@@ -175,8 +175,10 @@ export const splitIntoValueRuns = <T>(
  *    2. the single `dashGapColor` override (the one-swatch no-hue case);
  *    3. the pattern channel's per-category Color pick
  *       (`pattern.inkColors[patternValue]`);
- *    4. the palette-paired pattern ink for the line's drawn color
- *       (`inkForHueColor` against the same palette the hue scale used);
+ *    4. the palette-paired pattern ink for the line's COLOR-ENCODING color
+ *       (`hueColor`, pre-modulation — the same key bar/area pattern inks
+ *       pair on), then for the line's own unmodulated stroke (`lineColor`,
+ *       the no-hue case), via `inkForHueColor` against the hue palette;
  *    5. the default pattern ink (`configs.defaultPatternInk`, theme-seeded),
  *       else the built-in near-black.
  *  Deliberately NOT the chart background — background-colored gaps are
@@ -185,6 +187,7 @@ export const splitIntoValueRuns = <T>(
 export const resolveDashGapColor = ({
 	overrideKeys,
 	patternValue,
+	hueColor,
 	lineColor,
 	overrides,
 	singleOverride,
@@ -201,8 +204,14 @@ export const resolveDashGapColor = ({
 	/** The line/run's pattern-channel category value (null when the pattern
 	 *  channel is unmapped or the value is missing). */
 	patternValue: string | null
-	/** The line's resolved stroke color — the pre-modulation hue/palette
-	 *  color, so the palette pairing lookup can hit. */
+	/** The color the COLOR encoding assigns this line/run, BEFORE sat/bri
+	 *  modulation (`preModulationHue`). The line's stroke can come from the
+	 *  line palette / Line color slot instead of hue, so pairing on the
+	 *  stroke alone misses the palette and falls to the default ink. Null
+	 *  when hue is unmapped. */
+	hueColor?: string | null
+	/** The line's resolved stroke color BEFORE sat/bri modulation — the
+	 *  pairing key when `hueColor` is absent or has no paired ink. */
 	lineColor: string
 	overrides: Record<string, string>
 	singleOverride: string | null | undefined
@@ -223,7 +232,10 @@ export const resolveDashGapColor = ({
 	if (singleOverride) return singleOverride
 	const categoryInk = patternValue !== null ? inkColors[patternValue] : undefined
 	if (categoryInk) return categoryInk
-	const paired = inkForHueColor(lineColor, palette, patternInks, themeInkFallback)
-	if (paired) return paired
+	for (const color of [hueColor, lineColor]) {
+		if (!color) continue
+		const paired = inkForHueColor(color, palette, patternInks, themeInkFallback)
+		if (paired) return paired
+	}
 	return defaultInk ?? DEFAULT_PATTERN_INK
 }

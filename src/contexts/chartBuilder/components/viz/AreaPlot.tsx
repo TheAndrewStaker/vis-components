@@ -1215,8 +1215,10 @@ const buildAreas = ({
 					// covers hue-less layers and legacy saved visuals.
 					overrideKeys: [hueValue, layerDashKey],
 					patternValue,
-					// The layer's pre-highlight stroke — the hue/palette color
-					// when the line inherits it, so the pairing lookup can hit.
+					// Pair on the color encoding's pre-modulation color first
+					// (what bar/area pattern inks key on), then the layer's
+					// pre-highlight stroke for hue-less layers.
+					hueColor: hueValue != null ? layerResolved.preModulationHue : null,
 					lineColor: layerStroke,
 					overrides: dashAlternateColors,
 					singleOverride: channelConfigs.connection?.dashGapColor ?? null,

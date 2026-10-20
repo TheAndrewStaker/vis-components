@@ -148,7 +148,12 @@ export const renderConnectionLines = (
 	 *  Omitted = no modulation. */
 	modulateLine: (color: string, row: Record<string, unknown>) => string = (
 		color
-	) => color
+	) => color,
+	/** The COLOR encoding's pre-modulation color for a row (null when hue is
+	 *  unmapped). The dash-gap ink pairs on it, so gaps match the pattern
+	 *  inks bars/areas draw for the same category — the line's own stroke
+	 *  may come from the line palette / Line color slot instead. */
+	hueColorFor: (row: Record<string, unknown>) => string | null = () => null
 ) => {
 	const connectionField = encodings.connection?.field ?? null
 	if (!connectionField) return null
@@ -411,20 +416,21 @@ export const renderConnectionLines = (
 			// global stroke override → theme connection color (a real single
 			// color, NOT the point fill).
 			const slotRow = sorted[0]?.row ?? { [connectionField]: groupValue }
-			const stroke = modulateLine(
-				resolveConnectionStroke({
-					groupKey: groupValue,
-					lineColors,
-					linePalette: cfg.linePalette ?? null,
-					paletteIdx: groupKeys.indexOf(groupValue),
-					strokeColor: cfg.strokeColor ?? null,
-					fallback: connectionColor,
-					lineSlotCfg: channelConfigs.colorSlots?.line,
-					lineSlot,
-					slotRow,
-				}),
-				slotRow
-			)
+			const baseStroke = resolveConnectionStroke({
+				groupKey: groupValue,
+				lineColors,
+				linePalette: cfg.linePalette ?? null,
+				paletteIdx: groupKeys.indexOf(groupValue),
+				strokeColor: cfg.strokeColor ?? null,
+				fallback: connectionColor,
+				lineSlotCfg: channelConfigs.colorSlots?.line,
+				lineSlot,
+				slotRow,
+			})
+			const stroke = modulateLine(baseStroke, slotRow)
+			// Dash-gap ink key: the color encoding's pre-modulation color for
+			// this series (first-row convention, like the stroke).
+			const gapHueColor = hueField ? hueColorFor(slotRow) : null
 			// Legend / mark-hover highlight for this SERIES, resolved off its
 			// representative row — the same first-row convention `stroke` and
 			// the dash-gap hue sampling already use (the hovered field is a
@@ -477,8 +483,8 @@ export const renderConnectionLines = (
 					els.push(
 						renderLine(`${keyBase}-bg`, pts, {
 							stroke: resolveDashGapColor({
-								// The pre-highlight stroke — the hue/palette color the
-								// line inherits — so the ink pairing lookup can hit.
+								// Pair on PRE-modulation colors (hue first, then the
+								// stroke) so the palette ink lookup can hit.
 								overrideKeys: [
 									hueValueRaw === null || hueValueRaw === undefined
 										? null
@@ -486,7 +492,8 @@ export const renderConnectionLines = (
 									groupValue,
 								],
 								patternValue,
-								lineColor: stroke,
+								hueColor: gapHueColor,
+								lineColor: baseStroke,
 								overrides: dashAlternateColors,
 								singleOverride: dashGapColor,
 								inkColors: patternInkColors,

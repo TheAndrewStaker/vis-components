@@ -39,6 +39,9 @@ export type LayerResolved = {
 	/** Base fill color, after hue lookup and saturation/brightness
 	 *  modulation. Always a CSS color string. */
 	fill: string
+	/** The hue color BEFORE sat/bri modulation — the key pattern-ink
+	 *  lookups pair on (see `resolveGroupFill`'s invariant). */
+	preModulationHue: string
 	/** Resolved opacity in [0, 1]. */
 	opacity: number
 	/** SVG `<pattern>` element id when a pattern is applied, else null. */
@@ -409,7 +412,13 @@ export const resolveLayerColor = ({
 		if (ruleColor) outline = ruleColor
 	}
 
-	return { fill: color, opacity, patternId, outline }
+	return {
+		fill: color,
+		preModulationHue: paletteHueColor,
+		opacity,
+		patternId,
+		outline,
+	}
 }
 
 /** Convenience: turn a `LayerResolved` into the SVG `fill` attribute
