@@ -351,9 +351,9 @@ describe("Line chart (scatter + connection) — points + line render together", 
 			</TestProvider>
 		)
 		// 2 layers × (1 underlay + 1 dashed top) = 4 line paths with
-		// `fill="none"`. The dashed top carries `stroke-dasharray="8,4"`.
+		// `fill="none"`. The dashed top carries `stroke-dasharray="8,7"`.
 		const pathsWithStrokeDash = [...container.querySelectorAll("path:not(.vc-line-hit)")].filter(
-			(p) => p.getAttribute("stroke-dasharray") === "8,4"
+			(p) => p.getAttribute("stroke-dasharray") === "8,7"
 		)
 		expect(pathsWithStrokeDash.length).toBe(2)
 	})
@@ -381,7 +381,7 @@ describe("Line chart (scatter + connection) — points + line render together", 
 		const polylines = [...container.querySelectorAll("polyline:not(.vc-line-hit)")]
 		expect(polylines.length).toBe(6)
 		const dashed = polylines.filter(
-			(p) => p.getAttribute("stroke-dasharray") === "8,4"
+			(p) => p.getAttribute("stroke-dasharray") === "8,7"
 		)
 		expect(dashed.length).toBe(2)
 		// The solid 'pre' segment ends exactly where the dashed segment
@@ -428,7 +428,7 @@ describe("Line chart (scatter + connection) — points + line render together", 
 		)
 		expect(layerLines.length).toBe(6)
 		const dashed = layerLines.filter(
-			(p) => p.getAttribute("stroke-dasharray") === "8,4"
+			(p) => p.getAttribute("stroke-dasharray") === "8,7"
 		)
 		expect(dashed.length).toBe(2)
 	})

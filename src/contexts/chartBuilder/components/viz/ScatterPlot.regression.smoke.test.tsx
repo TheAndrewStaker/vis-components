@@ -173,7 +173,7 @@ describe("scatter regression overlay", () => {
 		const { container } = mount()
 		const [line] = linePaths(container, LINE_STROKE)
 		// "dotted" recipe from lib/dashPatterns.ts — panel and renderer agree.
-		expect(line?.getAttribute("stroke-dasharray")).toBe("2,3")
+		expect(line?.getAttribute("stroke-dasharray")).toBe("2,6")
 	})
 
 	it("custom dasharray wins over the picked line style", () => {
@@ -188,7 +188,7 @@ describe("scatter regression overlay", () => {
 		seed(XY, { lineStyle: "dashed", customDasharray: "abc" })
 		const { container } = mount()
 		const [line] = linePaths(container, LINE_STROKE)
-		expect(line?.getAttribute("stroke-dasharray")).toBe("8,4")
+		expect(line?.getAttribute("stroke-dasharray")).toBe("8,7")
 	})
 
 	it("'Apply pattern to range' splits the line: solid before From, dashed after", () => {
@@ -200,7 +200,7 @@ describe("scatter regression overlay", () => {
 		const lines = linePaths(container, LINE_STROKE)
 		expect(lines).toHaveLength(2)
 		const dashes = lines.map((p) => p.getAttribute("stroke-dasharray"))
-		expect(dashes.filter((d) => d === "8,4")).toHaveLength(1)
+		expect(dashes.filter((d) => d === "8,7")).toHaveLength(1)
 		expect(dashes.filter((d) => d === null)).toHaveLength(1)
 	})
 

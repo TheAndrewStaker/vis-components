@@ -159,19 +159,19 @@ describe("Pattern channel drives connection-line dash (scatter/line chart)", () 
 		const container = mount({ patternField: "region" })
 		const dashes = polylines(container).map(dashOf)
 		// Per line: gap-filling underlay (solid) + dashed top. Category 0
-		// (north) → "dashed" (8,4); category 1 (south) → "dotted" (2,3).
-		expect(dashes.filter((d) => d === "8,4").length).toBe(1)
-		expect(dashes.filter((d) => d === "2,3").length).toBe(1)
+		// (north) → "dashed" (8,7); category 1 (south) → "dotted" (2,6).
+		expect(dashes.filter((d) => d === "8,7").length).toBe(1)
+		expect(dashes.filter((d) => d === "2,6").length).toBe(1)
 		expect(dashes.filter((d) => d === null).length).toBe(2)
 	})
 
 	it("a pattern field varying WITHIN a line splits it into runs, one dash per category", () => {
 		const container = mount({ patternField: "status" })
 		const lines = polylines(container)
-		// 2 lines × 2 runs × (underlay + dashed top): known → "8,4",
-		// proj → "2,3".
-		const known = lines.filter((p) => dashOf(p) === "8,4")
-		const proj = lines.filter((p) => dashOf(p) === "2,3")
+		// 2 lines × 2 runs × (underlay + dashed top): known → "8,7",
+		// proj → "2,6".
+		const known = lines.filter((p) => dashOf(p) === "8,7")
+		const proj = lines.filter((p) => dashOf(p) === "2,6")
 		expect(known.length).toBe(2)
 		expect(proj.length).toBe(2)
 		expect(lines.length).toBe(8)
@@ -189,10 +189,10 @@ describe("Pattern channel drives connection-line dash (scatter/line chart)", () 
 		})
 		const lines = polylines(container)
 		// Per line: solid known run (no underlay for solid) + underlay +
-		// "dashed" (8,4) proj run = 3 polylines; 2 lines = 6.
+		// "dashed" (8,7) proj run = 3 polylines; 2 lines = 6.
 		expect(lines.length).toBe(6)
-		expect(lines.filter((p) => dashOf(p) === "8,4").length).toBe(2)
-		expect(lines.filter((p) => dashOf(p) === "2,3").length).toBe(0)
+		expect(lines.filter((p) => dashOf(p) === "8,7").length).toBe(2)
+		expect(lines.filter((p) => dashOf(p) === "2,6").length).toBe(0)
 	})
 
 	it("'Apply pattern to range' is IGNORED when a pattern variable is mapped", () => {
@@ -322,7 +322,7 @@ describe("Pattern channel drives connection-line dash (scatter/line chart)", () 
 		// underlay + dashed top per line (gap fill auto-on without a
 		// pattern/hue collision).
 		expect(lines.length).toBe(4)
-		expect(lines.filter((p) => dashOf(p) === "8,4").length).toBe(2)
+		expect(lines.filter((p) => dashOf(p) === "8,7").length).toBe(2)
 	})
 
 	it("no pattern field: connection.customDashPattern (the no-field 'Custom' pick) wins over the swatch pick", () => {
@@ -331,9 +331,9 @@ describe("Pattern channel drives connection-line dash (scatter/line chart)", () 
 		})
 		const lines = polylines(container)
 		expect(lines.length).toBe(4)
-		// Normalized to comma-separated; no line keeps the swatch's 8,4.
+		// Normalized to comma-separated; no line keeps the swatch's 8,7.
 		expect(lines.filter((p) => dashOf(p) === "1,5,9").length).toBe(2)
-		expect(lines.filter((p) => dashOf(p) === "8,4").length).toBe(0)
+		expect(lines.filter((p) => dashOf(p) === "8,7").length).toBe(0)
 	})
 
 	it("an unparseable customDashPattern falls back to the swatch pick", () => {
@@ -341,7 +341,7 @@ describe("Pattern channel drives connection-line dash (scatter/line chart)", () 
 			connection: { defaultDashPattern: "dotted", customDashPattern: "abc" },
 		})
 		expect(
-			polylines(container).filter((p) => dashOf(p) === "2,3").length
+			polylines(container).filter((p) => dashOf(p) === "2,6").length
 		).toBe(2)
 	})
 
@@ -420,8 +420,8 @@ describe("Pattern channel drives layer dash (areas-x line-fill mode)", () => {
 		// pattern === hue → gap fill auto-off → one dashed path per layer.
 		expect(paths.length).toBe(2)
 		const dashes = paths.map(dashOf)
-		expect(dashes).toContain("8,4")
-		expect(dashes).toContain("2,3")
+		expect(dashes).toContain("8,7")
+		expect(dashes).toContain("2,6")
 	})
 
 	it("per-category dash overrides from the Pattern panel apply per layer", () => {
@@ -435,7 +435,7 @@ describe("Pattern channel drives layer dash (areas-x line-fill mode)", () => {
 		expect(paths.length).toBe(2)
 		const dashes = paths.map(dashOf)
 		expect(dashes).toContain(null)
-		expect(dashes).toContain("8,3,2,3")
+		expect(dashes).toContain("8,6,2,6")
 	})
 
 	it("'Apply pattern to range' is IGNORED when a pattern variable is mapped", () => {
@@ -457,7 +457,7 @@ describe("Pattern channel drives layer dash (areas-x line-fill mode)", () => {
 		})
 		const dashes = lineFillPaths(container).map(dashOf)
 		expect(dashes.filter((d) => d === "1,5,9").length).toBe(2)
-		expect(dashes).not.toContain("8,4")
+		expect(dashes).not.toContain("8,7")
 	})
 
 	it("'Blank' in the range window applies to layer edges too (gap-color underlay only)", () => {

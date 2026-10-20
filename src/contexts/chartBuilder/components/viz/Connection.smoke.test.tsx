@@ -299,7 +299,7 @@ describe("Connection — dash patterns", () => {
 		const dashed = polylines.filter((p) => p.hasAttribute("stroke-dasharray"))
 		expect(dashed.length).toBe(2)
 		// Confirm the dasharray value matches the "dashed" recipe.
-		expect(dashed[0]?.getAttribute("stroke-dasharray")).toBe("8,4")
+		expect(dashed[0]?.getAttribute("stroke-dasharray")).toBe("8,7")
 	})
 })
 

@@ -29,13 +29,13 @@ export const dashArrayFor = (pattern: LineDashPattern): string | null => {
 			return null
 		}
 		case "dashed": {
-			return "8,4"
+			return "8,7"
 		}
 		case "dotted": {
-			return "2,3"
+			return "2,6"
 		}
 		case "dash-dot": {
-			return "8,3,2,3"
+			return "8,6,2,6"
 		}
 		// "blank" has no dasharray recipe — the range-aware renderers detect
 		// it themselves and skip the stroke entirely (gap in the line, or the

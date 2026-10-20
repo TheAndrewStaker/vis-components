@@ -16,10 +16,10 @@ describe("dashArrayFor", () => {
 	it("emits SVG-compatible dasharray strings for each non-solid preset", () => {
 		// Each entry must be a comma-separated list of positive numbers — the
 		// shape SVG's `stroke-dasharray` accepts. Pin the exact strings so a
-		// regression that changes "8,4" to "[8,4]" or similar trips here.
-		expect(dashArrayFor("dashed")).toBe("8,4")
-		expect(dashArrayFor("dotted")).toBe("2,3")
-		expect(dashArrayFor("dash-dot")).toBe("8,3,2,3")
+		// regression that changes "8,7" to "[8,7]" or similar trips here.
+		expect(dashArrayFor("dashed")).toBe("8,7")
+		expect(dashArrayFor("dotted")).toBe("2,6")
+		expect(dashArrayFor("dash-dot")).toBe("8,6,2,6")
 	})
 
 	it("returns null for blank — solid is the fallback anywhere the range renderers don't special-case it", () => {

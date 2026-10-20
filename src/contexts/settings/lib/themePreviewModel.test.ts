@@ -171,7 +171,7 @@ describe("buildThemeSamplerModel", () => {
 		const m = buildThemeSamplerModel(theme)
 		// An unset border color follows the fill, like the real seed.
 		expect(m.box.borderColor).toBe("#ff0000")
-		expect(dasharrayOf(m.line.lineDash, m.line.lineDasharray)).toBe("8,4")
+		expect(dasharrayOf(m.line.lineDash, m.line.lineDasharray)).toBe("8,7")
 		// Data labels inherit the text-encoding color, and pt → px.
 		expect(m.dataLabels.color).toBe("#0000ff")
 		expect(m.dataLabels.size).toBeCloseTo(10 * (4 / 3), 5)
