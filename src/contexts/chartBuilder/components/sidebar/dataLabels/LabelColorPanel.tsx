@@ -23,15 +23,12 @@ import { useCurrentTheme } from "../../../store/useCurrentTheme"
 
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { ColorInput } from "../../../../../components/ui/ColorInput"
-import {
-	LABEL_COL,
-	LabelSpacer,
-} from "../../../../../components/ui/LabeledField"
+import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { ColorSlotControls } from "../channelOptions/ColorPanel"
 import {
 	CategoricalSwatchList,
 } from "../channelOptions/ColorOptionsPanel"
-import { Input } from "../../../../../components/ui/Input"
+import { RuleConditionInput, RuleVariableHelp } from "../RuleConditionInput"
 import { Select } from "../../../../../components/ui/Select"
 
 const PALETTE_PRESET_NAMES: PaletteName[] = [
@@ -408,20 +405,15 @@ const TextColorRulesRow = ({
 					// Index key is stable here: rules are ordered, identity == position
 					// eslint-disable-next-line react/no-array-index-key
 					key={i}
-					className="flex items-center gap-2 text-sm"
+					className="flex items-start gap-2 text-sm"
 				>
-					{/* Empty leading column so the condition box lines up under the
-					 *  w-24-labeled text boxes above (Palette / Gradient, Color). */}
-					{/* Dropped below 360px: on the 2016 iPhone SE the menu sheet's
-					 *  rows are ~223px, and spacer + condition box + swatch don't fit. */}
-					<LabelSpacer className="hidden min-[360px]:inline" />
-					<Input
-						type="text"
+					{/* The condition box takes the row's full width (no label-column
+					 *  spacer) so a `{Variable} == value` rule fits. */}
+					<RuleConditionInput
 						value={rule.condition}
-						onChange={(e) => setRule(i, { condition: e.target.value })}
+						onChange={(condition) => setRule(i, { condition })}
 						placeholder="> 0"
-						aria-label={`Condition for ${ruleName(i)}`}
-						className="w-24"
+						ariaLabel={`Condition for ${ruleName(i)}`}
 					/>
 					<ColorInput
 						label={`Color for ${ruleName(i)}`}
@@ -455,7 +447,7 @@ const TextColorRulesRow = ({
 						First matching rule wins. <code>{">"}</code>, <code>{"<"}</code>,{" "}
 						<code>{">="}</code>, and <code>{"<="}</code> compare numbers;{" "}
 						<code>==</code> and <code>!=</code> also match text, e.g.{" "}
-						<code>== Melon</code>.
+						<code>== Melon</code>. <RuleVariableHelp />
 					</p>
 					{help && <p className="vc-help">{help}</p>}
 				</>

@@ -896,12 +896,10 @@ const DerivedVariableEditor = ({
 								)}
 							</div>
 						))}
-						{/* mr-6 = the × column (w-4) + gap-2, so the link's right
-						 *  edge lines up with the output boxes above and below. */}
 						<button
 							type="button"
 							onClick={() => setRules((prev) => [...prev, blankRule()])}
-							className="mr-6 self-end text-xs text-brand-500 hover:underline dark:text-indigo-400"
+							className="self-end text-xs text-brand-500 hover:underline dark:text-indigo-400"
 						>
 							+ Add rule
 						</button>

@@ -898,6 +898,7 @@ export const buildPieAnchors = ({
 			})
 			const { series, rank } = seriesByScope[layerScope]
 			anchors.push({
+				sourceRows: slice.rows,
 				cx,
 				cy,
 				key: `${stack.category}|${slice.key}`,
@@ -1025,6 +1026,7 @@ const renderWedgesForStack = (
 			aestheticScales: deps.aestheticScales,
 			channelConfigs: deps.channelConfigs,
 			patternOptions: deps.patternOptions,
+			rows: slice.rows,
 		})
 		const baseFillProp = layerFillProp(resolved)
 		// Legend-hover highlight: recolor / outline the matched wedge, fade rest.

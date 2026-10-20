@@ -241,3 +241,50 @@ describe("Data labels — per-variable position rules", () => {
 		})
 	})
 })
+
+/** `{Variable}` rules test another variable in the label's row instead of
+ *  the labeled value — here the sales labels move by their row's month. */
+describe("Data labels — {Variable} position rules", () => {
+	it("moves the label whose ROW matches, whatever its own value", () => {
+		const base = renderLabels([])
+		const ruled = renderLabels([
+			{ condition: "{month} > 40", xOffset: 7, yOffset: 5 },
+		])
+		// Row month 58 → its sales label (-7) moves.
+		expect(ruled.get("-7")).toEqual({
+			x: (base.get("-7")?.x ?? 0) + 7,
+			y: (base.get("-7")?.y ?? 0) + 5,
+		})
+		// Row month 31 → untouched.
+		expect(ruled.get("17")).toEqual(base.get("17"))
+	})
+})
+
+/** First-and-last labels with their own X / Y: a matching rule still wins
+ *  for the labels it matches; the rest keep the endpoint offsets. Two
+ *  points = one series whose first and last labels are the two points. */
+describe("Data labels — position rules beat first / last label offsets", () => {
+	const ENDPOINTS: Partial<DataLabelsConfig> = {
+		labelPoints: "first-last",
+		firstLabel: { yOffset: -13 },
+		lastLabel: { yOffset: -13 },
+	}
+
+	it("the rule's offsets replace a matching endpoint's own", () => {
+		const base = renderLabels([])
+		const ruled = renderLabels(
+			[{ condition: "{month} > 40", xOffset: 0, yOffset: 13 }],
+			ENDPOINTS
+		)
+		// month 58 (last label) matches → the rule's +13, not the endpoint's.
+		expect(ruled.get("-7")).toEqual({
+			x: base.get("-7")?.x ?? 0,
+			y: (base.get("-7")?.y ?? 0) + 13,
+		})
+		// month 31 (first label) doesn't → its endpoint's -13.
+		expect(ruled.get("17")).toEqual({
+			x: base.get("17")?.x ?? 0,
+			y: (base.get("17")?.y ?? 0) - 13,
+		})
+	})
+})

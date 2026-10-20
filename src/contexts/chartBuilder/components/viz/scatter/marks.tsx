@@ -366,7 +366,8 @@ export const buildMarks = ({
 			const outlineRuleColor = outlineHue
 				? resolveRuleColor(
 						channelConfigs.shape?.outlineColorRules,
-						row[outlineHue.name]
+						row[outlineHue.name],
+						[row]
 					)
 				: null
 			const { fill: shapeFill, stroke: baseStroke } = resolveShapeColors({

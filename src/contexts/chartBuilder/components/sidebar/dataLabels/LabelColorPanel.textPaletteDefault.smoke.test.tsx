@@ -212,7 +212,7 @@ describe("Data Labels text color rules — no header, add on demand", () => {
 		expect(container.textContent).not.toContain("Text color rules")
 		expect(addRuleLink(container)).not.toBeNull()
 		expect(
-			container.querySelector('input[aria-label="Condition for rule 1"]')
+			container.querySelector('textarea[aria-label="Condition for rule 1"]')
 		).toBeNull()
 		fireEvent.click(addRuleLink(container)!)
 		expect(readCfg().textColorRules).toEqual([
@@ -225,8 +225,8 @@ describe("Data Labels text color rules — no header, add on demand", () => {
 			cfg: { textColorRules: [{ condition: "> 0", color: "#00ff00" }] },
 		})
 		openChannel(container, "Color")
-		const condition = container.querySelector<HTMLInputElement>(
-			'input[aria-label="Condition for rule 1"]'
+		const condition = container.querySelector<HTMLTextAreaElement>(
+			'textarea[aria-label="Condition for rule 1"]'
 		)
 		expect(condition).not.toBeNull()
 		fireEvent.click(addRuleLink(container)!)

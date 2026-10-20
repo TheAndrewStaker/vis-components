@@ -340,22 +340,24 @@ export const TilePlot = (props: TilePlotProps = {}) => {
 		xField: string
 		yField: string
 	}): DataLabelAnchor[] => {
+		// Each cell's dataset rows — what `{Variable}` label rules test.
+		const rowsByCell = new Map<string, Record<string, unknown>[]>()
+		for (const row of rows) {
+			const xRaw = row[xField]
+			const yRaw = row[yField]
+			if (xRaw == null || yRaw == null) continue
+			const key = `${String(xRaw)}\u001F${String(yRaw)}`
+			const list = rowsByCell.get(key)
+			if (list) list.push(row)
+			else rowsByCell.set(key, [row])
+		}
 		// When the user has mapped a Data Labels.value field, pre-aggregate it
 		// per cell. Numeric → mean across rows in the cell; non-numeric → mode
 		// (most frequent value).
 		const valueByCell = new Map<string, number | string | null>()
 		if (valueField) {
-			const grouped = new Map<string, unknown[]>()
-			for (const row of rows) {
-				const xRaw = row[xField]
-				const yRaw = row[yField]
-				if (xRaw == null || yRaw == null) continue
-				const key = `${String(xRaw)}\u001F${String(yRaw)}`
-				const list = grouped.get(key) ?? []
-				list.push(row[valueField])
-				grouped.set(key, list)
-			}
-			for (const [key, vals] of grouped) {
+			for (const [key, cellRows] of rowsByCell) {
+				const vals = cellRows.map((r) => r[valueField])
 				// Blank cells are missing data, not zeros — drop them before
 				// deciding numeric-vs-mode so they neither drag means toward 0
 				// (`Number("") === 0`) nor win the mode as "". An all-blank
@@ -410,6 +412,7 @@ export const TilePlot = (props: TilePlotProps = {}) => {
 				label,
 				hueValue: cell.hueValue,
 				labelValue: labelSource,
+				sourceRows: rowsByCell.get(cellKey),
 			})
 		}
 		return anchors

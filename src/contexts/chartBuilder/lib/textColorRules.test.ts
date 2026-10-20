@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { firstMatchingRule, parseRule, resolveRuleColor } from "./textColorRules"
+import {
+	firstMatchingRule,
+	parseRule,
+	resolveRuleColor,
+} from "./textColorRules"
 
 describe("parseRule", () => {
 	it("parses each operator with and without whitespace", () => {
@@ -102,5 +106,73 @@ describe("firstMatchingRule", () => {
 
 	it("coerces numeric strings like resolveRuleColor does", () => {
 		expect(firstMatchingRule(rules, "-3")).toBe(rules[0])
+	})
+})
+
+describe("{Variable} rules", () => {
+	it("parses a leading {Variable} token into `field`", () => {
+		expect(parseRule("{Region} == West")).toEqual({
+			field: "Region",
+			op: "==",
+			num: null,
+			text: "West",
+		})
+		expect(parseRule('  {Unit price}>= "2.5"')).toEqual({
+			field: "Unit price",
+			op: ">=",
+			num: 2.5,
+			text: "2.5",
+		})
+		// Unclosed / empty token, or a token with no comparison → no rule.
+		expect(parseRule("{Region == West")).toBeNull()
+		expect(parseRule("{} == West")).toBeNull()
+		expect(parseRule("{Region}")).toBeNull()
+		expect(parseRule("{Region} ==")).toBeNull()
+	})
+
+	const rules = [
+		{ condition: "{Region} == West", color: "#00f" },
+		{ condition: "{Profit} < 0", color: "#f00" },
+		{ condition: "> 100", color: "#0f0" },
+	]
+
+	it("tests the referenced variable in the mark's row, not the labeled value", () => {
+		expect(resolveRuleColor(rules, 5, [{ Region: "West", Profit: "3" }])).toBe(
+			"#00f"
+		)
+		expect(resolveRuleColor(rules, 5, [{ Region: "East", Profit: "-3" }])).toBe(
+			"#f00"
+		)
+		// Neither variable rule matches → the implicit rule still reads `value`.
+		expect(
+			resolveRuleColor(rules, 150, [{ Region: "East", Profit: "3" }])
+		).toBe("#0f0")
+	})
+
+	it("passes only when EVERY row of a multi-row mark passes", () => {
+		const allWest = [
+			{ Region: "West", Profit: "1" },
+			{ Region: "West", Profit: "2" },
+		]
+		const mixed = [
+			{ Region: "West", Profit: "1" },
+			{ Region: "East", Profit: "-2" },
+		]
+		expect(resolveRuleColor(rules, 5, allWest)).toBe("#00f")
+		// One East row spoils `{Region} == West`; one positive row spoils
+		// `{Profit} < 0`.
+		expect(resolveRuleColor(rules, 5, mixed)).toBeNull()
+	})
+
+	it("never fires without rows (legend swatches) or on a blank cell", () => {
+		expect(resolveRuleColor(rules, 5)).toBeNull()
+		expect(resolveRuleColor(rules, 5, [])).toBeNull()
+		const ne = [{ condition: "{Region} != West", color: "#ccc" }]
+		expect(resolveRuleColor(ne, 5, [{ Region: "" }])).toBeNull()
+		expect(resolveRuleColor(ne, 5, [{}])).toBeNull()
+	})
+
+	it("fires for a nullish labeled value — the variable carries the test", () => {
+		expect(resolveRuleColor(rules, null, [{ Region: "West" }])).toBe("#00f")
 	})
 })

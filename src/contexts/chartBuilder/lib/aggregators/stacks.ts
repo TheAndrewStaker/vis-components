@@ -32,6 +32,10 @@ export type StackSlice = {
 	 * different from the length field). Numeric text fields → sum across the
 	 * slice's rows; non-numeric → first non-empty value encountered. */
 	textValue?: number | string
+	/** The dataset rows the slice aggregates (same category + group tuple,
+	 * finite contribution) — what `{Variable}` conditional rules test, every
+	 * row of the slice alike (lib/textColorRules.ts). */
+	rows?: readonly Row[]
 }
 
 export type Stack = {
@@ -195,6 +199,7 @@ export const aggregateStacks = (
 		textField && textField !== lengthField && textType === "quantitative"
 	const collectText = textField && textField !== lengthField
 	const textAggregates: Map<string, Map<string, number | string>> = new Map()
+	const sliceRows: Map<string, Map<string, Row[]>> = new Map()
 
 	for (const row of rows) {
 		const cat = coerceCategory(row[categoryField])
@@ -239,6 +244,14 @@ export const aggregateStacks = (
 			totals.set(cat, catMap)
 		}
 		catMap.set(sliceKey, (catMap.get(sliceKey) ?? 0) + contribution)
+		let catRows = sliceRows.get(cat)
+		if (!catRows) {
+			catRows = new Map()
+			sliceRows.set(cat, catRows)
+		}
+		const bucket = catRows.get(sliceKey)
+		if (bucket) bucket.push(row)
+		else catRows.set(sliceKey, [row])
 
 		if (collectText) {
 			let catTextMap = textAggregates.get(cat)
@@ -306,12 +319,14 @@ export const aggregateStacks = (
 	const stacks: Stack[] = categoryOrder.map((category) => {
 		const catMap = totals.get(category) ?? new Map<string, number>()
 		const catTextMap = textAggregates.get(category)
+		const catRows = sliceRows.get(category)
 		const slices: StackSlice[] = keysInOrder
 			.map((key) => {
 				const slice: StackSlice = {
 					key,
 					groupValues: sliceMeta.get(key) ?? {},
 					value: catMap.get(key) ?? 0,
+					rows: catRows?.get(key) ?? [],
 				}
 				if (catTextMap?.has(key)) slice.textValue = catTextMap.get(key)
 				return slice

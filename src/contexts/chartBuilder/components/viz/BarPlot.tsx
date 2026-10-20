@@ -1263,6 +1263,7 @@ const buildRects = ({
 				aestheticScales,
 				channelConfigs,
 				patternOptions,
+				rows: slice.rows,
 			})
 			// Vary-by-measure (histogram Count/Density) overrides the normal
 			// fill / opacity for this bin, mapping its measure (`slice.value`,
@@ -1763,6 +1764,7 @@ export const buildBarAnchors = ({
 			const { series, rank } = seriesByScope[layerScope]
 			anchors.push({
 				row,
+				sourceRows: slice.rows,
 				cx: aggregation.isVertical ? catPoint : measurePoint,
 				cy: aggregation.isVertical ? measurePoint : catPoint,
 				hAlign,

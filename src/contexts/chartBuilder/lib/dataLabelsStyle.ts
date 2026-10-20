@@ -21,7 +21,7 @@ import {
 	parseFormatSpec,
 } from "./formatTick"
 import { COUNTRY_NAME_FORMAT, fullCountryName } from "./geo/countryNames"
-import { resolveRuleColor } from "./textColorRules"
+import { resolveRuleColor, type RuleRows } from "./textColorRules"
 import type { DataLabelsEncodings, FieldType } from "./types"
 
 /** Format a numeric label respecting the user's `decimals` setting. */
@@ -378,18 +378,20 @@ export const sameBackground = (
  * per-category override → conditional numeric rule → hue-scale color →
  * the single fallback `cfg.color`. `hueColor` arrives pre-resolved (the
  * caller owns the scale); `labelValue` is the RAW value backing the
- * label (rules compare against the number, not its formatted string). */
+ * label (rules compare against the number, not its formatted string);
+ * `ruleRows` are the mark's dataset rows, for `{Variable}` rules. */
 export const resolveLabelFill = (
 	cfg: DataLabelsConfig,
 	hueValue: unknown,
 	hueColor: string | null,
-	labelValue: unknown
+	labelValue: unknown,
+	ruleRows?: RuleRows
 ): string => {
 	const overrideKey = hueValue === undefined ? null : String(hueValue ?? "")
 	const overrideColor =
 		overrideKey && cfg.colorOverrides[overrideKey]
 			? cfg.colorOverrides[overrideKey]
 			: null
-	const ruleColor = resolveRuleColor(cfg.textColorRules, labelValue)
+	const ruleColor = resolveRuleColor(cfg.textColorRules, labelValue, ruleRows)
 	return overrideColor ?? ruleColor ?? hueColor ?? cfg.color
 }

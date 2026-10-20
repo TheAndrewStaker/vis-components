@@ -328,15 +328,15 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 		// The rules show only their add link until one exists — no condition
 		// box until the user asks for a rule.
 		expect(
-			container.querySelector('input[aria-label="Condition for y rule 1"]')
+			container.querySelector('textarea[aria-label="Condition for y rule 1"]')
 		).toBeNull()
 		const add = [
 			...container.querySelectorAll<HTMLButtonElement>("button"),
 		].find((b) => b.textContent?.trim() === "+ Add text color rule")
 		expect(add, '"+ Add text color rule"').not.toBeNull()
 		fireEvent.click(add!)
-		const condition = container.querySelector<HTMLInputElement>(
-			'input[aria-label="Condition for y rule 1"]'
+		const condition = container.querySelector<HTMLTextAreaElement>(
+			'textarea[aria-label="Condition for y rule 1"]'
 		)
 		expect(condition).not.toBeNull()
 		fireEvent.change(condition!, { target: { value: "> 5" } })

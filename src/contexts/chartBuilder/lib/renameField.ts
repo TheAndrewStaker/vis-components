@@ -136,7 +136,10 @@ const renamePieces = (
 			const color = style.color
 				? renameSlotField(style.color, oldName, newName)
 				: style.color
-			const nextStyle = color === style.color ? style : { ...style, color }
+			const nextStyle = patched(style, {
+				color,
+				colorRules: renameRuleTokens(style.colorRules, oldName, newName),
+			})
 			const nextField = field === oldName ? newName : field
 			if (nextStyle !== style || nextField !== field) changed = true
 			nextByField[nextField] = nextStyle
@@ -221,6 +224,22 @@ const mapItems = <A>(items: A[], fn: (a: A) => A): A[] => {
 	})
 	return changed ? out : items
 }
+
+/** Swap `{Old}` tokens in a conditional-rule list's conditions (text-color,
+ * position, outline-color rules — `{Region} == West`). Same reference when
+ * no condition mentions the old name. */
+const renameRuleTokens = <R extends { condition: string }>(
+	rules: R[] | undefined,
+	oldName: string,
+	newName: string
+): R[] | undefined =>
+	rules &&
+	mapItems(rules, (r) => {
+		const condition = renameLabelTokens(r.condition, oldName, newName)
+		return condition === r.condition || condition === undefined
+			? r
+			: { ...r, condition }
+	})
 
 /** Merge `patch` onto `base`, but return `base` itself when every patched
  * property is already the same reference — the no-op detector the whole
@@ -374,6 +393,15 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 							: cc.connection.thicknessField,
 				})
 			: cc.connection,
+		shape: cc.shape
+			? patched(cc.shape, {
+					outlineColorRules: renameRuleTokens(
+						cc.shape.outlineColorRules,
+						oldName,
+						newName
+					),
+				})
+			: cc.shape,
 		drawOrder:
 			cc.drawOrder && cc.drawOrder.field === oldName
 				? { ...cc.drawOrder, field: newName }
@@ -411,7 +439,12 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 					renameKey(dlc.fieldColors, oldName, newName),
 					(s) => renameSlotField(s, oldName, newName)
 				) as Record<string, ColorSlotConfig> | undefined,
-				fieldColorRules: renameKey(dlc.fieldColorRules, oldName, newName),
+				fieldColorRules: mapRecordValues(
+					renameKey(dlc.fieldColorRules, oldName, newName),
+					(rules) => renameRuleTokens(rules, oldName, newName) ?? rules
+				) as DataLabelsConfig["fieldColorRules"],
+				textColorRules: renameRuleTokens(dlc.textColorRules, oldName, newName),
+				positionRules: renameRuleTokens(dlc.positionRules, oldName, newName),
 				fieldSizes: renameKey(dlc.fieldSizes, oldName, newName),
 				fieldFonts: renameKey(dlc.fieldFonts, oldName, newName),
 				fieldBackgrounds: renameKey(dlc.fieldBackgrounds, oldName, newName),
@@ -426,11 +459,10 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 					id: l.id === oldName ? newName : l.id,
 					template: renameLabelTokens(l.template, oldName, newName) ?? l.template,
 				})),
-				fieldPositionRules: renameKey(
-					dlc.fieldPositionRules,
-					oldName,
-					newName
-				),
+				fieldPositionRules: mapRecordValues(
+					renameKey(dlc.fieldPositionRules, oldName, newName),
+					(rules) => renameRuleTokens(rules, oldName, newName) ?? rules
+				) as DataLabelsConfig["fieldPositionRules"],
 				firstLabel: dlc.firstLabel
 					? patched(dlc.firstLabel, {
 							labelTemplate: renameLabelTokens(

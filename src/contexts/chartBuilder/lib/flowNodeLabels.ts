@@ -168,6 +168,32 @@ export const flowNodeTotal = (
 	geometry: FlowGeometry
 ): number => (geometry === "ring" ? inflow + outflow : Math.max(inflow, outflow))
 
+/** Each node's dataset rows: its OUTGOING edges' rows, or — for an end
+ *  node, which has none — its incoming ones. What a node's label record
+ *  aggregates (`buildFlowNodeRows`), and what `{Variable}` label rules
+ *  test, every row alike. */
+export const flowNodeSourceRows = (
+	nodes: readonly string[],
+	edges: readonly FlowEdge[]
+): Map<string, Record<string, unknown>[]> => {
+	const outRows = new Map<string, Record<string, unknown>[]>()
+	const inRows = new Map<string, Record<string, unknown>[]>()
+	for (const e of edges) {
+		const o = outRows.get(e.source) ?? []
+		o.push(...e.rows)
+		outRows.set(e.source, o)
+		const i = inRows.get(e.target) ?? []
+		i.push(...e.rows)
+		inRows.set(e.target, i)
+	}
+	const out = new Map<string, Record<string, unknown>[]>()
+	for (const name of nodes) {
+		const own = outRows.get(name)
+		out.set(name, own && own.length > 0 ? own : (inRows.get(name) ?? []))
+	}
+	return out
+}
+
 /** One synthetic record per node, for composing its label. Dataset
  *  variables aggregate the node's OUTGOING rows — an end node, which has
  *  none, uses its incoming rows — so a middle node isn't counted twice. The
@@ -185,22 +211,12 @@ export const buildFlowNodeRows = (
 		geometry: FlowGeometry
 	}
 ): Map<string, Record<string, unknown>> => {
-	const outRows = new Map<string, Record<string, unknown>[]>()
-	const inRows = new Map<string, Record<string, unknown>[]>()
-	for (const e of edges) {
-		const o = outRows.get(e.source) ?? []
-		o.push(...e.rows)
-		outRows.set(e.source, o)
-		const i = inRows.get(e.target) ?? []
-		i.push(...e.rows)
-		inRows.set(e.target, i)
-	}
+	const sourceRows = flowNodeSourceRows(nodes, edges)
 	const totals = flowNodeTotals(nodes, edges)
 	const flowNames = new Set(flowLabelFieldNames(opts.fields))
 	const out = new Map<string, Record<string, unknown>>()
 	for (const name of nodes) {
-		const own = outRows.get(name)
-		const rows = own && own.length > 0 ? own : (inRows.get(name) ?? [])
+		const rows = sourceRows.get(name) ?? []
 		const row: Record<string, unknown> = {}
 		for (const f of opts.fields) {
 			const v = aggregateField(rows, f)

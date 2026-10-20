@@ -1,8 +1,11 @@
 import type { LabelPositionRule } from "../../../lib/channelConfig"
 
-import { LABEL_COL } from "../../../../../components/ui/LabeledField"
+import {
+	LABEL_COL,
+	LABEL_COL_NESTED,
+} from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
-import { Input } from "../../../../../components/ui/Input"
+import { RuleConditionInput, RuleVariableHelp } from "../RuleConditionInput"
 
 /** Conditional position rules under "Adjust position" — the positional
  *  sibling of the text-color rules. Each rule pairs a comparison condition
@@ -30,6 +33,7 @@ export const PositionRulesEditor = ({
 	baseYOffset,
 	ruleLabel,
 	help,
+	nested = false,
 }: {
 	rules: LabelPositionRule[]
 	onChange: (rules: LabelPositionRule[]) => void
@@ -44,6 +48,10 @@ export const PositionRulesEditor = ({
 	/** Extra help prose below the grammar note — which value these rules
 	 *  compare against. */
 	help?: React.ReactNode
+	/** Indent each rule's X / Y under its "Rule N" line — the layout the
+	 *  split First / Last label X / Y pairs above use — so the columns line
+	 *  up with them. */
+	nested?: boolean
 }) => {
 	const ruleName = (i: number) =>
 		ruleLabel ? `${ruleLabel} position rule ${i + 1}` : `position rule ${i + 1}`
@@ -66,15 +74,13 @@ export const PositionRulesEditor = ({
 				>
 					{/* Same stacked layout — and w-24 label column — as the base
 					 *  X/Y adjusters above: condition line, then X, then Y. */}
-					<div className="flex items-center gap-2 text-sm">
-						<span className={LABEL_COL}>Rule {i + 1}</span>
-						<Input
-							type="text"
+					<div className="flex items-start gap-2 text-sm">
+						<span className={`${LABEL_COL} pt-1`}>Rule {i + 1}</span>
+						<RuleConditionInput
 							value={rule.condition}
-							onChange={(e) => setRule(i, { condition: e.target.value })}
+							onChange={(condition) => setRule(i, { condition })}
 							placeholder="< 0"
-							aria-label={`Condition for ${ruleName(i)}`}
-							className="w-24"
+							ariaLabel={`Condition for ${ruleName(i)}`}
 						/>
 						<button
 							type="button"
@@ -85,30 +91,36 @@ export const PositionRulesEditor = ({
 							×
 						</button>
 					</div>
-					<NumberInput
-						label="X"
-						labelClassName={LABEL_COL}
-						value={rule.xOffset}
-						step={1}
-						onChange={(xOffset) => setRule(i, { xOffset })}
-						inputClassName="w-16"
-						suffix="px"
-					/>
-					<NumberInput
-						label="Y"
-						labelClassName={LABEL_COL}
-						value={-rule.yOffset}
-						step={1}
-						onChange={(n) => setRule(i, { yOffset: -n })}
-						inputClassName="w-16"
-						suffix="px"
-					/>
+					<div
+						className={
+							nested ? "ml-6 flex flex-col gap-2 text-sm" : "flex flex-col gap-2"
+						}
+					>
+						<NumberInput
+							label="X"
+							labelClassName={nested ? LABEL_COL_NESTED : LABEL_COL}
+							value={rule.xOffset}
+							step={1}
+							onChange={(xOffset) => setRule(i, { xOffset })}
+							inputClassName="w-16"
+							suffix="px"
+						/>
+						<NumberInput
+							label="Y"
+							labelClassName={nested ? LABEL_COL_NESTED : LABEL_COL}
+							value={-rule.yOffset}
+							step={1}
+							onChange={(n) => setRule(i, { yOffset: -n })}
+							inputClassName="w-16"
+							suffix="px"
+						/>
+					</div>
 				</div>
 			))}
 			<button
 				type="button"
 				onClick={addRule}
-				className="self-start text-xs text-blue-600 hover:underline dark:text-blue-400"
+				className="self-end text-xs text-blue-600 hover:underline dark:text-blue-400"
 			>
 				+ Add rule
 			</button>
@@ -119,7 +131,7 @@ export const PositionRulesEditor = ({
 						of the values above. First matching rule wins. Use{" "}
 						<code>{">"}</code>, <code>{"<"}</code>, <code>{">="}</code>,{" "}
 						<code>{"<="}</code>, <code>==</code>, or <code>!=</code> followed
-						by a number.
+						by a number. <RuleVariableHelp />
 					</p>
 					{help && <p className="vc-help">{help}</p>}
 				</>

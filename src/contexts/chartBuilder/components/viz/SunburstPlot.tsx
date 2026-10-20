@@ -165,6 +165,9 @@ export const SunburstPlot = (props: SunburstPlotProps = {}) => {
 					// leaf's Value cell when mapped, else the node's name —
 					// the same value the text is composed from.
 					labelValue: labelStyle.valueFor(node, isLeaf),
+					// `{Variable}` rules test the arc's own row (none on an
+					// implicit container).
+					sourceRows: row ? [row] : undefined,
 					fill: labelStyle.fillFor(node),
 					fontSize: arcFontSize,
 					// Recedes with its own arc on legend hover.

@@ -5,6 +5,7 @@ import {
 	DEFAULT_FACET_CONFIG,
 	DEFAULT_REGRESSION_CONFIG,
 	DEFAULT_AXIS_CONFIG,
+	DEFAULT_SHAPE_CONFIG,
 } from "./channelConfig"
 import { DEFAULT_ANNOTATIONS_CONFIG } from "./annotationsConfig"
 import { DEFAULT_LABELS_CONFIG, DEFAULT_TOOLTIP_CONFIG } from "./labelsConfig"
@@ -299,6 +300,52 @@ describe("renameFieldInConfigs — standard (view-field) rewrite", () => {
 		expect(
 			renameFieldInConfigs(untouched, fields, "sales", "revenue").dataLabelsConfig.pieces
 		).toBe(untouched.dataLabelsConfig.pieces)
+	})
+
+	it("rewrites {tokens} in every conditional-rule condition", () => {
+		const state = baseState()
+		state.dataLabelsConfig = {
+			...DEFAULT_DATA_LABELS_CONFIG,
+			textColorRules: [
+				{ condition: "{sales} > 0", color: "#0a0" },
+				{ condition: "< 0", color: "#a00" },
+			],
+			positionRules: [{ condition: "{sales} < 0", xOffset: 0, yOffset: 8 }],
+			fieldColorRules: { region: [{ condition: "{sales} >= 5", color: "#fff" }] },
+			fieldPositionRules: {
+				region: [{ condition: "{sales} != 0", xOffset: 2, yOffset: 0 }],
+			},
+			pieces: {
+				"lbl-1": {
+					region: { colorRules: [{ condition: "{sales} == 1", color: "#000" }] },
+				},
+			},
+		}
+		state.channelConfigs = {
+			shape: {
+				...DEFAULT_SHAPE_CONFIG,
+				outlineColorRules: [{ condition: "{sales} > 9", color: "#111" }],
+			},
+		}
+		const next = renameFieldInConfigs(state, fields, "sales", "revenue")
+		const dlc = next.dataLabelsConfig
+		expect(dlc.textColorRules).toEqual([
+			{ condition: "{revenue} > 0", color: "#0a0" },
+			{ condition: "< 0", color: "#a00" },
+		])
+		// An implicit-value rule is untouched — same object.
+		expect(dlc.textColorRules?.[1]).toBe(
+			state.dataLabelsConfig.textColorRules?.[1]
+		)
+		expect(dlc.positionRules?.[0].condition).toBe("{revenue} < 0")
+		expect(dlc.fieldColorRules?.region[0].condition).toBe("{revenue} >= 5")
+		expect(dlc.fieldPositionRules?.region[0].condition).toBe("{revenue} != 0")
+		expect(dlc.pieces?.["lbl-1"].region.colorRules?.[0].condition).toBe(
+			"{revenue} == 1"
+		)
+		expect(next.channelConfigs.shape?.outlineColorRules?.[0].condition).toBe(
+			"{revenue} > 9"
+		)
 	})
 
 	it("does not rewrite a template token that merely contains the name", () => {

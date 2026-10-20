@@ -1744,6 +1744,7 @@ export const DataLabelsPanel = () => {
 						onChange={(positionRules) => updateCfg({ positionRules })}
 						baseXOffset={merged.xOffset}
 						baseYOffset={merged.yOffset}
+						nested={splitEndpoints}
 					/>
 				)}
 				</div>

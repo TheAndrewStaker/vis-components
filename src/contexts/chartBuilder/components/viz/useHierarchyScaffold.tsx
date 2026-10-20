@@ -409,6 +409,9 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 		 * single out a container by the name it displays. */
 		fillFor: (node: HierarchyLayoutNode): string => {
 			const row = node.data.row
+			// `{Variable}` rules test the node's own row; implicit
+			// containers have none, so those rules skip them.
+			const ruleRows = row ? [row] : undefined
 			const labelValue = labelBackingValue(
 				node,
 				node.data.children.length === 0
@@ -427,7 +430,8 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 					dataLabelsCfg,
 					value ?? undefined,
 					hueColor,
-					labelValue
+					labelValue,
+					ruleRows
 				)
 			}
 			const hueValue = labelHueField && row ? row[labelHueField] : undefined
@@ -436,7 +440,13 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 					? (applyHueScale(labelHueScale, hueValue, labelHueFieldType) ??
 						null)
 					: null
-			return resolveLabelFill(dataLabelsCfg, hueValue, hueColor, labelValue)
+			return resolveLabelFill(
+				dataLabelsCfg,
+				hueValue,
+				hueColor,
+				labelValue,
+				ruleRows
+			)
 		},
 		/** A node's label font size. "Nesting depth" maps the TOP level to
 		 * sizeMax and the deepest to sizeMin — hierarchy labels read big
@@ -640,7 +650,8 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 					row && outlineAes
 						? resolveRuleColor(
 								channelConfigs.shape?.outlineColorRules,
-								rowOutlineValue
+								rowOutlineValue,
+								[row]
 							)
 						: null,
 			}).stroke

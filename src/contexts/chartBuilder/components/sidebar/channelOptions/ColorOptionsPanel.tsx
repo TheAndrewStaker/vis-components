@@ -1615,7 +1615,7 @@ const CustomStopsList = ({
 			<button
 				type="button"
 				onClick={addStop}
-				className="self-start text-sm underline hover:text-stone-900 dark:hover:text-white vc-muted"
+				className="self-end text-sm underline hover:text-stone-900 dark:hover:text-white vc-muted"
 			>
 				+ Add a new step
 			</button>

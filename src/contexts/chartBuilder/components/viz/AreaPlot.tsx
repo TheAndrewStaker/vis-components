@@ -5,6 +5,7 @@ import {
 	aggregateStacks,
 	type GroupEncoding,
 	type Stack,
+	type StackSlice,
 } from "../../lib/aggregators/stacks"
 import {
 	buildPatternDefs,
@@ -1059,6 +1060,11 @@ const buildAreas = ({
 			aestheticScales,
 			channelConfigs,
 			patternOptions,
+			// One polygon spans the layer across every stack: `{Variable}`
+			// outline rules test all of its rows.
+			rows: aggregation.stacks.flatMap((st) =>
+				st.slices.flatMap((sl) => (sl.key === layerKey ? (sl.rows ?? []) : []))
+			),
 		})
 
 		// Compute per-stack tops and the pixel coords for this layer.
@@ -1518,8 +1524,10 @@ export const buildAreaAnchors = ({
 	const stackValues = aggregation.stacks.map((stack) => {
 		const byKey = new Map<string, number>()
 		const byKeyText = new Map<string, unknown>()
+		const byKeyRows = new Map<string, StackSlice["rows"]>()
 		for (const slice of stack.slices) {
 			byKey.set(slice.key, slice.value)
+			byKeyRows.set(slice.key, slice.rows)
 			// A mapped value field is authoritative — a blank slice stays
 			// absent from byKeyText so no label renders, rather than falling
 			// back to the layer's measure.
@@ -1530,7 +1538,7 @@ export const buildAreaAnchors = ({
 				byKeyText.set(slice.key, slice.textValue ?? slice.value)
 			}
 		}
-		return { stack, byKey, byKeyText }
+		return { stack, byKey, byKeyText, byKeyRows }
 	})
 
 	// Walking running cumulative tops per stack — only consulted in `stack`
@@ -1625,6 +1633,7 @@ export const buildAreaAnchors = ({
 			})
 			const { series, rank } = seriesByScope[layerScope]
 			anchors.push({
+				sourceRows: sv.byKeyRows.get(layerKey),
 				cx: aggregation.isVertical ? px : measurePoint,
 				cy: aggregation.isVertical ? measurePoint : px,
 				key: `${sv.stack.category}|${layerKey}`,

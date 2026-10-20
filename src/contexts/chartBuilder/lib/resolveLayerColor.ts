@@ -22,7 +22,7 @@ import {
 } from "./patterns"
 import { OPACITY_SLOT_DEFS } from "./opacitySlots"
 import { applyHueScale, modulateColor, type UnitScale } from "./scales"
-import { resolveRuleColor } from "./textColorRules"
+import { resolveRuleColor, type RuleRows } from "./textColorRules"
 
 /** Subset of `Slice.groupValues` (or equivalent per-row aesthetic map)
  *  that this resolver consumes. Keys are the five "group channels"; the
@@ -68,6 +68,10 @@ export type ResolveLayerColorArgs = {
 	 *  defs pass (`buildPatternDefs`) or marks reference defs that were
 	 *  never emitted. */
 	patternOptions?: PatternDefOptions
+	/** The dataset rows the mark draws (a bar slice's, a wedge's, an area
+	 *  layer's) — what `{Variable}` outline-color rules test, every row
+	 *  alike. Absent → those rules don't fire. */
+	rows?: RuleRows
 }
 
 /** The hue → sat/bri slice of the pipeline for one set of `GroupValues`:
@@ -354,6 +358,7 @@ export const resolveLayerColor = ({
 	aestheticScales,
 	channelConfigs,
 	patternOptions,
+	rows,
 }: ResolveLayerColorArgs): LayerResolved => {
 	const outlineG = aestheticScales.outlineHue?.field ?? null
 	const outlineScale = aestheticScales.outlineHue?.scale ?? null
@@ -407,7 +412,8 @@ export const resolveLayerColor = ({
 		// otherwise.
 		const ruleColor = resolveRuleColor(
 			channelConfigs.shape?.outlineColorRules,
-			groupValues.outlineHue
+			groupValues.outlineHue,
+			rows
 		)
 		if (ruleColor) outline = ruleColor
 	}

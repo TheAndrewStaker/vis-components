@@ -2615,8 +2615,9 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   chart labeled outside the bar ends: base Y nudges positive labels up,
   a `< 0` rule nudges negative labels down. New rules seed with the
   current base offsets (a no-op until edited). In first-and-last mode
-  an endpoint's own explicit X/Y override wins over a matching rule;
-  an unset endpoint offset inherits the rule-applied one.
+  a matching rule wins over the First / Last label's own X/Y (the rule
+  is the exception the user added); a label no rule matches takes its
+  endpoint's X/Y, and an unset endpoint offset inherits the base.
   Rules belong to a LABEL, not to the layer: the link sits inside the
   subsection of the label it rules. With the variables combined that's
   the one arranged label and the rules are layer-wide
@@ -2637,6 +2638,23 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   below the rows, so each click adds another rule, and every row can be
   removed; the condition grammar note appears once a rule does. Same
   shape as the position rules above.
+- **`{Variable}` conditions** (every conditional-rule list: text color,
+  position, and the Shape panel's outline color rules). A condition
+  may open with a variable in braces — `{Region} == West`,
+  `{Profit} < 0` — and then tests THAT variable in the mark's dataset
+  rows instead of the implicit value (the label's backing value, or
+  the outline variable's). Same operators and comparison semantics
+  as the implicit form; a blank cell never passes. A mark built from
+  several rows (a bar slice, an area layer, a pie wedge, a heatmap
+  cell, a flow node) passes only when EVERY one of its rows does, so
+  `{Region} == West` colors a bar only when the whole bar is West
+  rows — the rule never guesses from one row of a mixed bar. A point,
+  map region, or row-backed hierarchy node tests its one row; a mark
+  with no rows (a legend swatch, an implicit hierarchy container)
+  never fires a `{Variable}` rule. Renaming a variable rewrites its
+  `{token}` in every rule. The condition box fills its row and wraps,
+  growing to fit a long rule (Enter is ignored; a condition is one
+  line).
 - **Per-variable colors** (multi-field labels with 2+ variables) — the
   Color panel replaces the single base color stack with one color slot
   per label variable. Each variable's block also carries its own **Text

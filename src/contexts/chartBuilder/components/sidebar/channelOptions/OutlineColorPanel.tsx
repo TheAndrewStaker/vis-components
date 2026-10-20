@@ -30,7 +30,7 @@ import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { ColorInput } from "../../../../../components/ui/ColorInput"
-import { LABEL_COL, LabelSpacer } from "../../../../../components/ui/LabeledField"
+import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
 import {
@@ -38,7 +38,7 @@ import {
 	QuantitativePanel,
 	useQuantFieldExtent,
 } from "./ColorOptionsPanel"
-import { Input } from "../../../../../components/ui/Input"
+import { RuleConditionInput, RuleVariableHelp } from "../RuleConditionInput"
 
 /** Field-mapping state for the `outlineHue` channel, shared by the
  *  standalone dropdown (registry panel) and the combined `OutlineColorRow`
@@ -214,20 +214,15 @@ const OutlineColorRulesRow = ({
 						// Index key is stable here: rules are ordered, identity == position
 						// eslint-disable-next-line react/no-array-index-key
 						key={i}
-						className="flex items-center gap-1.5 text-sm"
+						className="flex items-start gap-1.5 text-sm"
 					>
-						{/* Empty label-column spacer so the condition box + swatch
-						 *  line up with the Fill controls (which sit after a w-24
-						 *  label), matching the gradient/swatch rows above. */}
-						{/* Dropped below 360px: on the 2016 iPhone SE the menu sheet's
-						 *  rows are ~223px, and spacer + condition box + swatch don't fit. */}
-						<LabelSpacer className="hidden min-[360px]:inline" />
-						<Input
-							type="text"
+						{/* The condition box takes the row's full width (no label-column
+						 *  spacer) so a `{Variable} == value` rule fits. */}
+						<RuleConditionInput
 							value={rule.condition}
-							onChange={(e) => setRule(i, { condition: e.target.value })}
+							onChange={(condition) => setRule(i, { condition })}
 							placeholder="> 0"
-							className="w-20"
+							ariaLabel={`Condition for outline rule ${i + 1}`}
 						/>
 						<ColorInput
 							label={`Outline color for rule ${i + 1}`}
@@ -251,7 +246,7 @@ const OutlineColorRulesRow = ({
 				<button
 					type="button"
 					onClick={addRule}
-					className="self-start text-xs text-blue-600 hover:underline dark:text-blue-400"
+					className="self-end text-xs text-blue-600 hover:underline dark:text-blue-400"
 				>
 					+ Add rule
 				</button>
@@ -259,7 +254,8 @@ const OutlineColorRulesRow = ({
 					Tested against the outline variable&apos;s value; first match wins and
 					overrides the palette. <code>{">"}</code>, <code>{"<"}</code>,{" "}
 					<code>{">="}</code>, and <code>{"<="}</code> compare numbers;{" "}
-					<code>==</code> and <code>!=</code> also match text.
+					<code>==</code> and <code>!=</code> also match text.{" "}
+					<RuleVariableHelp />
 				</p>
 			</div>
 		</CollapsibleSubsection>

@@ -255,7 +255,9 @@ export const resolveGeoOutlineColor = (
 ): string => {
 	if (!outlineHue) return baseOutlineColor
 	const rawOutline = row[outlineHue.field.name]
-	const outlineRuleColor = resolveRuleColor(outlineColorRules, rawOutline)
+	const outlineRuleColor = resolveRuleColor(outlineColorRules, rawOutline, [
+		row,
+	])
 	const outlineScaleColor = applyHueScale(
 		outlineHue.scale,
 		rawOutline,

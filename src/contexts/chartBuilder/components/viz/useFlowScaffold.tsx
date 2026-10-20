@@ -22,6 +22,7 @@ import {
 } from "../../lib/dataLabelsStyle"
 import {
 	buildFlowNodeRows,
+	flowNodeSourceRows,
 	effectiveFlowLabelNodes,
 	flowNodeLabeled,
 	flowNodeTotals,
@@ -336,6 +337,7 @@ export const useFlowScaffold = (props: ChartRendererBaseProps = {}) => {
 						geometry,
 					})
 				: new Map<string, Record<string, unknown>>()
+		const nodeSourceRows = flowNodeSourceRows(nodes, drawnEdges)
 		const which = effectiveFlowLabelNodes(dataLabelsCfg.flowLabelNodes, geometry)
 		const autoAlign = (dataLabelsCfg.alignment ?? "center") === "center"
 		const singleText = (name: string, row: Record<string, unknown>) =>
@@ -394,6 +396,7 @@ export const useFlowScaffold = (props: ChartRendererBaseProps = {}) => {
 		): DataLabelAnchor | null => {
 			if (!selected(name)) return null
 			const row = nodeRows.get(name) ?? {}
+			const sourceRows = nodeSourceRows.get(name)
 			const labelValue = labelValueField ? row[labelValueField] : name
 			const label = singleText(name, row)
 			const hueValue = labelHueField ? row[labelHueField] : undefined
@@ -412,9 +415,16 @@ export const useFlowScaffold = (props: ChartRendererBaseProps = {}) => {
 				// Endpoint-colored labels resolve here (node-union scale); the
 				// rest leave fill to the layer.
 				fill: labelHueOnNodes
-					? resolveLabelFill(dataLabelsCfg, hueValue, hueColor, labelValue)
+					? resolveLabelFill(
+							dataLabelsCfg,
+							hueValue,
+							hueColor,
+							labelValue,
+							sourceRows
+						)
 					: undefined,
 				row: labelMulti ? row : undefined,
+				sourceRows,
 				// Automatic alignment reads away from the node; a left / right
 				// pick is the user's and applies as-is.
 				hAlign: autoAlign ? at.side : undefined,

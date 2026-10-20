@@ -65,7 +65,11 @@ import {
 	type HueScale,
 	type PositionScale,
 } from "../../lib/scales"
-import { firstMatchingRule, resolveRuleColor } from "../../lib/textColorRules"
+import {
+	firstMatchingRule,
+	resolveRuleColor,
+	type RuleRows,
+} from "../../lib/textColorRules"
 import {
 	emptyDataLabelsEncodings,
 	type DataLabelsEncodings,
@@ -146,6 +150,11 @@ export type DataLabelAnchor = {
 	 * `label`; without it the anchor stays pre-formatted. Bars set it; area
 	 * / pie / tile anchors don't yet. */
 	row?: Record<string, unknown>
+	/** The dataset rows behind the anchor's mark (a bar slice's, an area
+	 * layer cell's, a wedge's, a map shape's) — what `{Variable}` position /
+	 * text-color rules test, passing only when every row does. Absent → such
+	 * rules don't fire on this anchor. */
+	sourceRows?: readonly Record<string, unknown>[]
 	/** Which edge of the label block sits on `cy`. Renderers that place
 	 * labels against a mark edge set it so a tall (wrapped) label stays on
 	 * the intended side: an area's "inside, near end" anchors the TOP of the
@@ -285,6 +294,9 @@ type EndpointAwareBox = LabelBox & {
 	anchorX: number
 	anchorY: number
 	alignment?: "left" | "center" | "right"
+	/** A position rule matched this label and set its offsets — they win
+	 *  over the first / last label's own X / Y. */
+	ruleOffset?: boolean
 }
 
 /** Apply the label selection: expand each anchor box into one label per
@@ -318,16 +330,19 @@ const expandLabelPopulations = <T extends EndpointAwareBox>(
 				continue
 			}
 			const ov = populationOverrides(cfg, sel, pop)
-			// An unset endpoint offset inherits the box's EFFECTIVE offset (its
-			// already-applied cx/cy), not `cfg.xOffset` — a matching position rule
-			// may have replaced the base offset for this label, and inheriting must
-			// not clobber that. The key gains a population suffix so an anchor's
-			// several labels reconcile independently.
+			// A matching position rule wins over the endpoint's own X / Y: the
+			// rule is the exception the user added, so `{sex} == Male` moves the
+			// Male end labels even when First / Last label carry offsets. Without
+			// a rule, an unset endpoint offset inherits the box's EFFECTIVE
+			// offset (its already-applied cx/cy). The key gains a population
+			// suffix so an anchor's several labels reconcile independently.
+			const keepX = b.ruleOffset || ov.xOffset == null
+			const keepY = b.ruleOffset || ov.yOffset == null
 			let next: T = {
 				...b,
 				key: `${b.key}:${pop}`,
-				cx: ov.xOffset != null ? b.anchorX + ov.xOffset : b.cx,
-				cy: ov.yOffset != null ? b.anchorY + ov.yOffset : b.cy,
+				cx: keepX ? b.cx : b.anchorX + (ov.xOffset ?? 0),
+				cy: keepY ? b.cy : b.anchorY + (ov.yOffset ?? 0),
 				alignment: ov.alignment ?? b.alignment,
 			}
 			if (recompose) {
@@ -904,14 +919,17 @@ export const DataLabelsLayer = ({
 		/** A piece's variable — its rules compare against THAT value. Omitted
 		 *  for a whole label, whose rules read its key (the default `{A}`
 		 *  label) or its first variable. */
-		pieceField?: string
+		pieceField?: string,
+		/** The mark's dataset rows, for `{Variable}` rules. */
+		ruleRows?: RuleRows
 	): string => {
 		if (!key) return baseFill
 		const ruleField =
 			pieceField ?? (key in row ? key : firstFieldOfLabel.get(key))
 		const ruleColor = resolveRuleColor(
 			labelEntry(cfg, "fieldColorRules", key),
-			ruleField === undefined ? undefined : row[ruleField]
+			ruleField === undefined ? undefined : row[ruleField],
+			ruleRows
 		)
 		if (ruleColor) return ruleColor
 		const slotCfg = labelEntry(cfg, "fieldColors", key)
@@ -939,7 +957,9 @@ export const DataLabelsLayer = ({
 		/** The composed label's id (multi-field): its own Color / Size / Text
 		 *  properties / Text background entries style the whole label —
 		 *  every piece alike. */
-		ownKey: string | null = null
+		ownKey: string | null = null,
+		/** The mark's dataset rows, for `{Variable}` text-color rules. */
+		ruleRows?: RuleRows
 	): { label: string; segments?: LabelPiece[]; fontSize: number } | null => {
 		const segs = buildLabelSegments(
 			row,
@@ -949,7 +969,7 @@ export const DataLabelsLayer = ({
 		)
 		if (!segs) return null
 		const label = segs.map((s) => s.text).join("")
-		const ownFill = resolveSegmentFill(ownKey, row, baseFill)
+		const ownFill = resolveSegmentFill(ownKey, row, baseFill, undefined, ruleRows)
 		const ownSize = resolveFieldSizePx(cfg, ownKey, baseFontSize)
 		const ownFont = resolveFieldFont(cfg, ownKey)
 		const ownBg = resolveFieldBackground(cfg, ownKey, vizBackground)
@@ -970,7 +990,7 @@ export const DataLabelsLayer = ({
 				field: s.field,
 				fill:
 					splitColor && pk && s.field
-						? resolveSegmentFill(pk, row, ownFill, s.field)
+						? resolveSegmentFill(pk, row, ownFill, s.field, ruleRows)
 						: ownFill,
 				fontSize: splitSize ? resolveFieldSizePx(cfg, pk, ownSize) : ownSize,
 				font: splitText ? resolveFieldFontOver(cfg, pk, ownFont) : ownFont,
@@ -1042,13 +1062,15 @@ export const DataLabelsLayer = ({
 	const ownPositionRule = (
 		own: string | null,
 		row: Record<string, unknown> | undefined,
-		labelValue: unknown
+		labelValue: unknown,
+		ruleRows: RuleRows
 	) =>
 		own === null
-			? firstMatchingRule(cfg.positionRules, labelValue)
+			? firstMatchingRule(cfg.positionRules, labelValue, ruleRows)
 			: firstMatchingRule(
 					cfg.fieldPositionRules?.[own],
-					!comboIds.has(own) && row && own in row ? row[own] : labelValue
+					!comboIds.has(own) && row && own in row ? row[own] : labelValue,
+					ruleRows
 				)
 	const noOverridesCfg: DataLabelsConfig = { ...cfg, firstLabel: {}, lastLabel: {} }
 	const ownTemplate = (
@@ -1076,6 +1098,9 @@ export const DataLabelsLayer = ({
 		 *  the row path, the slice's synthetic row on bar anchors. Absent for
 		 *  pre-formatted anchors, which keep their text through the pass. */
 		row?: Record<string, unknown>
+		/** The mark's dataset rows (`DataLabelAnchor.sourceRows`; the one row
+		 *  on the row path), so a re-compose keeps `{Variable}` rules. */
+		ruleRows?: RuleRows
 		/** See `DataLabelAnchor.vAlign`; row-based boxes never carry one. */
 		vAlign?: LabelVAlign
 		/** See `DataLabelAnchor.hAlign`; re-applied after the series-end
@@ -1105,7 +1130,8 @@ export const DataLabelsLayer = ({
 			template,
 			box.fill,
 			box.baseFontSize,
-			box.ownField ?? null
+			box.ownField ?? null,
+			box.ruleRows
 		)
 		if (!composed) return null
 		return wrapBoxForLayout({
@@ -1233,7 +1259,8 @@ export const DataLabelsLayer = ({
 			// A pre-resolved fill / size (layout renderers) wins over the
 			// layer's own lookup.
 			const fill =
-				a.fill ?? resolveLabelFill(cfg, a.hueValue, hueColor, a.labelValue)
+				a.fill ??
+				resolveLabelFill(cfg, a.hueValue, hueColor, a.labelValue, a.sourceRows)
 			const fontSize =
 				a.fontSize ??
 				(sizeField
@@ -1245,13 +1272,13 @@ export const DataLabelsLayer = ({
 			const template = composes ? ownTemplate(own, "all") : null
 			const composed =
 				composes && a.row && template !== null
-					? composeLabel(a.row, template, fill, fontSize, own)
+					? composeLabel(a.row, template, fill, fontSize, own, a.sourceRows)
 					: null
 			const label = composes ? (composed?.label ?? "") : (a.label ?? "")
 			// A matching position rule REPLACES the base offsets for this label
 			// (same first-match-wins walk as the text-color rules, against this
 			// label's own backing value).
-			const posRule = ownPositionRule(own, a.row, a.labelValue)
+			const posRule = ownPositionRule(own, a.row, a.labelValue, a.sourceRows)
 			const off = ownOffset(own)
 			// A separate variable with its own bar placement sits on ITS
 			// resolved point (and hangs per its own side); otherwise the
@@ -1262,6 +1289,7 @@ export const DataLabelsLayer = ({
 				{
 					cx: place.cx + (posRule?.xOffset ?? off.x),
 					cy: place.cy + (posRule?.yOffset ?? off.y),
+					ruleOffset: posRule !== null,
 					anchorX: place.cx,
 					anchorY: place.cy,
 					text: label,
@@ -1285,6 +1313,7 @@ export const DataLabelsLayer = ({
 					label,
 					segments: composed?.segments,
 					row: composes ? a.row : undefined,
+					ruleRows: a.sourceRows,
 					opacityMul: a.opacityMul,
 					vAlign: place.vAlign,
 					hAlign: place.hAlign,
@@ -1411,6 +1440,8 @@ export const DataLabelsLayer = ({
 			? (encodings.value.fields?.[0] ?? null)
 			: (valueField ?? xField ?? yField)
 		const labelValue = primaryField ? row[primaryField] : undefined
+		// One label per row: `{Variable}` rules test this row alone.
+		const ruleRows = [row]
 		const hueColor =
 			hueScale && hueField
 				? (applyHueScale(hueScale, row[hueField], hueFieldType) ?? null)
@@ -1419,7 +1450,8 @@ export const DataLabelsLayer = ({
 			cfg,
 			hueField ? row[hueField] : undefined,
 			hueColor,
-			labelValue
+			labelValue,
+			ruleRows
 		)
 		const fontSize = sizeField
 			? resolveLabelSize(row[sizeField], cfg, sizeValues)
@@ -1432,14 +1464,16 @@ export const DataLabelsLayer = ({
 		// Position rules evaluate against the same backing value the text-color
 		// rules use; a match replaces the base offsets for this label. Resolved
 		// per label key, so a separate variable's own rules see ITS value.
-		const posRule = ownPositionRule(own, row, labelValue)
+		const posRule = ownPositionRule(own, row, labelValue, ruleRows)
 		// Text: single-field formats one field's value (nothing to show →
 		// no box); multi-field composes the all-labels arrangement (or this
 		// one standalone variable / combination), keeping an empty box so a
 		// series-end population can still label the point.
 		const template = ownTemplate(own, "all")
 		const composed =
-			template !== null ? composeLabel(row, template, fill, fontSize, own) : null
+			template !== null
+				? composeLabel(row, template, fill, fontSize, own, ruleRows)
+				: null
 		if (!composed && !multi) return []
 		const label = composed?.label ?? ""
 		const off = ownOffset(own)
@@ -1447,6 +1481,7 @@ export const DataLabelsLayer = ({
 			{
 				cx: anchorX + (posRule?.xOffset ?? off.x),
 				cy: anchorY + (posRule?.yOffset ?? off.y),
+				ruleOffset: posRule !== null,
 				anchorX,
 				anchorY,
 				text: label,
@@ -1462,6 +1497,7 @@ export const DataLabelsLayer = ({
 				label,
 				segments: composed?.segments,
 				row,
+				ruleRows,
 				// `rowHighlight` guards on the hovered field being a column of
 				// the row, so an unrelated legend hover leaves labels alone.
 				opacityMul: rowHighlight(legendHighlight, row).opacityMul,

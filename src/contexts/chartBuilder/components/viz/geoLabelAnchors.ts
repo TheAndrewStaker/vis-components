@@ -99,6 +99,9 @@ export const buildGeoLabelAnchors = ({
 			// labels have no single backing value.
 			labelValue: value.field ? row[value.field] : undefined,
 			opacityMul: rowOpacity?.(row),
+			// The region draws from its representative row, so `{Variable}`
+			// rules test that row.
+			sourceRows: [row],
 		})
 	}
 	return anchors

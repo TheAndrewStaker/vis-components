@@ -18,10 +18,32 @@ describe("aggregateStacks (primary export)", () => {
 		})
 		if ("error" in result) throw new Error("unexpected error: " + result.error)
 		expect(result.categories).toEqual(["N", "S"])
-		expect(result.stacks).toEqual([
+		expect(result.stacks).toMatchObject([
 			{ category: "N", slices: [{ key: "", groupValues: {}, value: 15 }] },
 			{ category: "S", slices: [{ key: "", groupValues: {}, value: 3 }] },
 		])
+	})
+
+	it("carries each slice's aggregated rows (finite contributions only)", () => {
+		const rows = [
+			{ region: "N", sales: "10", tier: "A" },
+			{ region: "N", sales: "n/a", tier: "B" },
+			{ region: "N", sales: "5", tier: "B" },
+		]
+		const result = aggregateStacks({
+			rows,
+			categoryField: "region",
+			lengthField: "sales",
+			categoryType: "categorical",
+			lengthType: "quantitative",
+			groups: [{ channel: "hue", field: "tier", type: "categorical" }],
+		})
+		if ("error" in result) throw new Error("unexpected error: " + result.error)
+		const [a, b] = result.stacks[0].slices
+		expect(a.rows).toEqual([rows[0]])
+		// A non-numeric length cell contributes NaN and is skipped, so it
+		// isn't one of the slice's rows either.
+		expect(b.rows).toEqual([rows[2]])
 	})
 
 	it("returns an error when length is categorical and no group encoding references the length field", () => {
@@ -444,7 +466,7 @@ describe("aggregateStacks counting, summing, and row skipping", () => {
 		})
 		if ("error" in result) throw new Error("unexpected error: " + result.error)
 		expect(result.categories).toEqual(["N", "S"])
-		expect(result.stacks).toEqual([
+		expect(result.stacks).toMatchObject([
 			{ category: "N", slices: [{ key: "", groupValues: {}, value: 3 }] },
 			{ category: "S", slices: [{ key: "", groupValues: {}, value: 2 }] },
 		])
@@ -460,7 +482,7 @@ describe("aggregateStacks counting, summing, and row skipping", () => {
 			groups: [],
 		})
 		if ("error" in result) throw new Error("unexpected error: " + result.error)
-		expect(result.stacks).toEqual([
+		expect(result.stacks).toMatchObject([
 			{ category: "N", slices: [{ key: "", groupValues: {}, value: 37 }] },
 			{ category: "S", slices: [{ key: "", groupValues: {}, value: 20 }] },
 		])

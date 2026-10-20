@@ -171,8 +171,8 @@ describe("DataLabelsPanel — position rules live with each label", () => {
 		})
 		expect(cfg.positionRules ?? []).toHaveLength(0)
 		// Editing the condition keeps it on that variable.
-		const box = container.querySelector<HTMLInputElement>(
-			'input[aria-label="Condition for g position rule 1"]'
+		const box = container.querySelector<HTMLTextAreaElement>(
+			'textarea[aria-label="Condition for g position rule 1"]'
 		)
 		expect(box).not.toBeNull()
 		fireEvent.change(box!, { target: { value: "< 0" } })

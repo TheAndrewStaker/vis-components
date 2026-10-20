@@ -35,12 +35,27 @@ const unquote = (s: string): string => {
  *  either a numeric comparison or a categorical string match. Returns `null`
  *  when the input doesn't match — unparseable rules just don't fire.
  *
- *  Examples: `">0"` → {op:">", num:0}, `=="A"` → {op:"==", num:null, text:"A"}. */
+ *  A condition may open with a `{Variable}` token (`{Region} == West`,
+ *  `{Profit} < 0`) — the same single-brace field reference as the label
+ *  templates and derived variables — and then tests THAT variable's value in
+ *  the mark's rows instead of the implicit labeled / outline value. `field`
+ *  is the referenced name, absent for the implicit form.
+ *
+ *  Examples: `">0"` → {op:">", num:0}, `=="A"` → {op:"==", num:null, text:"A"},
+ *  `"{Region} == West"` → {field:"Region", op:"==", num:null, text:"West"}. */
 export const parseRule = (
 	condition: string
-): { op: Op; num: number | null; text: string } | null => {
-	const trimmed = condition.trim()
+): { field?: string; op: Op; num: number | null; text: string } | null => {
+	let trimmed = condition.trim()
 	if (trimmed === "") return null
+	let field: string | undefined
+	if (trimmed.startsWith("{")) {
+		const end = trimmed.indexOf("}")
+		if (end === -1) return null
+		field = trimmed.slice(1, end)
+		if (field.trim() === "") return null
+		trimmed = trimmed.slice(end + 1).trim()
+	}
 	const m = matchOp(trimmed)
 	if (!m) return null
 	const rest = m.rest.trim()
@@ -48,22 +63,18 @@ export const parseRule = (
 	if (rest === "") return null
 	const text = unquote(rest)
 	const num = Number(text)
-	return { op: m.op, num: Number.isFinite(num) ? num : null, text }
+	const parsed = { op: m.op, num: Number.isFinite(num) ? num : null, text }
+	return field === undefined ? parsed : { field, ...parsed }
 }
 
-/** Walk `rules` top-to-bottom; first one whose comparison passes for `value`
- *  wins. Ordering operators (`>`, `<`, `>=`, `<=`) are numeric-only. Equality
- *  operators (`==`, `!=`) compare numerically when both sides are numbers, and
- *  otherwise fall back to a categorical string match — so a rule like `=="A"`
- *  fires for a categorical value `A`. Returns `null` for nullish / empty values
- *  (e.g. heatmap blank cells) so they never trigger a rule. Generic over the
- *  rule's payload — text-color rules carry a color, position rules carry X/Y
- *  offsets — so every conditional-rule feature matches identically. */
-export const firstMatchingRule = <T extends { condition: string }>(
-	rules: readonly T[] | undefined,
-	value: unknown
-): T | null => {
-	if (!rules || rules.length === 0) return null
+type ParsedRule = NonNullable<ReturnType<typeof parseRule>>
+
+/** One value against one parsed comparison. Ordering operators (`>`, `<`,
+ *  `>=`, `<=`) are numeric-only. Equality operators (`==`, `!=`) compare
+ *  numerically when both sides are numbers, and otherwise fall back to a
+ *  categorical string match — so `=="A"` fires for a categorical value `A`.
+ *  Nullish / empty values (e.g. heatmap blank cells) never pass, even `!=`. */
+const valuePasses = (value: unknown, rule: ParsedRule): boolean => {
 	let text: string
 	let num: number | null
 	if (typeof value === "number") {
@@ -74,29 +85,55 @@ export const firstMatchingRule = <T extends { condition: string }>(
 		const parsed = Number(text)
 		num = Number.isFinite(parsed) ? parsed : null
 	} else {
-		return null
+		return false
 	}
+	const { op } = rule
+	if (op === "==" || op === "!=") {
+		// Numeric equality when both sides read as numbers; else string match.
+		const equal =
+			num !== null && rule.num !== null ? num === rule.num : text === rule.text
+		return op === "==" ? equal : !equal
+	}
+	// Ordering comparisons are numeric-only.
+	if (num === null || rule.num === null) return false
+	return op === ">"
+		? num > rule.num
+		: op === "<"
+			? num < rule.num
+			: op === ">="
+				? num >= rule.num
+				: num <= rule.num
+}
+
+/** The dataset rows behind one mark, for `{Variable}` rules: one row for a
+ *  point / map shape / unaggregated label, every aggregated row for a bar
+ *  slice, an area layer, a pie wedge. `undefined` / empty = the caller has no
+ *  rows (a legend swatch), so `{Variable}` rules never fire there. */
+export type RuleRows = readonly Record<string, unknown>[] | undefined
+
+/** Walk `rules` top-to-bottom; first one whose comparison passes wins. An
+ *  implicit rule (`> 0`) compares against `value`; a `{Variable}` rule
+ *  compares against that variable in `rows` and passes only when EVERY row
+ *  does — so `{Region} == West` colors a bar only when the whole bar is West
+ *  rows, never by guessing from one of them. Generic over the rule's payload
+ *  — text-color rules carry a color, position rules carry X/Y offsets — so
+ *  every conditional-rule feature matches identically. */
+export const firstMatchingRule = <T extends { condition: string }>(
+	rules: readonly T[] | undefined,
+	value: unknown,
+	rows?: RuleRows
+): T | null => {
+	if (!rules || rules.length === 0) return null
 	for (const rule of rules) {
 		const parsed = parseRule(rule.condition)
 		if (!parsed) continue
-		const { op } = parsed
-		let passes = false
-		if (op === "==" || op === "!=") {
-			// Numeric equality when both sides read as numbers; else string match.
-			const equal =
-				num !== null && parsed.num !== null ? num === parsed.num : text === parsed.text
-			passes = op === "==" ? equal : !equal
-		} else if (num !== null && parsed.num !== null) {
-			// Ordering comparisons are numeric-only.
-			passes =
-				op === ">"
-					? num > parsed.num
-					: op === "<"
-						? num < parsed.num
-						: op === ">="
-							? num >= parsed.num
-							: num <= parsed.num
-		}
+		const { field } = parsed
+		const passes =
+			field === undefined
+				? valuePasses(value, parsed)
+				: rows !== undefined &&
+					rows.length > 0 &&
+					rows.every((r) => valuePasses(r[field], parsed))
 		if (passes) return rule
 	}
 	return null
@@ -106,5 +143,6 @@ export const firstMatchingRule = <T extends { condition: string }>(
  *  text-color-specific face of `firstMatchingRule`. */
 export const resolveRuleColor = (
 	rules: readonly TextColorRule[] | undefined,
-	value: unknown
-): string | null => firstMatchingRule(rules, value)?.color ?? null
+	value: unknown,
+	rows?: RuleRows
+): string | null => firstMatchingRule(rules, value, rows)?.color ?? null
