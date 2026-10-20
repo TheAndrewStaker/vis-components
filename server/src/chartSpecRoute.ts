@@ -54,6 +54,8 @@ import {
 } from "../../src/contexts/chartBuilder/lib/visualSpec/composeVisual"
 import type { ServerConfig } from "./config.js"
 import {
+	deleteDatasetFile,
+	deleteDatasetVersionFile,
 	isSafeId,
 	readDatasetFile,
 	readDatasetVersionFile,
@@ -158,9 +160,13 @@ const defaultThemeId = (db: DatabaseSync): string | null => {
 	return typeof setting?.themeId === "string" ? setting.themeId : null
 }
 
-const assertStampsCurrent = (db: DatabaseSync): void => {
+const assertStampsCurrent = (
+	db: DatabaseSync,
+	only?: keyof typeof READ_VERSIONS
+): void => {
 	const stamps = listContentVersions(db)
 	for (const [collection, version] of Object.entries(READ_VERSIONS)) {
+		if (only && collection !== only) continue
 		const stored = stamps[collection]
 		if (stored === undefined || stored === version) continue
 		throw new HttpError(
@@ -540,17 +546,24 @@ export const createDatasetFromRows = async (
 	}
 	const body = gzipSync(bodyJson)
 	const versionBody = gzipSync(JSON.stringify({ id: version.id, rows: text }))
+	assertStampsCurrent(db, "datasets")
 	await writeDatasetFile(config.dataDir, dataset.id, body)
 	await writeDatasetVersionFile(config.dataDir, dataset.id, version.id, versionBody)
-	assertStampsCurrent(db)
-	db.exec("BEGIN")
 	try {
-		upsertDatasetRow(db, dataset.id, body.length)
-		upsertDatasetVersionRow(db, dataset.id, version.id, versionBody.length)
-		upsertDatasetMeta(db, dataset.id, JSON.stringify(datasetMetaFrom(dataset)))
-		db.exec("COMMIT")
+		assertStampsCurrent(db, "datasets")
+		db.exec("BEGIN")
+		try {
+			upsertDatasetRow(db, dataset.id, body.length)
+			upsertDatasetVersionRow(db, dataset.id, version.id, versionBody.length)
+			upsertDatasetMeta(db, dataset.id, JSON.stringify(datasetMetaFrom(dataset)))
+			db.exec("COMMIT")
+		} catch (error) {
+			db.exec("ROLLBACK")
+			throw error
+		}
 	} catch (error) {
-		db.exec("ROLLBACK")
+		await deleteDatasetFile(config.dataDir, dataset.id)
+		await deleteDatasetVersionFile(config.dataDir, dataset.id, version.id)
 		throw error
 	}
 	return sendJson(
