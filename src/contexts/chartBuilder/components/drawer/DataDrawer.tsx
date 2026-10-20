@@ -175,16 +175,25 @@ export const DataDrawer = () => {
 							{dropError}
 						</span>
 					)}
-					<span className="hidden text-sm text-stone-500 sm:inline dark:text-stone-500">
-						Drop a CSV to upload, or
-					</span>
-					<button
-						type="button"
-						onClick={() => setPaste({ open: true, text: "" })}
-						className="text-sm transition-colors hover:text-stone-900 pointer-coarse:px-2 pointer-coarse:py-1.5 dark:hover:text-white vc-muted"
-					>
-						Paste data
-					</button>
+					{/* The how-to-get-data-in prompt is for an EMPTY tray. Once a
+					 *  data set is loaded the user has done it already, and the
+					 *  strip is better spent on Reshape / Collapse; dropping a file
+					 *  or pressing Cmd/Ctrl+V still works, the invitation is just
+					 *  no longer spelled out. */}
+					{!dataset && (
+						<>
+							<span className="hidden text-sm text-stone-500 sm:inline dark:text-stone-500">
+								Drop a CSV to upload, or
+							</span>
+							<button
+								type="button"
+								onClick={() => setPaste({ open: true, text: "" })}
+								className="text-sm transition-colors hover:text-stone-900 pointer-coarse:px-2 pointer-coarse:py-1.5 dark:hover:text-white vc-muted"
+							>
+								Paste data
+							</button>
+						</>
+					)}
 					{dataset && (
 						<button
 							type="button"

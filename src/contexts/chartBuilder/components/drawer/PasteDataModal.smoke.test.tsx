@@ -179,3 +179,34 @@ describe("Paste data into the tray", () => {
 		expect(screen.queryByRole("dialog")).toBeNull()
 	})
 })
+
+describe("Tray header prompt", () => {
+	it("hides the drop / paste invitation once a data set is loaded", () => {
+		mount((s) => {
+			s.set(currentDatasetIdAtom, "ds-1")
+			s.set(loadedDatasetsAtom, {
+				"ds-1": {
+					id: "ds-1",
+					name: "Andes sales",
+					fields: [{ name: "city", inferredType: "categorical" }],
+					versions: [
+						{
+							id: "v1",
+							filename: "andes.csv",
+							rows: [{ city: "Lima" }],
+							createdAt: 0,
+						},
+					],
+					latestVersionId: "v1",
+					createdAt: 0,
+				},
+			})
+		})
+		expect(screen.queryByText("Paste data")).toBeNull()
+		expect(screen.queryByText(/Drop a CSV to upload/)).toBeNull()
+		// The empty tray still invites.
+		cleanup()
+		mount()
+		expect(screen.getByText("Paste data")).toBeTruthy()
+	})
+})

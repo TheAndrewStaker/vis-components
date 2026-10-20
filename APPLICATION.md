@@ -47,6 +47,11 @@ into the data tray. The tray header's "Paste data" button opens a
 dialog with a text box; so does pressing Cmd/Ctrl+V anywhere on the
 page that isn't a text field, when the clipboard holds tabular text
 (a tab or a second line), with the clipboard text already in the box.
+The header's "Drop a CSV to upload, or Paste data" invitation shows
+only while NO data set is loaded: once there is data in the tray the
+user has plainly found their way in, and the strip keeps just Reshape
+and Collapse/Expand. Dropping a file onto the tray and the Cmd/Ctrl+V
+paste keep working regardless.
 The delimiter is auto-detected — a spreadsheet selection arrives
 tab-separated, a CSV's contents comma-separated, a single column has
 no delimiter at all — and the first row is the header, as with a
