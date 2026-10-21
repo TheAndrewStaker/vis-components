@@ -115,13 +115,6 @@ export const LabelColorPanel = ({
 		<div className="flex flex-col gap-2">
 			{!perVariableColor && (
 				<>
-						{!hueFieldMapped && (
-							<p className="vc-help">
-								Map a field to <strong>Color</strong> above to drive label colors
-								by that field&apos;s values. The fallback color below is used
-								until then.
-							</p>
-						)}
 						{hueFieldMapped && !isQuantitative && (
 							<>
 								<CategoricalPaletteRow cfg={cfg} onChange={onChange} theme={theme} />
@@ -514,12 +507,6 @@ const CategoricalPaletteRow = ({
 					))}
 				</Select>
 			</label>
-			<p className="vc-help">
-				<em>Match chart colors</em> inherits the chart&apos;s palette so labels
-				match their marks. <em>None (single color)</em> paints every label
-				with the color below. Either way, the swatches under the dropdown
-				override individual categories.
-			</p>
 		</>
 	)
 }

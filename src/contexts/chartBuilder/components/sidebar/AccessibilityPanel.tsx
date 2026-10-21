@@ -68,10 +68,6 @@ export const AccessibilityPanel = () => {
 					onClick={() => setCfg({ description: null })}
 				/>
 			)}
-			<p className="vc-help">
-				The Accessibility check (header button) reviews contrast, color-only
-				encodings and text size.
-			</p>
 		</div>
 	)
 }

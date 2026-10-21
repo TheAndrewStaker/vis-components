@@ -240,8 +240,7 @@ export const ColorSlotControls = ({
 	defaultColor: string
 	acceptsFieldMapping?: boolean
 	inheritLabel?: string
-	/** Help prose shown while inheriting; defaults to the data-label wording
-	 *  ("Follows the Color mapping above."). */
+	/** Help prose shown while inheriting; nothing is shown when omitted. */
 	inheritHelp?: React.ReactNode
 	clearSlot?: () => void
 	/** Which theme palette the single-color swatch's picker leads with.
@@ -335,13 +334,7 @@ export const ColorSlotControls = ({
 				/>
 			) : null}
 			{inheriting && acceptsFieldMapping ? (
-				<p className="vc-help">
-					{inheritHelp ?? (
-						<>
-							Follows the <strong>Color</strong> mapping above.
-						</>
-					)}
-				</p>
+				inheritHelp ? <p className="vc-help">{inheritHelp}</p> : null
 			) : field === null || !acceptsFieldMapping ? (
 				<div className="flex flex-wrap items-center gap-2">
 					<ColorInput

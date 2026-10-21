@@ -88,8 +88,6 @@ describe("R panel — Tick Labels 'Adjust position' nudge", () => {
 		expect(q.getByText("Adjust position")).toBeTruthy()
 		expect(q.getByLabelText("X")).toBeTruthy()
 		expect(q.getByLabelText("Y")).toBeTruthy()
-		// Radar-specific helper: rings + spokes, not spine / tick marks.
-		expect(q.getByText(/rings and spokes stay put/)).toBeTruthy()
 	})
 
 	it("stores offsetX as typed and offsetY sign-flipped (UI positive = up → screen negative)", async () => {

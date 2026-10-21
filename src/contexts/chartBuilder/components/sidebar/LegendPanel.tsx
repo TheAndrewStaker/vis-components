@@ -900,8 +900,7 @@ export const LegendPanel = () => {
 							/>
 							<p className="vc-help">
 								When more than one encoding maps to the same field, show one
-								merged legend (a combined swatch and title) instead of a
-								separate legend for each.
+								combined legend.
 							</p>
 						</div>
 					)}
@@ -1000,12 +999,6 @@ export const LegendPanel = () => {
 								<ResetLink onClick={() => update({ width: null })} />
 							)}
 						</div>
-						<p className="vc-help">
-							Fixes the legend box at this width in every position; leave
-							blank to size it to its content. Labels that no longer fit
-							wrap onto extra lines. Inches and cm convert at the standard
-							96 px/inch.
-						</p>
 					</div>
 
 					{/* Legend height group — a fixed box height; the gap between
@@ -1040,11 +1033,6 @@ export const LegendPanel = () => {
 								<ResetLink onClick={() => update({ height: null })} />
 							)}
 						</div>
-						<p className="vc-help">
-							Fixes the legend box at this height. Stacked entries move
-							closer together or further apart to fill it; leave blank for
-							the default spacing.
-						</p>
 					</div>
 
 					<div className="vc-divider-group">
@@ -1054,10 +1042,6 @@ export const LegendPanel = () => {
 							options={ORIENTATION_OPTIONS}
 							onChange={(orientation) => update({ orientation })}
 						/>
-						<p className="vc-help">
-							How entries flow within each legend. Use Legend columns below
-							to arrange the legends themselves.
-						</p>
 					</div>
 
 					<div className="vc-divider-group">
@@ -1081,12 +1065,6 @@ export const LegendPanel = () => {
 								/>
 							)}
 						</div>
-						<p className="vc-help">
-							How the legends are arranged: 1 stacks them in a single
-							column, higher values split them into that many side-by-side
-							columns. With one legend mapped, its entries wrap across the
-							columns instead.
-						</p>
 						{(merged.columns ?? 1) > 1 && (
 							<div className="flex items-center gap-2">
 								<NumberInput
@@ -1241,13 +1219,6 @@ export const LegendPanel = () => {
 						baseSize={inheritedTextFont.size}
 						baseWeight={inheritedTextFont.weight}
 					/>
-					<p className="vc-help">
-						Styles the labels beside each legend swatch; blank fields
-						follow the theme&apos;s legend text. Align positions each
-						label within the entry column — as wide as the longest
-						label, or the fixed Legend width above — so left keeps
-						them against their swatches.
-					</p>
 				</CollapsibleSubsection>
 			)}
 
@@ -1811,11 +1782,6 @@ export const LegendPanel = () => {
 							suffix="px"
 						/>
 					)}
-					<p className="vc-help">
-						Default fill / stroke for shape swatches in the legend. Per-shape
-						overrides set in Shape (including
-						<code> none</code> for outline-only) win when present.
-					</p>
 					</div>
 				</CollapsibleSubsection>
 			)}

@@ -124,7 +124,6 @@ describe("DataLabelsPanel — flow diagrams", () => {
 		expect(y).not.toBeNull()
 		expect(x?.disabled).toBe(true)
 		expect(y?.disabled).toBe(true)
-		expect(c.textContent).toContain("Labels sit beside each node")
 		// Value / Color / Size stay live.
 		expect(selectFor(c, "Value")?.disabled).toBe(false)
 		expect(selectFor(c, "Color")?.disabled).toBe(false)

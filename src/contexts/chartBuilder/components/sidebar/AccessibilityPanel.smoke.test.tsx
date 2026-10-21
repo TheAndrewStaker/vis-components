@@ -46,7 +46,6 @@ describe("AccessibilityPanel", () => {
 		expect(utils.box().value).toBe("Sales by region. 2024.")
 		expect(utils.queryByRole("button", { name: "Reset to title" })).toBeNull()
 		expect(utils.getByText(/Read aloud by screen readers/)).toBeTruthy()
-		expect(utils.getByText(/Accessibility check \(header button\)/)).toBeTruthy()
 	})
 
 	it("follows title edits live while not overridden", () => {

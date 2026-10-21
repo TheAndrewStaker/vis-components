@@ -1444,9 +1444,6 @@ export const QuantitativePanel = ({
 						onValue={(v) => updateQ({ lowValue: v })}
 						trailing={stopResetLink("low", cfg.lowColor, cfg.lowValue)}
 					/>
-					<div className="vc-help">
-						Grey values follow the data — type to override.
-					</div>
 				</>
 			)}
 
@@ -1490,9 +1487,6 @@ export const QuantitativePanel = ({
 						onValue={(v) => updateQ({ lowValue: v })}
 						trailing={stopResetLink("low", cfg.lowColor, cfg.lowValue)}
 					/>
-					<div className="vc-help">
-						Grey values follow the data — type to override.
-					</div>
 				</>
 			)}
 

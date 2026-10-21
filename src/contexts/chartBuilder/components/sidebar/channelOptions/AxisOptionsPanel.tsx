@@ -706,7 +706,6 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 					}
 				/>
 				<AxisAdjustPositionControl
-					radial={channel === "r"}
 					offsetX={effOffsetX}
 					offsetY={effOffsetY}
 					changed={ch.offset}
@@ -777,7 +776,7 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 /** Hover help for the custom format box — the one place the "text around
  *  the value" grammar (`parseFormatSpec`) is spelled out to the user. */
 export const FORMAT_BOX_HELP =
-	"A format code, or literal plus text to add to each value: literal% → 3%, literal units → 3 units, €literal → €3. Text after a code is added too: ,.0f kg → 1,234 kg."
+	"A format code such as ,.0f, or text to show around each value. Write literal where the value goes: literal% shows 3 as 3%, €literal shows 3 as €3, literal units shows 3 as 3 units. Text after a code works too: ,.0f kg shows 1234 as 1,234 kg."
 
 /** The tick "Label format" control: the shared preset dropdown
  *  (`FormatPresetOptions`) over a free-typed custom format box. Shared with
@@ -841,15 +840,6 @@ export const TickFormatControl = ({
 				className="flex-1 font-mono"
 			/>
 		</div>
-		<div className="flex items-start gap-2">
-			<LabelSpacer />
-			<div className="vc-help flex-1">
-				Text around the value goes in the same box:{" "}
-				<span className="font-mono">,.0f kg</span>,{" "}
-				<span className="font-mono">literal%</span>,{" "}
-				<span className="font-mono">€literal</span>.
-			</div>
-		</div>
 	</div>
 )
 
@@ -877,16 +867,12 @@ const Section = ({
  *  the sign flips at this boundary in both directions. Renders at the end
  *  of the Tick Labels section behind a divider. */
 const AxisAdjustPositionControl = ({
-	radial = false,
 	offsetX,
 	offsetY,
 	changed,
 	onChange,
 	onReset,
 }: {
-	/** Radar `r` axis: the helper names rings + spokes instead of the
-	 *  cartesian spine / tick marks / gridlines. */
-	radial?: boolean
 	/** Effective nudge in screen px (legacy `offset` already folded in). */
 	offsetX: number
 	offsetY: number
@@ -924,12 +910,6 @@ const AxisAdjustPositionControl = ({
 			suffix="px"
 			changed={changed}
 		/>
-		<p className="vc-help">
-			{radial
-				? "Moves the tick labels only — the rings and spokes stay put. "
-				: "Moves the tick labels only — the spine, tick marks, and gridlines stay put. "}
-			Positive X moves right; positive Y moves up.
-		</p>
 	</div>
 )
 

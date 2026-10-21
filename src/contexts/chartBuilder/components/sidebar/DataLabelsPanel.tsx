@@ -939,13 +939,6 @@ export const DataLabelsPanel = () => {
 					name from the ID column.
 				</p>
 			)}
-			{isFlowMode && (
-				<p className="vc-help">
-					Labels sit beside each node, so X and Y position don&apos;t
-					apply. Value starts on the node names; Flow in, Flow out and Node
-					total are each node&apos;s flow, and — none — hides the labels.
-				</p>
-			)}
 			{/* Maps anchor labels to REGIONS — one Geography row replaces the
 			 *  cartesian X/Y rows. Its field joins to map regions at its own
 			 *  auto-detected level, independent of the map's region field, so

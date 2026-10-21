@@ -145,6 +145,8 @@ export const ConnectionOptionsPanel = () => {
 	// line — the gate for the Structure section and the line-styling
 	// stand-down.
 	const isStructureMode = isStructureModeId(modeId)
+	// Maps never draw connection lines, and the stand-down note is noise there.
+	const isGeoMode = modeDef.canvas.coordFamily === "geo"
 	// Connection lines are only DRAWN by the line (scatter incl. line
 	// charts), layer (area), and polygon (radar) roles. In every other mode
 	// — bars, pies, tile, hexbin, geo — the channel is either unmapped by
@@ -675,14 +677,6 @@ export const ConnectionOptionsPanel = () => {
 											/>
 										)}
 									</div>
-									<div className="flex gap-2">
-										<LabelSpacer />
-										<span className="min-w-0 flex-1 vc-help">
-											Approximate tick marks around the full ring — the
-											step snaps to a round value and each node gets a
-											share proportional to its total.
-										</span>
-									</div>
 								</div>
 								<TickmarkControls
 									tick={axis.tickmarks ?? DEFAULT_TICKMARK_CONFIG}
@@ -1030,7 +1024,7 @@ export const ConnectionOptionsPanel = () => {
 					</div>
 				</CollapsibleSubsection>
 			)}
-			{!drawsConnectionLines && !isStructureMode && (
+			{!drawsConnectionLines && !isStructureMode && !isGeoMode && (
 				<p className="vc-help">
 					Connection joins points that share a value into a line. This chart
 					type doesn&apos;t draw connection lines, so there are no line options
