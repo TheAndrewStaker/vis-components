@@ -15,6 +15,18 @@ import {
 
 import { ThemesGalleryPage } from "./ThemesGalleryPage"
 
+/** A gallery card is named by its content, so find it through the theme
+ *  name (which the preview may repeat) and climb to the link / button. */
+const cardFor = (name: string): HTMLElement => {
+	const hit = screen
+		.getAllByText(name)
+		.map((el) => el.closest("a,button"))
+		.find((el): el is HTMLElement => el !== null)
+	if (!hit) throw new Error(`No card for ${name}`)
+	return hit
+}
+
+
 // Custom-theme cards are real links (middle-click, prefetch); managed cards
 // are buttons that put up the administrator dialog and then navigate.
 const navigate = vi.fn()
@@ -105,7 +117,7 @@ describe("ThemesGalleryPage", () => {
 	it("shows every theme as a card under one of the three folders", () => {
 		mount()
 		const folderOf = (name: string) =>
-			screen.getByLabelText(`Open ${name}`).closest("section")?.querySelector("h2")
+			cardFor(name).closest("section")?.querySelector("h2")
 				?.textContent
 		expect(folderOf("System (Light)")).toBe("System Themes")
 		expect(folderOf("System (Dark)")).toBe("System Themes")
@@ -115,21 +127,21 @@ describe("ThemesGalleryPage", () => {
 
 	it("links a custom theme's card straight to its editor", () => {
 		mount()
-		const card = screen.getByLabelText("Open My theme") as HTMLAnchorElement
+		const card = cardFor("My theme") as HTMLAnchorElement
 		expect(card.tagName).toBe("A")
 		expect(card.getAttribute("href")).toBe("/settings/themes/th-mine")
 	})
 
 	it("links a system theme's card straight to its (read-only) editor — no dialog", () => {
 		mount()
-		const card = screen.getByLabelText("Open System (Dark)") as HTMLAnchorElement
+		const card = cardFor("System (Dark)") as HTMLAnchorElement
 		expect(card.tagName).toBe("A")
 		expect(card.getAttribute("href")).toBe("/settings/themes/system-dark")
 	})
 
 	it("fills the preview template from the theme itself", () => {
 		mount()
-		const card = screen.getByLabelText("Open My theme")
+		const card = cardFor("My theme")
 		const svg = card.querySelector("svg")!
 		// The theme's name is set in its own title font — the card doubles as
 		// a type specimen.
@@ -158,7 +170,7 @@ describe("ThemesGalleryPage", () => {
 				],
 			},
 		])
-		const svg = screen.getByLabelText("Open My theme").querySelector("svg")!
+		const svg = cardFor("My theme").querySelector("svg")!
 		const bars = Array.from(svg.querySelectorAll("rect")).filter((r) =>
 			/^#aa000[123]$/.test(r.getAttribute("fill") ?? "")
 		)
@@ -168,7 +180,7 @@ describe("ThemesGalleryPage", () => {
 
 	it("gates a managed theme's card behind the administrator dialog", () => {
 		const { store } = mount()
-		fireEvent.click(screen.getByLabelText("Open Team theme"))
+		fireEvent.click(cardFor("Team theme"))
 		expect(navigate).not.toHaveBeenCalled()
 		expect(screen.getByText(/managed by the administrator/i)).toBeTruthy()
 
@@ -182,7 +194,7 @@ describe("ThemesGalleryPage", () => {
 
 	it("stays on the gallery on \"No, exit\"", () => {
 		const { store } = mount()
-		fireEvent.click(screen.getByLabelText("Open Team theme"))
+		fireEvent.click(cardFor("Team theme"))
 		fireEvent.click(screen.getByText("No, exit"))
 		expect(navigate).not.toHaveBeenCalled()
 		expect(store.get(unlockedThemeIdAtom)).toBeNull()
@@ -192,12 +204,12 @@ describe("ThemesGalleryPage", () => {
 		mount()
 		expect(screen.getAllByText("Default")).toHaveLength(1)
 		expect(
-			screen.getByLabelText("Open System (Light)").textContent
+			cardFor("System (Light)").textContent
 		).toContain("Default")
 		expect(screen.getAllByText("Read-only")).toHaveLength(2)
 		expect(screen.getAllByText("Managed")).toHaveLength(1)
-		expect(screen.getByLabelText("Open Team theme").textContent).toContain("Managed")
-		expect(screen.getByLabelText("Open My theme").textContent).not.toMatch(
+		expect(cardFor("Team theme").textContent).toContain("Managed")
+		expect(cardFor("My theme").textContent).not.toMatch(
 			/Read-only|Managed/
 		)
 	})
@@ -208,9 +220,9 @@ describe("ThemesGalleryPage", () => {
 		expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
 			"Custom Themes"
 		)
-		expect(screen.getByLabelText("Open My theme")).toBeTruthy()
-		expect(screen.queryByLabelText("Open System (Light)")).toBeNull()
-		expect(screen.queryByLabelText("Open Team theme")).toBeNull()
+		expect(cardFor("My theme")).toBeTruthy()
+		expect(screen.queryByText("System (Light)")).toBeNull()
+		expect(screen.queryByText("Team theme")).toBeNull()
 		expect(
 			(screen.getByText("Show all themes") as HTMLAnchorElement).getAttribute("href")
 		).toBe("/settings/themes")

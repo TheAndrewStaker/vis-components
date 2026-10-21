@@ -195,6 +195,8 @@ export const ThemesGalleryPage = () => {
 					<ul className={CARD_GRID}>
 						{entries.map((t) => {
 							const isDefault = t.id === userDefaultId
+							// Cards are named by their content (theme name + pills), so the
+							// visible text and the accessible name always agree (WCAG 2.5.3).
 							return (
 								<li key={t.id}>
 									{managed ? (
@@ -202,7 +204,6 @@ export const ThemesGalleryPage = () => {
 											type="button"
 											onClick={() => setGatedThemeId(t.id)}
 											className={cardClass}
-											aria-label={`Open ${t.name}`}
 										>
 											<CardBody theme={t} isDefault={isDefault} />
 										</button>
@@ -211,7 +212,6 @@ export const ThemesGalleryPage = () => {
 											to="/settings/themes/$themeId"
 											params={{ themeId: t.id }}
 											className={cardClass}
-											aria-label={`Open ${t.name}`}
 										>
 											<CardBody theme={t} isDefault={isDefault} />
 										</Link>
