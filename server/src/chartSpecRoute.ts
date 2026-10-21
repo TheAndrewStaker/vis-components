@@ -37,6 +37,7 @@ import type {
 	Visual,
 } from "../../src/contexts/chartBuilder/lib/types"
 import { isTrashed } from "../../src/contexts/chartBuilder/lib/visualTrash"
+import { requestUser, sanitizeUser, type AppUser, type IdentifyUser } from "./identity.js"
 import {
 	hydrateVisual,
 	newVisualDraft,
@@ -206,6 +207,19 @@ const loadFolders = (db: DatabaseSync): Folder[] =>
 		.map(({ body }) => parseJson(body) as Folder | undefined)
 		.filter((f): f is Folder => typeof f?.id === "string")
 
+/** A chart-spec write is a save, so `updatedBy` is the requesting user
+ *  from the host's `identify`, or for an anonymous request the stored
+ *  saver kept as it was. */
+const stampedBy = <T extends { updatedBy?: AppUser }>(
+	visual: T,
+	user: AppUser | null,
+	storedUpdatedBy: unknown
+): T => {
+	const { updatedBy: _dropped, ...rest } = visual
+	const keep = user ?? sanitizeUser(storedUpdatedBy)
+	return (keep ? { ...rest, updatedBy: keep } : rest) as T
+}
+
 /** PATCH /api/visuals/<id>: apply a chart edit (the spec keys it names,
  *  nothing else) to a stored visual, checked like a create. `If-Match`
  *  (required) carries the `updatedAt` the caller last read; a visual
@@ -219,7 +233,8 @@ export const editVisualFromSpec = async (
 	db: DatabaseSync,
 	config: ServerConfig,
 	id: string,
-	query: URLSearchParams
+	query: URLSearchParams,
+	user: AppUser | null = null
 ): Promise<void> => {
 	const dryRun = readDryRun(res, query)
 	if (dryRun === undefined) return
@@ -268,7 +283,8 @@ export const editVisualFromSpec = async (
 		now: Math.max(Date.now(), (visual.updatedAt ?? 0) + 1),
 	})
 	if (!result.ok) return specErrors(res, result.errors)
-	const { warnings, visual: edited } = result
+	const { warnings } = result
+	const edited = stampedBy(result.visual, user, visual.updatedBy)
 	if (dryRun) return sendJson(res, 200, JSON.stringify({ visual: edited, warnings }))
 	if (!replaceVisualIfUnchanged(db, id, stored, JSON.stringify({ ...edited, thumbnail: null }))) {
 		throw new HttpError(412, "This visual changed while the edit ran; read it again")
@@ -334,7 +350,8 @@ export const createVisualFromSpec = async (
 	db: DatabaseSync,
 	config: ServerConfig,
 	query: URLSearchParams,
-	mintId: () => string = newVisualId
+	mintId: () => string = newVisualId,
+	user: AppUser | null = null
 ): Promise<void> => {
 	const dryRun = readDryRun(res, query)
 	if (dryRun === undefined) return
@@ -370,7 +387,7 @@ export const createVisualFromSpec = async (
 	if (!result.ok) return specErrors(res, result.errors)
 
 	const { warnings } = result
-	let { visual } = result
+	let visual = stampedBy(result.visual, user, undefined)
 	if (dryRun) return sendJson(res, 200, JSON.stringify({ visual, warnings }))
 	// Insert-only: a minted id that is somehow taken gets one fresh retry,
 	// never an overwrite.
@@ -407,7 +424,8 @@ export const restoreVisual = async (
 	res: ServerResponse,
 	db: DatabaseSync,
 	config: ServerConfig,
-	id: string
+	id: string,
+	user: AppUser | null = null
 ): Promise<void> => {
 	const input = parseJson((await readBody(req, JSON_BODY_CAP_BYTES)).toString("utf-8")) as
 		| Partial<UndoEnvelope>
@@ -445,7 +463,11 @@ export const restoreVisual = async (
 		)
 	}
 	const updatedAt = Math.max(Date.now(), (current.updatedAt ?? 0) + 1)
-	const restored = structuredVisual({ ...before, updatedAt, thumbnail: null })
+	const restored = stampedBy(
+		structuredVisual({ ...before, updatedAt, thumbnail: null }),
+		user,
+		current.updatedBy
+	)
 	if (!replaceVisualIfUnchanged(db, id, stored, JSON.stringify(restored))) {
 		throw new HttpError(412, "This visual changed while the undo ran; read it again")
 	}
@@ -585,7 +607,17 @@ export const createDatasetFromRows = async (
 export const handleChartSpec = async (
 	req: IncomingMessage,
 	res: ServerResponse,
-	{ config, db, mintVisualId }: { config: ServerConfig; db: DatabaseSync; mintVisualId?: () => string },
+	{
+		config,
+		db,
+		mintVisualId,
+		identify,
+	}: {
+		config: ServerConfig
+		db: DatabaseSync
+		mintVisualId?: () => string
+		identify?: IdentifyUser
+	},
 	{ method, collection, id, rest, query }: { method: string; collection: string; id?: string; rest: string[]; query: string }
 ): Promise<boolean> => {
 	const params = new URLSearchParams(query)
@@ -600,14 +632,15 @@ export const handleChartSpec = async (
 		return true
 	}
 	if (collection !== "visuals") return false
+	const user = requestUser(identify, req)
 	if (method === "POST" && !id) {
-		await createVisualFromSpec(req, res, db, config, params, mintVisualId)
+		await createVisualFromSpec(req, res, db, config, params, mintVisualId, user)
 		return true
 	}
 	const restore = method === "POST" && rest.length === 1 && rest[0] === "restore"
 	if (!id || !(restore || (method === "PATCH" && rest.length === 0))) return false
 	if (!isSafeId(id)) throw new HttpError(400, "Invalid id")
-	if (restore) await restoreVisual(req, res, db, config, id)
-	else await editVisualFromSpec(req, res, db, config, id, params)
+	if (restore) await restoreVisual(req, res, db, config, id, user)
+	else await editVisualFromSpec(req, res, db, config, id, params, user)
 	return true
 }
