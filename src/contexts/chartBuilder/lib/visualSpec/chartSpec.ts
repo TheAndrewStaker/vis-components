@@ -17,6 +17,7 @@ import type {
 import { LITERAL_FORMAT, parseFormatSpec } from "../formatTick"
 import {
 	QUICK_START_CHART_TYPES,
+	QUICK_START_VARIATIONS,
 	type QuickStartChartType,
 } from "../quickStartVariations"
 import {
@@ -443,9 +444,16 @@ export const readChartSpec = (
 		if (isOneOf(QUICK_START_CHART_TYPES, input.family)) draft.family = input.family
 		else {
 			const name = String(input.family)
+			const wanted = name.trim().toLowerCase()
+			const family = QUICK_START_CHART_TYPES.find((f) =>
+				QUICK_START_VARIATIONS[f].some((v) => v.name.toLowerCase() === wanted)
+			)
+			const variation = family && QUICK_START_VARIATIONS[family].find((v) => v.name.toLowerCase() === wanted)
 			problem(
 				"family",
-				`unknown family "${named(name)}"${hint(name, QUICK_START_CHART_TYPES)} (families: ${quoted(QUICK_START_CHART_TYPES)})`
+				family && variation
+					? `unknown family "${named(name)}"; "${variation.name}" is a variation: send family "${family}", variation "${variation.name}"`
+					: `unknown family "${named(name)}"${hint(name, QUICK_START_CHART_TYPES)} (families: ${quoted(QUICK_START_CHART_TYPES)})`
 			)
 		}
 	}
