@@ -1017,7 +1017,7 @@ const familyNeeds = (
 			.map(([channel, types]) => `"${channel}" (${types.join(" or ")})`)
 	)
 	const fewest = needs.reduce((a, b) => (b.length < a.length ? b : a))
-	return `a "${family}" chart needs ${fewest.join(", ")} (GET /api/chart-spec lists its variations)`
+	return `a "${family}" chart needs ${fewest.join(", ")} (chart_vocabulary lists its variations)`
 }
 
 /** A variation's settings, minus the field choices the spec already made

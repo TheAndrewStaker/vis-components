@@ -415,6 +415,7 @@ describe("review findings", () => {
 		const errors = errorsOf(create({ family: "line", encodings: { x: "month", y: "muffins" } }))
 		expect(errors[0]?.path).toBe("family")
 		expect(errors[0]?.message).toMatch(/"connection"/)
+		expect(errors[0]?.message).toMatch(/chart_vocabulary lists its variations/)
 	})
 
 	it("blank cells are not levels", () => {
