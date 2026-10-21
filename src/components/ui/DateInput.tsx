@@ -193,7 +193,7 @@ export const DateInput = ({
 				onClick={() => (open ? close() : openPicker())}
 				onBlur={onBlur}
 				onKeyDown={onKeyDown}
-				className="absolute right-1.5 flex h-5 w-5 items-center justify-center rounded text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-white"
+				className="absolute right-1 flex h-6 w-6 items-center justify-center rounded hover:text-stone-900 dark:hover:text-white vc-muted"
 			>
 				<CalendarGlyph />
 			</button>

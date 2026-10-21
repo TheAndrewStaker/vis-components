@@ -60,14 +60,14 @@ const mount = (init?: (store: TestStore) => void) => {
 }
 
 const openEditor = () => {
-	fireEvent.click(screen.getByRole("button", { name: "Rename data set" }))
+	fireEvent.click(screen.getByRole("button", { name: /rename data set/i }))
 	return screen.getByLabelText("New data set name") as HTMLInputElement
 }
 
 describe("DataUpload data set rename", () => {
 	it("renames on Enter and refreshes the content hash and index", async () => {
 		const store = mount()
-		expect(screen.getByRole("button", { name: "Rename data set" }).textContent).toBe(
+		expect(screen.getByRole("button", { name: /rename data set/i }).textContent).toBe(
 			"Q3 Sales"
 		)
 		const input = openEditor()
@@ -86,7 +86,7 @@ describe("DataUpload data set rename", () => {
 		// Everything that lists data sets by name reads the index.
 		expect(store.get(datasetIndexAtom)[ID].name).toBe("Q3 Sales (final)")
 		await waitFor(() => expect(screen.queryByLabelText("New data set name")).toBeNull())
-		expect(screen.getByRole("button", { name: "Rename data set" }).textContent).toBe(
+		expect(screen.getByRole("button", { name: /rename data set/i }).textContent).toBe(
 			"Q3 Sales (final)"
 		)
 	})

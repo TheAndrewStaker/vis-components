@@ -14,10 +14,10 @@
 }
 
 :global(.dark) {
-	/* Brand under stone-300 */
+	/* Brand under white (stone-300 on brand-600 was 4.28:1; white is 6.38:1) */
 
 	.bg-brand-text-aa {
-		@apply border-y border-t-brand-500 border-b-brand-700 bg-brand-600 text-stone-300;
+		@apply border-y border-t-brand-500 border-b-brand-700 bg-brand-600 text-white;
 	}
 
 	.bg-brand-text-aa:hover:not(:disabled) {

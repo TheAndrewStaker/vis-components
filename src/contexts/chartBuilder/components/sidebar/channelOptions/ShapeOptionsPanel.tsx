@@ -28,7 +28,12 @@ import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 
 import { CustomGlyphChips, CustomGlyphEditor } from "./customGlyphEditor"
-import { CategoryRow, ShapeGlyph, swatchChipClass } from "./glyphShared"
+import {
+	CategoryRow,
+	ShapeGlyph,
+	shapeName,
+	swatchChipClass,
+} from "./glyphShared"
 import { useUniqueValuesForChannel } from "./useUniqueValuesForChannel"
 
 /** Row key for the Default-shape row's custom-glyph editor — distinct from
@@ -74,6 +79,14 @@ export const ShapeOptionsPanel = () => {
 		updateCfg(resetShapeCategoryOverrides(cfg, value))
 
 	const defaultShapeIdx = configs.defaultShape ?? DEFAULT_SHAPE
+	// The panel-wide reset shows only when something it would write differs
+	// from that target (same fields the reset writes, below).
+	const panelChanged =
+		defaultShapeIdx !== theme.defaultShape ||
+		cfg.outlineColor !== theme.outlineColor ||
+		cfg.outlineWidth !== theme.outlineWidth ||
+		cfg.distributionOutlineWidth !==
+			DEFAULT_SHAPE_CONFIG.distributionOutlineWidth
 
 	// Which row's "+" custom-glyph editor is open — the DEFAULT_GLYPH_ROW
 	// sentinel for the Default-shape row, a category value for per-category
@@ -196,6 +209,7 @@ export const ShapeOptionsPanel = () => {
 											}))
 										}
 										aria-pressed={selected}
+										aria-label={`Default shape: ${shapeName(idx)}`}
 										className={swatchChipClass(selected, "w-7")}
 									>
 										<ShapeGlyph idx={idx} selected={selected} />
@@ -258,22 +272,24 @@ export const ShapeOptionsPanel = () => {
 					})}
 				</>
 			)}
-			<ResetLink
-				onClick={() => {
-					setConfigs((prev) => ({
-						...prev,
-						defaultShape: theme.defaultShape,
-					}))
-					updateCfg({
-						outlineColor: theme.outlineColor,
-						outlineWidth: theme.outlineWidth,
-						distributionOutlineWidth:
-							DEFAULT_SHAPE_CONFIG.distributionOutlineWidth,
-					})
-				}}
-				underline
-				className="self-start"
-			/>
+			{panelChanged && (
+				<ResetLink
+					onClick={() => {
+						setConfigs((prev) => ({
+							...prev,
+							defaultShape: theme.defaultShape,
+						}))
+						updateCfg({
+							outlineColor: theme.outlineColor,
+							outlineWidth: theme.outlineWidth,
+							distributionOutlineWidth:
+								DEFAULT_SHAPE_CONFIG.distributionOutlineWidth,
+						})
+					}}
+					underline
+					className="self-start"
+				/>
+			)}
 		</div>
 	)
 }

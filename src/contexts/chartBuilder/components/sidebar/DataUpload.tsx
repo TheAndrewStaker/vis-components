@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
@@ -95,7 +95,7 @@ export const DataUpload = () => {
 								<button
 									type="button"
 									onClick={() => downloadDatasetCsv(rawDataset)}
-									className="text-brand-500 underline hover:text-brand-600 dark:text-indigo-400"
+									className="py-0.5 text-brand-500 underline hover:text-brand-600 dark:text-indigo-400"
 								>
 									download data
 								</button>
@@ -105,7 +105,10 @@ export const DataUpload = () => {
 				</div>
 			)}
 			{error && (
-				<div className="rounded-sm bg-red-50 px-2 py-1 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300">
+				<div
+					role="alert"
+					className="rounded-sm bg-red-50 px-2 py-1 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300"
+				>
 					{error}
 				</div>
 			)}
@@ -135,6 +138,7 @@ const DatasetNameEditor = ({ id, name }: { id: string; name: string }) => {
 	const [editing, setEditing] = useState(false)
 	const [draft, setDraft] = useState(name)
 	const [error, setError] = useState<string | null>(null)
+	const noteId = useId()
 	const collides =
 		editing && nameCollides(draft, Object.values(datasetIndex), id)
 
@@ -176,8 +180,8 @@ const DatasetNameEditor = ({ id, name }: { id: string; name: string }) => {
 				type="button"
 				onClick={startEditing}
 				title={`${name} — click to rename`}
-				aria-label="Rename data set"
-				className="group flex w-full min-w-0 items-center gap-1 text-left font-medium vc-text"
+				aria-label={`${name} — rename data set`}
+				className="group -mt-0.5 flex w-full min-w-0 items-center gap-1 py-0.5 text-left font-medium vc-text"
 			>
 				<span className="min-w-0 truncate">{name}</span>
 				<svg
@@ -185,7 +189,7 @@ const DatasetNameEditor = ({ id, name }: { id: string; name: string }) => {
 					width={11}
 					height={11}
 					aria-hidden
-					className="flex-shrink-0 text-stone-400 opacity-0 group-hover:opacity-100 dark:text-stone-500"
+					className="flex-shrink-0 opacity-0 group-hover:opacity-100 vc-muted"
 				>
 					<path
 						d="M11.7 1.6l2.7 2.7-9.2 9.2-3.4.7.7-3.4 9.2-9.2z"
@@ -208,19 +212,23 @@ const DatasetNameEditor = ({ id, name }: { id: string; name: string }) => {
 					if (e.key === "Escape") cancel()
 				}}
 				aria-label="New data set name"
+				aria-invalid={error ? true : undefined}
+				aria-describedby={collides || error ? noteId : undefined}
 				// eslint-disable-next-line jsx-a11y/no-autofocus -- initial focus for the inline rename editor the user just opened
 				autoFocus
 				onFocus={(e) => e.target.select()}
-				className="min-w-0 rounded border border-blue-400 bg-white px-1 py-0 text-sm font-medium outline-none dark:bg-stone-900 vc-text"
+				className="vc-focus-ring min-w-0 rounded border border-blue-400 bg-white px-1 py-0 text-sm font-medium dark:bg-stone-900 vc-text"
 			/>
-			{collides && (
-				<p className="text-xs text-amber-800 dark:text-amber-300">
-					A data set named &ldquo;{draft.trim()}&rdquo; already exists.
-				</p>
-			)}
-			{error && (
-				<p className="text-xs text-red-700 dark:text-red-300">{error}</p>
-			)}
+			<div id={noteId} className="contents">
+				{collides && (
+					<p className="text-xs text-amber-800 dark:text-amber-300">
+						A data set named &ldquo;{draft.trim()}&rdquo; already exists.
+					</p>
+				)}
+				{error && (
+					<p className="text-xs text-red-700 dark:text-red-300">{error}</p>
+				)}
+			</div>
 		</div>
 	)
 }

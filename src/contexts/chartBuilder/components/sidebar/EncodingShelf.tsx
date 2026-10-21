@@ -51,6 +51,15 @@ type Props = {
 // defaults (fill, shape, radius, etc.) even before mapping a variable.
 const FIELD_REQUIRED_CHANNELS = new Set<EncodingChannel>(["x", "y", "r"])
 
+/** "Length", "Length and Shape", "X, Y, and Shape" — channel labels joined
+ *  for prose. */
+const joinChannelLabels = (channels: readonly EncodingChannel[]): string => {
+	const labels = channels.map((c) => ENCODING_CHANNEL_LABELS[c])
+	if (labels.length <= 1) return labels[0] ?? ""
+	if (labels.length === 2) return `${labels[0]} and ${labels[1]}`
+	return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`
+}
+
 export const EncodingShelf = ({ channel }: Props) => {
 	const overrides = useAtomValue(currentFieldOverridesAtom)
 	const [encodings, setEncodings] = useAtom(currentEncodingsAtom)
@@ -268,17 +277,9 @@ export const EncodingShelf = ({ channel }: Props) => {
 	const conflictMessage = useMemo(() => {
 		if (!pendingConflict) return ""
 		if (conflictingActiveChannels.length === 0) return ""
-		const labels = conflictingActiveChannels.map(
-			(c) => ENCODING_CHANNEL_LABELS[c]
-		)
-		const list =
-			labels.length === 1
-				? labels[0]
-				: labels.length === 2
-					? `${labels[0]} and ${labels[1]}`
-					: `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`
-		const verb = labels.length === 1 ? "is" : "are"
-		const pronoun = labels.length === 1 ? "it" : "them"
+		const list = joinChannelLabels(conflictingActiveChannels)
+		const verb = conflictingActiveChannels.length === 1 ? "is" : "are"
+		const pronoun = conflictingActiveChannels.length === 1 ? "it" : "them"
 		return `${list} ${verb} currently mapped. ${ENCODING_CHANNEL_LABELS[channel]} will override ${pronoun}.`
 	}, [pendingConflict, conflictingActiveChannels, channel])
 
@@ -380,13 +381,26 @@ export const EncodingShelf = ({ channel }: Props) => {
 		channel === "shape" && isBarModeId(modeDef.id)
 	const blockedByConflict =
 		hasConflictBlock && !value && !shapeAppliesDespiteConflict
-	const rowOpacity = blockedByConflict ? "opacity-50" : ""
+	// "In use by X and Y" for the shadowed row's tooltip and options hint.
+	const shadowedBy = joinChannelLabels(conflictingActiveChannels)
+	// The dim is capped at 90% opacity: the row's stone-600 label composited
+	// at 0.9 over the #fafafa sidebar is 4.52:1 (0.85 would be 4.05:1, under
+	// AA). That alone reads as barely dimmed, so the label also goes italic —
+	// a cue that isn't color-only — and the row carries a tooltip saying why.
+	const rowOpacity = blockedByConflict ? "opacity-90" : ""
 
 	const row = (
-		<div className={`flex flex-col gap-1 ${rowOpacity}`}>
+		<div
+			className={`flex flex-col gap-1 ${rowOpacity}`}
+			title={
+				blockedByConflict
+					? `Not used while ${shadowedBy} ${conflictingActiveChannels.length === 1 ? "is" : "are"} mapped`
+					: undefined
+			}
+		>
 			<SelectInput
 				label={ENCODING_CHANNEL_LABELS[channel]}
-				labelClassName={LABEL_COL}
+				labelClassName={blockedByConflict ? `${LABEL_COL} italic` : LABEL_COL}
 				value={
 					derivedSource
 						? PACKED_MEASURE_OPTION_VALUE[derivedSource]
@@ -400,7 +414,10 @@ export const EncodingShelf = ({ channel }: Props) => {
 				selectClassName={selectClass}
 			/>
 			{pendingConflict && (
-				<div className="flex flex-col gap-1.5 rounded border border-amber-300 bg-amber-50 p-2 dark:border-amber-700 dark:bg-amber-900/30">
+				<div
+					role="alert"
+					className="flex flex-col gap-1.5 rounded border border-amber-300 bg-amber-50 p-2 dark:border-amber-700 dark:bg-amber-900/30"
+				>
 					<div className="text-sm text-amber-800 dark:text-amber-300">
 						{conflictMessage} Proceed?
 					</div>
@@ -447,10 +464,19 @@ export const EncodingShelf = ({ channel }: Props) => {
 						// options aren't in effect — gray them out (and make them
 						// inert) to match the de-emphasized row above, rather than
 						// presenting live-looking controls that do nothing.
+						// Same 90% cap as the row (brand helper text on the panel
+						// stays 4.88:1), plus a plain-words hint so "not in effect"
+						// doesn't rest on the dim alone.
 						className={
-							blockedByConflict ? "pointer-events-none opacity-50" : undefined
+							blockedByConflict ? "pointer-events-none opacity-90" : undefined
 						}
 					>
+						{blockedByConflict && (
+							<p className="vc-help mb-1">
+								Not in effect while {shadowedBy}{" "}
+								{conflictingActiveChannels.length === 1 ? "is" : "are"} mapped.
+							</p>
+						)}
 						<ChannelOptionsPanel channel={channel} />
 					</Disclosure.Panel>
 				</>

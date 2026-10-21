@@ -79,10 +79,32 @@ export const embedPartPath = (publishId: string, part: EmbedPart): string => {
  *  wrapped, not parsed, so a large dataset never round-trips through
  *  JSON.parse here. `<` is escaped to < so no payload content (say, a
  *  tooltip template containing "</script>") can terminate the script tag. */
+/** HTML-escape text for an element body (the page <title>). */
+const escapeHtmlText = (text: string): string =>
+	text
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;")
+		.replaceAll("'", "&#39;")
+
+/** Put the visual's name in the page's <title> (escaped) so the embed's
+ *  document — and the frame a screen reader lands in — is named for its
+ *  chart rather than the template's generic "Chart embed". */
+const withTitle = (html: string, title: string | undefined): string => {
+	const name = title?.trim()
+	if (!name) return html
+	return html.replace(
+		/<title>[^<]*<\/title>/,
+		() => `<title>${escapeHtmlText(name)}</title>`
+	)
+}
+
 export const composePartHtml = (
 	template: string,
 	part: EmbedPart,
-	payloadJson: string
+	payloadJson: string,
+	title?: string
 ): string => {
 	if (!template.includes(PAYLOAD_MARKER)) {
 		throw new Error("embed runtime template is missing the payload marker")
@@ -93,7 +115,7 @@ export const composePartHtml = (
 	)
 	// Thunk replacement: a literal second argument would reinterpret `$`
 	// sequences inside the payload as replacement patterns.
-	return template.replace(PAYLOAD_MARKER, () => wrapper)
+	return withTitle(template, title).replace(PAYLOAD_MARKER, () => wrapper)
 }
 
 /** Write one part file: temp + fsync + rename so a crash mid-write can never
@@ -128,13 +150,15 @@ export const publishEmbedFiles = async (
 	publishId: string,
 	template: string,
 	payloadJson: string,
-	parts: readonly EmbedPart[]
+	parts: readonly EmbedPart[],
+	/** The visual's name, for the page <title>. */
+	title?: string
 ): Promise<Record<string, string>> => {
 	const dir = embedDir(publishDir, publishId)
 	await fs.mkdir(dir, { recursive: true })
 	const paths: Record<string, string> = {}
 	for (const part of parts) {
-		await writeAndVerify(dir, PART_FILES[part], composePartHtml(template, part, payloadJson))
+		await writeAndVerify(dir, PART_FILES[part], composePartHtml(template, part, payloadJson, title))
 		paths[part] = embedPartPath(publishId, part)
 	}
 	for (const part of EMBED_PARTS) {

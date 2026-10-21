@@ -129,7 +129,7 @@ const mapAllChannels = async (page: Page): Promise<void> => {
 		}
 	})
 
-	const panel = page.locator('[id="aside-section-Data Labels"]')
+	const panel = page.locator('[id="aside-section-data-labels"]')
 	const selects = panel.locator("select")
 	const count = await selects.count()
 	const channelOrder = ["X position", "Y position", "Value", "Color", "Size"]
@@ -162,7 +162,7 @@ const toggleByLabel = async (
 	label: string,
 	on: boolean,
 ): Promise<void> => {
-	const panel = page.locator('[id="aside-section-Data Labels"]')
+	const panel = page.locator('[id="aside-section-data-labels"]')
 	const cb = panel.getByLabel(label, { exact: true })
 	if ((await cb.count()) === 0) return
 	if (on) await cb.check().catch(() => {})
@@ -177,7 +177,7 @@ const setAlignment = async (
 	page: Page,
 	alignment: Alignment,
 ): Promise<void> => {
-	const panel = page.locator('[id="aside-section-Data Labels"]')
+	const panel = page.locator('[id="aside-section-data-labels"]')
 	const aria =
 		alignment === "left"
 			? "Align left"

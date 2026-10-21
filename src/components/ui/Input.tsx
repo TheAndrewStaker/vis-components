@@ -10,7 +10,7 @@ import { combine as c } from "../../lib/cls"
 /** Shared box treatment for Input, Textarea and Select (Select.tsx keeps
  *  its own copy minus the placeholder variants). */
 const INPUT_CLASS =
-	"min-w-0 rounded-control border border-stone-300 bg-white px-2 py-1 text-sm text-stone-900 transition-colors outline-none placeholder:text-stone-400 hover:border-stone-400 focus:border-stone-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-white dark:placeholder:text-stone-500 dark:hover:border-stone-600 dark:focus:border-stone-500"
+	"min-w-0 rounded-control border border-stone-400 bg-white px-2 py-1 text-sm text-stone-900 transition-colors vc-focus-ring placeholder:text-vc-faint hover:border-stone-600 focus:border-stone-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-white dark:placeholder:text-stone-500 dark:hover:border-stone-600 dark:focus:border-stone-500"
 
 export type InputProps = Omit<JSX.IntrinsicElements["input"], "ref">
 export type TextareaProps = Omit<JSX.IntrinsicElements["textarea"], "ref"> & {

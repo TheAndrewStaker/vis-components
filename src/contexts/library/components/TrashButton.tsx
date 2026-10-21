@@ -70,7 +70,7 @@ export const TrashButton = () => {
 				<TrashIcon size={20} />
 				{count > 0 && (
 					<span
-						className="absolute -top-1 -right-1 min-w-5 rounded-full bg-red-600 px-1.5 text-center text-[11px] leading-5 font-semibold text-white ring-2 ring-white dark:ring-stone-900"
+						className="absolute -top-1 -right-1 min-w-5 rounded-full bg-red-600 px-1.5 text-center text-xs leading-5 font-semibold text-white ring-2 ring-white dark:ring-stone-900"
 						aria-hidden="true"
 					>
 						{count}
@@ -101,7 +101,7 @@ export const TrashButton = () => {
 												className="h-full w-full object-contain"
 											/>
 										) : (
-											<span className="text-[10px] text-stone-400">No preview</span>
+											<span className="px-1 text-center text-xs leading-tight vc-faint">No preview</span>
 										)}
 									</div>
 									<div className="min-w-0 flex-1">

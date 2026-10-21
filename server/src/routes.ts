@@ -523,12 +523,14 @@ const publishEmbed = async (
 		// the runtime. Loud 500 so it reads as retryable-after-a-fix.
 		throw new HttpError(500, "The embed runtime is not built")
 	}
+	const visual = (record.payload as { visual?: { name?: unknown } }).visual
 	const paths = await publishEmbedFiles(
 		config.publishDir,
 		publishId,
 		template,
 		JSON.stringify(record.payload),
-		parts
+		parts,
+		typeof visual?.name === "string" ? visual.name : undefined
 	)
 	const urls: Record<string, string> = {}
 	for (const [part, path] of Object.entries(paths)) {

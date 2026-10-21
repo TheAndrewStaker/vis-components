@@ -110,9 +110,9 @@ const renderTree = (onSelect: (id: string | null) => void = () => {}) =>
 		</TestProvider>
 	)
 
-/** The folder row is the [role=button] div wrapping the folder name. */
+/** The folder row is the [data-folder-row] div wrapping the folder name. */
 const folderRow = (container: HTMLElement, name: string): HTMLElement => {
-	const rows = [...container.querySelectorAll('[role="button"]')]
+	const rows = [...container.querySelectorAll("[data-folder-row]")]
 	const row = rows.find((r) => r.textContent?.includes(name))
 	if (!row) throw new Error(`no folder row containing "${name}"`)
 	return row as HTMLElement
@@ -157,7 +157,7 @@ const dragTo = (
 
 /** Folder names in the order their rows appear in the tree. */
 const folderRowOrder = (container: HTMLElement, names: string[]): string[] =>
-	[...container.querySelectorAll('[role="button"]')]
+	[...container.querySelectorAll("[data-folder-row]")]
 		.map((r) => names.find((n) => r.textContent?.includes(n)))
 		.filter((n): n is string => n !== undefined)
 
@@ -424,7 +424,7 @@ describe("FolderTree row menu (touch/keyboard fallback for drag)", () => {
 		const { getByLabelText, getByText, container } = renderTree()
 		openMenu(getByLabelText, "Alpha")
 		fireEvent.click(getByText("Move down"))
-		const names = [...container.querySelectorAll('[role="button"]')]
+		const names = [...container.querySelectorAll("[data-folder-row]")]
 			.map((r) => r.textContent?.trim())
 			.filter((t) => t === "Alpha" || t === "Beta" || t === "Gamma")
 		expect(names).toEqual(["Beta", "Alpha", "Gamma"])

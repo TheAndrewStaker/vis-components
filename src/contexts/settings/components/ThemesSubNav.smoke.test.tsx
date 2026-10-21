@@ -106,7 +106,7 @@ describe("ThemesSubNav folders", () => {
 		const folderOf = (name: string) =>
 			screen
 				.getByText(name)
-				.closest("div.rounded")
+				.closest("[data-theme-folder]")
 				?.querySelector("button span.truncate")?.textContent
 		expect(folderOf("System (Light)")).toBe("System Themes")
 		expect(folderOf("Team theme")).toBe("Managed Themes")

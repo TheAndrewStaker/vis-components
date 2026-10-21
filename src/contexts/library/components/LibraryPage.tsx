@@ -471,12 +471,19 @@ export const LibraryPage = () => {
 						/>
 					</div>
 					{/* Resize handle; the pull tab hangs off its border line. */}
+					{/* The handle holds the rail's pull-tab BUTTON, so the separator
+					 *  role sits on a transparent overlay inside it rather than on the
+					 *  handle itself (a separator may not contain a control). */}
 					<div
-						role="separator"
-						aria-orientation="vertical"
 						onPointerDown={onSidebarResizeStart}
 						className="group relative flex w-1.5 flex-shrink-0 cursor-ew-resize touch-none items-center justify-center border-r border-stone-200 bg-stone-50 hover:bg-stone-200 pointer-coarse:w-3 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-700"
 					>
+						<div
+							role="separator"
+							aria-orientation="vertical"
+							aria-label="Resize folders panel"
+							className="absolute inset-0"
+						/>
 						<div className="h-8 w-0.5 rounded-full bg-stone-300 opacity-0 transition-opacity group-hover:opacity-100 dark:bg-stone-500" />
 						<RailTab
 							collapsed={false}
@@ -499,6 +506,7 @@ export const LibraryPage = () => {
 							value={query}
 							onChange={(e) => setQuery(e.target.value)}
 							placeholder="Search visualizations…"
+							aria-label="Search visualizations"
 							className="w-full sm:w-64"
 						/>
 						<Select
@@ -506,6 +514,7 @@ export const LibraryPage = () => {
 							onChange={(e) => setSelectedDatasetName(e.target.value || null)}
 							className="w-48"
 							title="Filter by data set"
+							aria-label="Filter by data set"
 						>
 							<option value="">All data sets</option>
 							{datasetList.map((name) => (
@@ -689,7 +698,7 @@ export const LibraryPage = () => {
 										className={`absolute top-2 left-2 flex h-6 w-6 cursor-pointer items-center justify-center rounded bg-white/90 shadow-sm ring-1 ring-stone-200 transition-opacity dark:bg-stone-800/90 dark:ring-stone-700 ${
 											isSelected
 												? "opacity-100"
-												: "opacity-0 group-hover/card:opacity-100 pointer-coarse:opacity-100"
+												: "opacity-0 group-hover/card:opacity-100 kbd:group-has-focus-visible/card:opacity-100 pointer-coarse:opacity-100"
 										}`}
 										onClick={(e) => e.stopPropagation()}
 										title={
@@ -707,7 +716,7 @@ export const LibraryPage = () => {
 											className="h-4 w-4 cursor-pointer"
 										/>
 									</label>
-									<div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover/card:opacity-100 pointer-coarse:opacity-100">
+									<div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover/card:opacity-100 kbd:group-has-focus-visible/card:opacity-100 pointer-coarse:opacity-100">
 										{d.visual.datasetId !== null &&
 											datasets[d.visual.datasetId] && (
 												<RegeneratePreviewButton

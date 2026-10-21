@@ -36,7 +36,7 @@ const setup = async (page: Page): Promise<void> => {
 	})
 	await page.setInputFiles('input[type="file"][accept*="csv"]', DATASET)
 	await page.waitForTimeout(800)
-	const enc = page.locator('[id="aside-section-Encodings"]')
+	const enc = page.locator('[id="aside-section-encodings"]')
 	await enc.getByLabel("X position", { exact: true }).selectOption("activity")
 	await enc.getByLabel("Y position", { exact: true }).selectOption("animal")
 	await enc.getByLabel("Color", { exact: true }).selectOption("silliness_score")

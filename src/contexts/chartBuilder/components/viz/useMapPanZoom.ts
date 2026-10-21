@@ -38,6 +38,7 @@ type RootProps = {
 	tabIndex?: number
 	role?: string
 	"aria-label"?: string
+	className?: string
 	style: React.CSSProperties
 	onPointerDown: (e: React.PointerEvent) => void
 	onPointerMove: (e: React.PointerEvent) => void
@@ -231,10 +232,11 @@ export const useMapPanZoom = ({
 					role: "application",
 					"aria-label":
 						"Map viewport — drag to pan, scroll or Ctrl+Arrow to zoom, Arrow keys to pan",
+					// No outline on a click; a keyboard ring via .vc-focus-ring.
+					className: "vc-focus-ring",
 					style: {
 						cursor: dragging.current ? "grabbing" : "grab",
 						touchAction: "none",
-						outline: "none",
 					},
 				}
 			: { style: {} }),

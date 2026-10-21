@@ -52,6 +52,13 @@ const CustomGlyphPreview = ({
  *  per saved glyph (with an ×-on-hover delete) plus the "+" chip that opens
  *  the add-custom editor. Glyph slots are shared chart-wide — a glyph
  *  created from any row is selectable from all of them. */
+/** Spoken name for a custom glyph chip (the chip itself only draws it),
+ *  minus the leading "custom": `shape "Rx"` / `image shape 2`. */
+const customGlyphName = (g: CustomGlyph, slot: number): string =>
+	g.kind === "text" && g.text.trim()
+		? `shape "${g.text}"`
+		: `image shape ${slot + 1}`
+
 export const CustomGlyphChips = ({
 	glyphs,
 	activeIdx,
@@ -71,20 +78,21 @@ export const CustomGlyphChips = ({
 			const idx = CUSTOM_GLYPH_BASE + slot
 			const selected = idx === activeIdx
 			return (
-				<span key={idx} className="group relative">
+				<span key={idx} className="group group/glyph relative">
 					<button
 						type="button"
 						onClick={() => onPick(idx)}
 						aria-pressed={selected}
+						aria-label={`Custom ${customGlyphName(g, slot)}`}
 						className={swatchChipClass(selected, "w-7")}
 					>
 						<CustomGlyphPreview glyph={g} selected={selected} />
 					</button>
 					<button
 						type="button"
-						aria-label="Delete custom shape"
+						aria-label={`Delete custom ${customGlyphName(g, slot)}`}
 						onClick={() => onDelete(slot)}
-						className="absolute -right-1 -top-1 hidden h-3.5 w-3.5 items-center justify-center rounded-full bg-stone-500 text-[9px] leading-none text-white group-hover:flex dark:bg-stone-400 dark:text-stone-900"
+						className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-stone-600 text-[11px] leading-none text-white before:absolute before:-inset-1 before:content-[''] group-hover:flex kbd:group-has-focus-visible/glyph:flex dark:bg-stone-400 dark:text-stone-900"
 					>
 						×
 					</button>

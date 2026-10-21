@@ -1,12 +1,22 @@
-import { useEffect, useRef, type ReactNode } from "react"
+import { useEffect, useId, useRef, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { combine as c } from "../../lib/cls"
 
 import { Button } from "./Button"
 
 // Lightweight portal-based modal. No headless-ui dependency to keep the
-// vis-components bundle small. Esc/backdrop close, focus stays in document
-// flow (good enough for the upload prompt and export modal use cases).
+// vis-components bundle small. Esc/backdrop close; focus moves into the panel
+// on open (first [autofocus] element, else the first focusable, else the
+// panel), Tab / Shift+Tab cycle inside it, and focus returns to whatever had
+// it when the modal closes.
+
+const FOCUSABLE =
+	'a[href], area[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), iframe, [contenteditable="true"], [tabindex]:not([tabindex="-1"])'
+
+const focusablesIn = (root: HTMLElement): HTMLElement[] =>
+	[...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+		(el) => el.getClientRects().length > 0 || el === document.activeElement
+	)
 
 type ModalProps = {
 	open: boolean
@@ -48,6 +58,9 @@ type ModalProps = {
 	 * `bodyClassName="flex min-h-0 flex-1 flex-col"` so the body can hand a
 	 * child the leftover space instead of growing the panel. */
 	bodyClassName?: string
+	/** Accessible name when there's no `title` (with a title, the dialog is
+	 * labelled by it). */
+	"aria-label"?: string
 }
 
 export const Modal = ({
@@ -63,6 +76,7 @@ export const Modal = ({
 	dismissOnBackdrop = true,
 	panelClassName,
 	bodyClassName,
+	"aria-label": ariaLabel,
 }: ModalProps) => {
 	// A text-selection drag that starts inside the panel (e.g. highlighting a
 	// dimension input) and releases over the backdrop fires the click on the
@@ -70,6 +84,9 @@ export const Modal = ({
 	// close would dismiss the modal mid-selection. Only close when the press
 	// itself began on the backdrop.
 	const pressBeganOnBackdrop = useRef(false)
+
+	const panelRef = useRef<HTMLDivElement>(null)
+	const titleId = useId()
 
 	useEffect(() => {
 		if (!open) return
@@ -80,12 +97,66 @@ export const Modal = ({
 		return () => window.removeEventListener("keydown", onKey)
 	}, [open, onClose])
 
+	// Initial focus + restore on close. Deferred a frame so children that
+	// mount with the panel (and their own autoFocus) have settled.
+	useEffect(() => {
+		if (!open) return
+		const previous = document.activeElement as HTMLElement | null
+		const raf = window.requestAnimationFrame(() => {
+			const panel = panelRef.current
+			if (!panel || panel.contains(document.activeElement)) return
+			// A pointer user gets the panel itself (no caret or ring appears
+			// in a field they didn't pick); a keyboard user lands on the first
+			// control.
+			const keyboard =
+				document.documentElement.dataset.vcModality === "keyboard"
+			const target =
+				panel.querySelector<HTMLElement>("[autofocus]") ??
+				(keyboard ? focusablesIn(panel)[0] : undefined) ??
+				panel
+			target.focus({ preventScroll: true })
+		})
+		return () => {
+			window.cancelAnimationFrame(raf)
+			if (previous && previous.isConnected && previous !== document.body)
+				previous.focus({ preventScroll: true })
+		}
+	}, [open])
+
+	// Focus trap: Tab past the last control wraps to the first and back.
+	const onPanelKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+		if (e.key !== "Tab") return
+		const panel = panelRef.current
+		if (!panel) return
+		const items = focusablesIn(panel)
+		if (items.length === 0) {
+			e.preventDefault()
+			panel.focus()
+			return
+		}
+		const first = items[0]
+		const last = items[items.length - 1]
+		const active = document.activeElement
+		if (e.shiftKey && (active === first || active === panel)) {
+			e.preventDefault()
+			last.focus()
+		} else if (!e.shiftKey && active === last) {
+			e.preventDefault()
+			first.focus()
+		}
+	}
+
 	if (!open) return null
 
 	const panel = (
-		/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- click here only stops propagation so panel clicks don't hit the backdrop's click-away; Escape closes via the keydown listener above */
+		/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- click only stops propagation so panel clicks don't hit the backdrop's click-away; keydown is the Tab focus trap; Escape closes via the window listener above */
 		<div
+			ref={panelRef}
+			tabIndex={-1}
 			className={c(
+				// The panel only takes focus as a fallback (nothing focusable
+				// inside); it never shows a ring.
+				"outline-none",
 				// max-h + overflow-y-auto is a backstop: a panel taller than the
 				// viewport (minus the backdrop's padding) scrolls internally
 				// instead of extending past the screen edges, where the title and
@@ -102,11 +173,17 @@ export const Modal = ({
 					: { maxWidth: maxWidthPx }
 			}
 			onClick={(e) => e.stopPropagation()}
+			onKeyDown={onPanelKeyDown}
 			role="dialog"
 			aria-modal="true"
+			aria-labelledby={title ? titleId : undefined}
+			aria-label={title ? undefined : ariaLabel}
 		>
 			{title && (
-				<div className="border-b border-stone-200 px-4 py-3 text-sm font-medium dark:border-stone-700 vc-heading">
+				<div
+					id={titleId}
+					className="border-b border-stone-200 px-4 py-3 text-sm font-medium dark:border-stone-700 vc-heading"
+				>
 					{title}
 				</div>
 			)}

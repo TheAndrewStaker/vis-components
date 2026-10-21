@@ -395,6 +395,16 @@ const EmbedTab = ({
 	// Base for the snippet textareas' ids so each visible label targets its
 	// own textarea via htmlFor.
 	const snippetIdBase = useId()
+	// The iframe's accessible name — the visual's saved name, escaped for an
+	// HTML attribute.
+	const embedTitleAttr = (
+		useAtomValue(visualsAtom).find((v) => v.id === visualId)?.name.trim() ||
+		"Chart"
+	)
+		.replaceAll("&", "&amp;")
+		.replaceAll('"', "&quot;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
 	const [mode, setMode] = useState<PinMode>("live")
 	const [splitLegend, setSplitLegend] = useState(false)
 	const [copied, setCopied] = useState<"main" | "legend" | null>(null)
@@ -455,7 +465,7 @@ const EmbedTab = ({
 			}
 		}
 		const iframe = (src: string, size: { width: number; height: number }) =>
-			`<iframe src="${src}" width="${size.width}" height="${size.height}" frameborder="0"></iframe>`
+			`<iframe src="${src}" title="${embedTitleAttr}" width="${size.width}" height="${size.height}" frameborder="0"></iframe>`
 		if (urls.full) {
 			return {
 				snippets: [
@@ -484,7 +494,7 @@ const EmbedTab = ({
 			})
 		}
 		return { snippets: out, embedUrl: urls.chart ?? urls.legend ?? null }
-	}, [published?.publishedUrls, embedSizes])
+	}, [published?.publishedUrls, embedSizes, embedTitleAttr])
 
 	// Reset the editable drafts only when the underlying publish changes.
 	// Keyed on a stable signature rather than the `snippets` reference so an
@@ -948,7 +958,7 @@ const ExportTab = ({
 					{unit === "px" ? "" : ` ${unit}`})
 					{(format === "png" || format === "jpeg") &&
 						(effectiveRatio > 1 || unit !== "px") && (
-							<span className="text-stone-400 dark:text-stone-500">
+							<span className="vc-faint">
 								{" "}
 								— exports at {Math.round(width * effectiveRatio)} ×{" "}
 								{Math.round(height * effectiveRatio)} px
@@ -958,7 +968,7 @@ const ExportTab = ({
 							</span>
 						)}
 					{previewScale < 1 && (
-						<span className="text-stone-400 dark:text-stone-500">
+						<span className="vc-faint">
 							{" "}
 							— shown at {Math.round(previewScale * 100)}%
 						</span>
@@ -1114,7 +1124,7 @@ const ResizeHandles = ({
 					width="10"
 					height="10"
 					viewBox="0 0 10 10"
-					className="text-stone-400 dark:text-stone-500"
+					className="vc-muted"
 					aria-hidden="true"
 				>
 					<path

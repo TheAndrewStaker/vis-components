@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useId, useRef, useState } from "react"
 
 import type { SavedCategoricalPalette } from "../../../chartBuilder/lib/types"
 import { ColorInput as UiColorInput } from "../../../../components/ui/ColorInput"
@@ -79,10 +79,34 @@ const PaletteCard = ({
 			? dropSlot
 			: null
 	const lastIndex = palette.colors.length - 1
+	const paletteLabel = palette.name.trim() || "palette"
+	// Keyboard path for the swatch drag: step one place left / right
+	// (insertion-gap contract of reorderPaletteColors).
+	const cardRef = useRef<HTMLDivElement>(null)
+	const moveSwatch = (i: number, dir: -1 | 1) => {
+		const patch = reorderPaletteColors(palette, i, dir < 0 ? i - 1 : i + 2)
+		if (!patch) return
+		onUpdate(patch)
+		// Swatches are keyed by position, so keep focus on the moved color:
+		// the same arrow on its new slot (or the other one at an end).
+		const to = i + dir
+		window.requestAnimationFrame(() => {
+			const card = cardRef.current
+			const btn =
+				card?.querySelector<HTMLButtonElement>(
+					`[data-swatch-move="${to}:${dir}"]:not(:disabled)`
+				) ??
+				card?.querySelector<HTMLButtonElement>(
+					`[data-swatch-move="${to}:${-dir}"]`
+				)
+			btn?.focus()
+		})
+	}
 
 	return (
 	<div
-		className={`flex flex-col gap-1.5 rounded-lg border border-stone-200 p-3 dark:border-stone-700 ${
+		ref={cardRef}
+		className={`group/palette flex flex-col gap-1.5 rounded-lg border border-stone-200 p-3 dark:border-stone-700 ${
 			isDragging ? "opacity-50" : ""
 		}`}
 	>
@@ -102,31 +126,35 @@ const PaletteCard = ({
 					}
 					onGripDragStart(e)
 				}}
-				className={`select-none leading-none text-stone-400 dark:text-stone-500 ${
+				className={`select-none leading-none vc-muted ${
 					isReadOnly ? "" : "cursor-grab"
 				}`}
 			>
 				⠿
 			</span>
 			{!isReadOnly && (
-				<span className="hidden items-center pointer-coarse:flex">
+				// The drag's non-drag path: on touch, and for a keyboard user
+				// once focus is anywhere in the card.
+				<span className="hidden items-center pointer-coarse:flex kbd:group-has-focus-visible/palette:flex">
 					<button
 						type="button"
 						onClick={onMoveUp ?? undefined}
 						disabled={onMoveUp === null}
 						title="Move palette up"
+						aria-label={`Move ${paletteLabel} up`}
 						className={paletteMoveButton}
 					>
-						↑
+						<span aria-hidden="true">↑</span>
 					</button>
 					<button
 						type="button"
 						onClick={onMoveDown ?? undefined}
 						disabled={onMoveDown === null}
 						title="Move palette down"
+						aria-label={`Move ${paletteLabel} down`}
 						className={paletteMoveButton}
 					>
-						↓
+						<span aria-hidden="true">↓</span>
 					</button>
 				</span>
 			)}
@@ -199,7 +227,7 @@ const PaletteCard = ({
 						endDrag()
 					}}
 					onDragEnd={endDrag}
-					className={`relative rounded ${isReadOnly ? "" : "cursor-grab"} ${
+					className={`group/swatch relative rounded ${isReadOnly ? "" : "cursor-grab"} ${
 						dragIndex === i ? "opacity-50" : ""
 					}`}
 				>
@@ -234,6 +262,32 @@ const PaletteCard = ({
 							onUpdate({ colors: next })
 						}}
 					/>
+					{/* Keyboard path for the swatch drag, shown only while a
+					 *  keyboard user's focus is on this swatch. */}
+					{!isReadOnly && palette.colors.length > 1 && (
+						<span className="hidden gap-0.5 kbd:group-has-focus-visible/swatch:flex">
+							<button
+								type="button"
+								data-swatch-move={`${i}:-1`}
+								onClick={() => moveSwatch(i, -1)}
+								disabled={i === 0}
+								aria-label={`Move ${swatchNoun} ${i + 1} left`}
+								className="rounded px-1 text-xs hover:bg-stone-200 disabled:opacity-30 dark:hover:bg-stone-700 vc-muted"
+							>
+								<span aria-hidden="true">←</span>
+							</button>
+							<button
+								type="button"
+								data-swatch-move={`${i}:1`}
+								onClick={() => moveSwatch(i, 1)}
+								disabled={i === lastIndex}
+								aria-label={`Move ${swatchNoun} ${i + 1} right`}
+								className="rounded px-1 text-xs hover:bg-stone-200 disabled:opacity-30 dark:hover:bg-stone-700 vc-muted"
+							>
+								<span aria-hidden="true">→</span>
+							</button>
+						</span>
+					)}
 				</div>
 			))}
 			<button
@@ -248,7 +302,7 @@ const PaletteCard = ({
 						...(inks ? { patternInks: inks } : {}),
 					})
 				}}
-				className="flex h-6 w-10 items-center justify-center self-start rounded border border-dashed border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 dark:border-stone-700"
+				className="flex h-6 w-10 items-center justify-center self-start rounded border border-dashed border-stone-400 hover:border-stone-600 hover:text-stone-900 dark:border-stone-700 dark:hover:text-white vc-muted"
 				title="Add color"
 				aria-label="Add color"
 			>

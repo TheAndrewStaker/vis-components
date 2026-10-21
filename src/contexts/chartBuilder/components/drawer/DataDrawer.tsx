@@ -174,7 +174,7 @@ export const DataDrawer = () => {
 				</span>
 				<div className="flex items-center gap-3">
 					{dropError && (
-						<span className="text-sm text-red-700 dark:text-red-300">
+						<span role="alert" className="text-sm text-red-700 dark:text-red-300">
 							{dropError}
 						</span>
 					)}
@@ -185,7 +185,7 @@ export const DataDrawer = () => {
 					 *  no longer spelled out. */}
 					{!dataset && (
 						<>
-							<span className="hidden text-sm text-stone-500 sm:inline dark:text-stone-500">
+							<span className="hidden text-sm sm:inline vc-faint">
 								Drop a CSV to upload, or
 							</span>
 							<button

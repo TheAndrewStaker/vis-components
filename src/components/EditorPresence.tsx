@@ -108,7 +108,7 @@ const avatarColor = (id: string): string => {
 const MAX_AVATARS = 4
 
 const AVATAR =
-	"flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-white ring-2 ring-white select-none dark:ring-stone-900"
+	"flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-white ring-2 ring-white select-none dark:ring-stone-900"
 
 /** The editor header's "who's here" row: an initials circle for each
  *  person with this visual open, you included. Only on a server that

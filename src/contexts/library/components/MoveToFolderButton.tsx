@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useAtomValue } from "jotai"
 import { foldersAtom } from "../../chartBuilder/store/atoms"
 import { folderTreeOrder } from "../lib/folderOrder"
@@ -16,13 +16,27 @@ export const MoveToFolderButton = ({
 }: MoveToFolderButtonProps) => {
 	const folders = useAtomValue(foldersAtom)
 	const [open, setOpen] = useState(false)
+	const triggerRef = useRef<HTMLButtonElement>(null)
 
 	if (folders.length === 0) return null
 
 	return (
-		<div className="relative">
+		// Escape closes the menu and returns focus to "Move".
+		// eslint-disable-next-line jsx-a11y/no-static-element-interactions -- key handler only; the buttons inside are the interactions
+		<div
+			className="relative"
+			onKeyDown={(e) => {
+				if (e.key !== "Escape" || !open) return
+				e.stopPropagation()
+				setOpen(false)
+				triggerRef.current?.focus()
+			}}
+		>
 			<button
+				ref={triggerRef}
 				type="button"
+				aria-haspopup="menu"
+				aria-expanded={open}
 				onClick={(e) => {
 					e.preventDefault()
 					e.stopPropagation()
@@ -33,16 +47,19 @@ export const MoveToFolderButton = ({
 				Move
 			</button>
 			{open && (
+				// eslint-disable-next-line jsx-a11y/click-events-have-key-events -- click only stops propagation (see below); Escape is handled on the wrapper
 				<div
 					className="absolute top-full right-0 z-20 mt-1 max-h-48 w-44 overflow-y-auto rounded border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-800"
 					// click here only stops propagation so menu clicks don't
 					// reach the card link underneath; the buttons inside are
 					// the real (keyboard-accessible) interactions
 					onClick={(e) => e.stopPropagation()}
-					role="presentation"
+					role="menu"
+					tabIndex={-1}
 				>
 					<button
 						type="button"
+						role="menuitem"
 						onClick={(e) => {
 							e.preventDefault()
 							onMove(visualId, null)
@@ -60,6 +77,7 @@ export const MoveToFolderButton = ({
 						<button
 							key={f.id}
 							type="button"
+							role="menuitem"
 							onClick={(e) => {
 								e.preventDefault()
 								onMove(visualId, f.id)

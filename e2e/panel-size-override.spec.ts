@@ -42,7 +42,7 @@ test.beforeEach(() => {
  *  expanded. */
 const expandSubsection = async (page: Page, title: string): Promise<void> => {
 	const btn = page
-		.locator('[id="aside-section-Encodings"]')
+		.locator('[id="aside-section-encodings"]')
 		.getByRole("button", { name: title, exact: true })
 	if ((await btn.getAttribute("aria-expanded")) === "false") {
 		await btn.click()
@@ -56,7 +56,7 @@ const setup4x1 = async (page: Page): Promise<void> => {
 	})
 	await page.setInputFiles('input[type="file"][accept*="csv"]', DATASET)
 	await page.waitForTimeout(800)
-	const enc = page.locator('[id="aside-section-Encodings"]')
+	const enc = page.locator('[id="aside-section-encodings"]')
 	await enc.getByLabel("X position", { exact: true }).selectOption("Group")
 	await enc.getByLabel("Length", { exact: true }).selectOption("Value")
 	await enc.getByLabel("Color", { exact: true }).selectOption("Year")
@@ -85,7 +85,7 @@ const setPanelDim = async (
 	label: "Panel height" | "Panel width",
 	v: number | null,
 ): Promise<void> => {
-	const enc = page.locator('[id="aside-section-Encodings"]')
+	const enc = page.locator('[id="aside-section-encodings"]')
 	const input = enc.getByLabel(new RegExp(`^${label}`)).first()
 	await input.click()
 	await page.keyboard.press("ControlOrMeta+a")
@@ -233,7 +233,7 @@ test("panel-width override: 4 cols × 250 px wide on a 1×4 layout", async ({
 	})
 	await page.setInputFiles('input[type="file"][accept*="csv"]', DATASET)
 	await page.waitForTimeout(800)
-	const enc = page.locator('[id="aside-section-Encodings"]')
+	const enc = page.locator('[id="aside-section-encodings"]')
 	await enc.getByLabel("X position", { exact: true }).selectOption("Group")
 	await enc.getByLabel("Length", { exact: true }).selectOption("Value")
 	await enc.getByLabel("Facet (wrap)", { exact: true }).selectOption("Facet")

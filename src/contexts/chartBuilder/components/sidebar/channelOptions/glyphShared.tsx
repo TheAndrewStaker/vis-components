@@ -127,6 +127,20 @@ export const PatternGlyph = ({
 	)
 }
 
+/** Spoken names for the SHAPE_PALETTE entries (lib/scales.ts), same order.
+ *  Chips draw the shape, so their accessible name has to come from here. */
+export const SHAPE_NAMES = [
+	"Circle",
+	"Square",
+	"Triangle",
+	"Diamond",
+	"Cross",
+	"Star",
+] as const
+
+export const shapeName = (idx: number): string =>
+	SHAPE_NAMES[idx % SHAPE_NAMES.length] ?? `Shape ${idx + 1}`
+
 type CategoryRowProps = {
 	value: string
 	paletteSize: number
@@ -173,6 +187,7 @@ export const CategoryRow = ({
 						type="button"
 						onClick={() => onPick(idx)}
 						aria-pressed={selected}
+						aria-label={`${shapeName(idx)} for ${value}`}
 						className={swatchChipClass(selected, "w-7")}
 					>
 						<Glyph idx={idx} selected={selected} />

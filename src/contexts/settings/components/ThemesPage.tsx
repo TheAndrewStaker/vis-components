@@ -299,11 +299,11 @@ export const ThemesPage = ({
 				<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
 					<div className="min-w-0 flex-1">
 						{isSystem ? (
-							<span className="mb-1 inline-block rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-600 dark:bg-stone-700 dark:text-stone-300">
+							<span className="mb-1 inline-block rounded bg-stone-100 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-stone-600 dark:bg-stone-700 dark:text-stone-300">
 								System
 							</span>
 						) : isManaged ? (
-							<span className="mb-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+							<span className="mb-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
 								Managed
 							</span>
 						) : null}

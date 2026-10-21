@@ -1001,7 +1001,7 @@ const seedTheme = async (page: Page): Promise<void> => {
 }
 
 const applyTheme = async (page: Page, themeId: string): Promise<void> => {
-	const themePanel = page.locator('[id="aside-section-Theme"]')
+	const themePanel = page.locator('[id="aside-section-theme"]')
 	const select = themePanel.getByLabel("Theme", { exact: true })
 	if ((await select.count()) === 0) return
 	await select.selectOption(themeId).catch(() => {})
@@ -1013,7 +1013,7 @@ const setEncoding = async (
 	channel: string,
 	field: string,
 ): Promise<void> => {
-	const encodingsPanel = page.locator('[id="aside-section-Encodings"]')
+	const encodingsPanel = page.locator('[id="aside-section-encodings"]')
 	// The facet channel's control label is "Facet (wrap)" (see CHANNELS in
 	// lib/channels.ts); scenarios refer to it as "Facet" for brevity. Map it
 	// through so the exact-match getByLabel actually finds the select —
@@ -1033,7 +1033,7 @@ const setFieldType = async (
 	fieldName: string,
 	type: "quantitative" | "categorical" | "temporal" | "ordinal",
 ): Promise<void> => {
-	const fieldsPanel = page.locator('[id="aside-section-Fields"]')
+	const fieldsPanel = page.locator('[id="aside-section-fields"]')
 	const select = fieldsPanel.getByLabel(`Type for ${fieldName}`, {
 		exact: true,
 	})
@@ -1047,7 +1047,7 @@ const setTitle = async (
 	value: string,
 ): Promise<void> => {
 	const labelsPanel = page.locator(
-		'[id="aside-section-Titles"]',
+		'[id="aside-section-titles"]',
 	)
 	const textarea = labelsPanel.getByLabel(label, { exact: true })
 	if ((await textarea.count()) === 0) return
@@ -1064,7 +1064,7 @@ const setTitle = async (
  *  until it's open. The disclosure button only exists when a field is
  *  mapped to Facet — call this AFTER setEncoding(..., "Facet", ...). */
 const expandFacetOptions = async (page: Page): Promise<void> => {
-	const encodingsPanel = page.locator('[id="aside-section-Encodings"]')
+	const encodingsPanel = page.locator('[id="aside-section-encodings"]')
 	const btn = encodingsPanel.getByRole("button", {
 		name: /Toggle options for Facet \(wrap\)/,
 	})
@@ -1079,7 +1079,7 @@ const expandFacetOptions = async (page: Page): Promise<void> => {
  *  via htmlFor — locate by accessible label). Sets cols=1 for the "tall
  *  stack" scenarios. */
 const setFacetCols = async (page: Page, cols: number): Promise<void> => {
-	const encodingsPanel = page.locator('[id="aside-section-Encodings"]')
+	const encodingsPanel = page.locator('[id="aside-section-encodings"]')
 	const colsInput = encodingsPanel.getByLabel(/^Columns$/)
 	if ((await colsInput.count()) === 0) return
 	await colsInput.first().fill(String(cols)).catch(() => {})
@@ -1090,7 +1090,7 @@ const setFacetCols = async (page: Page, cols: number): Promise<void> => {
 const setFacetGapX = async (page: Page, gapX: number): Promise<void> => {
 	// GapInput renders a NumberInput: `type="text"` with the label associated
 	// via htmlFor — locate by accessible label, not label>input descendant.
-	const encodingsPanel = page.locator('[id="aside-section-Encodings"]')
+	const encodingsPanel = page.locator('[id="aside-section-encodings"]')
 	const gapInput = encodingsPanel.getByLabel(/^Gap X/)
 	if ((await gapInput.count()) === 0) return
 	await gapInput.first().fill(String(gapX)).catch(() => {})
@@ -1101,7 +1101,7 @@ const setFacetGapX = async (page: Page, gapX: number): Promise<void> => {
  *  "X-axis (only the bottom row labels)" and "Y-axis (only the left
  *  column labels)". */
 const setShareX = async (page: Page, on: boolean): Promise<void> => {
-	const encodingsPanel = page.locator('[id="aside-section-Encodings"]')
+	const encodingsPanel = page.locator('[id="aside-section-encodings"]')
 	const cb = encodingsPanel.getByLabel(/^X-axis \(only the bottom row labels\)/)
 	if ((await cb.count()) === 0) return
 	if (on) await cb.check().catch(() => {})
@@ -1109,7 +1109,7 @@ const setShareX = async (page: Page, on: boolean): Promise<void> => {
 }
 
 const setShareY = async (page: Page, on: boolean): Promise<void> => {
-	const encodingsPanel = page.locator('[id="aside-section-Encodings"]')
+	const encodingsPanel = page.locator('[id="aside-section-encodings"]')
 	const cb = encodingsPanel.getByLabel(/^Y-axis \(only the left column labels\)/)
 	if ((await cb.count()) === 0) return
 	if (on) await cb.check().catch(() => {})
@@ -1121,7 +1121,7 @@ const setShareY = async (page: Page, on: boolean): Promise<void> => {
  *  layouts that gap × (rows-1) overflows the canvas, so we drop it. */
 const setFacetGapY = async (page: Page, gapY: number): Promise<void> => {
 	// See setFacetGapX — locate the NumberInput by accessible label.
-	const encodingsPanel = page.locator('[id="aside-section-Encodings"]')
+	const encodingsPanel = page.locator('[id="aside-section-encodings"]')
 	const gapInput = encodingsPanel.getByLabel(/^Gap Y/)
 	if ((await gapInput.count()) === 0) return
 	await gapInput.first().fill(String(gapY)).catch(() => {})
@@ -1137,7 +1137,7 @@ const setProportionalByCategoryCount = async (
 	page: Page,
 	on: boolean,
 ): Promise<void> => {
-	const encodingsPanel = page.locator('[id="aside-section-Encodings"]')
+	const encodingsPanel = page.locator('[id="aside-section-encodings"]')
 	const cbs = encodingsPanel.getByLabel(
 		/Size (column widths|row heights|panel widths|panel heights) by category count/,
 	)
@@ -1212,7 +1212,7 @@ for (const scenario of AVAILABLE_SCENARIOS) {
 		await page.waitForFunction(
 			() => {
 				const enc = document.querySelector(
-					'[id="aside-section-Encodings"]',
+					'[id="aside-section-encodings"]',
 				)
 				if (!enc) return false
 				const sel = enc.querySelector("select")

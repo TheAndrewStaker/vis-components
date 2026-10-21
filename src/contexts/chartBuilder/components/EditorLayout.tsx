@@ -209,13 +209,19 @@ export const EditorLayout = () => {
 					<>
 						<div className="min-h-0">{sidebar}</div>
 						{/* Resize handle; the pull tab hangs off its border line. */}
+						{/* The handle holds the rail's pull-tab BUTTON, so the separator
+						 *  role sits on a transparent overlay inside it rather than on the
+						 *  handle itself (a separator may not contain a control). */}
 						<div
-							role="separator"
-							aria-orientation="vertical"
-							aria-label="Resize sidebar"
 							onPointerDown={onPointerDown}
 							className="group relative flex w-1.5 cursor-ew-resize touch-none items-center justify-center border-r border-stone-200 bg-stone-50 hover:bg-stone-200 pointer-coarse:w-3 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-700"
 						>
+							<div
+								role="separator"
+								aria-orientation="vertical"
+								aria-label="Resize sidebar"
+								className="absolute inset-0"
+							/>
 							<div className="h-8 w-0.5 rounded-full bg-stone-300 opacity-0 transition-opacity group-hover:opacity-100 dark:bg-stone-500" />
 							<RailTab
 								collapsed={false}
@@ -276,6 +282,12 @@ export const EditorLayout = () => {
 							<div className="relative flex min-h-0 flex-1 flex-col">
 								<div
 									ref={setChartHost}
+									// Focusable so a keyboard user can scroll a canvas larger
+									// than the viewport (arrow keys / Page Up/Down).
+									// eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- scrollable region must be focusable (WCAG 2.1.1)
+									tabIndex={0}
+									role="region"
+									aria-label="Chart canvas"
 									className={`min-h-0 flex-1 overflow-auto bg-stone-200 dark:bg-stone-800${publishedFrame}`}
 									style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
 								>

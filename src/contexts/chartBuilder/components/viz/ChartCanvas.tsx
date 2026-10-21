@@ -98,6 +98,7 @@ export const ChartBody = ({
 					// one here would let the thumbnail pipeline capture it as a
 					// stable frame and save a blank preview.
 					<div
+						role="status"
 						className="flex items-center gap-2 text-sm opacity-0"
 						style={{
 							animation: "vc-delayed-reveal 0s linear 500ms both",

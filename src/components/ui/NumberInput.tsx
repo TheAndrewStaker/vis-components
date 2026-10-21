@@ -86,6 +86,7 @@ export const NumberInput = ({
 	// to thread one through; SSR-safe (React handles hydration).
 	const generatedId = useId()
 	const inputId = id ?? generatedId
+	const suffixId = `${inputId}-unit`
 
 	// Local edit buffer. `null` means "not editing" → the field mirrors the
 	// committed `value` prop. A string means the user is mid-edit and we show
@@ -253,7 +254,7 @@ export const NumberInput = ({
 			disabled={disabled}
 			tabIndex={-1}
 			aria-label={dir === 1 ? "Increment" : "Decrement"}
-			className="flex flex-1 items-center justify-center px-1 text-[7px] leading-none hover:bg-stone-100 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-stone-700 dark:hover:text-stone-100 vc-muted"
+			className="flex flex-1 items-center justify-center text-[9px] leading-none hover:bg-stone-100 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-stone-700 dark:hover:text-stone-100 vc-muted"
 		>
 			{dir === 1 ? "▲" : "▼"}
 		</button>
@@ -280,21 +281,22 @@ export const NumberInput = ({
 						onKeyDown={handleKeyDown}
 						disabled={disabled}
 						placeholder={placeholder}
+						aria-describedby={suffix !== undefined ? suffixId : undefined}
 						className={c(
-							// `pr-5` reserves room for the spinner column so the
+							// `pr-6` reserves room for the spinner column so the
 							// value text doesn't slide under the ▲▼ buttons.
-							"w-20 rounded-control border border-stone-300 bg-white py-1 pr-5 pl-1.5 text-sm text-stone-900 transition-colors outline-none hover:border-stone-400 focus:border-stone-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-white dark:hover:border-stone-600 dark:focus:border-stone-500",
+							"w-20 rounded-control border border-stone-400 bg-white py-1 pr-6 pl-1.5 text-sm text-stone-900 transition-colors vc-focus-ring placeholder:text-vc-faint hover:border-stone-600 focus:border-stone-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-white dark:placeholder:text-stone-500 dark:hover:border-stone-600 dark:focus:border-stone-500",
 							inputClassName
 						)}
 					/>
-					<div className="absolute inset-y-0 right-0 flex w-4 flex-col overflow-hidden rounded-r-control border-l border-stone-300 dark:border-stone-700">
+					<div className="absolute inset-y-0 right-0 flex w-5 flex-col overflow-hidden rounded-r-control border-l border-stone-300 dark:border-stone-700">
 						{spinnerButton(1)}
 						<div className="border-t border-stone-300 dark:border-stone-700" />
 						{spinnerButton(-1)}
 					</div>
 				</div>
 				{suffix !== undefined && (
-					<span className="text-sm vc-muted">
+					<span id={suffixId} className="text-sm vc-muted">
 						{suffix}
 					</span>
 				)}

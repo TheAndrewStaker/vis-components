@@ -16,6 +16,7 @@ import {
 } from "../../chartBuilder/components/viz/ChartCanvas"
 import { Legend } from "../../chartBuilder/components/viz/Legend"
 import { useEnsureCurrentDatasetLoaded } from "../../chartBuilder/store/useCurrentDatasetView"
+import { useDocumentTitle } from "../../../lib/documentTitle"
 
 type LoadState =
 	| { status: "loading" }
@@ -37,6 +38,10 @@ export const EmbedPage = () => {
 	// judging it early flashed "Visualization not found" on every cold load.
 	const visualsHydrated = useAtomValue(visualsHydratedAtom)
 	const datasets = useAtomValue(datasetIndexAtom)
+	// The embed's document is named for its chart (iframe title fallback).
+	useDocumentTitle(
+		visuals.find((v) => v.id === visualId)?.name.trim() || null
+	)
 	const setPreviewVersionId = useSetAtom(previewVersionIdAtom)
 	const loadVisual = useLoadVisual()
 	const [state, setState] = useState<LoadState>({ status: "loading" })
@@ -95,7 +100,7 @@ export const EmbedPage = () => {
 
 	if (state.status === "loading") {
 		return (
-			<div className="flex h-screen items-center justify-center text-sm text-stone-500">
+			<div className="flex h-screen items-center justify-center text-sm vc-muted">
 				Loading…
 			</div>
 		)
@@ -106,7 +111,7 @@ export const EmbedPage = () => {
 				<p className="text-sm vc-text">
 					This embed could not be loaded.
 				</p>
-				<p className="text-sm text-stone-500">Visualization not found.</p>
+				<p className="text-sm vc-muted">Visualization not found.</p>
 			</div>
 		)
 	}
@@ -116,7 +121,7 @@ export const EmbedPage = () => {
 				<p className="text-sm vc-text">
 					This embed is pinned to a version that no longer exists.
 				</p>
-				<p className="text-sm text-stone-500">
+				<p className="text-sm vc-muted">
 					Pinned version: <code>{state.requestedVersionId}</code>
 				</p>
 			</div>

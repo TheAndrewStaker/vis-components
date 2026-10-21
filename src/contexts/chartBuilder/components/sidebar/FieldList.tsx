@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useId, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { effectiveDerivedName } from "../../lib/derivedVariables"
 import {
@@ -232,6 +232,7 @@ const FieldNameEditor = ({ field }: { field: Field }) => {
 	const [editing, setEditing] = useState(false)
 	const [draft, setDraft] = useState(field.name)
 	const [error, setError] = useState<string | null>(null)
+	const errorId = useId()
 
 	const startEditing = () => {
 		setDraft(field.name)
@@ -276,7 +277,7 @@ const FieldNameEditor = ({ field }: { field: Field }) => {
 						: `${field.name} — click to rename`
 				}
 				aria-label={`Rename ${field.name}`}
-				className="group flex min-w-0 flex-1 items-center gap-1 text-left text-sm vc-text"
+				className="group -my-0.5 flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left text-sm vc-text"
 			>
 				<span className="min-w-0 truncate">{field.name}</span>
 				<svg
@@ -284,7 +285,7 @@ const FieldNameEditor = ({ field }: { field: Field }) => {
 					width={11}
 					height={11}
 					aria-hidden
-					className="flex-shrink-0 text-stone-400 opacity-0 group-hover:opacity-100 dark:text-stone-500"
+					className="flex-shrink-0 opacity-0 group-hover:opacity-100 vc-muted"
 				>
 					<path
 						d="M11.7 1.6l2.7 2.7-9.2 9.2-3.4.7.7-3.4 9.2-9.2z"
@@ -307,13 +308,17 @@ const FieldNameEditor = ({ field }: { field: Field }) => {
 					if (e.key === "Escape") cancel()
 				}}
 				aria-label={`New name for ${field.name}`}
+				aria-invalid={error ? true : undefined}
+				aria-describedby={error ? errorId : undefined}
 				// eslint-disable-next-line jsx-a11y/no-autofocus -- initial focus for the inline rename editor the user just opened
 				autoFocus
 				onFocus={(e) => e.target.select()}
-				className="min-w-0 rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none dark:bg-stone-900 vc-text"
+				className="vc-focus-ring min-w-0 rounded border border-blue-400 bg-white px-1 py-0 text-sm dark:bg-stone-900 vc-text"
 			/>
 			{error && (
-				<p className="text-xs text-red-700 dark:text-red-300">{error}</p>
+				<p id={errorId} className="text-xs text-red-700 dark:text-red-300">
+					{error}
+				</p>
 			)}
 		</div>
 	)
@@ -331,6 +336,7 @@ const DerivedFieldName = ({ field }: { field: Field }) => {
 	const [editing, setEditing] = useState(false)
 	const [draft, setDraft] = useState(field.name)
 	const [error, setError] = useState<string | null>(null)
+	const errorId = useId()
 	const variable = config.variables.find(
 		(v, i) => effectiveDerivedName(v, i) === field.name
 	)
@@ -382,7 +388,7 @@ const DerivedFieldName = ({ field }: { field: Field }) => {
 				onClick={startEditing}
 				title={`${field.name} — click to rename`}
 				aria-label={`Rename ${field.name}`}
-				className="group flex min-w-0 flex-1 items-center gap-1 text-left text-sm vc-text"
+				className="group -my-0.5 flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left text-sm vc-text"
 			>
 				<span className="min-w-0 truncate">{field.name}</span>
 				<svg
@@ -390,7 +396,7 @@ const DerivedFieldName = ({ field }: { field: Field }) => {
 					width={11}
 					height={11}
 					aria-hidden
-					className="flex-shrink-0 text-stone-400 opacity-0 group-hover:opacity-100 dark:text-stone-500"
+					className="flex-shrink-0 opacity-0 group-hover:opacity-100 vc-muted"
 				>
 					<path
 						d="M11.7 1.6l2.7 2.7-9.2 9.2-3.4.7.7-3.4 9.2-9.2z"
@@ -413,13 +419,17 @@ const DerivedFieldName = ({ field }: { field: Field }) => {
 					if (e.key === "Escape") cancel()
 				}}
 				aria-label={`New name for ${field.name}`}
+				aria-invalid={error ? true : undefined}
+				aria-describedby={error ? errorId : undefined}
 				// eslint-disable-next-line jsx-a11y/no-autofocus -- initial focus for the inline rename editor the user just opened
 				autoFocus
 				onFocus={(e) => e.target.select()}
-				className="min-w-0 rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none dark:bg-stone-900 vc-text"
+				className="vc-focus-ring min-w-0 rounded border border-blue-400 bg-white px-1 py-0 text-sm dark:bg-stone-900 vc-text"
 			/>
 			{error && (
-				<p className="text-xs text-red-700 dark:text-red-300">{error}</p>
+				<p id={errorId} className="text-xs text-red-700 dark:text-red-300">
+					{error}
+				</p>
 			)}
 		</div>
 	)
@@ -819,7 +829,7 @@ const LevelReorderPanel = ({
 						>
 							<span
 								aria-hidden
-								className="flex-shrink-0 select-none leading-none text-stone-400 dark:text-stone-500"
+								className="flex-shrink-0 select-none leading-none vc-muted"
 							>
 								⠿
 							</span>
@@ -831,6 +841,7 @@ const LevelReorderPanel = ({
 								onClick={() => move(i, -1)}
 								disabled={i === 0}
 								title="Move up"
+								aria-label={`Move ${value} up`}
 								className="flex h-5 w-5 items-center justify-center rounded hover:bg-stone-200 disabled:cursor-not-allowed disabled:opacity-30 pointer-coarse:h-8 pointer-coarse:w-8 dark:hover:bg-stone-700 vc-muted"
 							>
 								↑
@@ -840,6 +851,7 @@ const LevelReorderPanel = ({
 								onClick={() => move(i, 1)}
 								disabled={i === ordered.length - 1}
 								title="Move down"
+								aria-label={`Move ${value} down`}
 								className="flex h-5 w-5 items-center justify-center rounded hover:bg-stone-200 disabled:cursor-not-allowed disabled:opacity-30 pointer-coarse:h-8 pointer-coarse:w-8 dark:hover:bg-stone-700 vc-muted"
 							>
 								↓

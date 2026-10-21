@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useId, useMemo, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { DEFAULT_ANNOTATIONS_CONFIG } from "../../lib/annotationsConfig"
 import {
@@ -401,6 +401,7 @@ export const QuickStartIconBar = () => {
 	// Custom hover tooltip (instant, unlike the native `title` delay). Fixed
 	// positioning so it escapes the sidebar's overflow-y-auto clipping; the
 	// x-center is clamped so long labels don't run off the window edge.
+	const reasonIdPrefix = useId()
 	const [hovered, setHovered] = useState<{
 		label: string
 		x: number
@@ -544,24 +545,49 @@ export const QuickStartIconBar = () => {
 					const tooltip = disabled
 						? `${LABELS[chartType]} unavailable: ${MISSING_TYPE_HINT[chartType]}`
 						: LABELS[chartType]
+					// An unavailable type stays FOCUSABLE (aria-disabled, not
+					// disabled) so a keyboard user can reach the reason: it's
+					// announced via aria-describedby and shown on keyboard focus.
+					// Without a data set there's no reason to give — truly disabled.
+					const unavailable = disabled && !!dataset
+					const reasonId = `${reasonIdPrefix}-${chartType}`
+					const showTip = (el: HTMLElement) => {
+						const rect = el.getBoundingClientRect()
+						setHovered({
+							label: tooltip,
+							x: rect.left + rect.width / 2,
+							y: rect.bottom,
+						})
+					}
 					return (
 						<button
 							key={chartType}
 							type="button"
-							disabled={disabled || !dataset}
-							onClick={() => onIconClick(chartType)}
-							onMouseEnter={(e) => {
-								const rect = e.currentTarget.getBoundingClientRect()
-								setHovered({
-									label: tooltip,
-									x: rect.left + rect.width / 2,
-									y: rect.bottom,
-								})
+							disabled={!dataset}
+							aria-disabled={unavailable || undefined}
+							aria-describedby={unavailable ? reasonId : undefined}
+							onClick={() => {
+								if (!unavailable) onIconClick(chartType)
 							}}
+							onMouseEnter={(e) => showTip(e.currentTarget)}
 							onMouseLeave={() => setHovered(null)}
+							onFocus={(e) => {
+								if (e.currentTarget.matches(":focus-visible"))
+									showTip(e.currentTarget)
+							}}
+							onBlur={() => setHovered(null)}
 							aria-label={LABELS[chartType]}
-							className="flex h-8 w-full items-center justify-center rounded border border-stone-300 bg-white transition hover:enabled:scale-125 disabled:cursor-not-allowed disabled:opacity-40 dark:border-stone-700 dark:bg-stone-800 vc-text"
+							className={`flex h-8 w-full items-center justify-center rounded border border-stone-300 bg-white transition disabled:cursor-not-allowed disabled:opacity-40 dark:border-stone-700 dark:bg-stone-800 vc-text ${
+								unavailable
+									? "cursor-not-allowed opacity-40"
+									: "hover:enabled:scale-125"
+							}`}
 						>
+							{unavailable && (
+								<span id={reasonId} className="sr-only">
+									{tooltip}
+								</span>
+							)}
 							<Icon className="h-6 w-6 fill-current" />
 						</button>
 					)
@@ -579,8 +605,11 @@ export const QuickStartIconBar = () => {
 						const overLeft = Math.max(0, 8 - r.left)
 						const overRight = Math.max(0, r.right - (window.innerWidth - 8))
 						const dx = overLeft - overRight
-						if (dx !== 0)
-							el.style.transform = `translateX(calc(-50% + ${dx}px))`
+						// Tailwind v4's `-translate-x-1/2` is the CSS `translate`
+						// property, not `transform`; writing `transform` here would
+						// STACK on it (a full width left of center) instead of
+						// replacing it, which is exactly how the tip ran off-screen.
+						if (dx !== 0) el.style.translate = `calc(-50% + ${dx}px)`
 					}}
 					className="pointer-events-none fixed z-50 max-w-56 -translate-x-1/2 rounded-md bg-white px-2 py-1 text-center text-xs font-medium text-vc-brand-text shadow-md ring-1 ring-stone-200"
 					style={{ left: hovered.x, top: hovered.y + 6 }}

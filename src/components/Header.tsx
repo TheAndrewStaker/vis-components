@@ -235,8 +235,20 @@ const NewVisualizationButton = () => {
 		setImportOutcome(await importBundle(file))
 	}
 
+	// Escape closes the menu and hands focus back to the arrow segment, so a
+	// keyboard user isn't stranded on a menu item that just disappeared.
+	const onMenuKeyDown = (e: React.KeyboardEvent) => {
+		if (e.key !== "Escape" || !open) return
+		e.stopPropagation()
+		setOpen(false)
+		wrapperRef.current
+			?.querySelector<HTMLElement>("[aria-haspopup=menu]")
+			?.focus()
+	}
+
 	return (
-		<div className="relative" ref={wrapperRef}>
+		// eslint-disable-next-line jsx-a11y/no-static-element-interactions -- Escape-to-close for the menu below; the interactive elements are the buttons inside
+		<div className="relative" ref={wrapperRef} onKeyDown={onMenuKeyDown}>
 			<div className="flex">
 				<Button
 					compact
@@ -380,7 +392,7 @@ const EditorOnlyBlackAndWhiteToggle = () => {
 }
 
 /** Top-bar toggle that flips a `grayscale(1)` filter on the chart wrapper —
- * a quick accessibility check ("does my color encoding still read in B&W?")
+ * a quick visual check ("does my color encoding still read in B&W?")
  * without altering the saved theme. State is in-memory only. */
 const BlackAndWhiteToggle = () => {
 	const [active, setActive] = useAtom(blackAndWhiteModeAtom)
@@ -391,7 +403,7 @@ const BlackAndWhiteToggle = () => {
 			title={
 				active
 					? "Disable black-and-white preview"
-					: "Black-and-white preview (accessibility check)"
+					: "Black-and-white preview"
 			}
 			aria-pressed={active}
 			className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${

@@ -43,7 +43,7 @@ export const EmbedRoot = ({
 
 	if (state === "loading") {
 		return (
-			<div className="flex h-screen items-center justify-center text-sm text-stone-500">
+			<div className="flex h-screen items-center justify-center text-sm vc-muted">
 				Loading…
 			</div>
 		)
@@ -54,7 +54,7 @@ export const EmbedRoot = ({
 				<p className="text-sm vc-text">
 					This embed could not be loaded.
 				</p>
-				<p className="text-sm text-stone-500">
+				<p className="text-sm vc-muted">
 					Its published data is incomplete.
 				</p>
 			</div>

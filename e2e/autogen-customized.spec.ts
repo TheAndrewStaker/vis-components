@@ -72,7 +72,7 @@ const applyCustomizations = async (page: Page): Promise<void> => {
 		await dataLabelsHeader.click()
 	}
 
-	const dataLabelsPanel = page.locator('[id="aside-section-Data Labels"]')
+	const dataLabelsPanel = page.locator('[id="aside-section-data-labels"]')
 	// Map the "Value" field: third select in the panel (X / Y / Value /
 	// Color / Size in that order, per CHANNEL_LABEL).
 	const dataLabelsSelects = dataLabelsPanel.locator("select")
@@ -105,7 +105,7 @@ const applyCustomizations = async (page: Page): Promise<void> => {
 	// to facet + connection (or facet + x) causes degenerate renders
 	// (one-row-per-panel area charts that draw nothing because each
 	// panel has only one connection group).
-	const encodingsPanel = page.locator('[id="aside-section-Encodings"]')
+	const encodingsPanel = page.locator('[id="aside-section-encodings"]')
 	const alreadyMapped = await encodingsPanel
 		.locator("select")
 		.evaluateAll((selects) =>
@@ -148,7 +148,7 @@ const applyCustomizations = async (page: Page): Promise<void> => {
 	// whole customization silently no-ops — which made the
 	// `title-not-left-aligned` check assert an alignment nobody set.)
 	const labelsPanel = page.locator(
-		'[id="aside-section-Titles"]',
+		'[id="aside-section-titles"]',
 	)
 	const subsections = labelsPanel.getByRole("button", {
 		name: /^(Primary|Axis|Facet|Legend) titles$/,

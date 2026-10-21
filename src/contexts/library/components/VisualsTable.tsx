@@ -297,7 +297,7 @@ export const VisualsTable = ({
 											)}
 										</>
 									) : (
-										<span className="text-stone-400 italic">—</span>
+										<span className="italic vc-faint">—</span>
 									)}
 								</td>
 								<td className="px-3 py-2">
@@ -311,7 +311,7 @@ export const VisualsTable = ({
 								</td>
 								<td className="px-3 py-2 vc-text">
 									{row.folderPath || (
-										<span className="text-stone-400 italic">Root</span>
+										<span className="italic vc-faint">Root</span>
 									)}
 								</td>
 							</tr>

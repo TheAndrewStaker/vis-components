@@ -290,7 +290,7 @@ const FolderRowMenu = ({
 			<button
 				type="button"
 				onClick={() => (open ? close() : onOpenChange(true))}
-				className="rounded p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-white"
+				className="rounded p-1 hover:text-stone-900 dark:hover:text-white vc-muted"
 				title="More actions"
 				aria-label={`Actions for ${folder.name}`}
 				aria-haspopup="menu"
@@ -484,12 +484,17 @@ const FolderTreeItem = ({
 
 	return (
 		<div>
+			{/* The row is a pointer target (click anywhere selects, drag to
+			 *  move/drop); the keyboard path is the name button inside, so the
+			 *  row itself is not a control — it contains other buttons. */}
+			{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer convenience; the name button is the keyboard path, see above */}
 			<div
-				className={`group ${TREE_ROW} ${
+				className={`group group/folderrow ${TREE_ROW} ${
 					isSelected
 						? "vc-nav-active"
 						: "hover:bg-stone-100 dark:hover:bg-stone-800 vc-text"
 				} ${dropZoneClass(rowDropZone)}`}
+				data-folder-row
 				data-drop-zone={rowDropZone ?? undefined}
 				style={{ paddingLeft: `${depth * 16 + 4}px` }}
 				draggable={!editing}
@@ -505,17 +510,6 @@ const FolderTreeItem = ({
 				onDragEnd={() => setCurrentDrag(null)}
 				{...dropHandlers}
 				onClick={() => onSelect(folder.id)}
-				onKeyDown={(e) => {
-					// Only when the row itself is focused — Enter inside the
-					// rename input / expand button must not also select.
-					if (e.target !== e.currentTarget) return
-					if (e.key === "Enter" || e.key === " ") {
-						e.preventDefault()
-						onSelect(folder.id)
-					}
-				}}
-				role="button"
-				tabIndex={0}
 			>
 				{hasExpandable ? (
 					<button
@@ -525,6 +519,10 @@ const FolderTreeItem = ({
 							onToggleExpanded(folder.id)
 						}}
 						className={`flex ${ROW_CHEVRON_BOX} items-center justify-center text-vc-brand-text dark:text-vc-electric-indigo-300`}
+						aria-label={
+							expanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`
+						}
+						aria-expanded={expanded}
 					>
 						<SectionChevron open={expanded} />
 					</button>
@@ -547,11 +545,16 @@ const FolderTreeItem = ({
 						onClick={(e) => e.stopPropagation()}
 						// eslint-disable-next-line jsx-a11y/no-autofocus -- initial focus for the inline rename editor the user just opened
 						autoFocus
-						className="min-w-0 flex-1 rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none dark:bg-stone-900"
+						aria-label="New folder name"
+						className="vc-focus-ring min-w-0 flex-1 rounded border border-blue-400 bg-white px-1 py-0 text-sm dark:bg-stone-900"
 					/>
 				) : (
-					<span
-						className="min-w-0 flex-1 truncate font-bold text-vc-brand-text dark:text-vc-electric-indigo-300"
+					// The row's click (bubbling from here) selects; as a real
+					// button the name is also the row's Tab stop and Enter target.
+					<button
+						type="button"
+						className="min-w-0 flex-1 truncate text-left font-bold text-vc-brand-text dark:text-vc-electric-indigo-300"
+						aria-current={isSelected ? "true" : undefined}
 						onDoubleClick={(e) => {
 							e.stopPropagation()
 							setEditing(true)
@@ -559,12 +562,13 @@ const FolderTreeItem = ({
 						}}
 					>
 						{folder.name}
-					</span>
+					</button>
 				)}
 				{/* Always visible on touch (no hover there) and while the row's
-				 *  menu is open, so it doesn't vanish under a moving pointer. */}
+				 *  menu is open, so it doesn't vanish under a moving pointer;
+				 *  revealed for a keyboard user who tabs onto one of them. */}
 				<div
-					className={`flex gap-0.5 group-hover:opacity-100 pointer-coarse:opacity-100 ${
+					className={`flex gap-1.5 group-hover:opacity-100 kbd:group-has-focus-visible/folderrow:opacity-100 pointer-coarse:opacity-100 ${
 						menuOpen ? "opacity-100" : "opacity-0"
 					}`}
 				>
@@ -574,10 +578,11 @@ const FolderTreeItem = ({
 							e.stopPropagation()
 							onCreateChild(folder.id)
 						}}
-						className="rounded p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-white"
+						className="rounded p-1 hover:text-stone-900 dark:hover:text-white vc-muted"
 						title="New subfolder"
+						aria-label={`New subfolder in ${folder.name}`}
 					>
-						<svg viewBox="0 0 12 12" width={10} height={10}>
+						<svg viewBox="0 0 12 12" width={10} height={10} aria-hidden="true">
 							<path
 								d="M6 2v8M2 6h8"
 								stroke="currentColor"
@@ -593,10 +598,11 @@ const FolderTreeItem = ({
 								e.stopPropagation()
 								onDelete(folder.id)
 							}}
-							className="rounded p-0.5 text-stone-400 hover:text-red-600 dark:hover:text-red-400"
+							className="rounded p-1 hover:text-red-600 dark:hover:text-red-400 vc-muted"
 							title="Delete folder"
+							aria-label={`Delete folder ${folder.name}`}
 						>
-							<svg viewBox="0 0 12 12" width={10} height={10}>
+							<svg viewBox="0 0 12 12" width={10} height={10} aria-hidden="true">
 								<path
 									d="M3 3l6 6M9 3l-6 6"
 									stroke="currentColor"
@@ -955,10 +961,11 @@ export const FolderTree = ({
 				<button
 					type="button"
 					onClick={() => createFolder(null)}
-					className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 pointer-coarse:p-2 dark:hover:bg-stone-800 dark:hover:text-white"
+					className="-m-0.5 rounded p-1.5 hover:bg-stone-100 hover:text-stone-900 pointer-coarse:p-2 dark:hover:bg-stone-800 dark:hover:text-white vc-muted"
 					title="New folder"
+					aria-label="New folder"
 				>
-					<svg viewBox="0 0 12 12" width={12} height={12}>
+					<svg viewBox="0 0 12 12" width={12} height={12} aria-hidden="true">
 						<path
 							d="M6 2v8M2 6h8"
 							stroke="currentColor"
@@ -984,26 +991,27 @@ export const FolderTree = ({
 					if (e.target === e.currentTarget) onSelect(UNFILED_FOLDER_ID)
 				}}
 			>
-				{/* "All visualizations" root item */}
+				{/* "All visualizations" root item: pointer target row, with the
+				 *  label button as its keyboard path (same shape as a folder). */}
+				{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer convenience; the label button is the keyboard path */}
 				<div
 					className={`${TREE_ROW} ${
 						selectedFolderId === null
 							? "vc-nav-active"
 							: "hover:bg-stone-100 dark:hover:bg-stone-800 vc-text"
 					} ${dropZoneClass(rootDrop.dropZone ?? rootContents.dropZone)}`}
+					data-folder-row
 					{...rootDrop.dropHandlers}
 					onClick={() => onSelect(null)}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === " ") {
-							e.preventDefault()
-							onSelect(null)
-						}
-					}}
-					role="button"
-					tabIndex={0}
 				>
 					<span className={ROW_CHEVRON_BOX} />
-					<span className="flex-1">All visualizations</span>
+					<button
+						type="button"
+						className="flex-1 text-left"
+						aria-current={selectedFolderId === null ? "true" : undefined}
+					>
+						All visualizations
+					</button>
 				</div>
 				{rootFolders.map((folder) => (
 					<FolderTreeItem

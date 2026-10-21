@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useId, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { useAtom } from "jotai"
 
@@ -152,14 +152,19 @@ const AddThemeDialog = ({
 	onPickImport: () => void
 }) => {
 	const [selectedId, setSelectedId] = useState<string>("")
+	const baseSelectId = useId()
 	return (
 		<Modal open={open} onClose={onCancel} title="Add a new theme">
 			<div className="flex flex-col gap-4">
 				<div className="flex flex-col gap-2">
-					<span className="text-sm font-medium vc-text">
+					<label
+						htmlFor={baseSelectId}
+						className="text-sm font-medium vc-text"
+					>
 						Base on an existing theme
-					</span>
+					</label>
 					<Select
+						id={baseSelectId}
 						value={selectedId}
 						onChange={(e) => setSelectedId(e.target.value)}
 					>

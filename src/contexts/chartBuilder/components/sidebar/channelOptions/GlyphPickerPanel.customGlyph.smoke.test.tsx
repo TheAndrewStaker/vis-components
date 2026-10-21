@@ -173,7 +173,7 @@ describe("Shape panel — custom glyphs (no shape field: Default shape row)", ()
 			},
 		})
 		const q = await mount()
-		fireEvent.click(q.getAllByLabelText("Delete custom shape")[0]!)
+		fireEvent.click(q.getByLabelText('Delete custom shape "A"'))
 		const saved = readSavedConfigs(store)
 		expect(saved.shape?.customGlyphs).toEqual([
 			null,

@@ -6,6 +6,8 @@ import { Footer } from "../components/Footer"
 import { Header } from "../components/Header"
 import { StaleBuildBanner } from "../components/StaleBuildBanner"
 import { EMBED_PATH_PREFIX } from "../lib/embedPath"
+import { pageTitle, useDocumentTitle } from "../lib/documentTitle"
+import { installFocusModality } from "../lib/focusModality"
 import { UploadNoticeModal } from "../contexts/chartBuilder/components/UploadNoticeModal"
 import { registerUserFonts } from "../contexts/chartBuilder/lib/fontRegistration"
 import { userFontsAtom } from "../contexts/chartBuilder/store/atoms"
@@ -47,6 +49,31 @@ const useUserFontRegistration = () => {
 	}, [fonts])
 }
 
+const MAIN_ID = "main-content"
+
+/** "Skip to main content" for keyboard users: invisible until it takes
+ *  keyboard focus (it's the first Tab stop). `<main>` only becomes
+ *  focusable for the jump itself, so clicks inside the page never land
+ *  focus on it. */
+const SkipLink = () => (
+	<a
+		href={`#${MAIN_ID}`}
+		className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-50 focus-visible:rounded focus-visible:bg-white focus-visible:px-3 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:shadow-lg dark:focus-visible:bg-stone-800"
+		onClick={(e) => {
+			const main = document.getElementById(MAIN_ID)
+			if (!main) return
+			e.preventDefault()
+			main.setAttribute("tabindex", "-1")
+			main.focus()
+			main.addEventListener("blur", () => main.removeAttribute("tabindex"), {
+				once: true,
+			})
+		}}
+	>
+		Skip to main content
+	</a>
+)
+
 export const RootLayout = () => {
 	const pathname = useRouterState({ select: (s) => s.location.pathname })
 	const isEmbed = pathname.startsWith(EMBED_PATH_PREFIX)
@@ -57,11 +84,19 @@ export const RootLayout = () => {
 	const showFooter = !isEmbed && !isEditor
 	useGlobalFileDropGuard()
 	useUserFontRegistration()
+	useEffect(() => installFocusModality(), [])
+	// The editor and the embed name the page after the visual themselves.
+	useDocumentTitle(
+		isEditor || isEmbed
+			? null
+			: pageTitle(pathname.startsWith("/settings") ? "Settings" : "Library")
+	)
 	return (
 		<div className="flex min-h-screen flex-col bg-white text-stone-900 dark:bg-stone-900 dark:text-stone-100">
+			{!isEmbed && <SkipLink />}
 			{!isEmbed && <StaleBuildBanner />}
 			{!isEmbed && <Header />}
-			<main className="flex-1">
+			<main id={MAIN_ID} className="flex-1">
 				<Outlet />
 			</main>
 			{showFooter && <Footer />}

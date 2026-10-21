@@ -69,7 +69,7 @@ test("item 16 — toggling Color off removes the histogram legend", async ({
 	// Scope to the Legend section — the encoding shelf row is now also labeled
 	// "Color" (renamed from "Hue"), so an unscoped match is ambiguous.
 	await page
-		.locator("#aside-section-Legend")
+		.locator("#aside-section-legend")
 		.getByText("Color", { exact: true })
 		.click()
 	await page.waitForTimeout(250)

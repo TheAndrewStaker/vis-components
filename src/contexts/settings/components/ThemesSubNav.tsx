@@ -145,6 +145,7 @@ export const ThemesSubNav = ({
 		return (
 			<div
 				key={folder}
+				data-theme-folder={folder}
 				onDragOver={(e) => {
 					if (!draggingId || !canDropIntoFolder(folder)) return
 					e.preventDefault()
@@ -158,49 +159,46 @@ export const ThemesSubNav = ({
 					dragOver === folder && "vc-nav-active"
 				)}
 			>
-				<button
-					type="button"
+				{/* Pointer target row: a click anywhere shows the folder. The
+				 *  chevron (fold) and the label (show) are sibling buttons — a
+				 *  button can't contain another one. */}
+				{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer convenience; the label button is the keyboard path */}
+				<div
 					onClick={() => showFolder(folder)}
-					aria-current={selectedFolder === folder ? "page" : undefined}
 					className={c(
-						"flex w-full items-center gap-1 rounded px-1 py-1 text-left text-[11px] font-semibold uppercase tracking-wide",
+						"flex w-full cursor-default items-center gap-1 rounded px-1 py-1 text-left text-xs font-semibold uppercase tracking-wide",
 						selectedFolder === folder
 							? "vc-nav-active"
 							: "text-stone-900 hover:bg-stone-100 dark:text-white dark:hover:bg-stone-800"
 					)}
 				>
-					{/* The chevron folds the list without changing the page.
-					 *  Nested interactive content is why it's a span with a
-					 *  button role, like the rows' move affordance. */}
-					<span
-						role="button"
-						tabIndex={0}
+					<button
+						type="button"
 						aria-label={`${open ? "Collapse" : "Expand"} ${THEME_FOLDER_LABEL[folder]}`}
 						aria-expanded={open}
 						onClick={(e) => {
 							e.stopPropagation()
 							setExpanded((prev) => ({ ...prev, [folder]: !prev[folder] }))
 						}}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault()
-								e.stopPropagation()
-								setExpanded((prev) => ({ ...prev, [folder]: !prev[folder] }))
-							}
-						}}
-						className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 pointer-coarse:h-7 pointer-coarse:w-7 dark:hover:bg-stone-700"
+						className="relative flex h-4 w-4 flex-shrink-0 items-center justify-center rounded before:absolute before:-inset-1 before:content-[''] hover:bg-stone-200 pointer-coarse:h-7 pointer-coarse:w-7 dark:hover:bg-stone-700"
 					>
 						<SectionChevron open={open} />
-					</span>
-					<span className="min-w-0 flex-1 truncate">
-						{THEME_FOLDER_LABEL[folder]}
-					</span>
-					{(managed || system) && <LockIcon />}
-				</button>
+					</button>
+					<button
+						type="button"
+						aria-current={selectedFolder === folder ? "page" : undefined}
+						className="flex min-w-0 flex-1 items-center gap-1 text-left font-semibold uppercase tracking-wide"
+					>
+						<span className="min-w-0 flex-1 truncate">
+							{THEME_FOLDER_LABEL[folder]}
+						</span>
+						{(managed || system) && <LockIcon />}
+					</button>
+				</div>
 				{open && (
 					<div className="flex flex-col gap-0.5 pl-3">
 						{entries.length === 0 && (
-							<p className="px-2 py-1 text-[11px] italic text-stone-400 dark:text-stone-500">
+							<p className="px-2 py-1 text-xs italic vc-faint">
 								{managed
 									? "Drag a theme here to manage it"
 									: system
@@ -211,52 +209,57 @@ export const ThemesSubNav = ({
 						{entries.map((t) => {
 							const isActive = t.id === openThemeId
 							return (
-								<button
+								// The row is a plain container: the theme's name button
+								// (draggable, as the whole row used to be) and the move
+								// button sit side by side — a button can't nest another.
+								<div
 									key={t.id}
-									type="button"
-									draggable={!t.isSystem}
-									onDragStart={(e) => {
-										e.dataTransfer.setData(
-											THEME_DRAG_TYPE,
-											encodeThemeDrag(t.id)
-										)
-										e.dataTransfer.effectAllowed = "move"
-										setDraggingId(t.id)
-									}}
-									onDragEnd={() => {
-										setDraggingId(null)
-										setDragOver(null)
-									}}
-									onClick={() =>
-										managed
-											? gate({ kind: "select", themeId: t.id })
-											: openTheme(t.id)
-									}
 									className={c(
-										"flex w-full items-center gap-1 rounded px-2 py-1 text-left text-xs",
+										"group/themerow flex w-full items-center gap-1 rounded pr-2 text-xs pointer-coarse:py-1",
 										draggingId === t.id && "opacity-50",
 										isActive
 											? "vc-nav-active"
 											: "hover:bg-stone-100 dark:hover:bg-stone-800 vc-text"
 									)}
 								>
-									<span className="min-w-0 flex-1 truncate">{t.name}</span>
-									{(managed || system) && (
-										<span className="text-stone-400 dark:text-stone-500">
-											<LockIcon />
-										</span>
-									)}
-									{/* Touch fallback for the drag between folders: a
-									 *  drag can't start from a finger in every mobile
-									 *  browser, so on coarse pointers each theme carries
-									 *  a one-tap move to the other folder, through the
-									 *  same administrator gate as the drop. Nested
-									 *  interactive content is why this is a span with a
-									 *  button role rather than a <button>. */}
+									<button
+										type="button"
+										draggable={!t.isSystem}
+										onDragStart={(e) => {
+											e.dataTransfer.setData(
+												THEME_DRAG_TYPE,
+												encodeThemeDrag(t.id)
+											)
+											e.dataTransfer.effectAllowed = "move"
+											setDraggingId(t.id)
+										}}
+										onDragEnd={() => {
+											setDraggingId(null)
+											setDragOver(null)
+										}}
+										onClick={() =>
+											managed
+												? gate({ kind: "select", themeId: t.id })
+												: openTheme(t.id)
+										}
+										aria-current={isActive ? "true" : undefined}
+										className="flex min-w-0 flex-1 items-center gap-1 py-1 pl-2 text-left"
+									>
+										<span className="min-w-0 flex-1 truncate">{t.name}</span>
+										{(managed || system) && (
+											<span className="vc-muted">
+												<LockIcon />
+											</span>
+										)}
+									</button>
+									{/* Non-drag path for the move between folders: a drag
+									 *  can't start from a finger in every mobile browser,
+									 *  and a keyboard can't drag at all. Shown on coarse
+									 *  pointers, and for a keyboard user once focus is in
+									 *  the row; same administrator gate as the drop. */}
 									{!t.isSystem && (
-										<span
-											role="button"
-											tabIndex={0}
+										<button
+											type="button"
 											title={
 												managed
 													? "Move to Custom Themes"
@@ -267,23 +270,15 @@ export const ThemesSubNav = ({
 													? `Move ${t.name} to Custom Themes`
 													: `Move ${t.name} to Managed Themes`
 											}
-											onClick={(e) => {
-												e.stopPropagation()
+											onClick={() =>
 												moveByTap(t.id, managed ? "custom" : "managed")
-											}}
-											onKeyDown={(e) => {
-												if (e.key === "Enter" || e.key === " ") {
-													e.preventDefault()
-													e.stopPropagation()
-													moveByTap(t.id, managed ? "custom" : "managed")
-												}
-											}}
-											className="hidden h-7 w-7 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 pointer-coarse:flex dark:hover:bg-stone-700 vc-muted"
+											}
+											className="hidden h-7 w-7 flex-shrink-0 items-center justify-center rounded kbd:group-has-focus-visible/themerow:flex hover:bg-stone-200 pointer-coarse:flex dark:hover:bg-stone-700 vc-muted"
 										>
-											{managed ? "↓" : "↑"}
-										</span>
+											<span aria-hidden="true">{managed ? "↓" : "↑"}</span>
+										</button>
 									)}
-								</button>
+								</div>
 							)
 						})}
 					</div>

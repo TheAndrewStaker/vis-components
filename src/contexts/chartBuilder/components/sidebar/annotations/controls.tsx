@@ -166,7 +166,7 @@ const AnnotationNameEditor = ({
 				// eslint-disable-next-line jsx-a11y/no-autofocus -- initial focus for the inline rename editor the user just opened
 				autoFocus
 				onFocus={(e) => e.target.select()}
-				className="min-w-0 flex-1 rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none dark:bg-stone-900 vc-text"
+				className="vc-focus-ring min-w-0 flex-1 rounded border border-blue-400 bg-white px-1 py-0 text-sm dark:bg-stone-900 vc-text"
 			/>
 		)
 	}
@@ -185,7 +185,7 @@ const AnnotationNameEditor = ({
 				onClick={startEditing}
 				aria-label={`Rename ${shown}`}
 				title="Rename"
-				className="flex-shrink-0 text-stone-400 hover:text-stone-900 dark:text-stone-500 dark:hover:text-white"
+				className="-m-[7px] flex-shrink-0 p-[7px] hover:text-stone-900 dark:hover:text-white vc-muted"
 			>
 				<svg viewBox="0 0 16 16" width={11} height={11} aria-hidden>
 					<path

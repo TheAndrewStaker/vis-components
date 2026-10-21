@@ -61,6 +61,9 @@
 	 * holds up on the light option panels. */
 	--color-vc-brand-text: #4433ff;
 
+	/* Lightest AA text on the light surfaces — see .vc-faint (Text roles). */
+	--color-vc-faint: #706e6c;
+
 	/* Sidebar section headers (Fields, Encodings, Base font, …) */
 	--color-vc-section-header: var(--color-vc-brand-text);
 
@@ -76,6 +79,13 @@
 	 *   --radius-vc-card
 	 */
 }
+
+/* `kbd:` — applies only while the user is navigating by keyboard (the
+ * modality lib/focusModality.ts stamps on <html>). Pair it with the
+ * focus-visible reveals (`kbd:group-has-focus-visible:flex`): a text field
+ * matches :focus-visible even on a click, and a hover-only control must never
+ * pop into view for a mouse user. */
+@custom-variant kbd (:root[data-vc-modality="keyboard"] &);
 
 /* -----------------------------------------------------------------------------
  * Base layer — global element defaults
@@ -101,7 +111,7 @@
 	}
 
 	/* Headings render in the --font-heading face (currently Quicksand). Covers
-	 * the sidebar section headers too — AsideSection renders them as <h3>. Use
+	 * the sidebar section headers too — AsideSection renders them as <h2>. Use
 	 * the `font-heading` utility for header-like elements that aren't <h1>–<h6>. */
 	h1,
 	h2,
@@ -235,6 +245,16 @@
 	 *   .vc-heading  titles and emphasised names — semibold by default;
 	 *                add `font-medium` at the call site for a lighter one
 	 *                (was text-stone-900 / dark:text-white)
+	 *   .vc-faint    the LIGHTEST text allowed: empty-state hints, "no
+	 *                preview", secondary asides in a muted line, input
+	 *                placeholders (via the `placeholder:text-vc-faint`
+	 *                utility from the --color-vc-faint token). #706e6c is
+	 *                5.08:1 on white, 4.86:1 on the #fafafa sidebar, 4.65:1
+	 *                on stone-100 — AA for body text. Nothing lighter:
+	 *                stone-500 (#999796) is only 2.91:1 and stone-400 1.89:1,
+	 *                so neither is a TEXT color (was text-stone-400/500).
+	 *                Icons that are controls or convey state take .vc-muted
+	 *                (non-text contrast 3:1).
 	 *
 	 * Not for text on the purple option panels: that's `.vc-help` and
 	 * `.vc-group-header` above, which use the brand color so they pass AA
@@ -257,6 +277,12 @@
 	}
 	.dark .vc-heading {
 		color: #ffffff;
+	}
+	.vc-faint {
+		color: var(--color-vc-faint);
+	}
+	.dark .vc-faint {
+		color: var(--color-stone-500); /* 6.08:1 on stone-900 */
 	}
 
 	/* A run of control rows separated from the rows above by a hairline.
@@ -375,6 +401,28 @@
 	}
 	.dark .vc-select {
 		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='3 5 10 6' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+	}
+
+	/* Keyboard focus ring for text fields, selects and other controls that
+	 * suppress the browser outline. Mouse users must see nothing new, and a
+	 * text field matches :focus-visible even on a click, so the ring is ALSO
+	 * gated on the input modality lib/focusModality.ts stamps on <html>
+	 * (keyboard after Tab, pointer after any press). The outline-none default
+	 * lives here (not as a utility on the element) because the utilities
+	 * layer would otherwise beat the ring. */
+	.vc-focus-ring {
+		outline: none;
+		/* Color set up front: these controls carry transition-colors, which
+		 * would otherwise fade the ring in from currentColor. */
+		outline-color: var(--color-vc-brand-text);
+	}
+	.dark .vc-focus-ring {
+		outline-color: var(--color-brand-300);
+	}
+	:root[data-vc-modality="keyboard"] .vc-focus-ring:focus-visible {
+		outline-style: solid;
+		outline-width: 2px;
+		outline-offset: 1px;
 	}
 }
 

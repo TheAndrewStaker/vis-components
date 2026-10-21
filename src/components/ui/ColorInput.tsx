@@ -157,7 +157,7 @@ export const ColorInput = ({
 						// palette picker, so the row goes swatch-only there: tapping the
 						// swatch still opens the native picker.
 						className={c(
-							"hidden w-24 min-w-18 rounded-control border border-stone-300 bg-white px-1.5 py-1 font-mono text-xs text-stone-900 transition-colors outline-none hover:border-stone-400 focus:border-stone-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-white dark:hover:border-stone-600 dark:focus:border-stone-500 min-[360px]:block",
+							"hidden w-24 min-w-18 rounded-control border border-stone-400 bg-white px-1.5 py-1 font-mono text-xs text-stone-900 transition-colors vc-focus-ring placeholder:text-vc-faint hover:border-stone-600 focus:border-stone-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-white dark:placeholder:text-stone-500 dark:hover:border-stone-600 dark:focus:border-stone-500 min-[360px]:block",
 							!HEX_PATTERN.test(textValue) &&
 								!(textValue === "" && onClear) &&
 								"border-amber-400 focus:border-amber-500"
@@ -172,7 +172,7 @@ export const ColorInput = ({
 					disabled={disabled}
 					title={inherited ? "Inherited — pick a color to override" : undefined}
 					className={c(
-						"h-6 w-10 shrink-0 cursor-pointer rounded border border-stone-300 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700",
+						"h-6 w-10 shrink-0 cursor-pointer rounded border border-stone-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700",
 						// Dashed border = "nothing chosen here; previewing the inherited
 						// color" — the one visual cue that the swatch isn't a pick.
 						inherited && "border-dashed"

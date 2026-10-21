@@ -228,6 +228,13 @@ export const DataTable = () => {
 								<th
 									key={f.name}
 									scope="col"
+									aria-sort={
+										isActive
+											? sort?.dir === "asc"
+												? "ascending"
+												: "descending"
+											: undefined
+									}
 									style={
 										width
 											? {

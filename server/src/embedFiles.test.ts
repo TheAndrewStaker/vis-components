@@ -60,6 +60,17 @@ describe("composePartHtml", () => {
 		expect(html).toContain('{"t":"$& $` $\'"}')
 	})
 
+	it("names the page after the visual, HTML-escaped", () => {
+		const tpl = `<head><title>Chart embed</title></head>${TEMPLATE}`
+		const html = composePartHtml(tpl, "full", "{}", 'Sales <Q1> & "more"')
+		expect(html).toContain(
+			"<title>Sales &lt;Q1&gt; &amp; &quot;more&quot;</title>"
+		)
+		expect(composePartHtml(tpl, "full", "{}")).toContain(
+			"<title>Chart embed</title>"
+		)
+	})
+
 	it("refuses a template without the marker", () => {
 		expect(() => composePartHtml("<html></html>", "full", "{}")).toThrow(
 			/marker/

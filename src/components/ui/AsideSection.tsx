@@ -5,8 +5,9 @@ import { combine as c } from "../../lib/cls"
 import { SectionChevron } from "./Chevron"
 
 // Local mirror of external-ui's ExplorerSuiteAsideSection. Wraps a sidebar
-// section with a consistent h3 header and content area. Collapsible by default
-// — collapsed state is keyed by `title` and persists across reloads.
+// section with a consistent h2 header (directly under the editor's h1) and
+// content area. Collapsible by default — collapsed state is keyed by `title`
+// and persists across reloads.
 type Props = PropsWithChildren<{
 	title: string
 	right?: React.ReactNode
@@ -17,6 +18,13 @@ type Props = PropsWithChildren<{
 	 * Ignored on subsequent visits — the user's last toggle wins. */
 	defaultCollapsed?: boolean
 }>
+
+/** DOM id of an AsideSection's body: `aside-section-<slug of title>`. */
+export const asideSectionId = (title: string): string =>
+	`aside-section-${title
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "")}`
 
 export const AsideSection = ({
 	title,
@@ -32,12 +40,11 @@ export const AsideSection = ({
 	const toggle = () =>
 		setCollapsedMap((prev) => ({ ...prev, [title]: !collapsed }))
 
-	const headerContent = (
-		<h3 className="text-vc-section-header flex items-center gap-1.5 text-base font-semibold tracking-wider uppercase">
-			{collapsible && <SectionChevron open={!collapsed} />}
-			{title}
-		</h3>
-	)
+	// Slugged: raw titles carry spaces and "&" ("Aesthetics & Theme"), which
+	// make an invalid IDREF for aria-controls. Stable so e2e can find a body.
+	const bodyId = asideSectionId(title)
+	const headingClass =
+		"text-vc-section-header flex items-center gap-1.5 text-base font-semibold tracking-wider uppercase"
 
 	return (
 		// Tighter rhythm below `lg` (phones, tablets in portrait): a column of
@@ -45,22 +52,30 @@ export const AsideSection = ({
 		<div className={c("flex flex-col pb-1.5 lg:pb-3", className)}>
 			<div className="mx-3 flex items-center justify-between pb-1 lg:pb-2">
 				{collapsible ? (
-					<button
-						type="button"
-						onClick={toggle}
-						className="flex flex-1 items-center gap-1.5 text-left hover:opacity-80 pointer-coarse:py-1.5"
-						aria-expanded={!collapsed}
-						aria-controls={`aside-section-${title}`}
-					>
-						{headerContent}
-					</button>
+					// The heading wraps the toggle (not the other way round) so
+					// assistive tech still exposes the section title as a heading.
+					<h2 className="flex flex-1">
+						<button
+							type="button"
+							onClick={toggle}
+							className={c(
+								headingClass,
+								"flex-1 text-left hover:opacity-80 pointer-coarse:py-1.5"
+							)}
+							aria-expanded={!collapsed}
+							aria-controls={bodyId}
+						>
+							<SectionChevron open={!collapsed} />
+							{title}
+						</button>
+					</h2>
 				) : (
-					headerContent
+					<h2 className={headingClass}>{title}</h2>
 				)}
 				{right}
 			</div>
 			{!collapsed && (
-				<div id={`aside-section-${title}`} className="relative px-3">
+				<div id={bodyId} className="relative px-3">
 					{children}
 				</div>
 			)}

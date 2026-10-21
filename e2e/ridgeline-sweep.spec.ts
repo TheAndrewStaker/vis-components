@@ -45,7 +45,7 @@ const GAP_Y_VALUES = [0, -20, -50, -80, -120] as const
  *  subheader is clicked open. Idempotent — a no-op if already expanded. */
 const expandSubsection = async (page: Page, title: string): Promise<void> => {
 	const btn = page
-		.locator('[id="aside-section-Encodings"]')
+		.locator('[id="aside-section-encodings"]')
 		.getByRole("button", { name: title, exact: true })
 	if ((await btn.getAttribute("aria-expanded")) === "false") {
 		await btn.click()
@@ -59,7 +59,7 @@ const setup4x1 = async (page: Page): Promise<void> => {
 	})
 	await page.setInputFiles('input[type="file"][accept*="csv"]', DATASET)
 	await page.waitForTimeout(800)
-	const enc = page.locator('[id="aside-section-Encodings"]')
+	const enc = page.locator('[id="aside-section-encodings"]')
 	await enc.getByLabel("X position", { exact: true }).selectOption("Group")
 	await enc.getByLabel("Length", { exact: true }).selectOption("Value")
 	await enc.getByLabel("Color", { exact: true }).selectOption("Year")
@@ -85,7 +85,7 @@ const setGapY = async (page: Page, gapY: number): Promise<void> => {
 	// the label associated via htmlFor, so locate by accessible label — a
 	// `label >> input[type=number]` descendant query finds nothing.
 	const gapInput = page
-		.locator('[id="aside-section-Encodings"]')
+		.locator('[id="aside-section-encodings"]')
 		.getByLabel(/^Gap Y/)
 	await gapInput.first().fill(String(gapY))
 	await page.waitForTimeout(600)

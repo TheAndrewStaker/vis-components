@@ -31,9 +31,14 @@ export const RailTab = ({
 			onPointerDown={(e) => e.stopPropagation()}
 			title={title}
 			aria-label={title}
-			className={`absolute top-3 z-10 ${collapsed ? "left-full" : "left-[calc(100%+1px)]"} flex h-10 w-4 items-center justify-center rounded-r border border-l-0 border-stone-200 bg-white text-stone-400 shadow-sm hover:bg-stone-100 hover:text-stone-700 pointer-coarse:h-12 pointer-coarse:w-6 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800 dark:hover:text-white`}
+			// The button is a transparent 24px-wide hit area (WCAG 2.2 target
+			// size); the visible 16px tab is the inner span, so the look is
+			// unchanged and the extra 8px reach past the tab's outer edge.
+			className={`group/railtab absolute top-3 z-10 ${collapsed ? "left-full" : "left-[calc(100%+1px)]"} flex h-10 w-6 items-stretch pointer-coarse:h-12`}
 		>
-			<RailChevron direction={collapsed ? "right" : "left"} />
+			<span className="flex w-4 items-center justify-center rounded-r border border-l-0 border-stone-200 bg-white shadow-sm group-hover/railtab:bg-stone-100 group-hover/railtab:text-stone-900 pointer-coarse:w-6 dark:border-stone-700 dark:bg-stone-900 dark:group-hover/railtab:bg-stone-800 dark:group-hover/railtab:text-white vc-muted">
+				<RailChevron direction={collapsed ? "right" : "left"} />
+			</span>
 		</button>
 	)
 }

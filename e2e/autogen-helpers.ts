@@ -119,7 +119,11 @@ export const waitForDatasetReady = async (page: Page) => {
 					"Pie chart",
 					"Tile heatmap",
 				].includes(label)
-				return isChartIcon && !b.disabled
+				return (
+					isChartIcon &&
+					!b.disabled &&
+					b.getAttribute("aria-disabled") !== "true"
+				)
 			})
 		},
 		{ timeout: 10_000 },

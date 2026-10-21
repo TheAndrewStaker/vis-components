@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react"
+import { Fragment, useId, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { useAtom, useAtomValue } from "jotai"
 import { nameCollides } from "../lib/nameUniqueness"
@@ -14,6 +14,7 @@ import {
 } from "../store/atoms"
 import { folderAncestors } from "../../library/lib/folderSubtree"
 import { useMediaQuery, useNarrowLayout } from "../../../lib/useMediaQuery"
+import { pageTitle, useDocumentTitle } from "../../../lib/documentTitle"
 
 import { DisclosureChevron } from "../../../components/ui/Chevron"
 import { EditorActions } from "./EditorActions"
@@ -105,6 +106,13 @@ export const SaveBar = () => {
 	const nameTaken = nameCollides(name, visuals, visualId ?? undefined)
 
 	const indicator = saveIndicatorText(saveStatus === "saving", savedVisual)
+	const nameErrorId = useId()
+	const displayName = name.trim() || "Untitled visualization"
+	useDocumentTitle(pageTitle(displayName))
+	// The editor's page heading for assistive tech; the visible title is the
+	// editable box below. sr-only = absolutely positioned, so it takes no
+	// space in the bar's flex rows.
+	const pageHeading = <h1 className="sr-only">{displayName}</h1>
 
 	const nameField = (
 		<div className="flex min-w-32 flex-1 flex-col">
@@ -115,13 +123,19 @@ export const SaveBar = () => {
 					value={name}
 					onChange={(e) => setName(e.target.value)}
 					placeholder="Untitled visualization"
-					className={`min-w-24 flex-1 rounded-control border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-stone-900 transition-colors outline-none hover:border-stone-200 focus:border-stone-400 dark:text-white dark:hover:border-stone-700 dark:focus:border-stone-500 ${
+					aria-label="Visualization title"
+					aria-invalid={nameTaken ? true : undefined}
+					aria-describedby={nameTaken ? nameErrorId : undefined}
+					className={`vc-focus-ring min-w-24 flex-1 rounded-control border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-stone-900 transition-colors hover:border-stone-200 focus:border-stone-600 dark:text-white dark:hover:border-stone-700 dark:focus:border-stone-500 ${
 						nameTaken ? "border-red-400 dark:border-red-500" : ""
 					}`}
 				/>
 			</div>
 			{nameTaken && (
-				<span className="px-2 text-xs text-red-700 dark:text-red-300">
+				<span
+					id={nameErrorId}
+					className="px-2 text-xs text-red-700 dark:text-red-300"
+				>
 					A visualization named &ldquo;{name.trim()}&rdquo; already exists.
 				</span>
 			)}
@@ -144,6 +158,7 @@ export const SaveBar = () => {
 	if (narrow) {
 		return (
 			<div className="border-b border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+				{pageHeading}
 				{barOpen && oneRow ? (
 					<div className="flex flex-wrap items-center gap-3 px-4 py-2">
 						{nameField}
@@ -188,22 +203,27 @@ export const SaveBar = () => {
 		// `flex-wrap` is a safety net: an overflowing row would widen the
 		// mobile layout viewport and let the whole page pan into blank space.
 		<div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-stone-200 bg-white px-4 py-2 dark:border-stone-800 dark:bg-stone-900">
+			{pageHeading}
 			{nameField}
 			<VersionBadge />
-			{indicator && (
-				<span
-					className="hidden text-sm sm:inline vc-muted"
-					title={
-						savedVisual && saveStatus !== "saving"
-							? `${savedVisual.updatedBy ? `${savedVisual.updatedBy.name}, ` : ""}${new Date(
-									savedVisual.updatedAt
-								).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`
-							: undefined
-					}
-				>
-					{indicator}
-				</span>
-			)}
+			{/* Always mounted so screen readers hear "Saving…" / "Saved" as
+			 *  it changes; screen-reader-only below `sm` (where it used to be
+			 *  display:none) and while empty, so it takes no room there. */}
+			<span
+				role="status"
+				className={
+					indicator ? "sr-only text-sm sm:not-sr-only vc-muted" : "sr-only"
+				}
+				title={
+					savedVisual && saveStatus !== "saving"
+						? `${savedVisual.updatedBy ? `${savedVisual.updatedBy.name}, ` : ""}${new Date(
+								savedVisual.updatedAt
+							).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`
+						: undefined
+				}
+			>
+				{indicator}
+			</span>
 			<div className="ml-auto">
 				<EditorActions />
 			</div>

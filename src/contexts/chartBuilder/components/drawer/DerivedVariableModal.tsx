@@ -863,7 +863,7 @@ const DerivedVariableEditor = ({
 									)}
 									<span
 										aria-hidden="true"
-										className="flex-shrink-0 text-stone-400"
+										className="flex-shrink-0 vc-muted"
 									>
 										→
 									</span>
@@ -884,7 +884,7 @@ const DerivedVariableEditor = ({
 										onClick={() =>
 											setRules((prev) => prev.filter((_, j) => j !== i))
 										}
-										className="w-4 flex-shrink-0 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+										className="w-4 flex-shrink-0 hover:text-stone-900 dark:hover:text-stone-200 vc-muted"
 									>
 										×
 									</button>
@@ -907,7 +907,7 @@ const DerivedVariableEditor = ({
 							<span className="flex-1 text-right text-sm vc-muted">
 								Otherwise
 							</span>
-							<span aria-hidden="true" className="text-stone-400">
+							<span aria-hidden="true" className="vc-muted">
 								→
 							</span>
 							<TokenInput

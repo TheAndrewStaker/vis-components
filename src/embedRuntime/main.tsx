@@ -24,6 +24,10 @@ if (embedDocument === null) {
 		"This embed could not be loaded — the page carries no published chart."
 } else {
 	const store = bootEmbedRuntime(embedDocument.payload)
+	// Name the document after the chart (the server also writes it into the
+	// <title>; this covers templates published before that).
+	const visualName = embedDocument.payload.visual.name?.trim()
+	if (visualName) document.title = visualName
 	createRoot(root).render(
 		<StrictMode>
 			<Provider store={store}>
