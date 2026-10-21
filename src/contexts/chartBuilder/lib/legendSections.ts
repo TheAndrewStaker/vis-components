@@ -927,7 +927,10 @@ export const planLegendSections = ({
 			const cfg = legendCfg.channels?.[channelKey]
 			const breaks = resolveLegendBreaks(s.values, s.type, cfg, 5, 2)
 			const merged = resolveLegendChannelConfig(cfg)
-			const fmt = buildLegendFormatter(merged.format, defaultLegendFormatter(breaks, s.type))
+			const fmt = buildLegendFormatter(merged.format, defaultLegendFormatter(breaks, s.type), {
+				values: breaks,
+				type: s.type,
+			})
 			const dataExt = legendDataExtent(s.values, s.type)
 			breaks.forEach((b, i) => {
 				uniques.add(decorateOpenEndLabel(fmt(b), i, breaks, dataExt))

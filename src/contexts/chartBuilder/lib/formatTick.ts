@@ -100,6 +100,31 @@ const isTimeFormatSpec = (spec: string): boolean => /%[a-zA-Z]/.test(spec)
  * `new Date(2020)` (2020ms past epoch → 1969/1970), collapsing every tick. */
 export const LITERAL_FORMAT = "literal"
 
+/** Sentinel `customFormat` spec for the house year style ("Year Mixed"):
+ * the first and last tick of an axis spell the year in full and the ticks
+ * between abbreviate it with a typographic apostrophe — 2020 ’22 ’24 ’26
+ * ’28 2030. Position-aware, so it reads the tick set it labels
+ * (`TickFormatterOptions.tickValues`); with no set (data labels,
+ * tooltips) every year prints in full. A year reaches it as a Date, a
+ * plain number (2020 — NEVER coerced through `new Date`, unlike `%Y`) or
+ * a numeric string on a categorical axis. */
+export const YEAR_ENDS_FORMAT = "year-ends"
+
+const YEAR_APOSTROPHE = "\u2019"
+
+/** The calendar year a tick value stands for — a Date's year, or a whole
+ * number / numeric string in 0..9999 as itself — else null. */
+const yearOf = (v: unknown): number | null => {
+	if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v.getFullYear()
+	const n =
+		typeof v === "number"
+			? v
+			: typeof v === "string" && v.trim() !== ""
+				? Number(v)
+				: NaN
+	return Number.isInteger(n) && n >= 0 && n <= 9999 ? n : null
+}
+
 export type ValueFormatter = (v: unknown) => string
 
 /** A stored format string, split into the spec proper and the literal text
@@ -182,6 +207,10 @@ export type TickFormatterOptions = {
 	 *  ("1988", "1988-07"). A date AXIS passes the formatter for its whole
 	 *  tick set (`uniformTimeLiteral`) so every label shares one shape. */
 	literalDate?: (d: Date) => string
+	/** The tick set the labels are drawn for, in axis order. The
+	 *  `year-ends` format spells the first and last entry's years in full
+	 *  and abbreviates the rest; absent, it prints every year in full. */
+	tickValues?: readonly unknown[]
 }
 
 /** Literal: stringify as-is, bypassing both formatters. A Date is the one
@@ -191,6 +220,23 @@ export type TickFormatterOptions = {
 const literalFormatterWith = (opts?: TickFormatterOptions): ValueFormatter => {
 	const date = opts?.literalDate ?? literalDateText
 	return (v) => (v instanceof Date ? date(v) : String(v ?? ""))
+}
+
+/** `year-ends`: the years at either end of the tick set print in full,
+ * every other year as ’YY. Values that are not years print as Literal. */
+const yearEndsFormatterWith = (opts?: TickFormatterOptions): ValueFormatter => {
+	const set = opts?.tickValues
+	const full =
+		set && set.length > 0
+			? new Set([yearOf(set[0]), yearOf(set[set.length - 1])])
+			: null
+	const literal = literalFormatterWith(opts)
+	return (v) => {
+		const y = yearOf(v)
+		if (y === null) return literal(v)
+		if (!full || full.has(y)) return String(y)
+		return `${YEAR_APOSTROPHE}${String(y % 100).padStart(2, "0")}`
+	}
 }
 
 /** Spec-only formatter for the INNER spec (affixes already stripped):
@@ -204,6 +250,7 @@ const innerFormatter = (
 	// Literal must come before the time/numeric routing so a numeric axis
 	// can opt out of any coercion.
 	if (trimmed.toLowerCase() === LITERAL_FORMAT) return literalFormatterWith(opts)
+	if (trimmed.toLowerCase() === YEAR_ENDS_FORMAT) return yearEndsFormatterWith(opts)
 	return isTimeFormatSpec(trimmed) ? safeTimeFormat(trimmed) : safeFormat(trimmed)
 }
 

@@ -1,4 +1,4 @@
-import { LITERAL_FORMAT, parseFormatSpec } from "./formatTick"
+import { LITERAL_FORMAT, parseFormatSpec, YEAR_ENDS_FORMAT } from "./formatTick"
 import { COUNTRY_NAME_FORMAT } from "./geo/countryNames"
 
 /** Dropdown value for the "Auto" preset in every format dropdown. Selecting
@@ -89,6 +89,9 @@ const TEMPORAL_GROUP: FormatPresetGroup = {
 		{ value: "%Y-%m-%d", label: "ISO date (2026-05-20)" },
 		{ value: "%b %Y", label: "Month + year (May 2026)" },
 		{ value: "%Y", label: "Year (2026)" },
+		// Position-aware (see `YEAR_ENDS_FORMAT`): full years at the ends of
+		// the tick set, ’YY between.
+		{ value: YEAR_ENDS_FORMAT, label: "Year Mixed (2026 ’27 2028)" },
 		{ value: "%b %d", label: "Day + month (May 20)" },
 		{ value: "%H:%M", label: "Time (14:35)" },
 	],

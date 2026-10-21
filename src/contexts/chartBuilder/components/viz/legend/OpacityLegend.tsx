@@ -65,7 +65,10 @@ export const OpacityLegend = ({
 	const hi = breaks.at(-1)
 	if (lo === undefined || hi === undefined) return null
 	const dataExt = legendDataExtent(values, type)
-	const fmt = buildLegendFormatter(merged.format, defaultLegendFormatter(breaks, type))
+	const fmt = buildLegendFormatter(merged.format, defaultLegendFormatter(breaks, type), {
+		values: breaks,
+		type,
+	})
 	const gradientStops = breaks.map((v, i) => {
 		const t = (v - lo) / (hi - lo || 1)
 		return {

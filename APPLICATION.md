@@ -1994,7 +1994,17 @@ The X-axis and Y-axis panels (under Encodings) configure:
   Millions / Billions — `,.1~fM`, `,.1~fB`) and **Temporal**, plus a
   Literal "as-is" option, that populates
   an editable text box. The user can pick a preset and then refine it
-  as raw d3-format syntax. A d3 spec ending in an uppercase `K`, `M` or
+  as raw d3-format syntax. The Temporal group's **Year Mixed** preset
+  (`year-ends`) is the house style for year-only axes: the first and
+  last tick spell the year in full and the ticks between abbreviate it
+  with a typographic apostrophe — 2020 ’22 ’24 ’26 ’28 2030. It reads a
+  year as a Date, a plain number (never coerced through a date, unlike
+  `%Y`, which turns a bare 2020 into 1970) or a numeric category; the
+  ends are the ends of the tick set as drawn — Custom breaks, facet
+  replaced ticks and a categorical stride included — and one or two
+  ticks print in full. Legend gradient breaks get the same ends
+  treatment; everywhere else (data labels, tooltips) there are no ends
+  and every year prints in full. A d3 spec ending in an uppercase `K`, `M` or
   `B` divides every value by that scale and prints the letter after it
   ("$12.5K", "$1.2M", "$1.2B"): ONE scale for every label, unlike the
   SI-prefix preset, which d3 picks per value (and spells billions "G").

@@ -343,20 +343,22 @@ export const Axis = ({
 					: s.tickFormat?.(
 							tickCount > 0 ? tickCount : Math.max(2, DEFAULT_TICK_COUNT)
 						)
-			const fmt = formatterOver(
-				fallback ?? ((v: unknown) => String(v)),
-				dates
-					? { literalDate: literalTimeLabel(rawTextByValue, uniformTimeLiteral(dates)) }
-					: undefined
-			)
 			// Sort by axis value (breaks land between the auto ticks) and de-dup
 			// on pixel position so a break that coincides with an auto tick
 			// draws one tick + label, not two.
 			const toNum = (v: unknown) =>
 				v instanceof Date ? v.getTime() : Number(v)
+			const sorted = values.sort((a, b) => toNum(a) - toNum(b))
+			// The sorted set goes to the formatter too: the `year-ends` format
+			// spells the first and last tick's years in full.
+			const fmt = formatterOver(fallback ?? ((v: unknown) => String(v)), {
+				tickValues: sorted,
+				...(dates
+					? { literalDate: literalTimeLabel(rawTextByValue, uniformTimeLiteral(dates)) }
+					: {}),
+			})
 			const seen = new Set<string>()
-			return values
-				.sort((a, b) => toNum(a) - toNum(b))
+			return sorted
 				.map((v) => ({
 					pos: (scale as unknown as (x: unknown) => number)(v),
 					label: fmt(toMagnitude(v)),
@@ -384,7 +386,6 @@ export const Axis = ({
 		// every entry — the default. We always keep the first and last so
 		// the axis ends stay anchored, then walk forward by `stride`.
 		const stride = Math.max(1, config?.categoricalTickStride ?? 1)
-		const categoryFmt = formatterOver((v: unknown) => String(v))
 		const visibleIndices = new Set<number>()
 		if (stride <= 1) {
 			for (let i = 0; i < domain.length; i++) visibleIndices.add(i)
@@ -394,6 +395,12 @@ export const Axis = ({
 			}
 			visibleIndices.add(domain.length - 1)
 		}
+		// The visible categories, in axis order, go to the formatter: the
+		// `year-ends` format spells the first and last one's years in full
+		// (the stride always keeps both ends, so the ends stay the ends).
+		const categoryFmt = formatterOver((v: unknown) => String(v), {
+			tickValues: domain.filter((_, i) => visibleIndices.has(i)),
+		})
 		return domain
 			.map((d, i) => ({
 				pos: ((scale as unknown as (x: unknown) => number)(d) ?? 0) + halfBand,

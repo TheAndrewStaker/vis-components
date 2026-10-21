@@ -6,6 +6,7 @@ import {
 	buildTickFormatterWithAuto,
 	composeFormatSpec,
 	parseFormatSpec,
+	YEAR_ENDS_FORMAT,
 } from "./formatTick"
 
 /** Build an AxisConfig override on top of the default — cleaner than
@@ -309,5 +310,57 @@ describe("'literal' on Date values", () => {
 			literalDate: (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
 		})!
 		expect(f(new Date(1988, 0, 1))).toBe("1988-01 units")
+	})
+})
+
+describe("'year-ends': full years at the ends of the tick set, ’YY between", () => {
+	const build = (set?: readonly unknown[]) =>
+		buildTickFormatter(
+			{ customFormat: YEAR_ENDS_FORMAT },
+			"quantitative",
+			undefined,
+			set ? { tickValues: set } : undefined
+		)!
+
+	it("spells the first and last tick's years in full and abbreviates the rest", () => {
+		const years = [2020, 2022, 2024, 2026, 2028, 2030]
+		expect(years.map(build(years))).toEqual(["2020", "’22", "’24", "’26", "’28", "2030"])
+	})
+
+	it("never coerces a plain number through a Date (unlike %Y)", () => {
+		const y = buildTickFormatter({ customFormat: "%Y" }, "quantitative")!
+		expect(y(2020)).not.toBe("2020")
+		expect(build([2020, 2021])(2020)).toBe("2020")
+	})
+
+	it("reads Dates on a date axis and numeric strings on a categorical one", () => {
+		const dates = [2005, 2010, 2015].map((y) => new Date(y, 0, 1))
+		expect(dates.map(build(dates))).toEqual(["2005", "’10", "2015"])
+		const cats = ["1998", "1999", "2000", "2001"]
+		expect(cats.map(build(cats))).toEqual(["1998", "’99", "’00", "2001"])
+	})
+
+	it("prints every year in full with one or two ticks, or with no tick set", () => {
+		expect(build([2020])(2020)).toBe("2020")
+		expect([2020, 2021].map(build([2020, 2021]))).toEqual(["2020", "2021"])
+		// Data labels / tooltips: no ends to speak of.
+		expect(build()(2024)).toBe("2024")
+	})
+
+	it("passes values that are not years through as-is", () => {
+		const f = build([12.5, "North", 2020])
+		expect(f(12.5)).toBe("12.5")
+		expect(f("North")).toBe("North")
+	})
+
+	it("composes with text around the value", () => {
+		const f = buildTickFormatter(
+			{ customFormat: `{${YEAR_ENDS_FORMAT}} est.` },
+			"quantitative",
+			undefined,
+			{ tickValues: [2020, 2022, 2024] }
+		)!
+		expect(f(2022)).toBe("’22 est.")
+		expect(f(2024)).toBe("2024 est.")
 	})
 })

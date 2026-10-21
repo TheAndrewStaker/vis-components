@@ -128,20 +128,24 @@ export const buildSolverPanelInputs = ({
 	// measure the FORMATTED label — "$140,000" is wider than the raw
 	// "140000", and "25 units" wider than "25" — or under-measuring lets the
 	// centered edge tick label clip past the plot's right edge.
-	const xTickFmt = channelConfigs.x
-		? buildTickFormatter({ customFormat: channelConfigs.x.customFormat }, "quantitative", autoMarginLabel)
-		: autoMarginLabel
-	const yTickFmt = channelConfigs.y
-		? buildTickFormatter({ customFormat: channelConfigs.y.customFormat }, "quantitative", autoMarginLabel)
-		: autoMarginLabel
+	// The formatter takes the sorted tick set it labels, as `Axis` does, so
+	// the `year-ends` format measures "’22" between its full-year ends.
+	const tickFmtFor = (axis: "x" | "y", ticks: readonly number[]) =>
+		buildTickFormatter(
+			{ customFormat: channelConfigs[axis]?.customFormat ?? "" },
+			"quantitative",
+			autoMarginLabel,
+			{ tickValues: ticks },
+		)
 	// Replaced ticks (facet Custom breaks) draw at their own precision
 	// with thousands separators (`Axis`'s ",~f" fallback), not d3's step
 	// precision — measure them the same way.
-	const replacedTickFmt = (axis: "x" | "y") =>
+	const replacedTickFmt = (axis: "x" | "y", ticks: readonly number[]) =>
 		buildTickFormatter(
 			{ customFormat: channelConfigs[axis]?.customFormat ?? "" },
 			"quantitative",
 			(v) => d3Format(",~f")(Number(v)),
+			{ tickValues: ticks },
 		)
 	type Extent = { min: number; max: number }
 	const fieldExtent = (
@@ -268,15 +272,18 @@ export const buildSolverPanelInputs = ({
 			.filter((b) => b >= dLo && b <= dHi)
 			.map((b) => new Date(b))
 		// A panel's Custom breaks replace the layout outright.
-		const ticks = replaceTicks
-			? replaceTicks.map((b) => new Date(b))
-			: [...auto, ...breaks]
+		const ticks = (
+			replaceTicks ? replaceTicks.map((b) => new Date(b)) : [...auto, ...breaks]
+		).sort((a, b) => a.getTime() - b.getTime())
 		const timeFmt = uniformTimeFormat(ticks)
 		const fmt = buildTickFormatter(
 			{ customFormat: cfg?.customFormat ?? "" },
 			"temporal",
 			(v) => timeFmt(v as Date),
-			{ literalDate: literalTimeLabel(rawText, uniformTimeLiteral(ticks)) }
+			{
+				literalDate: literalTimeLabel(rawText, uniformTimeLiteral(ticks)),
+				tickValues: ticks,
+			}
 		)
 		return ticks.map(fmt)
 	}
@@ -304,8 +311,10 @@ export const buildSolverPanelInputs = ({
 		if (type === "temporal") {
 			return timeTickLabelsFor(cfg, extent, pinMin, pinMax, rawText, replaceTicks)
 		}
-		if (replaceTicks) return replaceTicks.map(replacedTickFmt(axis))
-		const fmtForMargin = axis === "x" ? xTickFmt : yTickFmt
+		if (replaceTicks) {
+			const sorted = [...replaceTicks].sort((a, b) => a - b)
+			return sorted.map(replacedTickFmt(axis, sorted))
+		}
 		const lo = pinMin ?? extent.min
 		const hi = pinMax ?? extent.max
 		if (!Number.isFinite(lo) || !Number.isFinite(hi)) return []
@@ -319,7 +328,8 @@ export const buildSolverPanelInputs = ({
 		const dLo = Math.min(lo, hi)
 		const dHi = Math.max(lo, hi)
 		const breaks = (cfg?.breaks ?? []).filter((b) => b >= dLo && b <= dHi)
-		return [...auto, ...breaks].map(fmtForMargin)
+		const ticks = [...auto, ...breaks].sort((a, b) => a - b)
+		return ticks.map(tickFmtFor(axis, ticks))
 	}
 	const labelsAxisFor = (
 		axis: "x" | "y",

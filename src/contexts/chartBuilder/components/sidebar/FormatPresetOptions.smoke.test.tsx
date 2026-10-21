@@ -47,7 +47,7 @@ describe("FormatPresetOptions", () => {
 		for (const v of [".2e", ".3s", ",.1~fM", ",.1~fB"]) {
 			expect(values).toContain(v)
 		}
-		for (const v of ["%Y-%m-%d", "%b %Y", "%Y", "%b %d", "%H:%M"]) {
+		for (const v of ["%Y-%m-%d", "%b %Y", "%Y", "year-ends", "%b %d", "%H:%M"]) {
 			expect(values).toContain(v)
 		}
 	})
@@ -113,6 +113,10 @@ describe("formatPresetValueFor", () => {
 		expect(formatPresetValueFor(",.0f")).toBe(",.0f")
 		expect(formatPresetValueFor(`${LITERAL_FORMAT}%`)).toBe(`${LITERAL_FORMAT}%`)
 		expect(formatPresetValueFor("%b %Y")).toBe("%b %Y")
+		// The position-aware Year Mixed sentinel round-trips like any preset,
+		// with or without text around it.
+		expect(formatPresetValueFor("year-ends")).toBe("year-ends")
+		expect(formatPresetValueFor("{year-ends} est.")).toBe("year-ends")
 		expect(formatPresetValueFor("$,.1~fM")).toBe("$,.1~fM")
 	})
 

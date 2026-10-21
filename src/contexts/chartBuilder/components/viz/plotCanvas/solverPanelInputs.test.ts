@@ -209,8 +209,9 @@ describe("buildSolverPanelInputs", () => {
 			},
 			channelConfigs: { y: { ...DEFAULT_AXIS_CONFIG, breaks: [2.5] } },
 		})
-		// Exactly the custom ticks, formatted as the Axis draws them.
-		expect(inputs[0].yLabels).toEqual(["1,000,000", "5"])
+		// Exactly the custom ticks, formatted (and sorted) as the Axis draws
+		// them — the formatter reads the ends of the sorted set.
+		expect(inputs[0].yLabels).toEqual(["5", "1,000,000"])
 		// The other row keeps the normal layout (auto + the 2.5 break).
 		expect(inputs[1].yLabels).toContain("2.5")
 	})

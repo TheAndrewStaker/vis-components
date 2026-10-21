@@ -273,3 +273,29 @@ describe("buildLegendFormatter with Before / After text", () => {
 		expect(f(1)).toBe("1")
 	})
 })
+
+describe("buildLegendFormatter over the break set", () => {
+	it("spells the first and last break's years in full under year-ends", () => {
+		const breaks = [2000, 2010, 2020]
+		const f = buildLegendFormatter("year-ends", defaultLegendFormatter(breaks, "quantitative"), {
+			values: breaks,
+			type: "quantitative",
+		})
+		expect(breaks.map(f)).toEqual(["2000", "’10", "2020"])
+	})
+
+	it("reads a temporal legend's epoch-ms breaks as dates under year-ends only", () => {
+		const breaks = [2000, 2010, 2020].map((y) => new Date(y, 0, 1).getTime())
+		const f = buildLegendFormatter("year-ends", defaultLegendFormatter(breaks, "temporal"), {
+			values: breaks,
+			type: "temporal",
+		})
+		expect(breaks.map(f)).toEqual(["2000", "’10", "2020"])
+		// Any other spec still sees the number it always has.
+		const plain = buildLegendFormatter(",.0f", defaultLegendFormatter(breaks, "temporal"), {
+			values: breaks,
+			type: "temporal",
+		})
+		expect(plain(breaks[0]!)).toBe(Intl.NumberFormat("en-US").format(breaks[0]!))
+	})
+})

@@ -1,7 +1,7 @@
 import { ticks as d3Ticks } from "d3-array"
 import { scaleLinear } from "d3-scale"
 
-import { buildTickFormatter } from "./formatTick"
+import { buildTickFormatter, parseFormatSpec, YEAR_ENDS_FORMAT } from "./formatTick"
 import {
 	DEFAULT_LEGEND_CHANNEL_CONFIG,
 	type LegendChannelConfig,
@@ -62,23 +62,40 @@ export const legendDataExtent = (
  * fully-Auto spec (caller falls back to `defaultLegendFormatter`); WITH the
  * caller's default formatter it always returns a function, so an
  * affixes-only format like `{}%` wraps the default break labels. */
+/** The break set a legend formatter labels, in display order. The
+ * `year-ends` format spells the first and last break's years in full; a
+ * temporal legend's breaks are epoch ms, which that format reads as
+ * dates. */
+export type LegendBreakSet = { values: readonly number[]; type: FieldType }
+
 export function buildLegendFormatter(
 	spec: string,
 	fallback: (v: number) => string,
+	set?: LegendBreakSet,
 ): (v: number) => string
 export function buildLegendFormatter(
 	spec: string,
 	fallback?: (v: number) => string,
+	set?: LegendBreakSet,
 ): ((v: number) => string) | null
 export function buildLegendFormatter(
 	spec: string,
 	fallback?: (v: number) => string,
+	set?: LegendBreakSet,
 ): ((v: number) => string) | null {
-	return buildTickFormatter(
+	// Only `year-ends` reads a temporal legend's ms breaks as Dates; every
+	// other spec keeps seeing the number it always has.
+	const asDates =
+		set?.type === "temporal" &&
+		parseFormatSpec(spec).spec.trim().toLowerCase() === YEAR_ENDS_FORMAT
+	const toValue = (v: number): unknown => (asDates ? new Date(v) : v)
+	const fmt = buildTickFormatter(
 		{ customFormat: spec },
 		"quantitative",
 		fallback ? (v) => fallback(v as number) : undefined,
+		set ? { tickValues: set.values.map(toValue) } : undefined,
 	)
+	return fmt ? (v) => fmt(toValue(v)) : null
 }
 
 /** Default ("Auto") formatter for legend break labels when no custom

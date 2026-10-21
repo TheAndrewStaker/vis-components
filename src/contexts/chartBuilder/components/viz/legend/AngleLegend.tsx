@@ -70,8 +70,10 @@ export const AngleLegend = ({
 	// who want raw-value labels can pick a custom d3-format and the
 	// raw break value is fed through it instead; Before / After text
 	// wraps whichever applies.
-	const fmt = buildLegendFormatter(merged.format, (s) =>
-		Number.isFinite(s) ? `${(((scale(s) ?? 0) * 180) / Math.PI).toFixed(0)}°` : ""
+	const fmt = buildLegendFormatter(
+		merged.format,
+		(s) => (Number.isFinite(s) ? `${(((scale(s) ?? 0) * 180) / Math.PI).toFixed(0)}°` : ""),
+		{ values: breaks, type },
 	)
 	const lineLen = 10
 	const angleSvgFor = (s: number) => {

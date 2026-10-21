@@ -80,7 +80,10 @@ export const AreaLegend = ({
 		// circle that reads as "show all marks at one size".
 		const breaks = resolveLegendBreaks(values, type, channelCfg, 3, 3)
 		if (breaks.length === 0) return null
-		const fmt = buildLegendFormatter(merged.format, defaultLegendFormatter(breaks, type))
+		const fmt = buildLegendFormatter(merged.format, defaultLegendFormatter(breaks, type), {
+		values: breaks,
+		type,
+	})
 		entries = breaks.map((s, i) => ({
 			key: String(s),
 			label: decorateOpenEndLabel(fmt(s), i, breaks, dataExt),

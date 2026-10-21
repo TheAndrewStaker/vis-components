@@ -1465,3 +1465,90 @@ describe("Axis replaceTicks (facet panel Custom breaks)", () => {
 		])
 	})
 })
+
+describe("Axis 'year-ends' tick format (Year Mixed)", () => {
+	// The house style for year-only axes: the first and last tick spell
+	// the year in full, the ticks between abbreviate it — 2020 ’22 … 2030.
+	// Position-aware, so the axis hands the formatter its tick set.
+	const cfg = (extra: Record<string, unknown> = {}) => ({
+		tickCount: 5,
+		customFormat: "year-ends",
+		tickLabelAngle: null,
+		jitterAmount: 0,
+		gridlines: { enabled: false, color: "#abcdef", thickness: 1, count: null },
+		tickmarks: { color: "#000", thickness: 1, length: 5 },
+		spine: { color: "#000", thickness: 1 },
+		distributionOverlay: {
+			showDensityViolin: false,
+			showBoxPlot: false,
+			showPoints: true,
+			color: "#000",
+			fillColor: "#000",
+			colorOverrides: {},
+			fillColorOverrides: {},
+		},
+		categoricalTickStride: 1,
+		...extra,
+	})
+	const labelsOf = (container: HTMLElement) =>
+		[...container.querySelectorAll("text")]
+			.map((t) => t.textContent)
+			.filter((s): s is string => !!s && s !== "Year")
+
+	it("spells the first and last tick of a quantitative year axis in full", () => {
+		const xScale = scaleLinear().domain([2020, 2030]).range([80, 380])
+		const { container } = render(
+			wrapInSvg(
+				<Axis
+					scale={xScale}
+					orientation="x"
+					inner={inner}
+					label="Year"
+					fieldType="quantitative"
+					config={cfg() as never}
+				/>
+			)
+		)
+		expect(labelsOf(container)).toEqual(["2020", "’22", "’24", "’26", "’28", "2030"])
+	})
+
+	it("keeps the ends full on a categorical axis, across a tick stride", () => {
+		const years = Array.from({ length: 11 }, (_, i) => String(2020 + i))
+		const xScale = scaleBand().domain(years).range([80, 380])
+		const { container } = render(
+			wrapInSvg(
+				<Axis
+					scale={xScale}
+					orientation="x"
+					inner={inner}
+					label="Year"
+					fieldType="ordinal"
+					config={cfg({ categoricalTickStride: 2 }) as never}
+				/>
+			)
+		)
+		expect(labelsOf(container)).toEqual(["2020", "’22", "’24", "’26", "’28", "2030"])
+	})
+
+	it("spells the ends in full on a date axis too", () => {
+		const xScale = scaleTime()
+			.domain([new Date(2000, 0, 1), new Date(2020, 0, 1)])
+			.range([80, 380])
+		const { container } = render(
+			wrapInSvg(
+				<Axis
+					scale={xScale}
+					orientation="x"
+					inner={inner}
+					label="Year"
+					fieldType="temporal"
+					config={cfg() as never}
+				/>
+			)
+		)
+		const labels = labelsOf(container)
+		expect(labels[0]).toBe("2000")
+		expect(labels.at(-1)).toBe("2020")
+		expect(labels.slice(1, -1).every((l) => /^’\d\d$/.test(l))).toBe(true)
+	})
+})
