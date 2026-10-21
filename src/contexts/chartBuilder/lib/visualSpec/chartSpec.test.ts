@@ -129,6 +129,15 @@ describe("parseChartSpec", () => {
 		})
 	})
 
+	it("answers a variation name sent as a family with the corrected call", () => {
+		const [error] = errorsOf({ ...valid(), family: "choropleth" })
+		expect(error).toEqual({
+			path: "family",
+			message: `unknown family "choropleth"; "Choropleth" is a variation: send family "map", variation "Choropleth"`,
+		})
+		expect(errorsOf({ ...valid(), family: "lollipop" })[0]?.message).toMatch(/^unknown family "lollipop".*\(families: /)
+	})
+
 	it("rejects an unknown field type", () => {
 		expect(paths({ ...valid(), fieldTypes: { month: "date" } })).toEqual([
 			"fieldTypes.month",
