@@ -288,6 +288,7 @@ export const emptyDataLabelsEncodings = (): DataLabelsEncodings => ({
 
 import type { AnnotationsConfig } from "./annotationsConfig"
 import type { CaptionConfig } from "./captionConfig"
+import type { DataTableConfig } from "./dataTableConfig"
 import type {
 	CanvasMargins,
 	ChannelConfigs,
@@ -396,6 +397,11 @@ export type Visual = {
 	 * x-axis title. Optional for back-compat with visuals saved before
 	 * captions existed; falls back to DEFAULT_CAPTION_CONFIG on load. */
 	captionConfig?: CaptionConfig
+	/** Per-visual data table — an optional HTML table rendered under the
+	 * chart (editor, in-app embed, published embed; never image exports).
+	 * Optional for back-compat: absent reads as the disabled default via
+	 * `migrateDataTableConfig`, so no storage version bump. */
+	dataTableConfig?: DataTableConfig
 	thumbnail: string | null
 	/** When `thumbnail` was captured (epoch ms). Stamped only by a capture
 	 * that actually produced a picture — a save whose capture came back

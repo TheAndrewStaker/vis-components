@@ -33,6 +33,10 @@ import {
 	type AnnotationsConfig,
 } from "./annotationsConfig"
 import { DEFAULT_CAPTION_CONFIG, type CaptionConfig } from "./captionConfig"
+import {
+	migrateDataTableConfig,
+	type DataTableConfig,
+} from "./dataTableConfig"
 import type { DisplayUnit } from "./displayUnits"
 
 import type { ChannelConfigs, DataLabelsConfig } from "./channelConfig"
@@ -84,6 +88,8 @@ import {
 	RESHAPE_CONFIG_VERSION,
 	derivedVariablesMigrations,
 	DERIVED_VARIABLES_VERSION,
+	dataTableMigrations,
+	DATA_TABLE_VERSION,
 	legendMigrations,
 	LEGEND_VERSION,
 	themesMigrations,
@@ -173,6 +179,7 @@ const KEY_CURRENT_DATA_LABELS_ENCODINGS =
 const KEY_CURRENT_DATA_LABELS_CONFIG = "vis-components:currentDataLabelsConfig"
 const KEY_CURRENT_ANNOTATIONS = "vis-components:currentAnnotations"
 const KEY_CURRENT_CAPTION = "vis-components:currentCaption"
+const KEY_CURRENT_DATA_TABLE = "vis-components:currentDataTable"
 const KEY_PREVIEW_VERSION_ID = "vis-components:previewVersionId"
 const KEY_DRAWER_HEIGHT = "vis-components:drawerHeight"
 const KEY_SIDEBAR_WIDTH = "vis-components:sidebarWidth"
@@ -1440,6 +1447,23 @@ export const saveCurrentCaption = (c: CaptionConfig): void =>
 		data: c,
 	})
 
+/** The data table draft slice. Normalized on the way in so a partial or
+ *  older blob always yields a full config (see `migrateDataTableConfig`). */
+export const loadCurrentDataTable = (): DataTableConfig =>
+	migrateDataTableConfig(
+		loadVersioned<unknown>({
+			key: KEY_CURRENT_DATA_TABLE,
+			currentVersion: DATA_TABLE_VERSION,
+			migrations: dataTableMigrations,
+			fallback: null,
+		})
+	)
+export const saveCurrentDataTable = (c: DataTableConfig): void =>
+	saveVersioned({
+		key: KEY_CURRENT_DATA_TABLE,
+		currentVersion: DATA_TABLE_VERSION,
+		data: c,
+	})
 export const loadPreviewVersionId = (): string | null =>
 	safeGet<string | null>(KEY_PREVIEW_VERSION_ID, null)
 export const savePreviewVersionId = (id: string | null): void =>
@@ -1470,6 +1494,7 @@ const DRAFT_STATE_KEYS = [
 	KEY_CURRENT_DATA_LABELS_CONFIG,
 	KEY_CURRENT_ANNOTATIONS,
 	KEY_CURRENT_CAPTION,
+	KEY_CURRENT_DATA_TABLE,
 	KEY_PREVIEW_VERSION_ID,
 ]
 

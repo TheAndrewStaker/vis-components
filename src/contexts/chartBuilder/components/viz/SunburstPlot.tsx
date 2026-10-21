@@ -5,7 +5,10 @@ import {
 } from "d3-hierarchy"
 import { arc } from "d3-shape"
 
-import type { HierarchyNode } from "../../lib/buildHierarchy"
+import {
+	hierarchyLeafValue,
+	type HierarchyNode,
+} from "../../lib/buildHierarchy"
 import type { ChartRendererBaseProps } from "../../lib/chartRendererProps"
 import { DEFAULT_DATA_LABELS_CONFIG } from "../../lib/channelConfig"
 import { wrapByCharCount } from "../../lib/multilineText"
@@ -80,7 +83,7 @@ export const SunburstPlot = (props: SunburstPlotProps = {}) => {
 		// is skipped like every other synthetic-root mark.
 		const laid = partition<HierarchyNode>().size([2 * Math.PI, radius])(
 			hierarchy<HierarchyNode>(scaffold.root)
-				.sum((d) => (d.children.length === 0 ? Math.max(d.value ?? 0, 0) : 0))
+				.sum(hierarchyLeafValue)
 				.sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
 		)
 

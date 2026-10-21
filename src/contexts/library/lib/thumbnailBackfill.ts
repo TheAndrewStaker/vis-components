@@ -144,7 +144,8 @@ const captureVisualOffscreen = async (
 ): Promise<string | null> => {
 	if (signal?.aborted) return null
 	const iframe = document.createElement("iframe")
-	iframe.src = `${window.location.origin}/embed/${visualId}?part=chart`
+	// table=off: a preview is the chart alone, never the data table under it.
+	iframe.src = `${window.location.origin}/embed/${visualId}?part=chart&table=off`
 	// Offscreen but NOT display:none / visibility:hidden — the chart sizes
 	// itself with ResizeObserver and needs real layout to mount at all.
 	iframe.style.position = "fixed"

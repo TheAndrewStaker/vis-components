@@ -4,6 +4,7 @@ import { useAtomValue, useSetAtom } from "jotai"
 import {
 	currentAnnotationsAtom,
 	currentCaptionConfigAtom,
+	currentDataTableConfigAtom,
 	currentChannelConfigsAtom,
 	currentDataLabelsConfigAtom,
 	currentDataLabelsEncodingsAtom,
@@ -58,6 +59,7 @@ export const useAutoSave = () => {
 	const name = useAtomValue(currentVisualNameAtom)
 	const annotations = useAtomValue(currentAnnotationsAtom)
 	const caption = useAtomValue(currentCaptionConfigAtom)
+	const dataTable = useAtomValue(currentDataTableConfigAtom)
 	const mapConfig = useAtomValue(currentMapConfigAtom)
 	const reshapeConfig = useAtomValue(currentReshapeConfigAtom)
 	const derivedVariablesConfig = useAtomValue(currentDerivedVariablesAtom)
@@ -97,6 +99,7 @@ export const useAutoSave = () => {
 		name,
 		annotations,
 		caption,
+		dataTable,
 		mapConfig,
 		reshapeConfig,
 		derivedVariablesConfig,

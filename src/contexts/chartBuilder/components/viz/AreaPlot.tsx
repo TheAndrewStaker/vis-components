@@ -6,6 +6,7 @@ import {
 	type GroupEncoding,
 	type Stack,
 	type StackSlice,
+	resolveAreaMeasureField,
 } from "../../lib/aggregators/stacks"
 import {
 	buildPatternDefs,
@@ -119,17 +120,9 @@ type Aggregation =
  *   - areas-y always uses `length` (orientation-fixed: category on y, measure on x).
  *   - areas-x uses `length` when mapped, otherwise falls back to `y`. The
  *     detect predicate guarantees exactly one of length/y is mapped for the
- *     areas-x mode. */
-export const resolveAreaMeasureField = (
-	mode: "areas-x" | "areas-y",
-	encodings: {
-		length: { field: string | null }
-		y: { field: string | null }
-	}
-): string | null => {
-	if (mode === "areas-y") return encodings.length.field
-	return encodings.length.field ?? encodings.y.field
-}
+ *     areas-x mode. Lives in `lib/aggregators/stacks.ts` (shared with the
+ *     data table); re-exported for existing importers. */
+export { resolveAreaMeasureField } from "../../lib/aggregators/stacks"
 
 export const AreaPlot = (props: AreaPlotProps = {}) => {
 	const overrides = useAtomValue(currentFieldOverridesAtom)

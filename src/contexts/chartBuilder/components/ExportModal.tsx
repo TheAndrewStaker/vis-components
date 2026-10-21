@@ -787,10 +787,10 @@ const ExportTab = ({
 		const origin = typeof window === "undefined" ? "" : window.location.origin
 		const params = new URLSearchParams()
 		if (view) params.set("v", view.versionId)
-		const q = params.toString()
-		return q
-			? `${origin}/embed/${visualId}?${q}`
-			: `${origin}/embed/${visualId}`
+		// An image export is the chart alone at the requested size — the
+		// data table (HTML under the chart) would take room from it.
+		params.set("table", "off")
+		return `${origin}/embed/${visualId}?${params.toString()}`
 	}, [visualId, view])
 
 	const onDownload = async () => {

@@ -297,3 +297,54 @@ export const buildHierarchyFromEdges = (
 
 	return { root, diagnostics }
 }
+
+/** A node's own size contribution in the treemap / sunburst layouts (and
+ * packed circles' "area" sizing): leaves size by their non-negative value,
+ * containers contribute nothing of their own — d3's `.sum()` adds their
+ * descendants. Shared with the data table so its node totals are the sizes
+ * the marks are drawn at. */
+export const hierarchyLeafValue = (d: HierarchyNode): number =>
+	d.children.length === 0 ? Math.max(d.value ?? 0, 0) : 0
+
+export type HierarchyNodeRow = {
+	node: HierarchyNode
+	/** Labels from the top-level group down to (and including) the node. */
+	path: string[]
+	/** 1 = top level (the synthetic root is depth 0 and never listed). */
+	depth: number
+	/** Sum of `hierarchyLeafValue` over the node's subtree — what d3's
+	 * `hierarchy(root).sum(hierarchyLeafValue)` assigns it. */
+	total: number
+	/** Leaves under the node (1 for a leaf). */
+	leaves: number
+}
+
+/** Every node of the tree (the synthetic root excluded) in depth-first
+ * order, with its summed value — the data table's one-row-per-node view
+ * of a treemap / sunburst / packed-circles chart. */
+export const hierarchyNodeRows = (root: HierarchyNode): HierarchyNodeRow[] => {
+	const out: HierarchyNodeRow[] = []
+	const walk = (
+		node: HierarchyNode,
+		path: string[],
+		depth: number
+	): { total: number; leaves: number } => {
+		const entry: HierarchyNodeRow | null =
+			depth > 0 ? { node, path, depth, total: 0, leaves: 0 } : null
+		if (entry) out.push(entry)
+		let total = hierarchyLeafValue(node)
+		let leaves = node.children.length === 0 ? 1 : 0
+		for (const child of node.children) {
+			const sub = walk(child, [...path, child.label], depth + 1)
+			total += sub.total
+			leaves += sub.leaves
+		}
+		if (entry) {
+			entry.total = total
+			entry.leaves = leaves
+		}
+		return { total, leaves }
+	}
+	walk(root, [], 0)
+	return out
+}

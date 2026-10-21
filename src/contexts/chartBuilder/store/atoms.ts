@@ -7,6 +7,7 @@ import {
 	type AnnotationsConfig,
 } from "../lib/annotationsConfig"
 import { type CaptionConfig } from "../lib/captionConfig"
+import { type DataTableConfig } from "../lib/dataTableConfig"
 import { type CanvasZoom } from "../lib/canvasZoom"
 import {
 	type ChannelConfigs,
@@ -25,6 +26,7 @@ import {
 	loadCurrentAnnotations,
 	loadCurrentCaption,
 	loadCurrentChannelConfigs,
+	loadCurrentDataTable,
 	loadCurrentDataLabelsConfig,
 	loadCurrentDataLabelsEncodings,
 	loadCurrentDatasetId,
@@ -62,6 +64,7 @@ import {
 	saveCurrentAnnotations,
 	saveCurrentCaption,
 	saveCurrentChannelConfigs,
+	saveCurrentDataTable,
 	saveCurrentDataLabelsConfig,
 	saveCurrentDataLabelsEncodings,
 	saveCurrentDatasetId,
@@ -1304,6 +1307,13 @@ export const currentCaptionConfigAtom = persistedAtom<CaptionConfig>(
 	saveCurrentCaption
 )
 
+/** Per-visual data table — the optional HTML table rendered under the chart
+ * (outside the layout solver and the fixed canvas). See
+ * `lib/dataTableConfig.ts` for the data shape. */
+export const currentDataTableConfigAtom = persistedAtom<DataTableConfig>(
+	loadCurrentDataTable,
+	saveCurrentDataTable
+)
 export const saveStatusAtom = atom<"idle" | "saving">("idle")
 
 /** Last rendered panel inner dimensions (in px). PlotCanvas writes this

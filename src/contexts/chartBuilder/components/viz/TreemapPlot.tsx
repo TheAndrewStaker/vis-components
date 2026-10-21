@@ -4,7 +4,10 @@ import {
 	type HierarchyRectangularNode,
 } from "d3-hierarchy"
 
-import type { HierarchyNode } from "../../lib/buildHierarchy"
+import {
+	hierarchyLeafValue,
+	type HierarchyNode,
+} from "../../lib/buildHierarchy"
 import type { ChartRendererBaseProps } from "../../lib/chartRendererProps"
 import { PatternDefs, type PatternDefSpec } from "../../lib/patternDefs"
 
@@ -48,7 +51,7 @@ export const TreemapPlot = (props: TreemapPlotProps = {}) => {
 		// compounded into uncontrollable multi-line borders.
 		const laid = treemap<HierarchyNode>().size([w, h])(
 			hierarchy<HierarchyNode>(scaffold.root)
-				.sum((d) => (d.children.length === 0 ? Math.max(d.value ?? 0, 0) : 0))
+				.sum(hierarchyLeafValue)
 				.sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
 		)
 

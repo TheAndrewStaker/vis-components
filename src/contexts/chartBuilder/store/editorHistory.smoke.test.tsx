@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { TestProvider, type TestStore } from "../../../testSupport/TestProvider"
 import { installInMemoryLocalStorage } from "../../../testSupport/localStorageShim"
-import { currentDatasetIdAtom, currentVisualNameAtom } from "./atoms"
+import { DEFAULT_DATA_TABLE_CONFIG } from "../lib/dataTableConfig"
+import {
+	currentDataTableConfigAtom,
+	currentDatasetIdAtom,
+	currentVisualNameAtom,
+} from "./atoms"
 import {
 	COALESCE_MS,
 	canRedoAtom,
@@ -90,6 +95,22 @@ describe("useEditorHistory", () => {
 		expect(result.current.canRedo).toBe(false)
 	})
 
+	it("covers the data table config", () => {
+		const { result, store } = mount((s) =>
+			s.set(currentDataTableConfigAtom, DEFAULT_DATA_TABLE_CONFIG)
+		)
+		later()
+		act(() =>
+			store.set(currentDataTableConfigAtom, {
+				...DEFAULT_DATA_TABLE_CONFIG,
+				enabled: true,
+			})
+		)
+		act(() => {
+			result.current.undo()
+		})
+		expect(store.get(currentDataTableConfigAtom).enabled).toBe(false)
+	})
 	it("coalesces a burst of changes into one step", () => {
 		const { result, store } = mount()
 		later()

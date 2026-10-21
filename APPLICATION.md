@@ -473,7 +473,7 @@ bar's Undo / Redo buttons (left of Export) do the same and show
 whether there is anything to step to. The history covers everything
 the visual saves — name, encodings, type overrides, every channel
 config, labels, legend, tooltip, data labels, level orders, annotations,
-caption, map, reshape, derived variables, the chosen theme — but NOT
+caption, data table, map, reshape, derived variables, the chosen theme — but NOT
 the dataset binding (changing the data set resets the stack), field
 renames or dataset edits (those mutate the data set and sibling
 visuals, not this draft), or the preview version. Changes landing
@@ -3401,6 +3401,138 @@ default, so saved visuals keep the old behavior.
 
 ---
 
+## 10b. Data table
+
+A **Data table** section in the sidebar, right after Caption, adds an
+optional HTML `<table>` of the chart's data UNDER the figure. It is the
+non-visual alternative to the chart — a screen reader reads a real table
+with a caption and column headers — and lets sighted embed viewers read
+exact values. The top toggle, **Show a data table under the chart**, is
+off by default; every other control is hidden while it is off.
+
+- **Placement** — *Below the chart* renders the table always; *Behind a
+  button* renders a **View data** / **Hide data** button under the chart
+  that toggles it (a real `<button>` with `aria-expanded` and
+  `aria-controls`; the table is not built until it is first opened).
+- **Caption** — the table's `<caption>`. Empty = "Data for <chart
+  title>", falling back to the visual's name (the placeholder shows it).
+- **Columns** — *Encoded variables only* (the default) or *All
+  variables*. Encoded columns list the dimensions (categorical, ordinal
+  and temporal variables) first, then the measures (quantitative), so a
+  horizontal chart whose x is the value still reads "Category, …,
+  Value". Within each group columns follow encoding order: x, y, r,
+  length, angle, area, then the color / mark channels (hue, outline,
+  saturation, brightness, opacity, shape, pattern, connection, legacy
+  text), facets last. A field mapped twice is listed once. With nothing
+  mapped the table lists every column.
+- **Max rows** — empty = all rows. When set, the first N rows show with
+  a **Show all N rows** button. With no limit set the table still renders
+  at most 1,000 rows up front (same button), so a very large data set
+  can't stall the page.
+- **Download link** (on by default) — a **Download CSV** button under
+  the table. The CSV carries the table's columns and EVERY row, with the
+  raw (unformatted) cells, so it is machine-readable.
+- **Table text** — Family, Size (pt) and Color. Empty = inherit the
+  theme's base text font (the live theme, so a re-theme restyles the
+  table with no config write).
+- **Header** — Background (empty = none), Text color (empty = the
+  table's text color), **Bold** (on by default).
+- **Rows** — Border color (empty = a soft tint of the text color),
+  **Striped rows** (on by default) with a Stripe color (empty = a 4%
+  tint of the text color), and the alignment of numeric columns
+  (right by default; the shared alignment picker, so center is offered
+  too).
+
+There are no position nudges: the table sits in page flow under the
+chart, outside the layout solver and outside a fixed canvas size.
+
+**What the rows are.** For chart types that draw one mark per data
+row (scatter, lines, dumbbells, radar, maps) the table lists the rows
+the marks are drawn from, after the reshape, the cell conversions and
+derived variables (the view stage) — one table row per data row. Chart
+types that AGGREGATE list the aggregated values the marks are drawn
+at instead — one table row per mark, computed by the renderers' own
+aggregation code (`lib/plottedData.ts`), so the table can't disagree
+with the picture:
+
+- **Bars** (stacked, grouped, mirrored, negative): the category, each
+  color / pattern / opacity variable that splits the bar, and the
+  measure summed — headed "sales (sum)" — or **Count** when the length
+  variable is categorical. One row per bar segment. A mirrored bar shows
+  its magnitude, as its labels do.
+- **Histograms**: "score (bin)" — the bin's range in the binned axis's
+  Format — and **Count** (**Share** in density mode); colored
+  histograms add the color variable, one row per bin segment. An
+  uncolored histogram lists every bin, empty ones included.
+- **Areas**: the category, the layer variable(s) and the measure summed
+  per point of each layer (the area renderer sums rows sharing a point,
+  stacked or not).
+- **Pies**: the pie's category (pies-x / pies-y), the wedge variable(s),
+  the measure summed (or **Count**) and the wedge's **Share** of its pie.
+- **Heatmap tiles**: x, y, **Count**, and the color variable's mean
+  ("temp (mean)") or most common value.
+- **Hexbins**: each hexagon's center in data units ("x (hexagon
+  center)", "y (hexagon center)") and **Count**.
+- **Box / violin**: per group, **Min**, **Lower whisker**, **Q1**,
+  **Median**, **Q3**, **Upper whisker**, **Max** and **N** — the drawn
+  whiskers are Tukey's (the furthest value within 1.5 × IQR).
+- **Treemap / sunburst / packed circles**: one row per node — its path
+  as **Level 1**, **Level 2**, … and its value summed over the leaves
+  inside it (**Leaves** when no value variable is mapped).
+- **Chord / sankey**: source, target and the value summed per link. The
+  sankey lists only the links it draws (loops it has to drop are left
+  out).
+
+Facets split every aggregation per panel (the facet variables are the
+last columns); bin edges and hexagon lattices come from all rows, as
+on the default shared axes. Under an aggregated table a one-line note
+says what a row is ("Values are sums per bar; the underlying data has
+N rows."), in the table's own text color, a step smaller, and tied to
+the table with `aria-describedby`. **Columns** has nothing to choose
+there (an aggregate has no other variables), so the sidebar hides it
+behind a one-line explanation. A density curve (single variable) and a
+regression line are curves COMPUTED from the rows, not lists of
+values — those charts keep the row table, with a note saying so.
+
+Column headers are the variables' current (renamed) names; an
+aggregate column names its variable and aggregate. Cells print with the
+same inherited format as the tooltip (§10: axis, then quantitative
+legend, then data label); a variable formatted nowhere falls back to
+its dollar / percent cell hint ("14%" rather than 0.14), then to its
+raw cell. An aggregate column inherits its MEASURE's format; **Count**,
+**N** and **Leaves** print as integers and **Share** as a percent when
+nothing else applies. The CSV download carries the same rows as the
+table (aggregated when the table is). Row order in an aggregated table
+is the chart's own (categories, slices and bins as drawn, panels in the
+facet order). In a row table, row order follows the
+chart's level order where a shown column has one — a pinned order from
+the Fields panel, or an ordinal variable's natural sort — in column
+order; otherwise data order. Numeric (quantitative) columns align per
+the setting; everything else aligns left.
+
+**Where it renders.** (1) The editor canvas, under the figure inside the
+chart's scroll region (with a fixed canvas size, under the white canvas
+at its displayed width — the table is not part of the zoomed frame and
+is never scaled). (2) The in-app `/embed/<visualId>` page: with a table
+the page becomes a scrolling column, chart first (it fills what the
+table leaves of the viewport, never below a readable floor), table
+under it. In a split embed the table belongs to the **chart** part,
+never the legend part. Without a table the embed page is unchanged.
+(3) Published (static) embeds: the payload carries the whole saved
+visual, so the table config travels with it; a visual published before
+the table existed has no config, which reads as off.
+
+**Not in image exports.** PNG / JPEG / SVG / PDF exports serialize the
+chart SVG, and the export preview (and the library's thumbnail refresh)
+load the embed page with `table=off`, so an image is the chart alone at
+the requested size.
+
+Saved per visual (`dataTableConfig`, `lib/dataTableConfig.ts`), covered
+by undo. The field is optional: a visual saved before it existed loads
+with the table off, so no storage version bump.
+
+---
+
 ## 11. Annotations
 
 A top-level "Annotations" section in the sidebar. Users can add
@@ -4128,7 +4260,9 @@ by measuring the live on-screen chart / plot area / legend subtree, so
 the embed inherits the size the user sees (fixed fallbacks when a
 piece can't be measured). The snippets are editable textareas: hand
 edits survive until an option that rebuilds the snippet changes.
-Copying a snippet records an embed instance, which is what lets live
+When the visual has a data table (§10b) it renders under the chart in
+the embed (in the chart part of a split embed). Copying a snippet
+records an embed instance, which is what lets live
 embeds follow later version uploads; the library's Data set column shows
 each instance's pinned version and when its snippet was last exported.
 The "Pin to current version" option names the version being pinned with

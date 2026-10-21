@@ -6,6 +6,7 @@ import {
 	type GroupChannel,
 	type GroupEncoding,
 	type Stack,
+	toDensityStacks,
 } from "../../lib/aggregators/stacks"
 import {
 	buildPatternDefs,
@@ -26,10 +27,9 @@ import {
 import { ptToPx } from "../../lib/fontUnit"
 import { getChartMode } from "../../lib/chartMode"
 import type { MeasureAxisRendererProps } from "../../lib/chartRendererProps"
-import { buildTickFormatterWithAuto } from "../../lib/formatTick"
 import { densityCurveGroupField } from "../../lib/colorSlots"
 import { densityCurveMeasures } from "../../lib/densityCurve"
-import { computeHistogramBins } from "../../lib/histogramBins"
+import { histogramBinningForAxis } from "../../lib/histogramBins"
 import { applyMirrorSign, resolveMirrorDirection } from "../../lib/mirrorAxis"
 import { cartesian } from "./coords"
 import { effectiveType } from "../../lib/fieldType"
@@ -93,20 +93,9 @@ import { Plot, type CoordFactory, type PlotContext } from "./Plot"
 
 const FALLBACK_FILL = "#6b7280"
 
-/** Rescale every slice value to its share of the grand total across all
- * stacks (count → relative frequency in 0–1). Used for histogram "density"
- * mode. Returns the input unchanged when the total is non-positive. */
-export const toDensityStacks = (stacks: Stack[]): Stack[] => {
-	const total = stacks.reduce(
-		(sum, s) => sum + s.slices.reduce((a, sl) => a + sl.value, 0),
-		0
-	)
-	if (total <= 0) return stacks
-	return stacks.map((s) => ({
-		...s,
-		slices: s.slices.map((sl) => ({ ...sl, value: sl.value / total })),
-	}))
-}
+/** Moved to `lib/aggregators/stacks.ts` (shared with the data table);
+ *  re-exported for existing importers. */
+export { toDensityStacks } from "../../lib/aggregators/stacks"
 
 type BarPlotProps = MeasureAxisRendererProps
 
@@ -325,20 +314,14 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 		// buckets.
 		// Bin-edge labels honor the binned axis's tick-format setting (e.g. an
 		// SI format renders "20000 – 30000" as "20k – 30k"; Before / After
-		// text wraps each edge). `buildTickFormatterWithAuto` returns null
+		// text wraps each edge) — `histogramBinningForAxis`, shared with the data
+		// table. Its tick formatter is null
 		// when the format is fully Auto, in which case the binner uses its
 		// built-in precision formatter.
-		const categoryAxisConfig = channelConfigs[categoryChannel]
-		const tickFormatter = categoryAxisConfig
-			? buildTickFormatterWithAuto(categoryAxisConfig)
-			: null
 		const binning = isHistogram
-			? computeHistogramBins(
+			? histogramBinningForAxis(
 					categoryRows.map((r) => r[categoryField]),
-					histogramCfg?.binCount ?? 10,
-					tickFormatter ?? undefined,
-					{ min: categoryAxisConfig?.min ?? null, max: categoryAxisConfig?.max ?? null },
-					histogramCfg?.labelMode ?? "range"
+					channelConfigs[categoryChannel]
 			  )
 			: null
 		const prep = (rows: typeof rowsForChart): typeof rowsForChart => {

@@ -2,6 +2,7 @@ import { AsideSection } from "../../../../components/ui/AsideSection"
 import { AestheticsPanel } from "./AestheticsPanel"
 import { AnnotationsPanel } from "./AnnotationsPanel"
 import { CaptionPanel } from "./CaptionPanel"
+import { DataTablePanel } from "./DataTablePanel"
 import { DataLabelsPanel } from "./DataLabelsPanel"
 import { DataUpload } from "./DataUpload"
 import { EncodingShelves } from "./EncodingShelves"
@@ -71,6 +72,10 @@ export const Sidebar = () => {
 				<hr className="mx-3 border-stone-200 dark:border-stone-700" />
 				<AsideSection title="Caption" defaultCollapsed>
 					<CaptionPanel />
+				</AsideSection>
+				<hr className="mx-3 border-stone-200 dark:border-stone-700" />
+				<AsideSection title="Data table" defaultCollapsed>
+					<DataTablePanel />
 				</AsideSection>
 				<hr className="mx-3 border-stone-200 dark:border-stone-700" />
 				<AsideSection title="Annotations" defaultCollapsed>

@@ -2,6 +2,10 @@ import { useAtomCallback } from "jotai/utils"
 import { useCallback } from "react"
 import { DEFAULT_ANNOTATIONS_CONFIG } from "../lib/annotationsConfig"
 import { DEFAULT_CAPTION_CONFIG } from "../lib/captionConfig"
+import {
+	DEFAULT_DATA_TABLE_CONFIG,
+	migrateDataTableConfig,
+} from "../lib/dataTableConfig"
 import { knownFacetPanels, resolveFacetPanels } from "../lib/resolveFacetPanels"
 import { structureVisualKeys } from "../lib/savedKeyStructure"
 import { currentDatasetViewAtom } from "./useCurrentDatasetView"
@@ -40,6 +44,7 @@ import {
 	currentAnnotationsAtom,
 	currentCaptionConfigAtom,
 	currentChannelConfigsAtom,
+	currentDataTableConfigAtom,
 	currentDataLabelsConfigAtom,
 	currentDataLabelsEncodingsAtom,
 	currentDatasetIdAtom,
@@ -97,6 +102,7 @@ export const useSaveVisual = () => {
 			const fieldLevelOrderSpecs = get(currentFieldLevelOrderSpecsAtom)
 			const annotationsConfig = get(currentAnnotationsAtom)
 			const captionConfig = get(currentCaptionConfigAtom)
+			const dataTableConfig = get(currentDataTableConfigAtom)
 			const mapConfig = get(currentMapConfigAtom)
 			const reshapeConfig = get(currentReshapeConfigAtom)
 			const derivedVariablesConfig = get(currentDerivedVariablesAtom)
@@ -152,6 +158,7 @@ export const useSaveVisual = () => {
 				texts: [...(annotationsConfig.texts ?? [])],
 			},
 			captionConfig: { ...captionConfig },
+			dataTableConfig: { ...dataTableConfig },
 			mapConfig: { ...mapConfig },
 			reshapeConfig: {
 				...reshapeConfig,
@@ -301,6 +308,13 @@ export const useLoadVisual = () => {
 			...DEFAULT_CAPTION_CONFIG,
 			...visual.captionConfig,
 			})
+			// Per-visual data table — added after first release. Older visuals
+			// leave it undefined, which normalizes to the disabled default; a
+			// prior visual's table settings never linger.
+			set(
+			currentDataTableConfigAtom,
+			migrateDataTableConfig(visual.dataTableConfig)
+			)
 			// Per-visual map config — added after maps shipped. Older visuals (and
 			// any saved before mapConfig was bound into the save cycle) leave it
 			// undefined; default-merge so the coordinate system / projection / focus
@@ -362,6 +376,7 @@ export const useResetVisual = () => {
 			set(currentFieldLevelOrderSpecsAtom, {})
 			set(currentAnnotationsAtom, DEFAULT_ANNOTATIONS_CONFIG)
 			set(currentCaptionConfigAtom, captionConfigFromTheme(defaultTheme))
+			set(currentDataTableConfigAtom, DEFAULT_DATA_TABLE_CONFIG)
 			set(currentMapConfigAtom, DEFAULT_MAP_CONFIG)
 			set(currentReshapeConfigAtom, DEFAULT_RESHAPE_CONFIG)
 			set(currentDerivedVariablesAtom, DEFAULT_DERIVED_VARIABLES_CONFIG)

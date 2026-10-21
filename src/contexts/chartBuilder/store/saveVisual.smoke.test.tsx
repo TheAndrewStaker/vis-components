@@ -16,6 +16,10 @@ import type { LabelsConfig } from "../lib/labelsConfig"
 import { SYSTEM_LIGHT_THEME } from "../lib/systemThemes"
 import { dataLabelsConfigFromTheme, labelsFromTheme } from "../lib/themeConfig"
 import { emptyEncodings, type Encodings } from "../lib/types"
+import {
+	DEFAULT_DATA_TABLE_CONFIG,
+	type DataTableConfig,
+} from "../lib/dataTableConfig"
 
 import { pieceKey } from "../lib/labelPieces"
 import type { Visual } from "../lib/types"
@@ -23,6 +27,7 @@ import {
 	currentAnnotationsAtom,
 	currentChannelConfigsAtom,
 	currentDataLabelsConfigAtom,
+	currentDataTableConfigAtom,
 	currentDatasetIdAtom,
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
@@ -110,6 +115,14 @@ const DATA_LABELS: DataLabelsConfig = {
 
 const FIELD_LEVEL_ORDERS = { cut: ["Ideal", "Good", "Fair"] }
 
+const DATA_TABLE: DataTableConfig = {
+	...DEFAULT_DATA_TABLE_CONFIG,
+	enabled: true,
+	placement: "button",
+	caption: "Diamond prices",
+	maxRows: 20,
+	headerBackground: "#eeeeee",
+}
 const seedEditor = (s: TestStore) => {
 	s.set(currentVisualIdAtom, null)
 	s.set(currentVisualNameAtom, "Round-trip chart")
@@ -119,6 +132,7 @@ const seedEditor = (s: TestStore) => {
 	s.set(currentLabelsAtom, LABELS)
 	s.set(currentDataLabelsConfigAtom, DATA_LABELS)
 	s.set(currentFieldLevelOrdersAtom, FIELD_LEVEL_ORDERS)
+	s.set(currentDataTableConfigAtom, DATA_TABLE)
 	s.set(currentThemeIdAtom, "theme-roundtrip")
 }
 
@@ -158,6 +172,7 @@ describe("useSaveVisual → useLoadVisual round-trip", () => {
 		expect(store.get(currentChannelConfigsAtom)).toEqual(CHANNEL_CONFIGS)
 		expect(store.get(currentDataLabelsConfigAtom)).toEqual(DATA_LABELS)
 		expect(store.get(currentFieldLevelOrdersAtom)).toEqual(FIELD_LEVEL_ORDERS)
+		expect(store.get(currentDataTableConfigAtom)).toEqual(DATA_TABLE)
 
 		expect(store.get(currentLabelsAtom)).toEqual(LABELS)
 	})
@@ -179,6 +194,7 @@ describe("useSaveVisual → useLoadVisual round-trip", () => {
 		expect(v.labelsConfig).toEqual(LABELS)
 		expect(v.labelsConfig.titleAngles).toEqual({ facetTitle: 90 })
 		expect(v.dataLabelsConfig).toEqual(DATA_LABELS)
+		expect(v.dataTableConfig).toEqual(DATA_TABLE)
 		// No chart SVG in the test DOM → capture returns null, and there's no
 		// prior thumbnail to preserve. The stamp moves only with a real
 		// capture, so it stays absent — which is what marks the preview as

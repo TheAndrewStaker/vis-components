@@ -19,6 +19,9 @@
  */
 import { tickStep } from "d3-array"
 
+import type { AxisConfig } from "./channelConfig"
+import { buildTickFormatterWithAuto } from "./formatTick"
+
 export type HistogramBin = {
 	/** Zero-based bin index, ascending from the lowest value. */
 	index: number
@@ -323,4 +326,23 @@ export const binnedCounts = (
 		counts.set(label, (counts.get(label) ?? 0) + 1)
 	}
 	return counts
+}
+
+/** The binning a histogram draws for its binned (category) axis: the axis's
+ * histogram bin count + label mode, its pinned min / max, and its tick
+ * Format applied to the bin-edge labels. The ONE recipe shared by the bars
+ * renderer and the data table (`lib/plottedData.ts`), so the table's "Bin"
+ * column reads exactly like the axis. */
+export const histogramBinningForAxis = (
+	values: readonly unknown[],
+	axisConfig: AxisConfig | undefined
+): HistogramBinning | null => {
+	const tickFormatter = axisConfig ? buildTickFormatterWithAuto(axisConfig) : null
+	return computeHistogramBins(
+		values,
+		axisConfig?.histogram?.binCount ?? 10,
+		tickFormatter ?? undefined,
+		{ min: axisConfig?.min ?? null, max: axisConfig?.max ?? null },
+		axisConfig?.histogram?.labelMode ?? "range"
+	)
 }

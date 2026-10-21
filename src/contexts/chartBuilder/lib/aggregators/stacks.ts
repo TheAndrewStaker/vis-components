@@ -353,3 +353,32 @@ export const aggregateStacks = (
 
 /** Backwards-compatible alias. New code should prefer `aggregateStacks`. */
 export const aggregateBars = aggregateStacks
+
+/** Rescale every slice value to its share of the grand total across all
+ * stacks (count → relative frequency in 0–1). Used for histogram "density"
+ * mode — by the bars renderer and the data table alike. Returns the input
+ * unchanged when the total is non-positive. */
+export const toDensityStacks = (stacks: Stack[]): Stack[] => {
+	const total = stacks.reduce(
+		(sum, s) => sum + s.slices.reduce((a, sl) => a + sl.value, 0),
+		0
+	)
+	if (total <= 0) return stacks
+	return stacks.map((s) => ({
+		...s,
+		slices: s.slices.map((sl) => ({ ...sl, value: sl.value / total })),
+	}))
+}
+
+/** The field an area chart's layers measure: `length` on areas-y; `length`,
+ * else `y`, on areas-x. Shared by the area renderer and the data table. */
+export const resolveAreaMeasureField = (
+	mode: "areas-x" | "areas-y",
+	encodings: {
+		length: { field: string | null }
+		y: { field: string | null }
+	}
+): string | null => {
+	if (mode === "areas-y") return encodings.length.field
+	return encodings.length.field ?? encodings.y.field
+}

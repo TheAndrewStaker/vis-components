@@ -3,6 +3,7 @@ import { useParams, useSearch } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
 import { resolveDatasetVersionStrict } from "../../chartBuilder/lib/resolveDatasetVersion"
 import {
+	currentDataTableConfigAtom,
 	datasetIndexAtom,
 	previewVersionIdAtom,
 	visualsAtom,
@@ -15,6 +16,7 @@ import {
 	ChartCanvas,
 } from "../../chartBuilder/components/viz/ChartCanvas"
 import { Legend } from "../../chartBuilder/components/viz/Legend"
+import { EmbedTableLayout } from "../../chartBuilder/components/viz/DataTableBlock"
 import { useEnsureCurrentDatasetLoaded } from "../../chartBuilder/store/useCurrentDatasetView"
 import { useDocumentTitle } from "../../../lib/documentTitle"
 
@@ -31,6 +33,12 @@ export const EmbedPage = () => {
 	const search = useSearch({ from: "/embed/$visualId" })
 	const requestedVersionId = search.v ?? null
 	const part = search.part ?? null
+	// The data table rides with the chart (full page or the chart part of a
+	// split embed), never the legend part; capture iframes switch it off.
+	const dataTableOn =
+		useAtomValue(currentDataTableConfigAtom)?.enabled === true &&
+		part !== "legend" &&
+		search.table !== "off"
 
 	const visuals = useAtomValue(visualsAtom)
 	// Server mode fills the visuals list asynchronously; an id absent from
@@ -135,6 +143,7 @@ export const EmbedPage = () => {
 		) : (
 			<ChartCanvas />
 		)
+	if (dataTableOn) return <EmbedTableLayout>{body}</EmbedTableLayout>
 	// data-export-root marks the capture boundary for image exports — the
 	// Export modal serializes everything inside it (chart + legend).
 	return (

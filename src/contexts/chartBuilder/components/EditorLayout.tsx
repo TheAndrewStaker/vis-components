@@ -3,6 +3,7 @@ import { useAtom, useAtomValue } from "jotai"
 import {
 	blackAndWhiteModeAtom,
 	currentChannelConfigsAtom,
+	currentDataTableConfigAtom,
 	currentVisualIdAtom,
 	currentVisualPublishedAtom,
 	editorSheetOpenAtom,
@@ -23,6 +24,7 @@ import { CanvasZoomControls } from "./CanvasZoomControls"
 import { SaveBar } from "./SaveBar"
 import { Sidebar } from "./sidebar/Sidebar"
 import { ChartCanvas } from "./viz/ChartCanvas"
+import { DataTableBlock } from "./viz/DataTableBlock"
 import { useEnsureCurrentDatasetLoaded } from "../store/useCurrentDatasetView"
 
 // Narrowing past the sidebar's content floor (Sidebar's `min-w-80`) is safe:
@@ -100,6 +102,9 @@ export const EditorLayout = () => {
 	const [sheetOpen, setSheetOpen] = useAtom(editorSheetOpenAtom)
 	const blackAndWhite = useAtomValue(blackAndWhiteModeAtom)
 	const canvasSizeCfg = useAtomValue(currentChannelConfigsAtom).canvasSize
+	// The data table (Sidebar → Data table) renders under the figure inside
+	// the scroll region — outside the zoomed canvas frame and the solver.
+	const dataTableOn = useAtomValue(currentDataTableConfigAtom)?.enabled === true
 	const publishedFrame = useAtomValue(currentVisualPublishedAtom)
 		? ` ${PUBLISHED_FRAME_CLASS}`
 		: ""
@@ -291,7 +296,9 @@ export const EditorLayout = () => {
 									className={`min-h-0 flex-1 overflow-auto bg-stone-200 dark:bg-stone-800${publishedFrame}`}
 									style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
 								>
-									<div className="flex min-h-full w-max min-w-full p-6">
+									<div
+										className={`flex min-h-full w-max min-w-full p-6${dataTableOn ? " flex-col" : ""}`}
+									>
 										{/* Outer box takes the SCALED footprint so centering
 										 *  and scrolling see the shrunken size; the inner
 										 *  canvas keeps its true dimensions and is
@@ -301,7 +308,7 @@ export const EditorLayout = () => {
 											// still true-size (transforms don't change layout),
 											// and without clipping it would widen the `w-max`
 											// wrapper and make the host scroll into blank space.
-											className="m-auto shrink-0 overflow-hidden"
+											className={`${dataTableOn ? "mx-auto" : "m-auto"} shrink-0 overflow-hidden`}
 											style={{
 												width: fixedCanvas.width * fixedScale,
 												height: fixedCanvas.height * fixedScale,
@@ -321,6 +328,17 @@ export const EditorLayout = () => {
 												<ChartCanvas />
 											</div>
 										</div>
+										{/* Under the white canvas, at its displayed width —
+										 *  not scaled with it (the zoom is display-only for
+										 *  the figure; the table stays readable). */}
+										{dataTableOn && (
+											<div
+												className="mx-auto mt-4 shrink-0 bg-white shadow-md"
+												style={{ width: fixedCanvas.width * fixedScale }}
+											>
+												<DataTableBlock />
+											</div>
+										)}
 									</div>
 								</div>
 								<CanvasZoomControls
@@ -353,6 +371,7 @@ export const EditorLayout = () => {
 										<ChartCanvas />
 									</div>
 								</div>
+								<DataTableBlock />
 							</div>
 						) : (
 							<div
@@ -362,6 +381,7 @@ export const EditorLayout = () => {
 								style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
 							>
 								<ChartCanvas />
+								<DataTableBlock />
 							</div>
 						)}
 					</ErrorBoundary>
