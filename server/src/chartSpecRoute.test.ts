@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { datasetMetaFrom } from "../../src/contexts/chartBuilder/lib/datasetMeta"
 import { pieceKey } from "../../src/contexts/chartBuilder/lib/labelPieces"
 import { DATASETS_VERSION, VISUALS_VERSION } from "../../src/contexts/chartBuilder/lib/storage/migrations"
-import { SYSTEM_DARK_THEME } from "../../src/contexts/chartBuilder/lib/systemThemes"
+import { SYSTEM_DARK_THEME, SYSTEM_LIGHT_THEME } from "../../src/contexts/chartBuilder/lib/systemThemes"
 import type { Dataset, DatasetMeta, Visual } from "../../src/contexts/chartBuilder/lib/types"
 import { hydrateVisual } from "../../src/contexts/chartBuilder/lib/visualDefaults"
 import { MAX_PROBLEMS } from "../../src/contexts/chartBuilder/lib/visualSpec/chartSpec"
@@ -261,6 +261,20 @@ describe("POST /api/visuals", () => {
 		expect(visual.themeId).toBe(SYSTEM_DARK_THEME.id)
 	})
 
+	it("takes a theme by name, ignoring case, and lists the themes on a miss", async () => {
+		const base = await start()
+		await seedDataset(base, CAFE)
+		await put(base, "/api/themes/th-basic", { ...SYSTEM_LIGHT_THEME, id: "th-basic", name: "Trilliant Health Basic", isSystem: false })
+		const res = await post(base, cafe({ themeId: "trilliant health basic" }), "?dryRun=1")
+		expect(res.status).toBe(200)
+		expect(((await res.json()) as { visual: Visual }).visual.themeId).toBe("th-basic")
+		const miss = await post(base, cafe({ themeId: "Trilliant Health" }), "?dryRun=1")
+		expect(miss.status).toBe(400)
+		const [error] = ((await miss.json()) as { errors: Array<{ path: string; message: string }> }).errors
+		expect(error?.path).toBe("themeId")
+		expect(error?.message).toMatch(/^no theme with id or name "Trilliant Health" \(themes: .*"System \(Dark\)" \(system-dark\).*"Trilliant Health Basic" \(th-basic\)\)$/)
+	})
+
 	it("refuses with 409 when stored visuals are at another content version", async () => {
 		const base = await start()
 		await seedDataset(base, CAFE)
@@ -484,6 +498,18 @@ describe("GET /api/chart-spec", () => {
 		expect(dumbbell?.variations[0]).toMatchObject({ name: "Dumbbell", sameFieldAs: { connection: "y" }, optional: ["shape", "area"] })
 		expect(body.families.map((f) => f.family)).not.toContain("lollipop")
 		expect((await fetch(`${base}/api/chart-spec`, { method: "POST" })).status).toBe(405)
+	})
+
+	it("lists the themes and marks the default one", async () => {
+		const base = await start()
+		const themes = async () =>
+			((await (await fetch(`${base}/api/chart-spec`)).json()) as { themes: Array<{ id: string; name: string; default: boolean }> }).themes
+		expect((await themes()).filter((t) => t.default)).toEqual([{ id: SYSTEM_LIGHT_THEME.id, name: SYSTEM_LIGHT_THEME.name, default: true }])
+		await put(base, "/api/themes/th-basic", { ...SYSTEM_LIGHT_THEME, id: "th-basic", name: "Trilliant Health Basic", isSystem: false })
+		await put(base, "/api/settings/default-theme", { id: "default-theme", themeId: "th-basic" })
+		const listed = await themes()
+		expect(listed.map((t) => t.id)).toEqual(expect.arrayContaining([SYSTEM_LIGHT_THEME.id, SYSTEM_DARK_THEME.id, "th-basic"]))
+		expect(listed.filter((t) => t.default).map((t) => t.name)).toEqual(["Trilliant Health Basic"])
 	})
 
 	it("lists where a map variation's geographic fields go", async () => {

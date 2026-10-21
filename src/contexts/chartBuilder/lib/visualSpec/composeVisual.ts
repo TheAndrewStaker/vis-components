@@ -110,6 +110,8 @@ export type ComposeContext = {
 	 *  else the library default. */
 	theme: Theme
 	themeId: string | null
+	/** The themes a `themeId` could name, listed when it names none. */
+	themes?: ReadonlyArray<{ id: string; name: string }>
 	now: number
 	/** The new visual's id. */
 	id: string
@@ -216,7 +218,11 @@ const compose = (
 		)
 	}
 	if (spec.themeId !== undefined && spec.themeId !== ctx.themeId) {
-		problem("themeId", `no theme with id "${spec.themeId}"`)
+		const known = ctx.themes ?? []
+		problem(
+			"themeId",
+			`no theme with id or name "${named(spec.themeId)}"${known.length > 0 ? ` (themes: ${known.map((t) => `"${t.name}" (${t.id})`).join(", ")})` : ""}`
+		)
 	}
 
 	const datasetId = base ? base.datasetId : spec.datasetId

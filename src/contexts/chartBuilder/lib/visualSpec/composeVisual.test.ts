@@ -282,6 +282,16 @@ describe("composeChartSpec — rejected specs", () => {
 		expect(paths(cafe({ themeId: "theme-nope" }))).toEqual(["themeId"])
 	})
 
+	it("lists the caller's themes when the spec names none of them", () => {
+		const result = composeChartSpec(cafe({ themeId: "theme-nope" }), {
+			...contextFor(ALL_DATASETS, CAFE.id),
+			themes: [{ id: THEME.id, name: THEME.name }],
+		})
+		expect(result.ok ? [] : result.errors).toEqual([
+			{ path: "themeId", message: `no theme with id or name "theme-nope" (themes: "${THEME.name}" (${THEME.id}))` },
+		])
+	})
+
 	it("rejects a color for a level the data doesn't have", () => {
 		const errors = errorsOf(cafe({ colors: { Lemon: "#ff0", Pistachio: "#0f0" } }))
 		expect(errors.map((e) => e.path)).toEqual(["colors.Pistachio"])
