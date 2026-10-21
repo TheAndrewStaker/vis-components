@@ -37,6 +37,10 @@ import {
 	migrateDataTableConfig,
 	type DataTableConfig,
 } from "./dataTableConfig"
+import {
+	migrateAccessibilityConfig,
+	type AccessibilityConfig,
+} from "./accessibilityConfig"
 import type { DisplayUnit } from "./displayUnits"
 
 import type { ChannelConfigs, DataLabelsConfig } from "./channelConfig"
@@ -90,6 +94,8 @@ import {
 	DERIVED_VARIABLES_VERSION,
 	dataTableMigrations,
 	DATA_TABLE_VERSION,
+	accessibilityMigrations,
+	ACCESSIBILITY_VERSION,
 	legendMigrations,
 	LEGEND_VERSION,
 	themesMigrations,
@@ -180,6 +186,7 @@ const KEY_CURRENT_DATA_LABELS_CONFIG = "vis-components:currentDataLabelsConfig"
 const KEY_CURRENT_ANNOTATIONS = "vis-components:currentAnnotations"
 const KEY_CURRENT_CAPTION = "vis-components:currentCaption"
 const KEY_CURRENT_DATA_TABLE = "vis-components:currentDataTable"
+const KEY_CURRENT_ACCESSIBILITY = "vis-components:currentAccessibility"
 const KEY_PREVIEW_VERSION_ID = "vis-components:previewVersionId"
 const KEY_DRAWER_HEIGHT = "vis-components:drawerHeight"
 const KEY_SIDEBAR_WIDTH = "vis-components:sidebarWidth"
@@ -1464,6 +1471,25 @@ export const saveCurrentDataTable = (c: DataTableConfig): void =>
 		currentVersion: DATA_TABLE_VERSION,
 		data: c,
 	})
+
+/** The accessibility (screen-reader description) draft slice. Normalized on
+ *  the way in, like the data table (see `migrateAccessibilityConfig`). */
+export const loadCurrentAccessibility = (): AccessibilityConfig =>
+	migrateAccessibilityConfig(
+		loadVersioned<unknown>({
+			key: KEY_CURRENT_ACCESSIBILITY,
+			currentVersion: ACCESSIBILITY_VERSION,
+			migrations: accessibilityMigrations,
+			fallback: null,
+		})
+	)
+export const saveCurrentAccessibility = (c: AccessibilityConfig): void =>
+	saveVersioned({
+		key: KEY_CURRENT_ACCESSIBILITY,
+		currentVersion: ACCESSIBILITY_VERSION,
+		data: c,
+	})
+
 export const loadPreviewVersionId = (): string | null =>
 	safeGet<string | null>(KEY_PREVIEW_VERSION_ID, null)
 export const savePreviewVersionId = (id: string | null): void =>
@@ -1495,6 +1521,7 @@ const DRAFT_STATE_KEYS = [
 	KEY_CURRENT_ANNOTATIONS,
 	KEY_CURRENT_CAPTION,
 	KEY_CURRENT_DATA_TABLE,
+	KEY_CURRENT_ACCESSIBILITY,
 	KEY_PREVIEW_VERSION_ID,
 ]
 

@@ -484,7 +484,7 @@ While a text field has focus `⌘Z` is left to the browser (it undoes the
 typing in that field); click the chart, or use the buttons, to undo the
 visual. An undo is an ordinary change to autosave, so the saved visual
 always matches the screen. (`store/editorHistory.ts`; the draft
-snapshot is the same 17 atoms `useSaveVisual` reads.)
+snapshot is the same 19 atoms `useSaveVisual` reads.)
 
 **Save status.** Beside the name, the top bar says when the open visual
 was last saved: "Saving…" mid-save, otherwise "Saved by Nancy at
@@ -3530,6 +3530,75 @@ the requested size.
 Saved per visual (`dataTableConfig`, `lib/dataTableConfig.ts`), covered
 by undo. The field is optional: a visual saved before it existed loads
 with the table off, so no storage version bump.
+
+---
+
+## 10d. Accessibility (description)
+
+The LAST sidebar section, **Accessibility** (expanded by default), right
+after Aesthetics & Theme. One option panel:
+
+- Help line: "Read aloud by screen readers in place of the figure, in the
+  editor, embeds and SVG exports."
+- **Description** — a stacked label over a multi-line box (4 rows,
+  grows with its text). While no override is stored the box SHOWS the
+  automatic text as its real value (not a placeholder) and follows title
+  / subtitle edits live. The first keystroke stores the box's text as an
+  override (the label turns bold accent, the usual "changed" mark).
+- **Reset to title** (right-aligned link) — shown only while overridden;
+  returns to the automatic text.
+- Clearing the box to nothing is an override of "" (it does not snap back
+  to the automatic text); while it is empty a help line says screen
+  readers hear the visual's name instead.
+- Help line: "The Accessibility check (header button) reviews contrast,
+  color-only encodings and text size."
+
+**Automatic text** (`autoChartDescription`, `lib/accessibilityConfig.ts`):
+the AUTHORED chart title and subtitle, each with runs of whitespace
+collapsed and trimmed, each skipped when empty, each ended with a period
+unless it already ends in `.` `!` `?` or `…` (optionally followed by a
+closing quote or bracket), joined by one space — "Sales by region. 2024,
+in USD." The title prefix is not included. Titles hidden by **Titles
+shown** still count: the description is for readers who cannot see the
+figure.
+
+**Resolved description** (`resolveChartDescription`): the automatic text
+when no override is stored, else the override trimmed; when that comes
+out empty, the visual's name; empty only when the name is empty too.
+
+**On the chart.** The plot SVG (`#vc-scatter-svg`, one per canvas, facets
+included) is `role="img"` with `aria-labelledby` pointing at a `<desc>`
+— its first child — holding the resolved description, so the description
+IS the figure's accessible name. Its id comes from `useId` (sanitized to
+a valid XML name), unique per mounted canvas. There is deliberately no
+live `<title>`: browsers show an SVG `<title>` as a native tooltip over
+every mark, on top of the app's own tooltips. The short title (chart
+title, else the visual name) rides on the SVG as `data-a11y-title`. If
+the resolved description is empty the SVG gets `aria-label="Chart"`.
+The same render path runs in the editor, the `/embed/$visualId` page and
+the published static embed. `<desc>` is not `<text>`, so neither the
+layout solver nor the accessibility check measures it. Because the SVG is
+an image to assistive technology, its inner text (ticks, titles, data
+labels) is not read piece by piece; annotation TEXT is no longer
+`aria-hidden` (only the decorative annotation shapes — rectangles,
+circles, lines, arrowheads, text boxes — are), and data labels stay
+hidden (the data table, §10b, carries the values).
+
+**In exports.** The export serializations (`serializeChartSvg`,
+`serializeEmbedCapture` in `lib/captureThumbnail.ts`) move the name to the
+exported root — it matters for the SVG download; raster formats and
+thumbnails carry it only in their intermediate SVG: `role="img"`, a `<title id="vc-export-title">` (the short
+title) and `<desc id="vc-export-desc">` (the resolved description) as its
+first children, `aria-labelledby` → title and `aria-describedby` → desc
+(`aria-labelledby` → desc when there is no title). Nested plot clones are
+stripped of their own role / desc, so the file carries one name and no
+duplicate ids.
+
+**Saved** per visual (`accessibilityConfig: { description: string | null
+}`, `null` = automatic), draft key `vis-components:currentAccessibility`,
+covered by undo. Optional: a visual saved before it existed (or a
+malformed value) loads as automatic via `migrateAccessibilityConfig`, so
+there is no content-version bump.
 
 ---
 

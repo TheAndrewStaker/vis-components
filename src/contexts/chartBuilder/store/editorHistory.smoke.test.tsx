@@ -7,6 +7,7 @@ import { TestProvider, type TestStore } from "../../../testSupport/TestProvider"
 import { installInMemoryLocalStorage } from "../../../testSupport/localStorageShim"
 import { DEFAULT_DATA_TABLE_CONFIG } from "../lib/dataTableConfig"
 import {
+	currentAccessibilityConfigAtom,
 	currentDataTableConfigAtom,
 	currentDatasetIdAtom,
 	currentVisualNameAtom,
@@ -111,6 +112,21 @@ describe("useEditorHistory", () => {
 		})
 		expect(store.get(currentDataTableConfigAtom).enabled).toBe(false)
 	})
+
+	it("covers the accessibility description", () => {
+		const { result, store } = mount((s) =>
+			s.set(currentAccessibilityConfigAtom, { description: null })
+		)
+		later()
+		act(() =>
+			store.set(currentAccessibilityConfigAtom, { description: "Override" })
+		)
+		act(() => {
+			result.current.undo()
+		})
+		expect(store.get(currentAccessibilityConfigAtom).description).toBeNull()
+	})
+
 	it("coalesces a burst of changes into one step", () => {
 		const { result, store } = mount()
 		later()

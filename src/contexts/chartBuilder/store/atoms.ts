@@ -8,6 +8,7 @@ import {
 } from "../lib/annotationsConfig"
 import { type CaptionConfig } from "../lib/captionConfig"
 import { type DataTableConfig } from "../lib/dataTableConfig"
+import { type AccessibilityConfig } from "../lib/accessibilityConfig"
 import { type CanvasZoom } from "../lib/canvasZoom"
 import {
 	type ChannelConfigs,
@@ -27,6 +28,7 @@ import {
 	loadCurrentCaption,
 	loadCurrentChannelConfigs,
 	loadCurrentDataTable,
+	loadCurrentAccessibility,
 	loadCurrentDataLabelsConfig,
 	loadCurrentDataLabelsEncodings,
 	loadCurrentDatasetId,
@@ -65,6 +67,7 @@ import {
 	saveCurrentCaption,
 	saveCurrentChannelConfigs,
 	saveCurrentDataTable,
+	saveCurrentAccessibility,
 	saveCurrentDataLabelsConfig,
 	saveCurrentDataLabelsEncodings,
 	saveCurrentDatasetId,
@@ -1314,6 +1317,15 @@ export const currentDataTableConfigAtom = persistedAtom<DataTableConfig>(
 	loadCurrentDataTable,
 	saveCurrentDataTable
 )
+
+/** Per-visual screen-reader description (`description: null` = follow the
+ * chart title + subtitle). See `lib/accessibilityConfig.ts`. */
+export const currentAccessibilityConfigAtom =
+	persistedAtom<AccessibilityConfig>(
+		loadCurrentAccessibility,
+		saveCurrentAccessibility
+	)
+
 export const saveStatusAtom = atom<"idle" | "saving">("idle")
 
 /** Last rendered panel inner dimensions (in px). PlotCanvas writes this

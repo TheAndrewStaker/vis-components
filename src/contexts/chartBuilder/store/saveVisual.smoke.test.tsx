@@ -24,6 +24,7 @@ import {
 import { pieceKey } from "../lib/labelPieces"
 import type { Visual } from "../lib/types"
 import {
+	currentAccessibilityConfigAtom,
 	currentAnnotationsAtom,
 	currentChannelConfigsAtom,
 	currentDataLabelsConfigAtom,
@@ -123,6 +124,9 @@ const DATA_TABLE: DataTableConfig = {
 	maxRows: 20,
 	headerBackground: "#eeeeee",
 }
+
+const ACCESSIBILITY = { description: "Ideal cuts cost the most." }
+
 const seedEditor = (s: TestStore) => {
 	s.set(currentVisualIdAtom, null)
 	s.set(currentVisualNameAtom, "Round-trip chart")
@@ -133,6 +137,7 @@ const seedEditor = (s: TestStore) => {
 	s.set(currentDataLabelsConfigAtom, DATA_LABELS)
 	s.set(currentFieldLevelOrdersAtom, FIELD_LEVEL_ORDERS)
 	s.set(currentDataTableConfigAtom, DATA_TABLE)
+	s.set(currentAccessibilityConfigAtom, ACCESSIBILITY)
 	s.set(currentThemeIdAtom, "theme-roundtrip")
 }
 
@@ -173,6 +178,7 @@ describe("useSaveVisual → useLoadVisual round-trip", () => {
 		expect(store.get(currentDataLabelsConfigAtom)).toEqual(DATA_LABELS)
 		expect(store.get(currentFieldLevelOrdersAtom)).toEqual(FIELD_LEVEL_ORDERS)
 		expect(store.get(currentDataTableConfigAtom)).toEqual(DATA_TABLE)
+		expect(store.get(currentAccessibilityConfigAtom)).toEqual(ACCESSIBILITY)
 
 		expect(store.get(currentLabelsAtom)).toEqual(LABELS)
 	})
@@ -195,6 +201,7 @@ describe("useSaveVisual → useLoadVisual round-trip", () => {
 		expect(v.labelsConfig.titleAngles).toEqual({ facetTitle: 90 })
 		expect(v.dataLabelsConfig).toEqual(DATA_LABELS)
 		expect(v.dataTableConfig).toEqual(DATA_TABLE)
+		expect(v.accessibilityConfig).toEqual(ACCESSIBILITY)
 		// No chart SVG in the test DOM → capture returns null, and there's no
 		// prior thumbnail to preserve. The stamp moves only with a real
 		// capture, so it stays absent — which is what marks the preview as

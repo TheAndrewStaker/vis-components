@@ -203,7 +203,7 @@ describe("annotations outside the plot", () => {
 		expect(valClip).not.toBeNull()
 		expect(isCanvasClip(valClip)).toBe(false)
 		// The clip region is the panel's plot area, defined in the same layer.
-		const clip = val.closest('g[aria-hidden="true"]')!.querySelector("clipPath rect")
+		const clip = val.closest("g[data-annotation-layer]")!.querySelector("clipPath rect")
 		expect(clip).not.toBeNull()
 	})
 })

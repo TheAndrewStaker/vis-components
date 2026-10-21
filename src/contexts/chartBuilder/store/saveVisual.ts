@@ -6,6 +6,10 @@ import {
 	DEFAULT_DATA_TABLE_CONFIG,
 	migrateDataTableConfig,
 } from "../lib/dataTableConfig"
+import {
+	DEFAULT_ACCESSIBILITY_CONFIG,
+	migrateAccessibilityConfig,
+} from "../lib/accessibilityConfig"
 import { knownFacetPanels, resolveFacetPanels } from "../lib/resolveFacetPanels"
 import { structureVisualKeys } from "../lib/savedKeyStructure"
 import { currentDatasetViewAtom } from "./useCurrentDatasetView"
@@ -41,6 +45,7 @@ import { getCurrentUser } from "../../../lib/currentUser"
 import { editorHistoryEpochAtom } from "./editorHistory"
 
 import {
+	currentAccessibilityConfigAtom,
 	currentAnnotationsAtom,
 	currentCaptionConfigAtom,
 	currentChannelConfigsAtom,
@@ -103,6 +108,7 @@ export const useSaveVisual = () => {
 			const annotationsConfig = get(currentAnnotationsAtom)
 			const captionConfig = get(currentCaptionConfigAtom)
 			const dataTableConfig = get(currentDataTableConfigAtom)
+			const accessibilityConfig = get(currentAccessibilityConfigAtom)
 			const mapConfig = get(currentMapConfigAtom)
 			const reshapeConfig = get(currentReshapeConfigAtom)
 			const derivedVariablesConfig = get(currentDerivedVariablesAtom)
@@ -159,6 +165,7 @@ export const useSaveVisual = () => {
 			},
 			captionConfig: { ...captionConfig },
 			dataTableConfig: { ...dataTableConfig },
+			accessibilityConfig: { ...accessibilityConfig },
 			mapConfig: { ...mapConfig },
 			reshapeConfig: {
 				...reshapeConfig,
@@ -315,6 +322,13 @@ export const useLoadVisual = () => {
 			currentDataTableConfigAtom,
 			migrateDataTableConfig(visual.dataTableConfig)
 			)
+			// Per-visual screen-reader description — added after first release.
+			// Absent normalizes to "follow the title and subtitle"; a prior
+			// visual's override never lingers.
+			set(
+			currentAccessibilityConfigAtom,
+			migrateAccessibilityConfig(visual.accessibilityConfig)
+			)
 			// Per-visual map config — added after maps shipped. Older visuals (and
 			// any saved before mapConfig was bound into the save cycle) leave it
 			// undefined; default-merge so the coordinate system / projection / focus
@@ -377,6 +391,7 @@ export const useResetVisual = () => {
 			set(currentAnnotationsAtom, DEFAULT_ANNOTATIONS_CONFIG)
 			set(currentCaptionConfigAtom, captionConfigFromTheme(defaultTheme))
 			set(currentDataTableConfigAtom, DEFAULT_DATA_TABLE_CONFIG)
+			set(currentAccessibilityConfigAtom, DEFAULT_ACCESSIBILITY_CONFIG)
 			set(currentMapConfigAtom, DEFAULT_MAP_CONFIG)
 			set(currentReshapeConfigAtom, DEFAULT_RESHAPE_CONFIG)
 			set(currentDerivedVariablesAtom, DEFAULT_DERIVED_VARIABLES_CONFIG)

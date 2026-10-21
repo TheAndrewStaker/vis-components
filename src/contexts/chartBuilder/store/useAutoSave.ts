@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
 import {
+	currentAccessibilityConfigAtom,
 	currentAnnotationsAtom,
 	currentCaptionConfigAtom,
 	currentDataTableConfigAtom,
@@ -60,6 +61,7 @@ export const useAutoSave = () => {
 	const annotations = useAtomValue(currentAnnotationsAtom)
 	const caption = useAtomValue(currentCaptionConfigAtom)
 	const dataTable = useAtomValue(currentDataTableConfigAtom)
+	const accessibility = useAtomValue(currentAccessibilityConfigAtom)
 	const mapConfig = useAtomValue(currentMapConfigAtom)
 	const reshapeConfig = useAtomValue(currentReshapeConfigAtom)
 	const derivedVariablesConfig = useAtomValue(currentDerivedVariablesAtom)
@@ -100,6 +102,7 @@ export const useAutoSave = () => {
 		annotations,
 		caption,
 		dataTable,
+		accessibility,
 		mapConfig,
 		reshapeConfig,
 		derivedVariablesConfig,

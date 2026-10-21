@@ -33,8 +33,15 @@ import { type ExtraMargin } from "../../lib/plotLayout"
 import { resolveFacetPanels } from "../../lib/resolveFacetPanels"
 import { PLOT_SVG_ID } from "../../lib/captureThumbnail"
 import {
+	chartAccessibleTitle,
+	resolveChartDescription,
+} from "../../lib/accessibilityConfig"
+import {
+	currentAccessibilityConfigAtom,
 	currentAnnotationsAtom,
 	currentCaptionConfigAtom,
+	currentLabelsAtom,
+	currentVisualNameAtom,
 	currentRenderedCaptionBoxAtom,
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
@@ -121,6 +128,20 @@ export const PlotCanvas = ({
 	const [ref, bounds] = useMeasure({ offsetSize: true })
 	// Clip for everything but the chart title / subtitle (see the SVG below).
 	const canvasClipId = useId()
+	// The figure's accessible name (`<desc>` below). Sanitized so the id is a
+	// valid XML name in SVG exports (React's ids carry colons).
+	const descId = `vc-chart-desc-${useId().replace(/[^\w-]/g, "")}`
+	// AUTHORED title / subtitle — not `renderedLabelsAtom`: a title hidden by
+	// "Titles shown" still describes the chart to someone who can't see it.
+	const authoredLabels = useAtomValue(currentLabelsAtom)
+	const visualName = useAtomValue(currentVisualNameAtom)
+	const accessibility = useAtomValue(currentAccessibilityConfigAtom)
+	const a11yTexts = {
+		title: authoredLabels.title,
+		subtitle: authoredLabels.subtitle,
+		visualName,
+	}
+	const description = resolveChartDescription(accessibility, a11yTexts)
 	const dataset = useCurrentDatasetView()
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const overrides = useAtomValue(currentFieldOverridesAtom)
@@ -876,7 +897,18 @@ export const PlotCanvas = ({
 			height={svgHeight}
 			className="block"
 			overflow="visible"
+			role="img"
+			aria-labelledby={description ? descId : undefined}
+			aria-label={description ? undefined : "Chart"}
+			data-a11y-title={chartAccessibleTitle(a11yTexts)}
 		>
+			{/* Screen-reader description (Accessibility section; APPLICATION.md
+			    §10d) — the figure's accessible name. A `<desc>`, not a
+			    `<title>`: a live `<title>` would pop the browser's native
+			    tooltip over every mark. SVG exports add the `<title>` from
+			    the data attribute above (captureThumbnail). Not `<text>`, so
+			    the layout solver never measures it. */}
+			{description && <desc id={descId}>{description}</desc>}
 			{/* `overflow="visible"` lets the chart title / subtitle paint past
 			    the SVG box — into the blank band over a left / right legend
 			    (LAYOUT.md §7, `titleOverhang`). Everything else stays clipped

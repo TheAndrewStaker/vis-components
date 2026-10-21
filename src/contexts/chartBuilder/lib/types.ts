@@ -289,6 +289,7 @@ export const emptyDataLabelsEncodings = (): DataLabelsEncodings => ({
 import type { AnnotationsConfig } from "./annotationsConfig"
 import type { CaptionConfig } from "./captionConfig"
 import type { DataTableConfig } from "./dataTableConfig"
+import type { AccessibilityConfig } from "./accessibilityConfig"
 import type {
 	CanvasMargins,
 	ChannelConfigs,
@@ -402,6 +403,11 @@ export type Visual = {
 	 * Optional for back-compat: absent reads as the disabled default via
 	 * `migrateDataTableConfig`, so no storage version bump. */
 	dataTableConfig?: DataTableConfig
+	/** Per-visual screen-reader description. Optional for back-compat:
+	 * absent reads as `{ description: null }` (follow the title and
+	 * subtitle) via `migrateAccessibilityConfig`, so no storage version
+	 * bump. */
+	accessibilityConfig?: AccessibilityConfig
 	thumbnail: string | null
 	/** When `thumbnail` was captured (epoch ms). Stamped only by a capture
 	 * that actually produced a picture — a save whose capture came back

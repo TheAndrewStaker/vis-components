@@ -1,4 +1,5 @@
 import { AsideSection } from "../../../../components/ui/AsideSection"
+import { AccessibilityPanel } from "./AccessibilityPanel"
 import { AestheticsPanel } from "./AestheticsPanel"
 import { AnnotationsPanel } from "./AnnotationsPanel"
 import { CaptionPanel } from "./CaptionPanel"
@@ -87,6 +88,10 @@ export const Sidebar = () => {
 						<ThemePanel />
 						<AestheticsPanel />
 					</div>
+				</AsideSection>
+				<hr className="mx-3 border-stone-200 dark:border-stone-700" />
+				<AsideSection title="Accessibility">
+					<AccessibilityPanel />
 				</AsideSection>
 			</div>
 		</aside>

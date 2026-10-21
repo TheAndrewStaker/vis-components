@@ -1003,3 +1003,30 @@ describe("PlotCanvas — chart title escapes the canvas clip", () => {
 		)
 	})
 })
+
+describe("PlotCanvas — accessible name", () => {
+	it("labels the plot SVG as an image named by its description", () => {
+		seed({ faceted: true, labels: { title: "Sales", subtitle: "By group" } })
+		const { container } = mountChartCanvas()
+		const svg = container.querySelector("svg#vc-scatter-svg")!
+		expect(svg.getAttribute("role")).toBe("img")
+		// The <desc> is the first child, so nothing measures it as text.
+		const desc = svg.firstElementChild!
+		expect(desc.localName).toBe("desc")
+		expect(desc.textContent).toBe("Sales. By group.")
+		expect(svg.getAttribute("aria-labelledby")).toBe(desc.id)
+		expect(svg.getAttribute("data-a11y-title")).toBe("Sales")
+		// No live <title>: it would pop a native tooltip over every mark.
+		expect(svg.querySelector(":scope > title")).toBeNull()
+	})
+
+	it("uses the authored title even when Titles shown hides it", () => {
+		seed({
+			faceted: false,
+			labels: { title: "Hidden title", hiddenTitles: { title: true } },
+		})
+		const { container } = mountChartCanvas()
+		const svg = container.querySelector("svg#vc-scatter-svg")!
+		expect(svg.querySelector("desc")!.textContent).toBe("Hidden title.")
+	})
+})

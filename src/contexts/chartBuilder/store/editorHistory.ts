@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef } from "react"
 import { stringifyJsonDangerous } from "../../../lib/json"
 
 import {
+	currentAccessibilityConfigAtom,
 	currentAnnotationsAtom,
 	currentCaptionConfigAtom,
 	currentChannelConfigsAtom,
@@ -38,7 +39,7 @@ import {
  *
  * The draft is ~20 independent atoms and every change autosaves 800 ms
  * later, so there is no "unsaved" state to fall back to; undo is a history
- * of whole-draft snapshots instead. A snapshot is the 17 editable pieces of
+ * of whole-draft snapshots instead. A snapshot is the 19 editable pieces of
  * a visual (everything `useSaveVisual` writes into the blob), held by
  * reference — the atoms' own objects, no copying. Undo writes a snapshot
  * back through the same atoms, and autosave then persists it like any edit.
@@ -66,6 +67,7 @@ const DRAFT_ATOMS = {
 	annotationsConfig: currentAnnotationsAtom,
 	captionConfig: currentCaptionConfigAtom,
 	dataTableConfig: currentDataTableConfigAtom,
+	accessibilityConfig: currentAccessibilityConfigAtom,
 	mapConfig: currentMapConfigAtom,
 	reshapeConfig: currentReshapeConfigAtom,
 	derivedVariablesConfig: currentDerivedVariablesAtom,
@@ -91,7 +93,7 @@ const draftSnapshotAtom = atom((get): DraftSnapshot => {
 /** Write a snapshot back into the draft atoms. */
 const applyDraftSnapshot = (set: Setter, snap: DraftSnapshot): void => {
 	// The atoms are a heterogeneous record; one widening cast here beats
-	// seventeen hand-written `set(...)` lines that would drift from
+	// eighteen hand-written `set(...)` lines that would drift from
 	// DRAFT_ATOMS.
 	const setAny = set as (
 		a: WritableAtom<unknown, [unknown], void>,

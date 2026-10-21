@@ -91,6 +91,7 @@ const TextAnnotationMark = ({
 	return (
 		<g clipPath={clipPath}>
 			<rect
+				aria-hidden="true"
 				data-annotation-text-box={anno.id}
 				data-annotation-coord={anno.coordSystem}
 				x={box.left}
@@ -217,7 +218,9 @@ export const AnnotationRects = ({
 			? `translate(${inner.x + inner.width / 2} ${inner.y + inner.height / 2}) scale(${s}) translate(${-(inner.x + inner.width / 2)} ${-(inner.y + inner.height / 2)})`
 			: undefined
 	return (
-		<g aria-hidden="true" pointerEvents="none">
+		// The author's annotation TEXT stays readable; only the decorative
+		// shapes (rects, circles, lines, arrowheads, text boxes) are hidden.
+		<g data-annotation-layer pointerEvents="none">
 			{needsClipDef && (
 				<defs>
 					<clipPath id={clipId}>
@@ -240,6 +243,7 @@ export const AnnotationRects = ({
 							return (
 								<g key={r.id} clipPath={clipPath}>
 									<rect
+										aria-hidden="true"
 										data-annotation={r.id}
 										data-annotation-coord={r.coordSystem}
 										x={a.left}
@@ -263,6 +267,7 @@ export const AnnotationRects = ({
 							return (
 								<circle
 									key={c.id}
+									aria-hidden="true"
 									data-annotation-circle={c.id}
 									data-annotation-coord={c.coordSystem}
 									clipPath={clipPath}
@@ -293,6 +298,7 @@ export const AnnotationRects = ({
 							return (
 								<g
 									key={l.id}
+									aria-hidden="true"
 									clipPath={clipPath}
 									opacity={l.lineOpacity < 1 ? l.lineOpacity : undefined}
 								>

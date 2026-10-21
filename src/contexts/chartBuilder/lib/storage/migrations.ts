@@ -48,6 +48,7 @@ export const MAP_CONFIG_VERSION = 8
 export const RESHAPE_CONFIG_VERSION = 1
 export const DERIVED_VARIABLES_VERSION = 1
 export const DATA_TABLE_VERSION = 1
+export const ACCESSIBILITY_VERSION = 1
 export const USER_FONTS_VERSION = 1
 
 // ──────────────────────────────────────────────────────────────────────
@@ -687,6 +688,7 @@ export const captionMigrations = identityMigrations
 export const reshapeConfigMigrations = identityMigrations
 export const derivedVariablesMigrations = identityMigrations
 export const dataTableMigrations = identityMigrations
+export const accessibilityMigrations = identityMigrations
 export const dataLabelsEncodingsMigrations = identityMigrations
 /** Data Labels config v1 → v2: split-piece entries move under `pieces` and
  *  grid facet scopes become pairs (the visuals v6→v7 step, for the draft

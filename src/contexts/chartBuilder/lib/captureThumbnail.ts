@@ -5,6 +5,57 @@ export const PLOT_SVG_ID = "vc-scatter-svg"
 
 const SVG_NS = "http://www.w3.org/2000/svg"
 
+/** PlotCanvas stamps the figure's short accessible title (chart title, else
+ *  visual name) here; exports turn it into a real `<title>`. */
+const A11Y_TITLE_ATTR = "data-a11y-title"
+
+/** Give an exported SVG the chart's accessible name. The live plot SVG
+ *  carries `role="img"`, a `<desc>` (the screen-reader description) and the
+ *  title in `data-a11y-title` — no live `<title>`, which would pop a native
+ *  tooltip over every mark. In a standalone file a `<title>` is what
+ *  readers expect, so the export root gets `<title>` + `<desc>` as its first
+ *  children, `role="img"`, `aria-labelledby` (title) and `aria-describedby`
+ *  (desc). `source` is the svg holding the live markup (the root itself, or
+ *  the first nested plot clone in a composed export); every `nested` clone
+ *  is stripped of it so the file carries ONE name and no duplicate ids. */
+const applyExportAccessibleName = (
+	doc: Document,
+	root: Element,
+	nested: Element[] = []
+): void => {
+	const source = nested[0] ?? root
+	const titleText = (source.getAttribute(A11Y_TITLE_ATTR) ?? "").trim()
+	const liveDesc = [...source.children].find((c) => c.localName === "desc")
+	const descText = (liveDesc?.textContent ?? "").trim()
+	for (const el of [root, ...nested]) {
+		el.removeAttribute(A11Y_TITLE_ATTR)
+		el.removeAttribute("role")
+		el.removeAttribute("aria-label")
+		el.removeAttribute("aria-labelledby")
+		for (const c of [...el.children]) {
+			if (c.localName === "desc" && c.id.startsWith("vc-chart-desc-")) c.remove()
+		}
+	}
+	if (!titleText && !descText) return
+	root.setAttribute("role", "img")
+	const first = root.firstChild
+	if (titleText) {
+		const t = doc.createElementNS(SVG_NS, "title")
+		t.setAttribute("id", "vc-export-title")
+		t.textContent = titleText
+		root.insertBefore(t, first)
+		root.setAttribute("aria-labelledby", "vc-export-title")
+	}
+	if (descText) {
+		const d = doc.createElementNS(SVG_NS, "desc")
+		d.setAttribute("id", "vc-export-desc")
+		d.textContent = descText
+		root.insertBefore(d, first)
+		if (titleText) root.setAttribute("aria-describedby", "vc-export-desc")
+		else root.setAttribute("aria-labelledby", "vc-export-desc")
+	}
+}
+
 // Serialize an SVG element to a base64-encoded data URL.
 // btoa only handles Latin-1, so we UTF-8 encode first.
 const toDataUrl = (svgText: string): string => {
@@ -55,6 +106,7 @@ const serializeFacetedChart = (
 	wrapper.setAttribute("height", String(gridRect.height))
 	wrapper.setAttribute("viewBox", `0 0 ${gridRect.width} ${gridRect.height}`)
 
+	const nestedClones: SVGSVGElement[] = []
 	for (const svg of svgs) {
 		const r = svg.getBoundingClientRect()
 		const nested = svg.cloneNode(true) as SVGSVGElement
@@ -66,7 +118,9 @@ const serializeFacetedChart = (
 		// needs to be findable, and even that is irrelevant for serialization.
 		nested.removeAttribute("id")
 		wrapper.append(nested)
+		nestedClones.push(nested)
 	}
+	applyExportAccessibleName(doc, wrapper, nestedClones)
 
 	const view = doc.defaultView ?? globalThis
 	const addText = (
@@ -126,7 +180,9 @@ export const serializeChartSvg = (doc: Document = document): string | null => {
 	// than this realm's, so `svg instanceof SVGSVGElement` is always false and
 	// we'd wrongly bail. Duck-type on the element's tag instead.
 	if (!svg || svg.localName !== "svg") return null
-	return new XMLSerializer().serializeToString(cloneAsRoot(svg))
+	const clone = cloneAsRoot(svg)
+	applyExportAccessibleName(doc, clone)
+	return new XMLSerializer().serializeToString(clone)
 }
 
 // ---------------------------------------------------------------------------
@@ -484,6 +540,7 @@ export const serializeEmbedCapture = (
 		wrapper.append(bg)
 	}
 
+	const nestedClones: SVGSVGElement[] = []
 	for (const svg of svgs) {
 		const r = svg.getBoundingClientRect()
 		const nested = svg.cloneNode(true) as SVGSVGElement
@@ -493,7 +550,10 @@ export const serializeEmbedCapture = (
 		nested.setAttribute("height", String(r.height))
 		nested.removeAttribute("id")
 		wrapper.append(nested)
+		nestedClones.push(nested)
 	}
+	// The figure's accessible name moves from the plot clone to the root.
+	applyExportAccessibleName(doc, wrapper, nestedClones)
 
 	// Titles, subtitles, and per-panel facet labels are all <text> inside the
 	// chart SVG (see PlotCanvas), so the clone above already carries them —
