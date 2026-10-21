@@ -481,7 +481,7 @@ describe("GET /api/chart-spec", () => {
 			expect.arrayContaining(["x", "y", "length"])
 		)
 		const dumbbell = body.families.find((f) => f.family === "dumbbell")
-		expect(dumbbell?.variations[0]).toMatchObject({ name: "Dumbbell", sameFieldAs: { connection: "y" } })
+		expect(dumbbell?.variations[0]).toMatchObject({ name: "Dumbbell", sameFieldAs: { connection: "y" }, optional: ["shape", "area"] })
 		expect(body.families.map((f) => f.family)).not.toContain("lollipop")
 		expect((await fetch(`${base}/api/chart-spec`, { method: "POST" })).status).toBe(405)
 	})

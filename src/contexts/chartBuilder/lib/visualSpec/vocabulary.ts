@@ -13,7 +13,7 @@ import {
 } from "../quickStartVariations"
 import type { EncodingChannel, FieldType } from "../types"
 import { SPEC_CHANNELS, type SpecChannel } from "./chartSpec"
-import { FAMILY_MODES, GEO_NEEDS } from "./composeVisual"
+import { FAMILY_MODES, GEO_NEEDS, OPTIONAL_CHANNELS } from "./composeVisual"
 
 export type ChartVocabulary = {
 	channels: Array<{
@@ -28,6 +28,8 @@ export type ChartVocabulary = {
 		variations: Array<{
 			name: string
 			channels: Partial<Record<EncodingChannel, readonly FieldType[]>>
+			/** Channels in `channels` a spec may leave out. */
+			optional?: readonly SpecChannel[]
 			/** Channels the variation fills from another channel's field. */
 			sameFieldAs?: Partial<Record<EncodingChannel, EncodingChannel>>
 			stack?: StackMode
@@ -60,12 +62,14 @@ export const chartVocabulary = (): ChartVocabulary => ({
 		family,
 		modes: FAMILY_MODES[family],
 		variations: QUICK_START_VARIATIONS[family].map((v) => {
+			const optional = OPTIONAL_CHANNELS[family]?.filter((c) => c in v.channels) ?? []
 			const sameFieldAs: Partial<Record<EncodingChannel, EncodingChannel>> = {}
 			if (v.connectionFrom) sameFieldAs.connection = v.connectionFrom
 			if (v.hueFrom) sameFieldAs.hue = v.hueFrom
 			return {
 				name: v.name,
 				channels: v.geo ? { ...GEO_CHANNELS[v.geo], ...v.channels } : v.channels,
+				...(optional.length > 0 ? { optional } : {}),
 				...(Object.keys(sameFieldAs).length > 0 ? { sameFieldAs } : {}),
 				...(v.stackMode ? { stack: v.stackMode } : {}),
 				...(v.geo ? { note: GEO_NEEDS[v.geo] } : {}),

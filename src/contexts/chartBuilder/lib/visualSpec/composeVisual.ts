@@ -894,8 +894,24 @@ const compose = (
 	return { ok: true, visual: structuredVisual(visual), warnings }
 }
 
+/** Channels a family's quick start fills for looks, which a spec may
+ *  leave out. */
+export const OPTIONAL_CHANNELS: Partial<Record<QuickStartChartType, readonly SpecChannel[]>> = {
+	dumbbell: ["shape", "area"],
+}
+
+/** The channels a spec must fill to make the variation, and the field
+ *  types each takes. */
+const requiredChannels = (
+	family: QuickStartChartType,
+	v: QuickStartVariation
+): Array<[SpecChannel, readonly FieldType[]]> =>
+	(Object.entries(v.channels) as Array<[SpecChannel, readonly FieldType[]]>).filter(
+		([channel]) => !OPTIONAL_CHANNELS[family]?.includes(channel)
+	)
+
 /** The family's quick-start variation these channels fill best: every
- *  channel it lists is mapped to a field of a type it takes. Ties go to
+ *  channel it requires is mapped to a field of a type it takes. Ties go to
  *  the one listed first, as on the quick-start bar. */
 export const matchVariation = (
 	family: QuickStartChartType,
@@ -905,7 +921,7 @@ export const matchVariation = (
 	let best: QuickStartVariation | undefined
 	let bestSize = -1
 	for (const v of QUICK_START_VARIATIONS[family]) {
-		const wanted = Object.entries(v.channels) as Array<[SpecChannel, readonly FieldType[]]>
+		const wanted = requiredChannels(family, v)
 		const fits = wanted.every(([channel, types]) => {
 			const field = fields[channel]
 			return field !== undefined && types.includes(typeOf(field))
@@ -956,7 +972,7 @@ export const namedVariation = (
 	const v = all.find((x) => x.name.toLowerCase() === name.trim().toLowerCase())
 	const names = all.map((x) => x.name)
 	if (!v) return `no "${name}" variation of "${family}"${didYouMean(name, names)} (variations: ${names.map((n) => `"${n}"`).join(", ")})`
-	const missing = (Object.entries(v.channels) as Array<[SpecChannel, readonly FieldType[]]>)
+	const missing = requiredChannels(family, v)
 		.filter(([channel, types]) => {
 			const field = fields[channel]
 			return field === undefined || !types.includes(typeOf(field))
@@ -993,7 +1009,7 @@ const familyNeeds = (
 	typeOf: (field: string) => FieldType
 ): string => {
 	const needs = QUICK_START_VARIATIONS[family].map((v) =>
-		(Object.entries(v.channels) as Array<[SpecChannel, readonly FieldType[]]>)
+		requiredChannels(family, v)
 			.filter(([channel, types]) => {
 				const field = fields[channel]
 				return field === undefined || !types.includes(typeOf(field))

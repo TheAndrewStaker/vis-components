@@ -321,6 +321,26 @@ describe("a named family uses its quick-start variation", () => {
 		expect(v.channelConfigs.connection?.fill).toBe("line")
 	})
 
+	it.each([
+		["Dumbbell", { y: "flavor", x: "muffins", hue: "month" }],
+		["Dumbbell (vertical)", { x: "flavor", y: "muffins", hue: "month" }],
+	])("a %s needs no shape or area, named or matched", (variation, encodings) => {
+		for (const named of [{}, { variation }]) {
+			const v = ok(composeVisual({ datasetId: CAFE.id, folderId: null, family: "dumbbell", ...named, encodings }, ctx(CAFE.id)))
+			expect(v.encodings.connection).toEqual({ field: "flavor" })
+			expect(v.encodings.shape?.field ?? null).toBeNull()
+			expect(v.encodings.area?.field ?? null).toBeNull()
+		}
+	})
+
+	it("a dumbbell missing its color says so, and not shape or area", () => {
+		const message = errorsOf(
+			composeVisual({ datasetId: CAFE.id, folderId: null, family: "dumbbell", encodings: { y: "flavor", x: "muffins" } }, ctx(CAFE.id))
+		)[0]?.message
+		expect(message).toMatch(/needs "hue"/)
+		expect(message).not.toMatch(/"shape"|"area"/)
+	})
+
 	it("no family leaves connection unmapped", () => {
 		const v = ok(
 			composeVisual(
