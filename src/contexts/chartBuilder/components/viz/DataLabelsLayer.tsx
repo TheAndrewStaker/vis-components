@@ -534,7 +534,9 @@ const renderPieceBackgrounds = (
 
 /** Emit the `<text>` elements (plus optional background rects) for a list of
  * resolved label boxes. Shared by the anchor-based and row-based paths so the
- * text-background, alignment, and font handling stay in one place. */
+ * text-background, alignment, and font handling stay in one place.
+ * `data-vc-data-labels` marks the layer for the accessibility check
+ * (collectAccessibilityDom), which words its findings by text role. */
 const renderLabels = (
 	boxes: RenderableLabel[],
 	cfg: DataLabelsConfig,
@@ -543,7 +545,7 @@ const renderLabels = (
 	const baseAnchor = alignmentAnchor(cfg.alignment)
 	const baseFont = resolveFieldFont(cfg, null)
 	return (
-		<g aria-hidden="true" pointerEvents="none">
+		<g aria-hidden="true" pointerEvents="none" data-vc-data-labels>
 			{boxes.map((b) => {
 				// A separate variable's own wrapping / angle, else the layer's.
 				// Text angle rotates each label (and its background rect) around
@@ -1374,7 +1376,7 @@ export const DataLabelsLayer = ({
 			]
 		})
 		return (
-			<g aria-hidden="true" pointerEvents="none">
+			<g aria-hidden="true" pointerEvents="none" data-vc-data-labels>
 				<g data-testid="geo-leader-lines">{leaderLines}</g>
 				{labels}
 			</g>

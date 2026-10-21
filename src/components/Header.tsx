@@ -4,6 +4,8 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router"
 import { useAtom, useAtomValue } from "jotai"
 import { useAtomCallback } from "jotai/utils"
 import {
+	accessibilityCheckAtom,
+	accessibilityFindingCountAtom,
 	blackAndWhiteModeAtom,
 	currentDatasetIdAtom,
 	datasetIndexAtom,
@@ -383,12 +385,64 @@ const ImportOutcomeModal = ({
 	</Modal>
 )
 
-/** Wrapper that only mounts the B&W toggle on editor routes — the landing
- * and settings pages have nothing for the filter to apply to. */
+/** Wrapper that only mounts the B&W preview and accessibility check
+ * toggles on editor routes — the landing and settings pages have no chart
+ * for them to apply to. */
 const EditorOnlyBlackAndWhiteToggle = () => {
 	const pathname = useRouterState({ select: (s) => s.location.pathname })
 	if (!pathname.startsWith("/editor")) return null
-	return <BlackAndWhiteToggle />
+	return (
+		<>
+			<BlackAndWhiteToggle />
+			<AccessibilityCheckToggle />
+		</>
+	)
+}
+
+/** Top-bar toggle for the accessibility check (AccessibilityCheckPanel):
+ * while on, a card over the chart lists what may be inaccessible. The
+ * badge repeats the finding count the card's heading announces, so it is
+ * aria-hidden. State is in-memory only. */
+const AccessibilityCheckToggle = () => {
+	const [active, setActive] = useAtom(accessibilityCheckAtom)
+	const count = useAtomValue(accessibilityFindingCountAtom)
+	return (
+		<button
+			type="button"
+			onClick={() => setActive(!active)}
+			title="Accessibility check"
+			aria-label="Accessibility check"
+			aria-pressed={active}
+			className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+				active
+					? "vc-toggle-on"
+					: "hover:bg-stone-100 hover:text-stone-900 dark:hover:bg-stone-800 dark:hover:text-white vc-muted"
+			}`}
+		>
+			<svg
+				viewBox="0 0 20 20"
+				width={18}
+				height={18}
+				aria-hidden="true"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth={1.6}
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			>
+				<circle cx={10} cy={3.6} r={1.6} fill="currentColor" stroke="none" />
+				<path d="M3.5 7l6.5 1.2L16.5 7M10 8.2v4.3m0 0L7 18m3-5.5L13 18" />
+			</svg>
+			{active && count > 0 && (
+				<span
+					aria-hidden="true"
+					className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-xs leading-none font-semibold text-white"
+				>
+					{count > 99 ? "99+" : count}
+				</span>
+			)}
+		</button>
+	)
 }
 
 /** Top-bar toggle that flips a `grayscale(1)` filter on the chart wrapper —

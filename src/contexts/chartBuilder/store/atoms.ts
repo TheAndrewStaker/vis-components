@@ -1194,6 +1194,21 @@ export const editorSheetOpenAtom = atom<boolean>(false)
  * "what would this look like in B&W?" check, not a saved theme setting. */
 export const blackAndWhiteModeAtom = atom<boolean>(false)
 
+/** Accessibility check toggle (the header button beside the black-and-white
+ * preview): while on, the editor inspects the rendered chart and lists what
+ * may be inaccessible (AccessibilityCheckPanel). Transient like the B&W
+ * preview — NOT persisted, never saved with a visual. */
+export const accessibilityCheckAtom = atom<boolean>(false)
+
+/** The WCAG conformance level the accessibility check measures text
+ * contrast against. Transient, resets to AA with the page. */
+export const accessibilityCheckLevelAtom = atom<"AA" | "AAA">("AA")
+
+/** How many findings the open accessibility check currently lists — drives
+ * the header button's count badge. Written only by AccessibilityCheckPanel;
+ * 0 whenever the check is off. */
+export const accessibilityFindingCountAtom = atom<number>(0)
+
 /** Editor display zoom for a fixed canvas (the zoom controls over the gray
  * viewport). View-only and NOT persisted or saved with the visual: the
  * canvas lays out at its true size whatever this says. Reset to automatic

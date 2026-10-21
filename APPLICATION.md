@@ -3533,6 +3533,142 @@ with the table off, so no storage version bump.
 
 ---
 
+## 10c. Accessibility preview and check
+
+Two header toggles, shown only on editor routes, side by side left of
+Settings. Both are transient editor views: in memory only, never saved
+with a visual, never in exports, thumbnails, the embed page or published
+embeds.
+
+**Black-and-white preview** (half-filled circle icon, title "Black-and-
+white preview", `aria-pressed`; `blackAndWhiteModeAtom`). Puts a CSS
+`filter: grayscale(1)` on the chart's scroll region, so the user can see
+whether the color encoding still reads without hue. Display only — the
+saved theme and the chart's colors are unchanged.
+
+**Accessibility check** (figure icon, title "Accessibility check",
+`aria-pressed`; `accessibilityCheckAtom`). While on, a card floats at the
+top-right of the chart viewport (below the zoom pill when a fixed canvas
+size shows one), over the figure but under the narrow-layout menu sheet
+and every modal. It lists what about the RENDERED chart may be
+inaccessible. While it has findings the header button carries a red count
+badge (`aria-hidden`; the same count is in the card's heading).
+
+- **Heading** "Accessibility check — N findings": the card is a labelled
+  region and keyboard-focusable. The × button turns the check off. The
+  chevron beside it (a button with `aria-expanded`, "Minimize" /
+  "Expand") collapses the card to that heading bar so it stops covering
+  the figure; the check keeps running underneath, so the count and the
+  header badge stay current and expanding shows the list at once.
+  Collapsed is UI-only and resets each time the check is turned on.
+- **Narrow layouts:** while the menu sheet is open the card and its
+  highlights are hidden (not discarded) and come back when it closes.
+- **AA / AAA** radio (`accessibilityCheckLevelAtom`, starts at AA each
+  session): which WCAG level text contrast is measured against.
+- **Findings**, grouped **Fails** → **Fails at AAA only** (AAA level only)
+  → **Advisories**. Each is a button: the message says what, where and
+  how far off; the line under it says how to fix it. Hovering or focusing
+  a row outlines its targets on the chart (brand dashed boxes drawn in a
+  layer beside the chart, `aria-hidden`); clicking also scrolls the first
+  target into view. Similar offenders are grouped into one row (e.g.
+  "7 data labels are as low as 1.9:1 (“30”) against the bar or tile
+  behind them") that outlines all of them, quoting the worst one.
+- **Re-check** re-reads the chart now. It also re-checks on its own:
+  any change inside the chart viewport restarts a 400ms quiet-period
+  timer (the layout solver re-renders several times per edit; checking
+  mid-pass would read a half-laid-out frame), as do editor-state changes,
+  window resizes and webfont loads. Until the chart has laid out it says
+  "Waiting for the chart to finish drawing…".
+- **Empty state:** "No accessibility issues found at AA." (or AAA).
+
+**Rules** (`lib/accessibilityCheck.ts`; the DOM is read by
+`components/accessibility/collectAccessibilityDom.ts`, editor state by
+`useAccessibilityState.ts`):
+
+1. **Text contrast — Fail.** Every visible chart text: the plot SVG's
+   text (tick labels, axis titles, chart title / subtitle, data labels,
+   annotation text, caption, flow labels) and the HTML legend and facet
+   titles. Foreground = the text's computed fill (or color) with its
+   fill-opacity and every ancestor's opacity. Background = the painted
+   shapes under the text's center, topmost first, found geometrically
+   (`isPointInFill`, so `pointer-events: none` layers such as label
+   backgrounds and annotation boxes count) and composited down to the
+   first opaque layer or the chart / page background. A text stroke of
+   1.5px or more is a halo and counts as the background. WCAG 2.x ratio;
+   AA needs 4.5:1 (3:1 for large text: ≥ 18pt, or ≥ 14pt bold), AAA 7:1
+   (4.5:1 large). At AAA, text that passes AA but not AAA is listed as
+   "Fails at AAA only". Ratios are shown floored to one decimal, so a
+   near miss never reads as a pass. Skipped: text over a gradient or
+   pattern fill (background unknown), emoji-only text (glyphs ignore
+   their fill), invisible text.
+2. **Palette distinguishability — Advisory.** The categorical / ordinal
+   color levels actually in use (from the color scale, not the whole
+   theme palette): any pair within CIEDE2000 ΔE 10 as-is ("too similar
+   for anyone") or under a protanopia / deuteranopia / tritanopia
+   simulation (Machado 2009, severity 1) names the two levels and the
+   vision types. Six pairs are listed, closest first; the rest fold into
+   one "N more pairs" row. Skipped for gradient (quantitative) color.
+3. **Color is the only cue — Advisory.** Color maps a categorical /
+   ordinal field and nothing else tells its levels apart: not Shape or
+   Pattern on the same field **where the chart mode draws it** — Shape
+   counts only when the mode's marks are glyphs (`canvas.shapeRole`
+   "glyph": points, radar; not bars, tiles, wedges, regions or areas);
+   Pattern counts as the line dash on a drawn line (`connectionRole`
+   "line" with a Connection field) and as the fill pattern elsewhere,
+   unless two or more of the levels are set to no pattern / a solid
+   line — not data labels whose text includes the
+   field, not X / Y / a facet on the same field — and the level colors
+   do not all differ by at least 3:1 in luminance (WCAG's accepted
+   non-hue cue; such levels still separate in the black-and-white
+   preview).
+4. **Red–green ordered palette — Advisory.** An ordinal palette or a
+   color gradient whose two ends are a red and a green (e.g. the
+   Stoplight presets, RdYlGn), which red-green color-blind readers see
+   as the same muddy hue.
+5. **Small text — Advisory under 9pt, Fail under 7pt.** Resolved size in
+   points (the UI's unit: px × ¾), grouped by kind of text.
+6. **Faint or thin marks — Advisory.** Mark opacity under 40% (the
+   overall Opacity, when no field is mapped to opacity); line thickness
+   under 1px on a cartesian chart that draws lines from Connection; mark
+   outlines under 1px when an outline-color field makes them carry data.
+7. **Hover-only values — Advisory.** Tooltips are on and no data labels
+   are drawn or mapped.
+8. **Missing titles — Advisory.** On a chart with cartesian axes, an
+   axis whose title was cleared ("has no title") or unchecked under
+   Titles shown ("is hidden" — still an advisory, worded as a choice);
+   and a drawn legend whose title is cleared or hidden.
+9. **Description — Fail / Advisory.** The screen-reader description
+   (§10d). **Fail** when the resolved description is empty or is just
+   the visual's name on a chart with no title ("only the visual's
+   name") — screen-reader users learn nothing about the chart.
+   **Advisory** while the description is still the automatic one AND the
+   chart has an (authored) title: "The screen-reader description is the
+   chart title; write a sentence that states the takeaway, under
+   Accessibility." Quiet once the user writes their own, and for an
+   automatic description built from a subtitle alone.
+
+No rule fires on the chart background itself or other theme styling as
+such — only on text and marks drawn against it.
+
+**What it does not do.** It reads the editor's render: it cannot see
+hover tooltips' content, the published embed (or how a host page styles
+around it), or keyboard / screen-reader behavior of an embedding page.
+Of the chart's text alternative it judges only the description's
+presence (rule 9), not its quality. Contrast is measured at each text's center only, so a label
+straddling two fills is judged by what's under its middle. It is a
+guide, not a WCAG conformance certificate.
+
+**Never affects the chart.** The card and highlight layer are siblings
+of the chart's scroll region, never inside the plot SVG or the chart
+viewport, so the layout solver (which samples rendered tick labels),
+exports and thumbnails never see them. Reading is strictly read-only —
+the only chart-side change is a `data-vc-data-labels` marker attribute
+on the data-label layer, used to word findings. Fill colors are read
+from computed styles, which the black-and-white filter doesn't change,
+so the two toggles work together (the highlights stay in color).
+
+---
+
 ## 10d. Accessibility (description)
 
 The LAST sidebar section, **Accessibility** (expanded by default), right

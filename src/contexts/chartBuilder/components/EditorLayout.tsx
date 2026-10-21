@@ -25,6 +25,7 @@ import { SaveBar } from "./SaveBar"
 import { Sidebar } from "./sidebar/Sidebar"
 import { ChartCanvas } from "./viz/ChartCanvas"
 import { DataTableBlock } from "./viz/DataTableBlock"
+import { AccessibilityCheckOverlay } from "./accessibility/AccessibilityCheckPanel"
 import { useEnsureCurrentDatasetLoaded } from "../store/useCurrentDatasetView"
 
 // Narrowing past the sidebar's content floor (Sidebar's `min-w-80`) is safe:
@@ -265,7 +266,8 @@ export const EditorLayout = () => {
 						</div>
 					</>
 				)}
-				<div className="flex min-h-0 min-w-0 flex-col">
+				{/* relative: the accessibility check card docks over the chart. */}
+				<div className="relative flex min-h-0 min-w-0 flex-col">
 					<ErrorBoundary>
 						{/* data-editor-chart-viewport marks the element whose size the
 						 *  Export modal defaults its output dimensions to — the export
@@ -387,6 +389,12 @@ export const EditorLayout = () => {
 					</ErrorBoundary>
 					<ErrorBoundary>
 						<DataDrawer />
+					</ErrorBoundary>
+					{/* Header → Accessibility check: a sibling of the scroll
+					 *  region, never inside the chart (the solver, exports and
+					 *  thumbnails must not see it). */}
+					<ErrorBoundary>
+						<AccessibilityCheckOverlay />
 					</ErrorBoundary>
 				</div>
 			</div>
