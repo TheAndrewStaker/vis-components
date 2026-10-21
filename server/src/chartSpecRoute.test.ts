@@ -485,6 +485,20 @@ describe("GET /api/chart-spec", () => {
 		expect(body.families.map((f) => f.family)).not.toContain("lollipop")
 		expect((await fetch(`${base}/api/chart-spec`, { method: "POST" })).status).toBe(405)
 	})
+
+	it("lists where a map variation's geographic fields go", async () => {
+		const base = await start()
+		const body = (await (await fetch(`${base}/api/chart-spec`)).json()) as {
+			families: Array<{ family: string; variations: Array<{ name: string; channels: Record<string, string[]>; note?: string }> }>
+		}
+		const map = body.families.find((f) => f.family === "map")?.variations ?? []
+		expect(map.find((v) => v.name === "Choropleth")).toMatchObject({
+			channels: { connection: ["categorical", "ordinal"], hue: expect.any(Array) },
+			note: expect.stringMatching(/region field on "connection", the measure on "hue", nothing on "x", "y" or "area"/),
+		})
+		expect(map.find((v) => v.name === "Dot map")?.channels).toEqual({ x: ["quantitative"], y: ["quantitative"] })
+		expect(body.families.find((f) => f.family === "bar")?.variations[0]?.note).toBeUndefined()
+	})
 })
 
 describe("GET /api/chart-spec/settings", () => {

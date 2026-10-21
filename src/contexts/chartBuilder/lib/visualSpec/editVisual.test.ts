@@ -367,6 +367,20 @@ describe("review findings", () => {
 		expect(v.mapConfig?.coordSystem).toBe("geographic")
 	})
 
+	it("a map the encodings don't make says where the region goes and which fields hold regions", () => {
+		const message = errorsOf(create({ family: "map", encodings: { y: "State", length: "Value" } }, STATES.id))[0]?.message
+		expect(message).toMatch(/"Choropleth" needs the region field on "connection", the measure on "hue", nothing on "x", "y" or "area"/)
+		expect(message).toMatch(/"Bubble map" needs .*"Dot map" needs/)
+		expect(message).toMatch(/region fields: "State" \(states\)$/)
+	})
+
+	it("a named map variation names only its own needs, and says when no field holds regions", () => {
+		const message = errorsOf(create({ family: "map", variation: "Choropleth", encodings: { y: "flavor", length: "muffins", hue: "coffees" } }))[0]?.message
+		expect(message).toMatch(/"Choropleth" needs/)
+		expect(message).not.toMatch(/"Dot map"/)
+		expect(message).toMatch(/no field joins a states, counties or countries table$/)
+	})
+
 	it("naming a family never changes the stack default", () => {
 		const hue = (spec: Record<string, unknown>) => {
 			const h = ok(create(spec)).channelConfigs.hue
