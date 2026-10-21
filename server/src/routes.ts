@@ -152,7 +152,7 @@ const handleApi = async (
 	}
 	// Chart specs, and the dataset and restore operations built on them.
 	const spec = { method, collection, id, rest, query: rawQuery ?? "" }
-	if (await handleChartSpec(req, res, { config, db, mintVisualId }, spec)) return
+	if (await handleChartSpec(req, res, { config, db, mintVisualId, identify }, spec)) return
 	// Sub-resources: the datasets collection has several, visuals exactly
 	// one (the thumbnail upload); every other collection keeps the original
 	// flat shape.

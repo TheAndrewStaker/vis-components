@@ -17,13 +17,14 @@ import { CAFE, TRENDS } from "../../src/testSupport/chartSpecFixtures"
 import { openDb } from "./db.js"
 import * as dbModule from "./db.js"
 import { SPEC_BODY_CAP_BYTES } from "./limits.js"
+import type { IdentifyUser } from "./identity.js"
 import { createHandler } from "./routes.js"
 
 /** A fresh server per test: these assert on whole collections. */
 const servers: Server[] = []
 /** The data dir of the server `start` made last. */
 let dataDir = ""
-const start = async (mintVisualId?: () => string): Promise<string> => {
+const start = async (mintVisualId?: () => string, identify?: IdentifyUser): Promise<string> => {
 	const dbDir = mkdtempSync(join(tmpdir(), "vis-spec-db-"))
 	dataDir = mkdtempSync(join(tmpdir(), "vis-spec-data-"))
 	const distDir = mkdtempSync(join(tmpdir(), "vis-spec-dist-"))
@@ -40,6 +41,7 @@ const start = async (mintVisualId?: () => string): Promise<string> => {
 		db: openDb(dbDir),
 		distDir,
 		mintVisualId,
+		identify,
 	})
 	const server = createServer((req, res) => void handler(req, res))
 	servers.push(server)
@@ -572,6 +574,65 @@ describe("POST /api/visuals/<id>/restore", () => {
 		expect((await restore(base, "vs-none", { ...undo, visual: { ...undo.visual, id: "vs-none" } }, edit.updatedAt)).status).toBe(404)
 		expect((await put(base, `/api/visuals/${v0.id}`, { ...edit, deletedAt: Date.now() })).status).toBe(204)
 		expect((await restore(base, v0.id, undo, edit.updatedAt)).status).toBe(409)
+	})
+})
+
+describe("Saved by, from the host's identify", () => {
+	const JANE = { id: "jane@example.com", name: "Jane Doe" }
+	const NANCY = { id: "nancy@example.com", name: "Nancy Organ" }
+	const as = (user: typeof JANE | null): Record<string, string> =>
+		user ? { "x-test-user": JSON.stringify(user) } : {}
+	const startIdentified = () =>
+		start(undefined, (req) => {
+			const raw = req.headers["x-test-user"]
+			return typeof raw === "string" ? (JSON.parse(raw) as never) : null
+		})
+	const createAs = async (base: string, user: typeof JANE | null) => {
+		await seedDataset(base, CAFE)
+		const res = await fetch(`${base}/api/visuals`, {
+			method: "POST",
+			headers: as(user),
+			body: JSON.stringify(cafe({ title: "Muffins" })),
+		})
+		expect(res.status).toBe(201)
+		return ((await res.json()) as { visual: Visual }).visual
+	}
+	const editAs = async (base: string, v: Visual, user: typeof JANE | null) => {
+		const res = await patch(base, v.id, { title: "Changed" }, { "if-match": String(v.updatedAt), ...as(user) })
+		expect(res.status).toBe(200)
+		return (await res.json()) as { visual: Visual; undo: unknown }
+	}
+
+	it("stamps the requesting user on a create, an edit and an undo", async () => {
+		const base = await startIdentified()
+		const v0 = await createAs(base, JANE)
+		expect(v0.updatedBy).toEqual(JANE)
+		expect((await visuals(base))[0]?.updatedBy).toEqual(JANE)
+		const { visual: edit, undo } = await editAs(base, v0, NANCY)
+		expect(edit.updatedBy).toEqual(NANCY)
+		const res = await fetch(`${base}/api/visuals/${v0.id}/restore`, {
+			method: "POST",
+			headers: { "if-match": String(edit.updatedAt), ...as(JANE) },
+			body: JSON.stringify(undo),
+		})
+		expect(res.status).toBe(200)
+		expect((await visuals(base))[0]?.updatedBy).toEqual(JANE)
+	})
+
+	it("keeps the stored saver on an anonymous edit, and names nobody on an anonymous create", async () => {
+		const base = await startIdentified()
+		const v0 = await createAs(base, JANE)
+		const { visual: edit } = await editAs(base, v0, null)
+		expect(edit.updatedBy).toEqual(JANE)
+		const other = await createAs(base, null)
+		expect(other.updatedBy).toBeUndefined()
+	})
+
+	it("names nobody without an identify hook", async () => {
+		const base = await start()
+		const v0 = await createAs(base, JANE)
+		expect(v0.updatedBy).toBeUndefined()
+		expect((await editAs(base, v0, JANE)).visual.updatedBy).toBeUndefined()
 	})
 })
 
