@@ -401,7 +401,7 @@ export const DataLabelsPanel = () => {
 
 	// Facet panels for the current chart — the same resolver PlotCanvas
 	// renders against (and the annotations panel lists), so the keys the
-	// "Label all facets" picker stores match the rendered panels. Unfaceted
+	// "Apply to all facets" picker stores match the rendered panels. Unfaceted
 	// charts (`mode === "single"`) hide the control.
 	const facetCfg = useMemo<FacetConfig>(
 		() => ({ ...DEFAULT_FACET_CONFIG, ...chartConfigs.facet }),
@@ -448,7 +448,7 @@ export const DataLabelsPanel = () => {
 		updateCfg({
 			fieldLabelPoints: { ...(merged.fieldLabelPoints ?? {}), [key]: mode },
 		})
-	// Per-label "Of each" and "Label all facets", same keying: each composed
+	// Per-label "Of each" and "Apply to all facets", same keying: each composed
 	// label's series ends can run over a different unit and it can be kept
 	// to its own facet panels. The single-field label writes the layer-wide
 	// fields instead (there's one label to place).
@@ -518,7 +518,7 @@ export const DataLabelsPanel = () => {
 			 *  ignored by the renderer — when not faceted. */}
 			{isFaceted && (
 				<FacetScopeControl
-					label="Label all facets"
+					label="Apply to all facets"
 					facetKeys={
 						key === null ? merged.facetKeys : labelFacetKeysFor(merged, key)
 					}
@@ -533,8 +533,8 @@ export const DataLabelsPanel = () => {
 		</>
 	)
 
-	// Multi-field label variables: the Size / Text properties / Text
-	// background panels add one block per variable when there are two or
+	// Multi-field label variables: the Size / Text / Box
+	// panels add one block per variable when there are two or
 	// more (one variable has nothing to differ from). Same gate as the Color
 	// panel's per-variable slots.
 	// The label KEYS the per-label sections iterate (`labelKeysFor`): one
@@ -798,7 +798,7 @@ export const DataLabelsPanel = () => {
 		[isFlowMode, dataset, chartEncodings, chartConfigs.connection]
 	)
 	// Flow diagrams: an unset Value is the source column (the node names),
-	// shown selected so its Text format is right there; "— none —" is the
+	// shown selected so its Label format is right there; "— none —" is the
 	// explicit `none` (no node labels).
 	const flowSourceField = flowEndpoints?.sourceField ?? null
 	// The target and weight columns only repeat the names / Flow out on a
@@ -1765,7 +1765,7 @@ export const DataLabelsPanel = () => {
 				</CollapsibleSubsection>
 			)}
 
-			<CollapsibleSubsection title="Text properties" changed={textPropertiesChanged}>
+			<CollapsibleSubsection title="Text" changed={textPropertiesChanged}>
 				<TextPropertiesPanel
 					cfg={merged}
 					onChange={updateCfg}
@@ -1778,7 +1778,7 @@ export const DataLabelsPanel = () => {
 			</CollapsibleSubsection>
 
 			{fineTuningApplies && (
-			<CollapsibleSubsection title="Text background" changed={textBackgroundChanged}>
+			<CollapsibleSubsection title="Box" changed={textBackgroundChanged}>
 				<TextBackgroundPanel
 					cfg={merged}
 					onChange={updateCfg}

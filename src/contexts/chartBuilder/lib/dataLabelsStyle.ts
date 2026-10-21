@@ -302,12 +302,18 @@ export type ResolvedLabelBackground = {
 	radius: number
 	padX: number
 	padY: number
+	/** Border stroke; `borderWidth` 0 = no border. */
+	borderColor: string
+	borderWidth: number
 }
 
 /** Fallback padding (px) for the text-background rect when the config
  *  hasn't set explicit values — matches the historical baked-in look. */
 export const DEFAULT_BG_PAD_X = 3
 export const DEFAULT_BG_PAD_Y = 1.5
+/** Border color a text-background rect strokes with when the config sets a
+ *  border thickness but no color. */
+export const DEFAULT_BG_BORDER_COLOR = "#999999"
 
 /** The LAYER-wide text background (`null` when the toggle is off).
  *  `vizBackground` is the chart's own background — the color a null
@@ -320,6 +326,8 @@ export const resolveLayerBackground = (
 		| "textBackgroundRadius"
 		| "textBackgroundPadX"
 		| "textBackgroundPadY"
+		| "textBackgroundBorderColor"
+		| "textBackgroundBorderWidth"
 	>,
 	vizBackground: string
 ): ResolvedLabelBackground | null =>
@@ -329,6 +337,8 @@ export const resolveLayerBackground = (
 				radius: cfg.textBackgroundRadius ?? 0,
 				padX: cfg.textBackgroundPadX ?? DEFAULT_BG_PAD_X,
 				padY: cfg.textBackgroundPadY ?? DEFAULT_BG_PAD_Y,
+				borderColor: cfg.textBackgroundBorderColor ?? DEFAULT_BG_BORDER_COLOR,
+				borderWidth: cfg.textBackgroundBorderWidth ?? 0,
 			}
 		: null
 
@@ -345,6 +355,8 @@ export const resolveFieldBackground = (
 		| "textBackgroundRadius"
 		| "textBackgroundPadX"
 		| "textBackgroundPadY"
+		| "textBackgroundBorderColor"
+		| "textBackgroundBorderWidth"
 		| "fieldBackgrounds"
 	>,
 	field: string | null,
@@ -358,6 +370,12 @@ export const resolveFieldBackground = (
 		radius: ov?.textBackgroundRadius ?? cfg.textBackgroundRadius ?? 0,
 		padX: ov?.textBackgroundPadX ?? cfg.textBackgroundPadX ?? DEFAULT_BG_PAD_X,
 		padY: ov?.textBackgroundPadY ?? cfg.textBackgroundPadY ?? DEFAULT_BG_PAD_Y,
+		borderColor:
+			ov?.textBackgroundBorderColor ??
+			cfg.textBackgroundBorderColor ??
+			DEFAULT_BG_BORDER_COLOR,
+		borderWidth:
+			ov?.textBackgroundBorderWidth ?? cfg.textBackgroundBorderWidth ?? 0,
 	}
 }
 
@@ -372,7 +390,9 @@ export const sameBackground = (
 		a.color === b.color &&
 		a.radius === b.radius &&
 		a.padX === b.padX &&
-		a.padY === b.padY)
+		a.padY === b.padY &&
+		a.borderColor === b.borderColor &&
+		a.borderWidth === b.borderWidth)
 
 /** One label's fill through the Data Labels precedence chain:
  * per-category override → conditional numeric rule → hue-scale color →

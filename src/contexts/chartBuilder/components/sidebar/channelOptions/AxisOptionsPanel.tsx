@@ -139,21 +139,21 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 	const sectionChanged = {
 		Distribution: ch.histogram || ch.distributionOverlay || ch.jitter,
 		Regression: ch.regression,
-		// The tick density controls (count / stride) render in the Ticks section
-		// on x/y, but under Tick Labels on r (which has no Ticks section).
 		// Custom breaks pin extra TICKS and scale range (min/max) pins the
-		// domain they lay out on, so both live with the density controls.
+		// domain they lay out on, so both live with the density controls in
+		// the Ticks section. The r axis's Ticks section holds the density
+		// control only (the radar draws no r tick marks, ranges or breaks).
 		Ticks:
-			ch.tickmarks ||
-			(channel !== "r" &&
-				(ch.tickCount ||
+			channel === "r"
+				? ch.tickCount || ch.stride
+				: ch.tickmarks ||
+					ch.tickCount ||
 					ch.stride ||
 					ch.breaks ||
 					ch.min ||
 					ch.max ||
-					ch.mirror)),
+					ch.mirror,
 		"Tick labels":
-			(channel === "r" && (ch.tickCount || ch.stride)) ||
 			ch.format ||
 			ch.tickLabelAngle ||
 			ch.tickLabelFont ||
@@ -538,6 +538,14 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 				</Section>
 			)}
 
+			{/* The radar draws no r tick marks, so r's Ticks section is just
+			 *  the density control (Count / Tick every / Label every). */}
+			{channel === "r" && (
+				<Section title="Ticks" changed={sectionChanged.Ticks}>
+					{tickDensityControls}
+				</Section>
+			)}
+
 			{channel !== "r" && (
 				<Section title="Ticks" changed={sectionChanged.Ticks}>
 					{tickDensityControls}
@@ -600,9 +608,6 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 					changed={ch.format}
 					onChange={(customFormat) => update({ customFormat })}
 				/>
-				{/* The r axis has no Ticks section, so its density control (count /
-				 *  stride) stays here; on x/y it lives in the Ticks section. */}
-				{channel === "r" && tickDensityControls}
 				{/* Blank = auto. A categorical x-axis auto-rotates to -45° when
 				 *  neighboring labels would collide; the renderer publishes what it
 				 *  resolved and the blank field shows it as the placeholder. Any
@@ -774,7 +779,7 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 export const FORMAT_BOX_HELP =
 	"A format code, or literal plus text to add to each value: literal% → 3%, literal units → 3 units, €literal → €3. Text after a code is added too: ,.0f kg → 1,234 kg."
 
-/** The tick "Format" control: the shared preset dropdown
+/** The tick "Label format" control: the shared preset dropdown
  *  (`FormatPresetOptions`) over a free-typed custom format box. Shared with
  *  the chord ring axis's Tick Labels section, the radar Spoke Labels AND
  *  the per-field data-label formatting, so the format mental model matches
@@ -782,7 +787,7 @@ export const FORMAT_BOX_HELP =
  *  (`literal%`, `,.0f kg` — see `parseFormatSpec`), and the dropdown keeps
  *  showing the preset that spec came from (`formatPresetValueFor`), so the
  *  pair reads as "the preset I picked" over "my edit of it". `label` overrides the
- *  row label (defaults to "Format") — data labels pass the field name.
+ *  row label (defaults to "Label format") — data labels pass the field name.
  *  `countryNames` adds the Geography preset group; the data-label panels
  *  pass it on countries-level geo charts only, so the option never pollutes
  *  other chart types or the axis tick dropdowns. */
@@ -790,7 +795,7 @@ export const TickFormatControl = ({
 	value,
 	changed,
 	onChange,
-	label = "Text format",
+	label = "Label format",
 	countryNames = false,
 }: {
 	value: string
@@ -835,6 +840,15 @@ export const TickFormatControl = ({
 				title={FORMAT_BOX_HELP}
 				className="flex-1 font-mono"
 			/>
+		</div>
+		<div className="flex items-start gap-2">
+			<LabelSpacer />
+			<div className="vc-help flex-1">
+				Text around the value goes in the same box:{" "}
+				<span className="font-mono">,.0f kg</span>,{" "}
+				<span className="font-mono">literal%</span>,{" "}
+				<span className="font-mono">€literal</span>.
+			</div>
 		</div>
 	</div>
 )
@@ -1072,7 +1086,7 @@ const ScaleRangeControls = ({
 			</div>
 			<div className="flex flex-col gap-1.5 text-sm">
 				<label className="flex items-center gap-2">
-					<span className={`w-24 ${lbl(changed?.min)}`}>min</span>
+					<span className={`w-24 ${lbl(changed?.min)}`}>Min</span>
 					{isTemporal ? (
 						<DateInput
 							value={min}
@@ -1089,7 +1103,7 @@ const ScaleRangeControls = ({
 					)}
 				</label>
 				<label className="flex items-center gap-2">
-					<span className={`w-24 ${lbl(changed?.max)}`}>max</span>
+					<span className={`w-24 ${lbl(changed?.max)}`}>Max</span>
 					{isTemporal ? (
 						<DateInput
 							value={max}

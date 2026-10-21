@@ -281,7 +281,8 @@ export const textAnnotationWidthPx = (
 		[anno.text],
 		anno.textFontFamily,
 		fontSizePx,
-		anno.textFontWeight
+		anno.textFontWeight,
+		anno.textItalic
 	)
 	return measured > 0 ? measured : estimateLongestLineWidth(anno.text, fontSizePx)
 }
@@ -525,4 +526,6 @@ export const rectangleTextStyle = (rect: RectangleAnnotation) => ({
 	fontFamily: rect.textFontFamily ?? DEFAULT_RECTANGLE_TEXT.textFontFamily,
 	fontWeight: rect.textFontWeight ?? DEFAULT_RECTANGLE_TEXT.textFontWeight,
 	color: rect.textColor ?? DEFAULT_RECTANGLE_TEXT.textColor,
+	italic: rect.textItalic ?? false,
+	underline: rect.textUnderline ?? false,
 })

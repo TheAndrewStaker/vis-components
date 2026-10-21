@@ -184,7 +184,7 @@ export const LineSegmentEditor = ({
 				<div className="flex flex-col gap-2">
 					<div className="flex flex-wrap items-center gap-2">
 						<ColorInput
-							label="Line"
+							label="Color"
 							labelClassName={LABEL_COL}
 							value={line.lineColor}
 							onChange={(c) => onChange({ lineColor: c })}

@@ -32,7 +32,7 @@ import {
 import { defaultComposedLabels } from "../../lib/dataLabelsSelection"
 import { DataLabelsPanel } from "./DataLabelsPanel"
 
-/** With two or more label variables, Size / Text properties / Text
+/** With two or more label variables, Size / Text / Box
  *  background grow one block per variable (like Color's slots); with one
  *  variable they don't. "Avoid overlapping labels" lives under Adjust
  *  position and alignment, and the selection subsection is "Label
@@ -144,8 +144,8 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 	it("single-variable labels show no per-variable blocks", () => {
 		const { container } = mountPanel({ fields: null })
 		openChannel(container, "Size")
-		expand(container, "Text properties")
-		expand(container, "Text background")
+		expand(container, "Text")
+		expand(container, "Box")
 		expect(sectionHeader(container, "y")).toBeNull()
 	})
 
@@ -181,9 +181,9 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 		expect(readCfg().fieldSizes).toEqual({})
 	})
 
-	it("two variables replace the layer-wide Text properties with one block each", () => {
+	it("two variables replace the layer-wide Text with one block each", () => {
 		const { container, readCfg } = mountPanel({ fields: ["y", "g"] })
-		expand(container, "Text properties")
+		expand(container, "Text")
 		// No layer-wide Family select — only the per-variable blocks.
 		expect(container.textContent).not.toContain("Family")
 		expand(container, "g")
@@ -204,9 +204,9 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 		expect(readCfg().fieldFonts).toEqual({})
 	})
 
-	it("two variables replace the layer-wide Text background with a toggle per variable", () => {
+	it("two variables replace the layer-wide Box with a toggle per variable", () => {
 		const { container, readCfg } = mountPanel({ fields: ["y", "g"] })
-		expand(container, "Text background")
+		expand(container, "Box")
 		// The layer-wide toggle stands down; each variable has its own.
 		expect(container.textContent).not.toContain("Show text background")
 		expand(container, "g")
@@ -306,8 +306,8 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 			"{y}",
 			"{y} ({g})",
 		])
-		// Text format stays — it formats each variable wherever it appears.
-		expect(container.textContent).toContain("Text format")
+		// Label format stays — it formats each variable wherever it appears.
+		expect(container.textContent).toContain("Label format")
 	})
 
 	it("checking a field adds its label; unchecking removes the labels composing just it", () => {

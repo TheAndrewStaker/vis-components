@@ -81,12 +81,11 @@ const mount = (legend: Partial<LegendConfig> = {}) => {
 }
 
 describe("LegendPanel — Legend text", () => {
-	it("sits between Legend properties and Label formatting", () => {
+	it("sits after Legend properties and its Box subsection", () => {
 		const { container } = mount()
 		const text = container.textContent ?? ""
-		expect(text.indexOf("Legend properties")).toBeLessThan(
-			text.indexOf("Legend text")
-		)
+		expect(text.indexOf("Legend properties")).toBeLessThan(text.indexOf("Box"))
+		expect(text.indexOf("Box")).toBeLessThan(text.indexOf("Legend text"))
 	})
 
 	it("starts blank, showing the theme's legend-text defaults as the inherited values", () => {

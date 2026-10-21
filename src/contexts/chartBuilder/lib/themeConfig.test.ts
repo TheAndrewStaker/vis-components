@@ -582,6 +582,15 @@ describe("legend section changed dot", () => {
 		expect(groups.has("properties")).toBe(false)
 	})
 
+	it("the legend border / background light the Box group, not properties", () => {
+		const groups = explainLegendCustomization(
+			{ ...base, showBorder: !base.showBorder },
+			STUB_THEME,
+		)
+		expect(groups.has("box")).toBe(true)
+		expect(groups.has("properties")).toBe(false)
+	})
+
 	it("a stale inside coord doesn't dot unless the legend is positioned inside", () => {
 		expect(
 			explainLegendCustomization(

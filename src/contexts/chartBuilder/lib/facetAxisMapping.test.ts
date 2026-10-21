@@ -30,7 +30,7 @@ describe("facetAxisMapping", () => {
 		expect(m.rowAxis).toBe("r")
 		expect(m.colAxis).toBe("angle")
 		expect(m.rowAxisLabel).toBe("R axis")
-		expect(m.colAxisLabel).toBe("angle axis")
+		expect(m.colAxisLabel).toBe("Angle axis")
 		expect(m.showPanelSize).toBe(false)
 	})
 

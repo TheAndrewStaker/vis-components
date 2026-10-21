@@ -1,4 +1,3 @@
-import type { ReactNode } from "react"
 import { useAtomValue } from "jotai"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { ColorInput } from "../../../../../components/ui/ColorInput"
@@ -20,13 +19,9 @@ import type {
 	BoxAnnotationStyle,
 	RectangleTextStyle,
 } from "../../../lib/annotationsConfig"
-import { fontWeightOptionsFor } from "../../../lib/labelsConfig"
+import type { FontConfig } from "../../../lib/labelsConfig"
 import { currentRenderedPanelInnerDimsAtom } from "../../../store/atoms"
-import {
-	useFontFamilyOptions,
-	useUserFontWeights,
-} from "../../../store/useFontOptions"
-import { AlignmentControl } from "../LabelsPanel"
+import { AlignmentControl, FontEditor } from "../LabelsPanel"
 import { DashStylePicker } from "../channelOptions/dashControls"
 import {
 	convertCoord,
@@ -226,7 +221,7 @@ export const EdgePositionSection = ({
 				{isPercentSystem(coords.coordSystem) ? (
 					<div className="flex flex-col gap-2">
 						<NumberInput
-							label="left %"
+							label="Left"
 							labelClassName={LABEL_COL}
 							value={cleanNumber(toNumber(coords.xMin) * 100)}
 							step={1}
@@ -234,7 +229,7 @@ export const EdgePositionSection = ({
 							suffix="%"
 						/>
 						<NumberInput
-							label="right %"
+							label="Right"
 							labelClassName={LABEL_COL}
 							value={cleanNumber(toNumber(coords.xMax) * 100)}
 							step={1}
@@ -242,7 +237,7 @@ export const EdgePositionSection = ({
 							suffix="%"
 						/>
 						<NumberInput
-							label="bottom %"
+							label="Bottom"
 							labelClassName={LABEL_COL}
 							value={cleanNumber(toNumber(coords.yMin) * 100)}
 							step={1}
@@ -250,7 +245,7 @@ export const EdgePositionSection = ({
 							suffix="%"
 						/>
 						<NumberInput
-							label="top %"
+							label="Top"
 							labelClassName={LABEL_COL}
 							value={cleanNumber(toNumber(coords.yMax) * 100)}
 							step={1}
@@ -261,28 +256,28 @@ export const EdgePositionSection = ({
 				) : coords.coordSystem === "values" ? (
 					<div className="flex flex-col gap-2">
 						<AxisValueInput
-							label="left"
+							label="Left"
 							labelClassName={LABEL_COL}
 							value={coords.xMin}
 							axis={xAxis}
 							onChange={(v) => onChange({ xMin: v })}
 						/>
 						<AxisValueInput
-							label="right"
+							label="Right"
 							labelClassName={LABEL_COL}
 							value={coords.xMax}
 							axis={xAxis}
 							onChange={(v) => onChange({ xMax: v })}
 						/>
 						<AxisValueInput
-							label="bottom"
+							label="Bottom"
 							labelClassName={LABEL_COL}
 							value={coords.yMin}
 							axis={yAxis}
 							onChange={(v) => onChange({ yMin: v })}
 						/>
 						<AxisValueInput
-							label="top"
+							label="Top"
 							labelClassName={LABEL_COL}
 							value={coords.yMax}
 							axis={yAxis}
@@ -291,10 +286,10 @@ export const EdgePositionSection = ({
 					</div>
 				) : (
 					<div className="flex flex-col gap-2">
-						{pxInput("xMin", "left")}
-						{pxInput("xMax", "right")}
-						{pxInput("yMin", "bottom")}
-						{pxInput("yMax", "top")}
+						{pxInput("xMin", "Left")}
+						{pxInput("xMax", "Right")}
+						{pxInput("yMin", "Bottom")}
+						{pxInput("yMax", "Top")}
 					</div>
 				)}
 				{coordHelpFor(coords.coordSystem) && (
@@ -361,7 +356,7 @@ export const PointPositionSection = ({
 			{isPercentSystem(coords.coordSystem) ? (
 				<div className="flex flex-col gap-2">
 					<NumberInput
-						label="x %"
+						label="X"
 						labelClassName={LABEL_COL}
 						value={cleanNumber(toNumber(coords.x) * 100)}
 						step={1}
@@ -369,7 +364,7 @@ export const PointPositionSection = ({
 						suffix="%"
 					/>
 					<NumberInput
-						label="y %"
+						label="Y"
 						labelClassName={LABEL_COL}
 						value={cleanNumber(toNumber(coords.y) * 100)}
 						step={1}
@@ -380,14 +375,14 @@ export const PointPositionSection = ({
 			) : coords.coordSystem === "values" ? (
 				<div className="flex flex-col gap-2">
 					<AxisValueInput
-						label="x"
+						label="X"
 						labelClassName={LABEL_COL}
 						value={coords.x}
 						axis={xAxis}
 						onChange={(v) => onChange({ x: v })}
 					/>
 					<AxisValueInput
-						label="y"
+						label="Y"
 						labelClassName={LABEL_COL}
 						value={coords.y}
 						axis={yAxis}
@@ -397,7 +392,7 @@ export const PointPositionSection = ({
 			) : (
 				<div className="flex flex-col gap-2">
 					<NumberInput
-						label="x"
+						label="X"
 						labelClassName={LABEL_COL}
 						value={cleanNumber(toNumber(coords.x))}
 						step={1}
@@ -405,7 +400,7 @@ export const PointPositionSection = ({
 						suffix="px"
 					/>
 					<NumberInput
-						label="y"
+						label="Y"
 						labelClassName={LABEL_COL}
 						value={cleanNumber(toNumber(coords.y))}
 						step={1}
@@ -502,7 +497,6 @@ export const BorderSection = ({
 	defaults,
 	onChange,
 	ariaContext,
-	children,
 }: {
 	style: BorderStyle
 	/** Theme-seeded style baseline the reset links compare against. */
@@ -511,9 +505,6 @@ export const BorderSection = ({
 	/** Accessible-name context for the dash picker's radio group, e.g.
 	 *  "rectangle border" / "circle border". */
 	ariaContext: string
-	/** Extra rows appended after the dash picker — the text annotation's
-	 *  corner-radius control, which only that kind has. */
-	children?: ReactNode
 }) => (
 	<CollapsibleSubsection title="Border">
 		<div className="flex flex-col gap-2">
@@ -584,7 +575,6 @@ export const BorderSection = ({
 					ariaContext={ariaContext}
 				/>
 			</div>
-			{children}
 		</div>
 	</CollapsibleSubsection>
 )
@@ -595,10 +585,6 @@ export const BorderSection = ({
  *  same field names for both. */
 type TextStyle = Partial<RectangleTextStyle> & { text?: string }
 
-/** "Text" subsection shared by the rectangle's inner label and the
- *  free-standing text annotation: the text box plus font family / size /
- *  color / weight / alignment / padding, each with a reset link against the
- *  theme-seeded `defaults` baseline. */
 /** The annotation's text content: a labeled, auto-sizing textarea. The
  *  rectangle keeps it inside its "Text" subsection (the label is optional
  *  there); the text annotation hoists it to the top of the card, outside any
@@ -635,6 +621,76 @@ export const TextContentField = ({
 	</label>
 )
 
+/** The text-to-box-edge inset row (px) with a reset link against the
+ *  theme-seeded default. Rendered in the text annotation's "Box" and at the
+ *  end of the rectangle's "Text" subsection. */
+export const PaddingRow = ({
+	value,
+	defaultValue,
+	onChange,
+}: {
+	value: number
+	defaultValue: number
+	onChange: (v: number) => void
+}) => (
+	<div className="flex items-center gap-2">
+		<NumberInput
+			label="Padding"
+			labelClassName={LABEL_COL}
+			value={value}
+			min={0}
+			step={1}
+			onChange={onChange}
+			suffix="px"
+		/>
+		{value !== defaultValue && (
+			<ResetLink onClick={() => onChange(defaultValue)} />
+		)}
+	</div>
+)
+
+/** Adapter: the annotation's text style as the shared `FontEditor`'s
+ *  `Partial<FontConfig>`. A field equal to its theme-seeded default reads as
+ *  UNSET, so the editor shows the default as its placeholder / "(inherit)"
+ *  entry and its reset links appear exactly when the old per-row resets did
+ *  (value differs from the default). Italic / underline are set only when on. */
+const annotationTextToFont = (
+	style: TextStyle,
+	defaults: RectangleTextStyle
+): Partial<FontConfig> => {
+	const family = style.textFontFamily ?? defaults.textFontFamily
+	const size = style.textFontSize ?? defaults.textFontSize
+	const color = style.textColor ?? defaults.textColor
+	const weight = style.textFontWeight ?? defaults.textFontWeight
+	return {
+		...(family !== defaults.textFontFamily && { family }),
+		...(size !== defaults.textFontSize && { size }),
+		...(color !== defaults.textColor && { color }),
+		...(weight !== defaults.textFontWeight && { weight }),
+		...(style.textItalic && { italic: true }),
+		...(style.textUnderline && { underline: true }),
+	}
+}
+
+/** Inverse of `annotationTextToFont`: an unset field (the editor's reset /
+ *  "(inherit)" choice) writes the default back, matching the old reset links. */
+const fontToAnnotationText = (
+	font: Partial<FontConfig>,
+	defaults: RectangleTextStyle
+): Partial<TextStyle> => ({
+	textFontFamily: font.family ?? defaults.textFontFamily,
+	textFontSize: font.size ?? defaults.textFontSize,
+	textColor: font.color ?? defaults.textColor,
+	textFontWeight: font.weight ?? defaults.textFontWeight,
+	textItalic: font.italic || undefined,
+	textUnderline: font.underline || undefined,
+})
+
+/** "Text" subsection shared by the rectangle's inner label and the
+ *  free-standing text annotation: the optional text box, Align, then the
+ *  shared `FontEditor` rows (Family · Color · Size · Weight · Style), each
+ *  with a reset link against the theme-seeded `defaults` baseline. Padding
+ *  lives with the box, not here. */
 export const TextStyleSection = ({
 	style,
 	defaults,
@@ -642,6 +698,7 @@ export const TextStyleSection = ({
 	placeholder,
 	alignmentHelp,
 	title = "Text",
+	showPadding = false,
 }: {
 	style: TextStyle
 	/** Theme-seeded text baseline the reset links compare against. */
@@ -651,20 +708,18 @@ export const TextStyleSection = ({
 	 *  to leave the text box out of the subsection (the caller renders a
 	 *  `TextContentField` elsewhere) so this holds formatting only. */
 	placeholder?: string
-	/** Extra prose under the Alignment row — the text annotation's alignment
+	/** Extra prose under the Align row — the text annotation's alignment
 	 *  also picks which edge of the box lands on the anchor point. */
 	alignmentHelp?: string
-	/** Subsection header; "Text formatting" when the text box lives outside. */
+	/** Subsection header. */
 	title?: string
+	/** Keep the Padding row at the end of this subsection. Only the
+	 *  rectangle wants it: its padding insets the label from the shape's
+	 *  edge and it has no "Box" subsection. The text annotation's padding
+	 *  lives in its Box. */
+	showPadding?: boolean
 }) => {
-	const familyOptions = useFontFamilyOptions()
-	const userFontWeights = useUserFontWeights()
-	const fontFamily = style.textFontFamily ?? defaults.textFontFamily
-	const fontSize = style.textFontSize ?? defaults.textFontSize
-	const color = style.textColor ?? defaults.textColor
-	const weight = style.textFontWeight ?? defaults.textFontWeight
 	const align = style.textAlign ?? defaults.textAlign
-	const padding = style.textPadding ?? defaults.textPadding
 	return (
 		<CollapsibleSubsection title={title}>
 			{placeholder !== undefined && (
@@ -674,89 +729,31 @@ export const TextStyleSection = ({
 					placeholder={placeholder}
 				/>
 			)}
-			<SelectInput
-				label="Font"
-				labelClassName={LABEL_COL}
-				value={fontFamily}
-				options={familyOptions}
-				onChange={(textFontFamily) => onChange({ textFontFamily })}
-				selectClassName="flex-1"
-			/>
-			<div className="flex items-center gap-2">
-				<NumberInput
-					label="Size"
-					labelClassName={LABEL_COL}
-					value={fontSize}
-					min={1}
-					step={1}
-					onChange={(v) => onChange({ textFontSize: v })}
-					suffix="pt"
-				/>
-				{fontSize !== defaults.textFontSize && (
-					<ResetLink
-						onClick={() => onChange({ textFontSize: defaults.textFontSize })}
-					/>
-				)}
-			</div>
-			<div className="flex flex-wrap items-center gap-2">
-				<ColorInput
-					label="Color"
-					labelClassName={LABEL_COL}
-					value={color}
-					onChange={(c) => onChange({ textColor: c })}
-					paletteKind="text"
-				/>
-				{color !== defaults.textColor && (
-					<ResetLink
-						onClick={() => onChange({ textColor: defaults.textColor })}
-					/>
-				)}
-			</div>
-			<div className="flex items-center gap-2">
-				<SelectInput
-					label="Weight"
-					labelClassName={LABEL_COL}
-					value={String(weight)}
-					options={fontWeightOptionsFor(
-						fontFamily,
-						weight,
-						userFontWeights
-					).map((w) => ({ value: String(w.value), label: w.label }))}
-					onChange={(w) => onChange({ textFontWeight: Number(w) })}
-				/>
-				{weight !== defaults.textFontWeight && (
-					<ResetLink
-						onClick={() =>
-							onChange({ textFontWeight: defaults.textFontWeight })
-						}
-					/>
-				)}
-			</div>
 			{/* div, not label: AlignmentControl is a button group, not a form control */}
 			<div className="flex items-center gap-2 text-sm">
-				<span className={LABEL_COL}>Alignment</span>
+				<span className={LABEL_COL}>Align</span>
 				<AlignmentControl
 					value={align}
 					onChange={(textAlign) => onChange({ textAlign })}
 				/>
 			</div>
 			{alignmentHelp && <p className="vc-help">{alignmentHelp}</p>}
-			<div className="flex items-center gap-2">
-				<NumberInput
-					label="Padding"
-					labelClassName={LABEL_COL}
-					value={padding}
-					min={0}
-					step={1}
-					onChange={(v) => onChange({ textPadding: v })}
-					suffix="px"
+			<FontEditor
+				value={annotationTextToFont(style, defaults)}
+				onChange={(font) => onChange(fontToAnnotationText(font, defaults))}
+				showResetFields
+				baseColor={defaults.textColor}
+				baseSize={defaults.textFontSize}
+				baseFamily={defaults.textFontFamily}
+				baseWeight={defaults.textFontWeight}
+			/>
+			{showPadding && (
+				<PaddingRow
+					value={style.textPadding ?? defaults.textPadding}
+					defaultValue={defaults.textPadding}
+					onChange={(textPadding) => onChange({ textPadding })}
 				/>
-				{padding !== defaults.textPadding && (
-					<ResetLink
-						onClick={() => onChange({ textPadding: defaults.textPadding })}
-					/>
-				)}
-			</div>
+			)}
 		</CollapsibleSubsection>
 	)
 }

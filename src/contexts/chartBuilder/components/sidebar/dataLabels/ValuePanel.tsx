@@ -13,7 +13,7 @@ import { Input } from "../../../../../components/ui/Input"
 // category can sit next to "32%"), and compose the labels themselves — one
 // text box per label, each arranging `{Field}` tokens with literal text.
 // The boxes ARE the labels: every one gets its own sections under Color,
-// Size, Text properties, Text background, Label selection and Adjust
+// Size, Text, Box, Label selection and Adjust
 // position, titled by its variables. Per-label COLOR lives under the Color
 // dropdown, not here.
 // ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ export const ValuePanel = ({
 			{fields.length > 0 && (
 				<div className="flex flex-col gap-1">
 					<span className="vc-group-header">
-						Text format
+						Label format
 					</span>
 					{fields.map((name) => (
 						<TickFormatControl
@@ -166,7 +166,7 @@ export const SingleValuePanel = ({
 	countryNames?: boolean
 }) => (
 	<div className="flex flex-col gap-1">
-		<span className="vc-group-header">Text format</span>
+		<span className="vc-group-header">Label format</span>
 		<TickFormatControl
 			label={field}
 			value={cfg.fieldFormats?.[field] ?? ""}

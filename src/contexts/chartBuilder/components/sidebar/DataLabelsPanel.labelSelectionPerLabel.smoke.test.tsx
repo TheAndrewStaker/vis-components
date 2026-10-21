@@ -165,26 +165,26 @@ const checkboxFor = (root: ParentNode, text: string) =>
 		.find((l) => l.textContent?.trim() === text)
 		?.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? null
 
-describe("DataLabelsPanel — per-label Of each and Label all facets", () => {
+describe("DataLabelsPanel — per-label Of each and Apply to all facets", () => {
 	afterEach(cleanup)
 
-	it("gives each composed label its own Of each and Label all facets", () => {
+	it("gives each composed label its own Of each and Apply to all facets", () => {
 		const { container } = mountPanel({})
 		const selection = openSection(container, "Label selection")
 		// No layer-wide pair left: both live under a label's subheader.
 		expect(labelledControl(selection, "Of each")).toBeNull()
-		expect(checkboxFor(selection, "Label all facets")).toBeNull()
+		expect(checkboxFor(selection, "Apply to all facets")).toBeNull()
 
 		const g = openSection(selection, "g")
 		expect(labelledControl(g, "Which labels")).not.toBeNull()
 		expect(labelledControl(g, "Of each")).not.toBeNull()
-		expect(checkboxFor(g, "Label all facets")).not.toBeNull()
+		expect(checkboxFor(g, "Apply to all facets")).not.toBeNull()
 
 		const val = openSection(selection, "val")
 		// "All labels" has no series ends, so there's no unit to scope —
 		// but it still picks its facet panels.
 		expect(labelledControl(val, "Of each")).toBeNull()
-		expect(checkboxFor(val, "Label all facets")).not.toBeNull()
+		expect(checkboxFor(val, "Apply to all facets")).not.toBeNull()
 	})
 
 	it("writes Of each to the label's own entry, not the layer", () => {
@@ -197,11 +197,11 @@ describe("DataLabelsPanel — per-label Of each and Label all facets", () => {
 		expect(readCfg().labelPointsScope).toBe("series")
 	})
 
-	it("writes Label all facets to the label's own entry, not the layer", () => {
+	it("writes Apply to all facets to the label's own entry, not the layer", () => {
 		const { container, readCfg } = mountPanel({})
 		const selection = openSection(container, "Label selection")
 		const g = openSection(selection, "g")
-		fireEvent.click(checkboxFor(g, "Label all facets")!)
+		fireEvent.click(checkboxFor(g, "Apply to all facets")!)
 		// Unticking "all" seeds every panel key, then the user prunes.
 		expect(readCfg().fieldFacetKeys?.["g"]).toEqual(["P1", "P2"])
 		expect(readCfg().facetKeys).toBeUndefined()
@@ -216,7 +216,7 @@ describe("DataLabelsPanel — per-label Of each and Label all facets", () => {
 		expect((labelledControl(g, "Of each") as HTMLSelectElement).value).toBe(
 			"stack"
 		)
-		expect(checkboxFor(g, "Label all facets")!.checked).toBe(false)
+		expect(checkboxFor(g, "Apply to all facets")!.checked).toBe(false)
 		expect(checkboxFor(g, "P2")!.checked).toBe(true)
 		expect(checkboxFor(g, "P1")!.checked).toBe(false)
 	})
@@ -246,7 +246,7 @@ describe("DataLabelsPanel — per-label Of each and Label all facets", () => {
 		fireEvent.change(ofEach, { target: { value: "stack" } })
 		expect(readCfg().labelPointsScope).toBe("stack")
 		expect(readCfg().fieldLabelPointsScope).toEqual({})
-		fireEvent.click(checkboxFor(selection, "Label all facets")!)
+		fireEvent.click(checkboxFor(selection, "Apply to all facets")!)
 		expect(readCfg().facetKeys).toEqual(["P1", "P2"])
 		expect(readCfg().fieldFacetKeys).toEqual({})
 	})

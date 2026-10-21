@@ -400,7 +400,7 @@ const FacetAxisSubsection = ({
 	return (
 		<CollapsibleSubsection title={spec.subsectionTitle}>
 			<ShareAxisRow
-				label={`Share ${axisLabelLower}`}
+				label={`Share ${axisLabel}`}
 				ariaLabel={`Share ${axisLabel}`}
 				value={displayShare}
 				perGroupLabel={spec.perGroupLabel}
@@ -514,7 +514,7 @@ const FacetAxisSubsection = ({
  *  Each panel hosts BOTH axis subsections (its own axis first, then the
  *  perpendicular one) — share modes are grid-wide, so a user on the
  *  Facet (col) panel can unshare Y without hopping to Facet (row) — plus
- *  the "Panel Spacing & Sizing" block for its own direction: gap, panel
+ *  the "Panel spacing and sizing" block for its own direction: gap, panel
  *  dimension, and the hide-empty-panels toggle. The "own axis" channel
  *  depends on the chart mode (y / r for rows, x / angle for columns,
  *  none for pie rows) — see `facetAxisMapping`. The wrap panel
@@ -616,7 +616,7 @@ export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
 				isOwnAxis={false}
 			/>
 
-			<CollapsibleSubsection title="Panel Spacing & Sizing">
+			<CollapsibleSubsection title="Panel spacing and sizing">
 				<GapInput
 					label={spec.gapLabel}
 					value={cfg[spec.gapKey]}

@@ -3,8 +3,12 @@ import { describe, expect, it } from "vitest"
 import {
 	buildLabelSegments,
 	buildLabelText,
+	DEFAULT_BG_BORDER_COLOR,
 	formatField,
 	formatSingleLabel,
+	resolveFieldBackground,
+	resolveLayerBackground,
+	sameBackground,
 } from "./dataLabelsStyle"
 import type { DataLabelsEncodings } from "./types"
 
@@ -256,5 +260,28 @@ describe("formatField with Before / After text", () => {
 		expect(formatField(null, "literal%", null)).toBe("")
 		expect(formatField("", "{country-name}!", null)).toBe("")
 		expect(formatSingleLabel(null, "{}%", null)).toBeNull()
+	})
+})
+
+describe("text-background border", () => {
+	it("is off (0 width) unless a thickness is set", () => {
+		const bg = resolveLayerBackground({ textBackground: true }, "#fff")
+		expect(bg?.borderWidth).toBe(0)
+		expect(bg?.borderColor).toBe(DEFAULT_BG_BORDER_COLOR)
+	})
+
+	it("a variable's entry overrides the layer border; others inherit it", () => {
+		const layer = {
+			textBackground: true,
+			textBackgroundBorderColor: "#123456",
+			textBackgroundBorderWidth: 2,
+			fieldBackgrounds: { B: { textBackgroundBorderWidth: 0.5 } },
+		}
+		const a = resolveFieldBackground(layer, "A", "#fff")
+		const b = resolveFieldBackground(layer, "B", "#fff")
+		expect(a).toMatchObject({ borderColor: "#123456", borderWidth: 2 })
+		expect(b).toMatchObject({ borderColor: "#123456", borderWidth: 0.5 })
+		// Different borders split the shared box.
+		expect(sameBackground(a, b)).toBe(false)
 	})
 })

@@ -83,6 +83,7 @@ export const RectangleEditor = ({
 			defaults={defaults}
 			onChange={onChange}
 			placeholder="Label drawn inside the rectangle…"
+			showPadding
 		/>
 	</AnnotationCard>
 )

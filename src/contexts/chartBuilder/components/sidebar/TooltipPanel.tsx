@@ -351,8 +351,7 @@ export const TooltipPanel = () => {
 										labelClassName={LABEL_COL_NESTED}
 										value={hoverOutlineWidth}
 										min={0}
-										max={20}
-										step={1}
+										step={0.5}
 										clamp
 										suffix="px"
 										onChange={(n) =>

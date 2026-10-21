@@ -134,7 +134,7 @@ describe("DataLabelsPanel — flow diagrams", () => {
 		const c = mountPanel("sankey")
 		const value = selectFor(c, "Value")
 		expect(value?.value).toBe("Start")
-		// Its Text format is available without picking anything first.
+		// Its Label format is available without picking anything first.
 		expect(
 			c.querySelector('button[aria-label="Toggle settings for Value"]')
 		).not.toBeNull()
@@ -204,10 +204,10 @@ describe("DataLabelsPanel — flow diagrams", () => {
 		expect(c.textContent).toContain("these options label the same nodes")
 	})
 
-	it("keeps Adjust position, Text properties and Text background", () => {
+	it("keeps Adjust position, Text and Box", () => {
 		const c = mountPanel("chord")
 		expect(sectionHeader(c, "Adjust position and alignment")).not.toBeNull()
-		expect(sectionHeader(c, "Text properties")).not.toBeNull()
-		expect(sectionHeader(c, "Text background")).not.toBeNull()
+		expect(sectionHeader(c, "Text")).not.toBeNull()
+		expect(sectionHeader(c, "Box")).not.toBeNull()
 	})
 })

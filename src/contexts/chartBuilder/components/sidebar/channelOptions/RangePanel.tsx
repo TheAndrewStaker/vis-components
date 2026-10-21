@@ -1043,11 +1043,13 @@ const RangePanel = ({
 					<> — {anchorHelp(variant.channel)}</>
 				)}
 			</div>
-			<ResetLink
-				onClick={() => update({ min: variant.min, max: variant.max })}
-				underline
-				className="self-start"
-			/>
+			{(currentMin !== variant.min || currentMax !== variant.max) && (
+				<ResetLink
+					onClick={() => update({ min: variant.min, max: variant.max })}
+					underline
+					className="self-start"
+				/>
+			)}
 			{/* Saturation/Brightness can drive bar layout when 2+ stack channels
 			    are mapped to different vars. Area doesn't stack (and "area" isn't
 			    a StackChannel), so it's excluded. StackModeRow self-gates. */}
@@ -1084,16 +1086,18 @@ const AreaDefaultPanel = () => {
 				inputClassName="w-20"
 				suffix="px"
 			/>
-			<ResetLink
-				onClick={() =>
-					setConfigs((prev) => ({
-						...prev,
-						defaultRadius: theme.defaultRadius,
-					}))
-				}
-				underline
-				className="self-start"
-			/>
+			{currentRadius !== theme.defaultRadius && (
+				<ResetLink
+					onClick={() =>
+						setConfigs((prev) => ({
+							...prev,
+							defaultRadius: theme.defaultRadius,
+						}))
+					}
+					underline
+					className="self-start"
+				/>
+			)}
 		</div>
 	)
 }
@@ -1180,7 +1184,7 @@ const ModulationLevelControl = ({
 			</div>
 			{enabled && !atAnchor && (
 				<ResetLink
-					label="Back to palette color"
+					ariaLabel="Reset to the palette color"
 					onClick={() => onChange(MODULATION_ANCHOR)}
 					underline
 					className="self-start"

@@ -186,12 +186,12 @@ describe("DataLabelsPanel — split a combined label into its variables", () => 
 		expect(readCfg().fieldSizes ?? {}).toEqual({})
 	})
 
-	it("Text properties splits into a block per variable", () => {
+	it("Text splits into a block per variable", () => {
 		const { container } = mountPanel({
 			...COMBINED,
 			pieceSplits: { "lbl-1": { text: true } },
 		})
-		const section = openSection(container, "Text properties")
+		const section = openSection(container, "Text")
 		const combined = openSection(section, "y + g")
 		// The label's own block is replaced by one per variable.
 		expect(headerFor(combined, "y")).not.toBeNull()

@@ -1048,6 +1048,7 @@ export const explainChannelCustomization = (
 export type LegendDotGroup =
 	| "shown"
 	| "properties"
+	| "box"
 	| "text"
 	| "formatting"
 	| "gradient"
@@ -1076,11 +1077,11 @@ export const explainLegendCustomization = (
 		// the width / height dot.
 		{ group: "properties", changed: differs(cfg.width, base.width) },
 		{ group: "properties", changed: differs(cfg.height, base.height) },
-		{ group: "properties", changed: differs(cfg.showBorder, base.showBorder) },
-		{ group: "properties", changed: differs(cfg.borderColor, base.borderColor) },
-		{ group: "properties", changed: differs(cfg.borderRadius, base.borderRadius) },
+		{ group: "box", changed: differs(cfg.showBorder, base.showBorder) },
+		{ group: "box", changed: differs(cfg.borderColor, base.borderColor) },
+		{ group: "box", changed: differs(cfg.borderRadius, base.borderRadius) },
 		{
-			group: "properties",
+			group: "box",
 			changed: differs(cfg.backgroundColor, base.backgroundColor),
 		},
 		{ group: "properties", changed: differs(cfg.columns, base.columns) },

@@ -218,7 +218,7 @@ export const SizeByCheckboxRow = ({
 /** One row of an axis-range editor: optional entry label (facet value,
  *  "Row 2", …) above a min / max input pair. Entries without a label
  *  render just the input pair (the "overall range" case). An entry with
- *  `onTicksChange` also offers "Custom breaks" under max: checking it
+ *  `onTicksChange` also offers "Replace ticks" under max: checking it
  *  opens a box whose values REPLACE the ticks of the panels that entry
  *  bounds (`AxisRangeOverride.ticks`). `ticks` present = checked. */
 export type AxisRangeEntry = {
@@ -232,7 +232,7 @@ export type AxisRangeEntry = {
 	onTicksChange?: (ticks: number[] | undefined) => void
 }
 
-/** "Custom breaks" checkbox + its tick box for one range entry. */
+/** "Replace ticks" checkbox + its "Ticks at" box for one range entry. */
 const CustomTicksControl = ({
 	entryLabel,
 	ticks,
@@ -253,16 +253,16 @@ const CustomTicksControl = ({
 					checked={ticks !== undefined}
 					onChange={(e) => onChange(e.target.checked ? [] : undefined)}
 					aria-label={
-						entryLabel ? `Custom breaks for ${entryLabel}` : undefined
+						entryLabel ? `Replace ticks for ${entryLabel}` : undefined
 					}
 					className="cursor-pointer"
 				/>
-				Custom breaks
+				Replace ticks
 			</label>
 		</div>
 		{ticks !== undefined && (
 			<BreaksField
-				label="Breaks"
+				label="Ticks at"
 				isTemporal={isTemporal}
 				breaks={ticks}
 				onCommit={onChange}
@@ -312,7 +312,7 @@ export const AxisRangeSection = ({
 						)}
 						<div className="flex flex-col gap-1">
 							<NumberInput
-								label="min"
+								label="Min"
 								labelClassName={LABEL_COL}
 								value={entry.min ?? null}
 								onChange={(n) => entry.onChange("min", String(n))}
@@ -320,7 +320,7 @@ export const AxisRangeSection = ({
 								inputClassName="w-16"
 							/>
 							<NumberInput
-								label="max"
+								label="Max"
 								labelClassName={LABEL_COL}
 								value={entry.max ?? null}
 								onChange={(n) => entry.onChange("max", String(n))}

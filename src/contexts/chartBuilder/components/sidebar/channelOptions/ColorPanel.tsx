@@ -206,7 +206,7 @@ const RegressionLineStyleControls = () => {
 /** Sentinel option value for `ColorSlotControls`' "inherit" entry — an
  *  UNCONFIGURED slot (no stored config), which downstream renderers resolve
  *  to their base color chain (e.g. a data-label segment following the
- *  layer's main Color mapping). Distinct from `""` ("Single color", a stored
+ *  layer's main Color mapping). Distinct from `""` ("— none —", a stored
  *  `field: null` config). */
 const SLOT_INHERIT_VALUE = "__inherit__"
 
@@ -218,12 +218,12 @@ const SLOT_INHERIT_VALUE = "__inherit__"
  * and emits partial updates. `defaultColor` is the single-color reset target;
  * `labelPrefix` labels the per-value swatches.
  *
- * `inheritLabel` (with `clearSlot`) adds an "inherit" option ABOVE "Single
- * color": an undefined `slotCfg` displays as inheriting (matching how
+ * `inheritLabel` (with `clearSlot`) adds an "inherit" option ABOVE "— none
+ * —": an undefined `slotCfg` displays as inheriting (matching how
  * renderers treat a missing slot — they fall through to the base color
  * chain), and picking it clears the stored slot via `clearSlot`. Callers
  * whose base chain is just a single color shouldn't pass it — there,
- * "Single color" already describes the fallback truthfully. */
+ * "— none —" (the single color) already describes the fallback truthfully. */
 export const ColorSlotControls = ({
 	labelPrefix,
 	slotCfg,
@@ -258,13 +258,13 @@ export const ColorSlotControls = ({
 	const singleColor = slotCfg?.singleColor ?? defaultColor
 	// An unconfigured slot inherits the caller's base color chain when the
 	// caller exposes that as an explicit option; otherwise it displays as
-	// "Single color" (the two are behaviorally identical without a scale).
+	// "— none —" (the two are behaviorally identical without a scale).
 	const inheriting = inheritLabel !== undefined && slotCfg === undefined
 	const fieldOptions = [
 		...(inheritLabel !== undefined
 			? [{ value: SLOT_INHERIT_VALUE, label: inheritLabel }]
 			: []),
-		{ value: "", label: "Single color" },
+		{ value: "", label: "— none —" },
 		...(dataset?.fields ?? []).map((f) => ({ value: f.name, label: f.name })),
 	]
 

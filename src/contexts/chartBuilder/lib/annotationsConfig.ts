@@ -100,6 +100,9 @@ export type RectangleAnnotation = {
 	textAlign?: "left" | "center" | "right"
 	/** Inner padding between the rectangle edge and the text, in px. */
 	textPadding?: number
+	/** Italic / underlined label text. Absent = off (pre-Style-row saves). */
+	textItalic?: boolean
+	textUnderline?: boolean
 }
 
 /** Fallback text styling for rectangles saved before the text feature (and
@@ -181,7 +184,13 @@ export type LineEndStyle = typeof DEFAULT_LINE_END_STYLE
 export type BoxAnnotationStyle = typeof DEFAULT_BOX_ANNOTATION_STYLE
 
 /** The rectangle's text styling, sans the text content itself. */
-export type RectangleTextStyle = Omit<typeof DEFAULT_RECTANGLE_TEXT, "text">
+export type RectangleTextStyle = Omit<typeof DEFAULT_RECTANGLE_TEXT, "text"> & {
+	/** Italic label text. Optional: absent = upright (what every annotation
+	 *  saved before the Style row drew), so no migration. */
+	textItalic?: boolean
+	/** Underlined label text. Optional: absent = no underline. */
+	textUnderline?: boolean
+}
 
 /** The line segment's stroke styling. */
 export type LineAnnotationStyle = typeof DEFAULT_LINE_ANNOTATION_STYLE
@@ -251,6 +260,9 @@ export type TextAnnotation = {
 	/** Inner padding between the text and the background box edge, in px.
 	 *  Also what the box grows by, since it's sized to the text. */
 	textPadding: number
+	/** Italic / underlined label text. Absent = off (pre-Style-row saves). */
+	textItalic?: boolean
+	textUnderline?: boolean
 	backgroundColor: string
 	/** 0..1 fill alpha applied on top of the fill color. */
 	backgroundOpacity: number

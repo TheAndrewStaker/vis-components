@@ -165,7 +165,7 @@ export const CircleEditor = ({
 					{isPercentSystem(circle.coordSystem) ? (
 						<div className="flex flex-col gap-2">
 							<NumberInput
-								label="center x %"
+								label="Center X"
 								labelClassName={LABEL_COL}
 								value={cleanNumber(toNumber(circle.centerX) * 100)}
 								step={1}
@@ -173,7 +173,7 @@ export const CircleEditor = ({
 								suffix="%"
 							/>
 							<NumberInput
-								label="center y %"
+								label="Center Y"
 								labelClassName={LABEL_COL}
 								value={cleanNumber(toNumber(circle.centerY) * 100)}
 								step={1}
@@ -181,7 +181,7 @@ export const CircleEditor = ({
 								suffix="%"
 							/>
 							<NumberInput
-								label="radius %"
+								label="Radius"
 								labelClassName={LABEL_COL}
 								value={cleanNumber(toNumber(circle.radius) * 100)}
 								step={1}
@@ -193,14 +193,14 @@ export const CircleEditor = ({
 					) : circle.coordSystem === "values" ? (
 						<div className="flex flex-col gap-2">
 							<AxisValueInput
-								label={isRadar ? "center angle" : "center x"}
+								label={isRadar ? "Center angle" : "Center X"}
 								labelClassName={LABEL_COL}
 								value={circle.centerX}
 								axis={xAxis}
 								onChange={(v) => onChange({ centerX: v })}
 							/>
 							<AxisValueInput
-								label={isRadar ? "center r" : "center y"}
+								label={isRadar ? "Center R" : "Center Y"}
 								labelClassName={LABEL_COL}
 								value={circle.centerY}
 								axis={yAxis}
@@ -209,7 +209,7 @@ export const CircleEditor = ({
 							{showRadiusUnit ? (
 								<div className="flex items-center gap-2">
 									<NumberInput
-										label={`radius (${circle.radiusAxis})`}
+										label={`Radius (${circle.radiusAxis.toUpperCase()})`}
 										labelClassName={LABEL_COL}
 										value={cleanNumber(
 											radiusUnit === "px"
@@ -246,7 +246,7 @@ export const CircleEditor = ({
 								</div>
 							) : (
 								<NumberInput
-									label={isRadar ? "radius (r)" : `radius (${circle.radiusAxis})`}
+									label={isRadar ? "Radius (R)" : `Radius (${circle.radiusAxis.toUpperCase()})`}
 									labelClassName={LABEL_COL}
 									value={cleanNumber(toNumber(circle.radius))}
 									step={1}
@@ -261,7 +261,7 @@ export const CircleEditor = ({
 					) : (
 						<div className="flex flex-col gap-2">
 							<NumberInput
-								label="center x"
+								label="Center X"
 								labelClassName={LABEL_COL}
 								value={cleanNumber(toNumber(circle.centerX))}
 								step={1}
@@ -269,7 +269,7 @@ export const CircleEditor = ({
 								suffix="px"
 							/>
 							<NumberInput
-								label="center y"
+								label="Center Y"
 								labelClassName={LABEL_COL}
 								value={cleanNumber(toNumber(circle.centerY))}
 								step={1}
@@ -277,7 +277,7 @@ export const CircleEditor = ({
 								suffix="px"
 							/>
 							<NumberInput
-								label="radius"
+								label="Radius"
 								labelClassName={LABEL_COL}
 								value={cleanNumber(toNumber(circle.radius))}
 								step={1}

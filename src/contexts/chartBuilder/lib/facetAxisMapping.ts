@@ -36,7 +36,7 @@ const RADAR_MAPPING: FacetAxisMapping = {
 	rowAxis: "r",
 	colAxis: "angle",
 	rowAxisLabel: "R axis",
-	colAxisLabel: "angle axis",
+	colAxisLabel: "Angle axis",
 	showPanelSize: false,
 }
 
@@ -44,7 +44,7 @@ const PIE_MAPPING: FacetAxisMapping = {
 	rowAxis: null,
 	colAxis: "angle",
 	rowAxisLabel: "",
-	colAxisLabel: "angle axis",
+	colAxisLabel: "Angle axis",
 	showPanelSize: false,
 }
 

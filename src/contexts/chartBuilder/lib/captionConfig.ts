@@ -41,6 +41,11 @@ export type CaptionConfig = {
 	fontWeight: number
 	textColor: string
 	align: CaptionAlign
+	/** Italic caption text. Optional: absent = upright (what every caption
+	 *  saved before the Style row drew), so no migration. */
+	italic?: boolean
+	/** Underlined caption text. Optional: absent = no underline. */
+	underline?: boolean
 	/** Inner padding between the box edge and the text, in px. */
 	padding: number
 

@@ -177,7 +177,7 @@ describe("BrightnessOptionsPanel — unmapped channel default level", () => {
 
 	it("offers a way back to the palette color once the level is dialed off the anchor", () => {
 		seedUnmapped()
-		const { getByText, queryByText, getByRole, getByTestId } = render(
+		const { getByText, queryByLabelText, getByLabelText, getByRole, getByTestId } = render(
 			<TestProvider>
 				<BrightnessOptionsPanel />
 				<ConfigsProbe />
@@ -185,9 +185,9 @@ describe("BrightnessOptionsPanel — unmapped channel default level", () => {
 		)
 		fireEvent.click(getByText("Enable override"))
 		// At the anchor there is nothing to get back TO.
-		expect(queryByText("Back to palette color")).toBeNull()
+		expect(queryByLabelText("Reset to the palette color")).toBeNull()
 		fireEvent.change(getByRole("slider"), { target: { value: "0.8" } })
-		fireEvent.click(getByText("Back to palette color"))
+		fireEvent.click(getByLabelText("Reset to the palette color"))
 		expect(getByTestId("configs").textContent).toContain(
 			'"defaultBrightness":0.5'
 		)

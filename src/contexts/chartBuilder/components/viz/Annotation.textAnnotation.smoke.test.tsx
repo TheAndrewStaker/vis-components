@@ -77,6 +77,26 @@ const boxOf = (container: HTMLElement) =>
 	container.querySelector<SVGRectElement>("[data-annotation-text-box='text-1']")
 
 describe("text annotation", () => {
+	it("draws italic / underlined text when the Style toggles are on", () => {
+		seed({ textItalic: true, textUnderline: true })
+		const { container } = mount()
+		const text = container.querySelector<SVGTextElement>(
+			"[data-annotation-text='text-1']"
+		)
+		expect(text!.getAttribute("font-style")).toBe("italic")
+		expect(text!.getAttribute("text-decoration")).toBe("underline")
+	})
+
+	it("draws upright, undecorated text when the Style fields are absent", () => {
+		seed({})
+		const { container } = mount()
+		const text = container.querySelector<SVGTextElement>(
+			"[data-annotation-text='text-1']"
+		)
+		expect(text!.getAttribute("font-style")).toBeNull()
+		expect(text!.getAttribute("text-decoration")).toBeNull()
+	})
+
 	it("renders the label and a background box sized to the text", () => {
 		seed({ textAlign: "center", cornerRadius: 6, textPadding: 8 })
 		const { container } = mount()

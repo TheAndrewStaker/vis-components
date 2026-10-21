@@ -65,15 +65,15 @@ const hasText = (container: HTMLElement, text: string) =>
 		.length > 0
 
 describe("LegendPanel — histogram measure (Count/Density)", () => {
-	it("surfaces the gradient style toggle + label formatting for color-by-count", () => {
+	it("surfaces the gradient style toggle + label format for color-by-count", () => {
 		seed({ field: null, measureSource: "count" }, true)
 		const { container } = mount()
 		// Subsection titles render even while collapsed. The gradient-style
 		// section only appears for a (quantitative) hue legend...
 		expect(hasText(container, "Gradient legend style")).toBe(true)
-		// ...and Label formatting appears solely because of the measure group
+		// ...and Label format appears solely because of the measure group
 		// (no data field is mapped to a legend channel here).
-		expect(hasText(container, "Label formatting")).toBe(true)
+		expect(hasText(container, "Label format")).toBe(true)
 	})
 
 	it("shows no gradient style toggle when there's no measure source", () => {

@@ -31,7 +31,7 @@ import {
 
 import { DataLabelsPanel } from "./DataLabelsPanel"
 
-/** "Label all facets" under Label selection: shown only on
+/** "Apply to all facets" under Label selection: shown only on
  *  faceted charts, checked by default (facetKeys null = every panel), and
  *  unchecking lists the facet panels so the user ticks which keep labels. */
 
@@ -142,14 +142,14 @@ const checkboxLabeled = (container: HTMLElement, text: string) => {
 	return input
 }
 
-describe("DataLabelsPanel — Label all facets", () => {
+describe("DataLabelsPanel — Apply to all facets", () => {
 	afterEach(cleanup)
 
 	it("is hidden on an unfaceted chart", () => {
 		const { container } = mountPanel({ faceted: false })
 		expandSelection(container)
 		expect(container.textContent).toContain("Which labels")
-		expect(container.textContent).not.toContain("Label all facets")
+		expect(container.textContent).not.toContain("Apply to all facets")
 		// Overlap avoidance moved out to Adjust position and alignment.
 		expect(container.textContent).not.toContain("Avoid overlapping labels")
 	})
@@ -159,10 +159,10 @@ describe("DataLabelsPanel — Label all facets", () => {
 		expandSelection(container)
 		const text = container.textContent ?? ""
 		const whichAt = text.indexOf("Which labels")
-		const allAt = text.indexOf("Label all facets")
+		const allAt = text.indexOf("Apply to all facets")
 		expect(whichAt).toBeGreaterThan(-1)
 		expect(allAt).toBeGreaterThan(whichAt)
-		const toggle = checkboxLabeled(container, "Label all facets")
+		const toggle = checkboxLabeled(container, "Apply to all facets")
 		expect(toggle?.checked).toBe(true)
 		// No per-facet list while every facet is labeled.
 		expect(checkboxLabeled(container, "A")).toBeNull()
@@ -171,23 +171,23 @@ describe("DataLabelsPanel — Label all facets", () => {
 	it("unchecking lists every facet (all ticked) and stores the full key list", () => {
 		const { container, readCfg } = mountPanel({ faceted: true })
 		expandSelection(container)
-		fireEvent.click(checkboxLabeled(container, "Label all facets")!)
+		fireEvent.click(checkboxLabeled(container, "Apply to all facets")!)
 		expect(readCfg().facetKeys).toEqual(["A", "B", "C"])
 		for (const key of ["A", "B", "C"]) {
 			expect(checkboxLabeled(container, key)?.checked).toBe(true)
 		}
 	})
 
-	it("unticking a facet removes it; re-checking Label all facets clears to null", () => {
+	it("unticking a facet removes it; re-checking Apply to all facets clears to null", () => {
 		const { container, readCfg } = mountPanel({
 			faceted: true,
 			cfg: { facetKeys: ["A", "B", "C"] },
 		})
 		expandSelection(container)
-		expect(checkboxLabeled(container, "Label all facets")?.checked).toBe(false)
+		expect(checkboxLabeled(container, "Apply to all facets")?.checked).toBe(false)
 		fireEvent.click(checkboxLabeled(container, "B")!)
 		expect(readCfg().facetKeys).toEqual(["A", "C"])
-		fireEvent.click(checkboxLabeled(container, "Label all facets")!)
+		fireEvent.click(checkboxLabeled(container, "Apply to all facets")!)
 		expect(readCfg().facetKeys).toBeNull()
 	})
 })

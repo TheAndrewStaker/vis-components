@@ -5,24 +5,19 @@ import { ColorInput } from "../../../../components/ui/ColorInput"
 import { LABEL_COL, LabelSpacer } from "../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../components/ui/ResetLink"
-import { SelectInput } from "../../../../components/ui/SelectInput"
 import { Toggle } from "../../../../components/ui/Toggle"
 import {
 	DEFAULT_CAPTION_CONFIG,
 	type CaptionConfig,
 	type CaptionUnit,
 } from "../../lib/captionConfig"
-import { fontWeightOptionsFor } from "../../lib/labelsConfig"
+import type { FontConfig } from "../../lib/labelsConfig"
 import { captionConfigFromTheme } from "../../lib/themeConfig"
-import { AlignmentControl } from "./LabelsPanel"
+import { AlignmentControl, FontEditor } from "./LabelsPanel"
 import {
 	currentCaptionConfigAtom,
 	currentRenderedCaptionBoxAtom,
 } from "../../store/atoms"
-import {
-	useFontFamilyOptions,
-	useUserFontWeights,
-} from "../../store/useFontOptions"
 import { useCurrentTheme } from "../../store/useCurrentTheme"
 import { Select } from "../../../../components/ui/Select"
 import { Textarea } from "../../../../components/ui/Input"
@@ -61,6 +56,38 @@ const OffsetField = ({
 	/>
 )
 
+/** Adapter: the caption's text styling as the shared `FontEditor`'s
+ *  `Partial<FontConfig>`. A field equal to the LIVE theme's caption default
+ *  reads as unset, so the editor shows the theme value as its placeholder /
+ *  "(…)" entry and offers a reset exactly when the value deviates. Italic /
+ *  underline are set only when on. */
+const captionToFont = (
+	cfg: CaptionConfig,
+	theme: CaptionConfig
+): Partial<FontConfig> => ({
+	...(cfg.fontFamily !== theme.fontFamily && { family: cfg.fontFamily }),
+	...(cfg.fontSize !== theme.fontSize && { size: cfg.fontSize }),
+	...(cfg.textColor !== theme.textColor && { color: cfg.textColor }),
+	...(cfg.fontWeight !== theme.fontWeight && { weight: cfg.fontWeight }),
+	...(cfg.italic && { italic: true }),
+	...(cfg.underline && { underline: true }),
+})
+
+/** Inverse of `captionToFont`: an unset field (reset / "(…)" choice) writes
+ *  the live theme value back — the same reset target the old per-row links
+ *  used (`captionConfigFromTheme`). */
+const fontToCaption = (
+	font: Partial<FontConfig>,
+	theme: CaptionConfig
+): Partial<CaptionConfig> => ({
+	fontFamily: font.family ?? theme.fontFamily,
+	fontSize: font.size ?? theme.fontSize,
+	textColor: font.color ?? theme.textColor,
+	fontWeight: font.weight ?? theme.fontWeight,
+	italic: font.italic || undefined,
+	underline: font.underline || undefined,
+})
+
 /** Sidebar panel for the Caption subsystem. Drives `CaptionConfig` — a single
  *  free-floating text box rendered inside the plot SVG. The figure reserves a
  *  band at the bottom and shrinks to fit the caption (it never pushes content
@@ -72,8 +99,6 @@ const OffsetField = ({
 export const CaptionPanel = () => {
 	const [cfg, setCfg] = useAtom(currentCaptionConfigAtom)
 	const renderedBox = useAtomValue(currentRenderedCaptionBoxAtom)
-	const familyOptions = useFontFamilyOptions()
-	const userFontWeights = useUserFontWeights()
 	// Id base for the Width / Height inputs so their visible labels associate
 	// via htmlFor (the inputs stay raw — blank means "auto", which the shared
 	// NumberInput can't express).
@@ -103,9 +128,11 @@ export const CaptionPanel = () => {
 		merged.fontWeight !== d.fontWeight ||
 		merged.align !== d.align ||
 		merged.textColor !== d.textColor ||
-		merged.padding !== d.padding
+		!!merged.italic ||
+		!!merged.underline
 	// Border color/width only count while the border toggle shows them.
 	const boxChanged =
+		merged.padding !== d.padding ||
 		merged.backgroundColor !== d.backgroundColor ||
 		merged.backgroundOpacity !== d.backgroundOpacity ||
 		merged.borderRadius !== d.borderRadius ||
@@ -254,52 +281,6 @@ export const CaptionPanel = () => {
 
 					<CollapsibleSubsection title="Text" changed={textChanged}>
 						<div className="flex flex-col gap-2">
-							<SelectInput
-								label="Family"
-								labelClassName={LABEL_COL}
-								value={merged.fontFamily}
-								options={familyOptions}
-								onChange={(fontFamily) => update({ fontFamily })}
-								selectClassName="flex-1"
-							/>
-							<div className="flex items-center gap-2">
-								<NumberInput
-									label="Size"
-									labelClassName={LABEL_COL}
-									value={merged.fontSize}
-									onChange={(v) => update({ fontSize: v })}
-									min={1}
-									step={1}
-									suffix="pt"
-								/>
-								{merged.fontSize !== themeDefaults.fontSize && (
-									<ResetLink
-										onClick={() =>
-											update({ fontSize: themeDefaults.fontSize })
-										}
-									/>
-								)}
-							</div>
-							<div className="flex items-center gap-2">
-								<SelectInput
-									label="Weight"
-									labelClassName={LABEL_COL}
-									value={String(merged.fontWeight)}
-									options={fontWeightOptionsFor(
-										merged.fontFamily,
-										merged.fontWeight,
-										userFontWeights
-									).map((w) => ({ value: String(w.value), label: w.label }))}
-									onChange={(w) => update({ fontWeight: Number(w) })}
-								/>
-								{merged.fontWeight !== themeDefaults.fontWeight && (
-									<ResetLink
-										onClick={() =>
-											update({ fontWeight: themeDefaults.fontWeight })
-										}
-									/>
-								)}
-							</div>
 							{/* div, not label: AlignmentControl is a button group, not a form control */}
 							<div className="flex items-center gap-2 text-sm">
 								<span className={LABEL_COL}>Align</span>
@@ -308,40 +289,17 @@ export const CaptionPanel = () => {
 									onChange={(align) => update({ align })}
 								/>
 							</div>
-							<div className="flex flex-wrap items-center gap-2">
-								<ColorInput
-									label="Color"
-									labelClassName={LABEL_COL}
-									value={merged.textColor}
-									onChange={(c) => update({ textColor: c })}
-									paletteKind="text"
-								/>
-								{merged.textColor !== themeDefaults.textColor && (
-									<ResetLink
-										onClick={() =>
-											update({ textColor: themeDefaults.textColor })
-										}
-									/>
-								)}
-							</div>
-							<div className="flex items-center gap-2">
-								<NumberInput
-									label="Padding"
-									labelClassName={LABEL_COL}
-									value={merged.padding}
-									onChange={(v) => update({ padding: v })}
-									min={0}
-									step={1}
-									suffix="px"
-								/>
-								{merged.padding !== DEFAULT_CAPTION_CONFIG.padding && (
-									<ResetLink
-										onClick={() =>
-											update({ padding: DEFAULT_CAPTION_CONFIG.padding })
-										}
-									/>
-								)}
-							</div>
+							<FontEditor
+								value={captionToFont(merged, themeDefaults)}
+								onChange={(font) =>
+									update(fontToCaption(font, themeDefaults))
+								}
+								showResetFields
+								baseColor={themeDefaults.textColor}
+								baseSize={themeDefaults.fontSize}
+								baseFamily={themeDefaults.fontFamily}
+								baseWeight={themeDefaults.fontWeight}
+							/>
 						</div>
 					</CollapsibleSubsection>
 
@@ -406,6 +364,24 @@ export const CaptionPanel = () => {
 											update({
 												borderRadius: DEFAULT_CAPTION_CONFIG.borderRadius,
 											})
+										}
+									/>
+								)}
+							</div>
+							<div className="flex items-center gap-2">
+								<NumberInput
+									label="Padding"
+									labelClassName={LABEL_COL}
+									value={merged.padding}
+									onChange={(v) => update({ padding: v })}
+									min={0}
+									step={1}
+									suffix="px"
+								/>
+								{merged.padding !== DEFAULT_CAPTION_CONFIG.padding && (
+									<ResetLink
+										onClick={() =>
+											update({ padding: DEFAULT_CAPTION_CONFIG.padding })
 										}
 									/>
 								)}

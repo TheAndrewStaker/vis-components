@@ -67,6 +67,8 @@ const AnnotationText = ({ placed }: { placed: PlacedRectangle }) => {
 			fontFamily={style.fontFamily}
 			fontSize={style.fontSizePx}
 			fontWeight={style.fontWeight}
+			fontStyle={style.italic ? "italic" : undefined}
+			textDecoration={style.underline ? "underline" : undefined}
 			fill={style.color}
 		>
 			{renderMultilineTspans(style.text, x)}
@@ -115,6 +117,8 @@ const TextAnnotationMark = ({
 				fontFamily={anno.textFontFamily}
 				fontSize={fontSizePx}
 				fontWeight={anno.textFontWeight}
+				fontStyle={anno.textItalic ? "italic" : undefined}
+				textDecoration={anno.textUnderline ? "underline" : undefined}
 				fill={anno.textColor}
 			>
 				{renderMultilineTspans(anno.text, box.textX)}

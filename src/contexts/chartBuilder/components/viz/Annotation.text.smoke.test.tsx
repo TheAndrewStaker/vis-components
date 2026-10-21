@@ -32,7 +32,7 @@ const buildDataset = (): Dataset =>
 		})),
 	})
 
-const seed = (withText: boolean) => {
+const seed = (withText: boolean, style: Record<string, unknown> = {}) => {
 	installInMemoryLocalStorage()
 	/* eslint-disable no-restricted-globals, @vc/no-storage-outside-try, @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v))
@@ -56,6 +56,7 @@ const seed = (withText: boolean) => {
 		textColor: "#ff0000",
 		textFontSize: 15,
 		textAlign: "right" as const,
+		...style,
 	}
 	set("vis-components:currentAnnotations", {
 		_v: 3,
@@ -87,6 +88,16 @@ describe("rectangle annotation text", () => {
 		expect(text!.getAttribute("text-anchor")).toBe("end")
 		// Two lines from the literal `\n` → two tspans.
 		expect(text!.querySelectorAll("tspan").length).toBe(2)
+	})
+
+	it("draws italic / underlined label text when the Style toggles are on", () => {
+		seed(true, { textItalic: true, textUnderline: true })
+		const { container } = mount()
+		const text = container.querySelector<SVGTextElement>(
+			"[data-annotation-text='rect-1']"
+		)
+		expect(text!.getAttribute("font-style")).toBe("italic")
+		expect(text!.getAttribute("text-decoration")).toBe("underline")
 	})
 
 	it("draws no text element when the rectangle has no text", () => {

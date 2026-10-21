@@ -1659,15 +1659,15 @@ export const FontEditor = ({
 			)}
 			{afterColor}
 			{/* Blank = inherit the theme size, shown as the placeholder; the
-			 *  first spinner click / arrow key steps from that displayed size
-			 *  rather than from the 6pt floor. */}
+			 *  first spinner click / arrow key steps from that displayed size.
+			 *  No upper bound and only a 1pt floor: font sizes are never clamped
+			 *  to a "sensible" range here. */}
 			<div className="flex items-center gap-2">
 				<NumberInput
 					label="Size"
 					labelClassName={LABEL_COL}
 					value={value.size ?? null}
-					min={6}
-					max={72}
+					min={1}
 					step={1}
 					onChange={(size) => onChange({ ...value, size })}
 					onClear={() => onChange({ ...value, size: undefined })}

@@ -5,8 +5,8 @@ import { Input } from "../../../../../components/ui/Input"
 import { LabelSpacer } from "../../../../../components/ui/LabeledField"
 
 /** Free-typed "Custom breaks" text box, shared by the Ticks section
- * and the Gridlines section (and, labelled "Breaks", the facet range
- * editors' Custom breaks). The text is mirrored locally (so the cursor
+ * and the Gridlines section (and, labelled "Ticks at", the facet range
+ * editors' "Replace ticks" box). The text is mirrored locally (so the cursor
  * doesn't jump while typing) and the parsed array commits on blur / Enter,
  * matching the legend's break-values box. Values are plain numbers — epoch
  * milliseconds for temporal axes, surfaced/parsed as ISO dates. */

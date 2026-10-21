@@ -194,6 +194,8 @@ export const CaptionOverlay = ({
 				fontFamily={caption.fontFamily}
 				fontSize={ptToPx(caption.fontSize)}
 				fontWeight={caption.fontWeight}
+				fontStyle={caption.italic ? "italic" : undefined}
+				textDecoration={caption.underline ? "underline" : undefined}
 				fill={caption.textColor || undefined}
 				className={caption.textColor ? undefined : TITLE_FILL_FALLBACK}
 			>

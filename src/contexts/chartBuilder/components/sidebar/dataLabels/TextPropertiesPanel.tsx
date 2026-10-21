@@ -95,7 +95,7 @@ const FontControls = ({
 }
 
 // ---------------------------------------------------------------------------
-// Text properties — font family / weight / style (italic, underline).
+// Text — font family / weight / style (italic, underline).
 // Grouped in their own purple subsection; the per-channel panels keep only
 // the settings scoped to their channel. With two or more label variables
 // the layer-wide controls stand down and each variable gets its own
@@ -127,7 +127,7 @@ export const TextPropertiesPanel = ({
 	 *  `SizePanel`). */
 	splitToggle?: (key: string) => React.ReactNode
 	/** The keys one label's blocks write to: just the label, or one per
-	 *  variable when its Text properties are split. */
+	 *  variable when its Text section is split. */
 	keysFor?: (key: string) => string[]
 }) => {
 	if (multiFields.length === 0) {

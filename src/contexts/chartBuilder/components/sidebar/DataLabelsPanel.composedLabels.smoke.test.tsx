@@ -131,7 +131,7 @@ const groupHeaders = (container: HTMLElement) =>
 describe("DataLabelsPanel — composed labels", () => {
 	afterEach(cleanup)
 
-	it("'Compose labels' comes after Text format, with one box per label", () => {
+	it("'Compose labels' comes after Label format, with one box per label", () => {
 		const { container } = mountPanel({
 			composedLabels: [
 				{ id: "y", template: "{y}" },
@@ -140,8 +140,8 @@ describe("DataLabelsPanel — composed labels", () => {
 		})
 		openChannel(container, "Value")
 		const headers = groupHeaders(container)
-		expect(headers.indexOf("Text format")).toBeGreaterThan(headers.indexOf("Fields to include"))
-		expect(headers.indexOf("Compose labels")).toBeGreaterThan(headers.indexOf("Text format"))
+		expect(headers.indexOf("Label format")).toBeGreaterThan(headers.indexOf("Fields to include"))
+		expect(headers.indexOf("Compose labels")).toBeGreaterThan(headers.indexOf("Label format"))
 		expect(
 			[...container.querySelectorAll<HTMLInputElement>('input[aria-label$=" text"]')].map(
 				(b) => b.value

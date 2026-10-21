@@ -8,7 +8,12 @@ import {
 	type EditedCells,
 	type FieldPlan,
 } from "../../lib/datasetEdits"
-import { datasetViewToCsv } from "../../lib/downloadDataset"
+import {
+	gridFromView,
+	gridIssue,
+	gridToCsv,
+	type Grid,
+} from "../../lib/editGrid"
 import { nameCollides } from "../../lib/nameUniqueness"
 import type { DatasetView } from "../../lib/types"
 import { currentDatasetIdAtom, datasetIndexAtom } from "../../store/atoms"
@@ -21,24 +26,26 @@ import {
 } from "../../store/useEditDataset"
 
 import { Button } from "../../../../components/ui/Button"
-import { Input, Textarea } from "../../../../components/ui/Input"
+import { Input } from "../../../../components/ui/Input"
 import { Modal } from "../../../../components/ui/Modal"
+import { EditDataGrid, useGridHistory } from "./EditDataGrid"
 
 type Props = {
 	open: boolean
 	onClose: () => void
 }
 
-/** The data tray's Edit dialog: the version shown, as delimited text in a
- *  box the user can change at will, saved as hand-edited data. The first
- *  edit of imported data creates a NEW data set (the imported one is never
- *  touched — other visuals may share it); an edit of a data set that is
- *  already a hand-edited copy adds a version to it. See
- *  `store/useEditDataset.ts` for what a save does. */
+/** The data tray's Edit dialog: the version shown as a grid of cells the
+ *  user changes in place (`EditDataGrid`), saved as hand-edited data. The
+ *  first edit of imported data creates a NEW data set (the imported one is
+ *  never touched — other visuals may share it); an edit of a data set that
+ *  is already a hand-edited copy adds a version to it. The grid serializes
+ *  to the same CSV text the dialog's text box used to hold, so the save
+ *  path (`store/useEditDataset.ts`) is unchanged. */
 export const EditDataModal = ({ open, onClose }: Props) => (
-	<Modal open={open} onClose={onClose} title="Edit data" widthClass="max-w-3xl">
+	<Modal open={open} onClose={onClose} title="Edit data" widthClass="max-w-5xl">
 		{/* The Modal renders nothing while closed, so the form (and its draft
-		 *  text, name and errors) remounts fresh on every open. */}
+		 *  grid, undo history, name and errors) remounts fresh on every open. */}
 		<EditDataForm onClose={onClose} />
 	</Modal>
 )
@@ -48,25 +55,56 @@ const suggestedName = (name: string) =>
 
 const EditDataForm = ({ onClose }: { onClose: () => void }) => {
 	const view = useAtomValue(currentRawDatasetViewAtom)
+	// The grid seeds ONCE from the view as the dialog opened (the Modal
+	// remounts the form on every open), so a background refresh of the
+	// data set can't wipe the edits in progress.
+	const [seedGrid] = useState(() => (view ? gridFromView(view) : null))
+	if (!view || !seedGrid) {
+		return <div className="text-sm vc-muted">No data set is loaded.</div>
+	}
+	return <EditDataBody view={view} seedGrid={seedGrid} onClose={onClose} />
+}
+
+const EditDataBody = ({
+	view,
+	seedGrid,
+	onClose,
+}: {
+	view: DatasetView
+	seedGrid: Grid
+	onClose: () => void
+}) => {
 	const datasetId = useAtomValue(currentDatasetIdAtom)
 	const datasetIndex = useAtomValue(datasetIndexAtom)
 	const meta = datasetId ? datasetIndex[datasetId] : undefined
 	const mode = meta ? editSaveMode(meta) : "fork"
-	const seed = useMemo(() => (view ? datasetViewToCsv(view) : ""), [view])
-	const [text, setText] = useState(seed)
+	const history = useGridHistory(seedGrid)
+	const seed = useMemo(() => gridToCsv(seedGrid), [seedGrid])
+	// What the grid would save: the same CSV text the dialog's text box once
+	// held, so the summary and the save path read it exactly as before.
+	const issue = gridIssue(history.grid)
+	const text = useMemo(
+		() => (issue ? null : gridToCsv(history.grid)),
+		[history.grid, issue]
+	)
 	const [name, setName] = useState(() =>
-		view ? (mode === "fork" ? suggestedName(view.name) : view.name) : ""
+		mode === "fork" ? suggestedName(view.name) : view.name
 	)
 	const [submitError, setSubmitError] = useState<string | null>(null)
 	const [busy, setBusy] = useState(false)
 	const saveEditedData = useSaveEditedData()
 
-	// The summary re-parses the whole text; deferring it keeps typing in a
-	// large box responsive.
+	// The summary re-parses and re-aligns the whole table; deferring it keeps
+	// editing a large one responsive.
 	const deferredText = useDeferredValue(text)
-	const preview = useMemo(
-		() => (view ? previewEdits(view, seed, deferredText, mode) : null),
-		[view, seed, deferredText, mode]
+	const preview = useMemo<EditPreview>(
+		() =>
+			issue
+				? { kind: "error", error: issue }
+				: deferredText === null
+					? { kind: "unchanged" }
+					: previewEdits(view, seed, deferredText, mode),
+		[view, seed, deferredText, mode, issue]
 	)
 
 	// Same-named data sets are allowed (the id is the identity); a collision
@@ -78,13 +116,14 @@ const EditDataForm = ({ onClose }: { onClose: () => void }) => {
 	)
 	const canSave =
 		!busy &&
-		preview?.kind === "changed" &&
+		text !== null &&
+		preview.kind === "changed" &&
 		name.trim() !== "" &&
 		// The deferred summary lags the text; don't save a stale read.
 		deferredText === text
 
 	const onSave = async () => {
-		if (!canSave) return
+		if (!canSave || text === null) return
 		setBusy(true)
 		setSubmitError(null)
 		const result = await saveEditedData(text, name)
@@ -94,10 +133,6 @@ const EditDataForm = ({ onClose }: { onClose: () => void }) => {
 			return
 		}
 		onClose()
-	}
-
-	if (!view) {
-		return <div className="text-sm vc-muted">No data set is loaded.</div>
 	}
 
 	return (
@@ -115,33 +150,31 @@ const EditDataForm = ({ onClose }: { onClose: () => void }) => {
 						with your changes.
 					</>
 				)}{" "}
-				A changed header renames that variable. Cells that differ from the imported
-				data are outlined in the data table.
+				A renamed column (double-click its name) renames that variable. Cells
+				that differ from the imported data are outlined here and in the data
+				table.
 			</div>
-			<Textarea
-				aria-label="Data to edit"
-				value={text}
-				onChange={(e) => setText(e.target.value)}
-				rows={16}
-				wrap="off"
-				spellCheck={false}
-				className="w-full resize-y font-mono"
-				// eslint-disable-next-line jsx-a11y/no-autofocus -- the box is what the user opened this dialog to edit
-				autoFocus
+			<EditDataGrid
+				grid={history.grid}
+				seed={seedGrid}
+				commit={history.commit}
+				undo={history.undo}
+				redo={history.redo}
+				canUndo={history.canUndo}
+				canRedo={history.canRedo}
 			/>
-			{preview && (
-				<div
-					className={
-						preview.kind === "error"
-							? "rounded-sm bg-red-50 px-2 py-1 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300"
-							: "text-sm vc-muted"
-					}
-				>
-					{preview.kind === "error" && preview.error}
-					{preview.kind === "unchanged" && "No changes yet."}
-					{preview.kind === "changed" && describeEdits(preview)}
-				</div>
-			)}
+			<div
+				role="status"
+				className={
+					preview.kind === "error"
+						? "rounded-sm bg-red-50 px-2 py-1 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300"
+						: "text-sm vc-muted"
+				}
+			>
+				{preview.kind === "error" && preview.error}
+				{preview.kind === "unchanged" && "No changes yet."}
+				{preview.kind === "changed" && describeEdits(preview)}
+			</div>
 			<div className="flex flex-col gap-1">
 				<label htmlFor="edit-data-name" className="text-sm vc-muted">
 					Data set name

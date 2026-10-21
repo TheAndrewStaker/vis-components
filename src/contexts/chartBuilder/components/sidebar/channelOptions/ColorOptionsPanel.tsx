@@ -315,7 +315,7 @@ export const ColorOptionsPanel = ({
 		channelAccepts("hue", overrides[f.name] ?? f.inferredType),
 	)
 	const varyByOptions = [
-		{ value: "", label: "Single color" },
+		{ value: "", label: "— none —" },
 		...eligible.map((f) => ({ value: f.name, label: f.name })),
 		// Histograms add ONE measure option matching the current measure mode
 		// (Count or Density) — never both, so the dropdown can't disagree with
@@ -368,7 +368,7 @@ export const ColorOptionsPanel = ({
 			}))
 			return
 		}
-		// A field (or "Single color") → clear any measure source.
+		// A field (or "— none —") → clear any measure source.
 		setEncodings((prev) => ({
 			...prev,
 			hue: {
@@ -777,7 +777,7 @@ export const AreaRadarOutlinePanel = () => {
 	// quantitative/temporal one) there are no per-layer categories to color, so
 	// fall back to a single outline color that applies to every layer's stroke —
 	// mirroring the Fill subheader's single-color swatch. `connection.strokeColor`
-	// is `null` by default, which inherits each layer's fill ("match fill"); a
+	// is `null` by default, which inherits each layer's fill ("reset" returns to it); a
 	// concrete value overrides every stroke uniformly.
 	const hasCategoricalHue =
 		!!dataset &&
@@ -796,7 +796,7 @@ export const AreaRadarOutlinePanel = () => {
 					onChange={(c) => setStrokeColor(c)}
 				/>
 				{strokeColor !== null && (
-					<ResetLink onClick={() => setStrokeColor(null)} label="match fill" />
+					<ResetLink onClick={() => setStrokeColor(null)} />
 				)}
 			</div>
 		)
@@ -1497,7 +1497,7 @@ export const QuantitativePanel = ({
 			)}
 
 			{/* Free-form Custom (manual stops): N stops, defaulting to two
-			 *  white→black anchors. User adds more via `+ add a new step`.
+			 *  white→black anchors. User adds more via `+ Add step`.
 			 *  Stops are labeled Step 1 .. Step N in order. */}
 			{paletteMode === "custom" && (
 				<CustomStopsList
@@ -1604,9 +1604,10 @@ const CustomStopsList = ({
 							<button
 								type="button"
 								onClick={() => removeAt(i)}
-								className="text-sm hover:text-stone-900 dark:hover:text-white vc-muted"
+								className="rounded px-1 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
+								aria-label={`Remove step ${i + 1}`}
 							>
-								remove
+								×
 							</button>
 						) : undefined
 					}
@@ -1615,9 +1616,9 @@ const CustomStopsList = ({
 			<button
 				type="button"
 				onClick={addStop}
-				className="self-end text-sm underline hover:text-stone-900 dark:hover:text-white vc-muted"
+				className="self-end text-xs text-blue-600 hover:underline dark:text-blue-400"
 			>
-				+ Add a new step
+				+ Add step
 			</button>
 			<div className="vc-help">
 				Grey values auto-position evenly between the anchor stops — type

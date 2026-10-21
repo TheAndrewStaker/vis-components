@@ -122,11 +122,39 @@ through its `sourceNames` alias. The file is named after the dataset
 
 **Edit data (the tray's Edit dialog).** The tray header carries
 **Edit** between Reshape and Collapse while a data set is loaded. It
-opens a dialog with the version shown as delimited text in an editable
-box — the same RAW text "download data" produces (current field
-names, cells as imported, no reshape / conversion / derived columns)
-— plus a data set name box. Editing a value by hand never touches
-imported data: the first edit of an imported data set **creates a new
+opens a dialog with the version shown as a **grid of cells** — the
+same RAW content "download data" produces (current field names,
+cells as imported, no reshape / conversion / derived columns) — plus
+a data set name box. The grid has plain spreadsheet manners
+(`drawer/EditDataGrid.tsx`, model in `lib/editGrid.ts`): click a cell
+to select it, drag or Shift+click / Shift+arrows for a range, click a
+row number or a column name for the whole row or column; double-click,
+Enter or simply typing edits a cell (Enter / Tab / arrows commit and
+move, Escape cancels the edit — a second Escape closes the dialog);
+Delete / Backspace blanks the selection; ⌘C / ⌘X / ⌘V move
+tab-separated blocks to and from the clipboard, so a block copied
+from a spreadsheet pastes straight in (a block pastes from the
+selection's top-left corner and grows the table with new rows as
+needed; a single value pastes into every selected cell); ⌘Z / ⇧⌘Z
+undo and redo every change made in the dialog. A toolbar adds a row
+(at the end) or a column (named "Column N", its name box opened
+ready to type over) and deletes the rows or columns the selection
+spans. Each column header has a sort control (⇅ → ▲ → ▼ → off) that
+reorders what is SHOWN only — the saved rows keep their import order,
+so sorting to find a cell never reads as a change. Columns are
+renamed by double-clicking the name (a blank name is ignored). A
+column that writes its numbers a particular way — comma-grouped
+"2,123,123", dollars "$1,234.56", accounting "(1,234)", percents
+"14%" — keeps writing them that way: a number typed or pasted into it
+is rewritten to match (`lib/cellFormat.ts`: "2222" → "2,222", "7" →
+"$7.00", "5" → "5%"), with the column's decimal places or more when
+more were typed (never fewer), while text and blanks are stored as
+typed and a plain-number or text column enforces nothing. The
+dialog refuses to save with a blank or duplicate column name, no
+columns, or no non-blank row. Cells that differ from the data as the
+dialog opened are outlined in the grid as in the table. Rows render
+through a window, so a large data set opens instantly. Editing a
+value by hand never touches imported data: the first edit of an imported data set **creates a new
 data set** (the dialog says so; the name box is prefilled `<name>
 (edited)`, and a colliding name warns as everywhere else) whose v1 is
 a copy of the version shown (same file name, note and upload time)
@@ -142,7 +170,7 @@ that is ALREADY a hand-edited copy **appends** a version to it
 (`editedFrom` the version shown) rather than forking again — the
 dialog says so and its button reads "Save new version"; the name box
 renames the data set when changed, and sibling visuals bound to it
-get any header rename.
+get any column rename.
 
 Columns are matched to fields by `planEditedFields`
 (`lib/datasetEdits.ts`): a header equal to a field's current name is
@@ -920,7 +948,7 @@ marks around the FULL ring, default 100 — the axis is continuous, so
 it takes a count like the continuous x / y axes, never the categorical
 "Tick every" stride; the step snaps to a nice round flow value and
 each node gets ticks proportional to its total) + tick-mark color /
-thickness / length; *Tick labels* = the shared **Format** control
+thickness / length; *Tick labels* = the shared **Label format** control
 (same preset dropdown + custom d3-format spec as the x / y Tick labels
 section; Auto = SI-prefixed calibrated to the step, fixed decimals for
 fractional steps) + **Label every** Nth tick (default 5th; each
@@ -1254,7 +1282,7 @@ histogram or density display to be on). Resolution is
 **slot-config-if-present, else the legacy per-feature config field**
 (e.g. `connection.strokeColor`, `histogram.rugColor`), so saved
 visuals keep their colors unchanged until the user touches the slot.
-Every single-color swatch shown when "Vary by" is set to Single color
+Every single-color swatch shown when "Vary by" is set to "— none —"
 (the Fill panel's default fill, each color slot, and the Shape panel's
 outline color) carries the same palette-icon palette-popover button
 as the per-value override rows, offering the active categorical
@@ -1428,7 +1456,7 @@ like AREA PATTERNS pick their ink — the palette's paired pattern-ink
 options (`resolveDashGapColor`): per-hue-category
 `dashAlternateColors` override (legacy visuals keyed by connection
 group still resolve) → the single `dashGapColor` → the pattern
-channel's per-category Color pick (`pattern.inkColors[patternValue]`)
+channel's per-category Ink color pick (`pattern.inkColors[patternValue]`)
 → the palette-paired pattern ink for the line's drawn color
 (`inkForHueColor` against the same palette the hue scale used —
 ordinal hue fields resolve from the ordinal palette) → the default
@@ -1558,7 +1586,7 @@ Pies lead with the Pie / Donut chart-type toggle above the sections.
   spoke line's thickness / dash via the shared Spine control. Spoke
   color lives in the Color menu's Radar spine slot.
 - **Spoke labels** (radar only) — the perimeter labels at each spoke:
-  **Label angle** (rotation), **Format** (the same preset dropdown +
+  **Label angle** (rotation), **Label format** (the same preset dropdown +
   custom d3-format / d3-time-format box the x / y axes use),
   **Label every** N spokes (labels thin out from the first spoke; the
   spokes themselves all still draw), and **Distance** — px moved
@@ -1644,8 +1672,9 @@ Visible when `facet` is mapped. Controls:
 
 - **Rows / columns** — explicit grid dimensions. Max for each is the
   number of levels in the facet variable.
-- **Share axes** — separate toggles for sharing the x-axis or y-axis
-  across panels in the same row or column. When shared, all axes have
+- **Share axes** — separate toggles ("Share X axis" / "Share Y axis";
+  polar: "Share R axis" / "Share Angle axis") for sharing the x-axis or
+  y-axis across panels in the same row or column. When shared, all axes have
   the same extent; tick labels render only on one row / column edge.
   Default is shared. Only for axes the mode draws (`canvas.cartesianAxes`
   — radar / pies swap in R / angle pickers; maps and the structure
@@ -1671,7 +1700,8 @@ Visible when `facet` is mapped. Controls:
   quantitative axes: panels with a larger axis range get proportionally
   more space. E.g. panel A's y is 0–10 and panel B's y is 0–20 → B is
   twice as tall, whether they're stacked or side by side. Same gating.
-- **Axis range** — min / max inputs for the continuous axis, shaped by
+- **Axis range** — Min / Max inputs for the continuous axis (titled
+  "Y axis range", "Angle axis range", …), shaped by
   its share mode: one overall range under "All panels", one per row /
   column under "Per row" / "Per column", one per panel under "None"
   (wrap mode keys these by facet value in `panelAxisOverrides`; the row
@@ -1690,9 +1720,9 @@ Visible when `facet` is mapped. Controls:
   histogram's count axis has no field at all). The size-by-unit toggle
   keeps the raw position-encoding gate, since its weights read that
   field.
-  **Custom breaks**: every cartesian range entry (overall, per row /
-  column, per panel) has a "Custom breaks" checkbox under its max.
-  Checking it opens a **Breaks** box (comma-separated values; dates on a
+  **Replace ticks**: every cartesian range entry (overall, per row /
+  column, per panel) has a "Replace ticks" checkbox under its Max.
+  Checking it opens a **Ticks at** box (comma-separated values; dates on a
   date axis) whose values REPLACE the tick layout of the panels that
   entry covers — the automatic ticks and the X / Y Custom breaks alike,
   unlike those breaks, which add to the automatic ticks. "Match tick
@@ -1719,12 +1749,12 @@ Visible when `facet` is mapped. Controls:
 
 ### 4.5a Hide empty panels (facet grid)
 The facet Row and Column option panels each carry a **Hide empty
-panels** checkbox in their "Panel Spacing & Sizing" subsection — one config
+panels** checkbox in their "Panel spacing and sizing" subsection — one config
 bit (`FacetConfig.hideEmptyPanels`) mirrored into both panels, shown
 only when BOTH `facetRow` and `facetCol` are mapped (the row × col
 cross-product is the only source of empty panels). Pie mode included:
 the row panel's "no row axis" hint replaces only its Rows subsection,
-not the Panel Spacing & Sizing block.
+not the Panel spacing and sizing block.
 
 Default off. Off — or on with no empty cross-product cell — the grid
 renders as always: full cross-product, top and left header strips, no
@@ -1847,7 +1877,7 @@ The X-axis and Y-axis panels (under Encodings) configure:
   panels (overall, per row/column, or per panel) overrides it for the
   panels it covers. The help text says so while the visual is faceted.
   Custom breaks apply to every panel, except one whose facet range entry
-  has Custom breaks — those replace the panel's ticks outright.
+  has Replace ticks checked — those replace the panel's ticks outright.
   **Count composes with Scale range**: while the domain is auto-fit
   (either bound blank), Count is a density hint and the ticks snap to
   round "nice" values, so the exact number may differ. Once BOTH min
@@ -1955,8 +1985,10 @@ The X-axis and Y-axis panels (under Encodings) configure:
   the labels, and pins them level; **reset** on an explicit value
   returns the field to auto. Stored 0 meant auto before visuals v6 —
   that migration (and the seed / bundle-import paths, which carry no
-  storage version) clears it to blank. Also here: **label stride**
-  (every Nth).
+  storage version) clears it to blank. The tick density control
+  (**Count** / **Tick every** / **Label every**) lives in the **Ticks**
+  section on every axis, the radar r axis included — r's Ticks section
+  holds only that control, since the radar draws no r tick marks.
 - **Wrap text** (Tick labels) — line-wraps long tick labels. X-axis
   labels wrap to their per-tick slot width; y-axis and radar r-axis
   labels wrap to a fixed font-relative max width (~8em). Wrapping
@@ -1986,7 +2018,7 @@ The X-axis and Y-axis panels (under Encodings) configure:
   right-aligned against the y axis, left-aligned at the radar spoke.
   Rotated x labels flip that default with their anchor: negative
   angles naturally right-align, positive left-align.
-- **Tick label format** — a dropdown of preset d3-format strings,
+- **Tick label format** — the **Label format** row: a dropdown of preset d3-format strings,
   grouped **Numeric** (comma-separated thousands, whole numbers,
   percent), **Currency** (whole dollars, dollars and cents, and
   Thousands / Millions / Billions — `$,.1~fK`, `…M`, `…B`),
@@ -2021,7 +2053,9 @@ The X-axis and Y-axis panels (under Encodings) configure:
   measure labels — offers this ONE preset list (`formatPresetGroups`,
   rendered by `FormatPresetOptions`); only the countries-level
   Geography group (§ maps) is conditional.
-  The box also takes literal text around the value, so whole-number
+  The box also takes literal text around the value (a help line under
+  it says so — "Text around the value goes in the same box: `,.0f kg`,
+  `literal%`, `€literal`." — and the box's hover tooltip spells it out), so whole-number
   percents (3 meaning 3%) need no derived variable: `literal%` prints
   "3%" (also a preset, "Literal + %"), `literal units` prints "3 units",
   `€literal` prints "€3", and text after a d3 code is appended too
@@ -2309,7 +2343,7 @@ The layer also has these controls:
 
 In the TREE layouts (packed circles / treemap / sunburst) labels are
 placed by the layout itself, so the panel hides its position rows and
-a note says so. Value, Color, Size, and Text properties still apply
+a note says so. Value, Color, Size, and Text still apply
 (see §6.2); Value defaults to each row's name. Packed circles and
 treemap draw their labels themselves, so the position / overlap /
 background fine-tuning stands down there too. The SUNBURST hands its
@@ -2370,8 +2404,8 @@ nothing mapped. The **X / Y position rows are greyed out, not hidden**
   reads as its chord equivalent, and when every node both sends and
   receives a hint says the three label the same nodes. The per-series
   "Which labels" / "Of each" stand down (no series).
-- **Adjust position and alignment**, **Text properties** and **Text
-  background** all apply. Alignment's default (center) is automatic:
+- **Adjust position and alignment**, **Text** and **Box** all
+  apply. Alignment's default (center) is automatic:
   text reads away from the node (end-anchored on the left half of the
   ring and on a sankey's last column); Left / Right force the anchor.
   The chord ring makes room for its labels: each selected node's widest
@@ -2466,7 +2500,7 @@ panel edge. No clear window — or text longer than ~a
 half-circumference — means no label, same convention as the rim fit
 check (`arcWrapLevels` in `DataLabelsConfig`).
 
-- **Text format** — every mapped Value takes a per-field format (the
+- **Label format** — every mapped Value takes a per-field format (the
   same preset dropdown + custom d3 spec the axes use), stored in
   `DataLabelsConfig.fieldFormats` keyed by field name. A single mapped
   field shows one format control under the Value row's disclosure;
@@ -2563,7 +2597,7 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   series name as a separate label — the direct-labeling recipe. (A
   one-point series takes the last label, plus the first label only when
   that population shows a variable the last one doesn't.)
-  **Compose labels** (under Value, a group header after Text format)
+  **Compose labels** (under Value, a group header after Label format)
   holds THE labels of a multi-variable mapping: one text box per label
   (`DataLabelsConfig.composedLabels` `[{id, template}]`). Checking a
   variable under Fields to include adds a box composing just it
@@ -2574,8 +2608,8 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   The field checklist only decides which variables the boxes may
   name; the boxes decide what the labels are. Every box is one label
   at every anchor its own "Which labels" names, and every box gets
-  its own sections — under Color, Size, Text properties, Text
-  background, Label selection (its Which labels) and Adjust position
+  its own sections — under Color, Size, Text, Box, Label
+  selection (its Which labels) and Adjust position
   (alignment, angle, wrapping, overlap avoidance, bar placement, X /
   Y) — titled by its variables (`A`, `A + B`; "Label N" while it
   names none), all keyed by the label's id. A label styles AS ONE by
@@ -2586,7 +2620,7 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   entries, if any, win).
   **Split into individual variables** — a checkbox above the controls
   of any label naming TWO or more variables, in each of Color, Size
-  and Text properties (`DataLabelsConfig.pieceSplits[id]`, one flag per
+  and Text (`DataLabelsConfig.pieceSplits[id]`, one flag per
   section). Checked, that section expands into one block per variable
   in the label and writes the variable's own entry
   (`DataLabelsConfig.pieces[id][field]` — `color` / `colorRules` /
@@ -2622,7 +2656,7 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   off the end; the population split (All / First / Last rows) and the
   endpoint override blocks don't apply to separate labels, while position
   rules still replace a matching label's base offsets. Their per-variable
-  Size / Text properties / Text background / Color apply per label. The
+  Size / Text / Box / Color apply per label. The
   solver reserve then measures each population's widest single variable
   at that variable's alignment and offset.
   Two or more populations present = a **split** selection, and only
@@ -2637,7 +2671,7 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
     when no all-labels population exists and the shared text covers the
     same variables, the shared arrangement (the legacy first-and-last
     inheritance: `{value}` on firsts, `{value} {series}` on lasts). There
-    is still exactly ONE "Text format" section — per-field formats are
+    is still exactly ONE "Label format" section — per-field formats are
     shared across populations.
   - Under **Adjust position and alignment**, the Alignment control
     and the Adjust-position X/Y inputs each become one row / pair per
@@ -2677,7 +2711,7 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   coast or an empty neighbor drift there without ever flying far just
   to reach water. Non-colliding labels never move; a label with no
   free spot within ~12 rings stays put (best-effort, as elsewhere).
-- **Label all facets** (faceted charts only; under Label selection,
+- **Apply to all facets** (faceted charts only; under Label selection,
   after Which labels and Of each) — checked by default: every panel
   draws its labels. Unchecking lists the chart's facet panels as
   checkboxes (all ticked at first) so the user keeps labels on just the
@@ -2711,7 +2745,7 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
 - With separate variables (Combine variables unchecked) the whole
   Adjust position and alignment section becomes one collapsible
   subsection PER VARIABLE (titled by field, like the Color / Size /
-  Text properties blocks), each holding that variable's Alignment,
+  Text blocks), each holding that variable's Alignment,
   Angle, Wrap text (+ Characters), Avoid overlapping labels, the bar
   Placement pair, and the Adjust position X / Y — effective values
   shown (the variable's own entry, else the layer's), writes to the
@@ -2819,25 +2853,36 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   its "Vary by" dropdown reads "Main Color mapping (field)" and the
   variable's segments follow that mapping; picking it again after a
   change clears the stored slot back to inheriting. Without a Color
-  mapping the default reads "Single color" (behaviorally identical
-  there). "Single color" / a mapped field store an explicit per-slot
+  mapping the default reads "— none —" (the single color; behaviorally
+  identical there). "— none —" / a mapped field store an explicit per-slot
   config as before. Wrap text applies to colored labels too: the
   colored pieces line-break at the same points the plain label would
   (`wrapSegments` splits a piece that straddles a break, keeping its
   fill), with each line's start position derived from the label's
   alignment.
+- **Box** — the box drawn behind each label. The **Show text
+  background** toggle gates every row: **Background** (color; empty
+  inherits the visualization's background), **Corner radius**,
+  **Horizontal padding**, **Vertical padding**, then **Border**, a
+  toggle that IS the border thickness (`textBackgroundBorderWidth`;
+  off = 0 / unset, the historical unbordered box; on restores the last
+  non-zero thickness, else 1px) with **Border color**
+  (`textBackgroundBorderColor`, default neutral `#999999`) and
+  **Border thickness** (px, step 0.5) shown only while it is on. The
+  renderer strokes the background rect with them; adjacent pieces
+  share one rect only when their borders match too.
 - **Per-variable text properties and backgrounds** (multi-field labels
-  with 2+ variables) — exactly like the Color panel: the Text properties
-  and Text background subsections REPLACE their layer-wide controls with
+  with 2+ variables) — exactly like the Color panel: the Text and Box
+  subsections REPLACE their layer-wide controls with
   one collapsible block per variable, named by field. Each block shows
   the variable's effective values (its own entry, else the layer-wide
   value the single-variable panel edits) and writes only that variable's
   entry; a control's reset link drops it back to the layer value:
-  - Text properties: **Family**, **Weight**, and the **Style** I / U
+  - Text: **Family**, **Weight**, and the **Style** I / U
     toggles, applying to that variable's text alone
     (`DataLabelsConfig.fieldFonts`, sparse per key).
-  - Text background: the **Show text background** toggle, then
-    Background color, Corner radius, and the two paddings, applying
+  - Box: the **Show text background** toggle, then Background color,
+    Corner radius, the two paddings, and the Border rows, applying
     behind that variable's text alone
     (`DataLabelsConfig.fieldBackgrounds`) — so a label can carry a boxed
     category beside an unboxed value. At render time adjacent
@@ -3100,6 +3145,13 @@ spacing (the natural height when there are no row gaps). The legend
 measures both after each render while the Legend panel is open. Typing
 a smaller number is still allowed.
 
+**Box** (its own subsection right after Legend properties) styles the
+legend box: **Background** (Transparent / Theme default / Custom with
+an inline swatch), then the **Border** toggle (`showBorder`; a 1px
+solid border), and — only while Border is on, since the radius rounds
+the border — **Corner radius** and **Border color**. Its settings dot
+is the `box` group of `explainLegendCustomization`.
+
 **Orientation and Legend columns are independent controls, and each
 owns exactly one axis of the layout.** Orientation (Stacked /
 Horizontal) governs how the ENTRIES flow inside a single legend
@@ -3236,7 +3288,7 @@ clears the setting rather than storing it. Center / right make each
 label's cell grow to fill the rest of its row first
 (`.vc-legend-text-align`), so the alignment has somewhere to work; the
 gradient bar's break labels are NOT affected — they keep their own
-**Label alignment** under Text formatting.
+**Label alignment** under Label format.
 
 The "Gradient legend style" toggle (quantitative hue only) switches
 between a gradient bar and sampled swatches; both honor the legend's
@@ -3263,7 +3315,7 @@ controls:
   thickness** (default 1px) and **Tick color** (default a neutral
   stone gray) appear only once ticks are on.
 
-Quantitative legend break labels take the shared **Text format**
+Quantitative legend break labels take the shared **Label format**
 preset dropdown + custom d3-format spec (Literal prints each break
 as-is, `literal%` as-is plus "%" — see the axis Tick label format for
 the text-around-the-value forms). **Auto** (empty spec) follows the break set: when every break
@@ -3272,7 +3324,7 @@ as whole numbers with no trailing ".00"; once any break carries a
 fraction every label prints two decimals so the column stays aligned
 (0.00 / 0.50 / 1.00). Temporal breaks print as locale dates.
 
-The Text formatting subsection additionally offers **Label
+The Label format subsection additionally offers **Label
 alignment** (left / center / right, via the shared AlignmentControl)
 whenever a gradient bar is active: under a horizontal bar each break
 label anchors its left edge / center / right edge at its stop; beside
@@ -3809,7 +3861,7 @@ has:
     pixel placement only holds still on the side it's measured from: a
     note hung under the plot in top-left px sits at `-(plot height + N)`,
     which scales with the plot again — and on a facet grid whose panels
-    differ in height ("Label all facets" with, say, two stacked panels
+    differ in height ("Apply to all facets" with, say, two stacked panels
     where the top one is taller), the same stored coordinate lands at a
     different depth under each panel. Bottom-left px puts it N px under
     every panel's own bottom edge.
@@ -3865,8 +3917,8 @@ against whichever unit is active. Circles share the rectangle's
 fill/border/layer styling controls. **Line segments**
 (`lib/lineSegmentAnnotationGeometry.ts`) run between two endpoints,
 each in Percent or Values coordinates (the Position inputs call them
-left / bottom and right / top). Their **Line properties** subsection
-holds the stroke — color, thickness, opacity, dash — and then the
+Left / Bottom and Right / Top). Their **Line properties** subsection
+holds the stroke — **Color**, thickness, opacity, dash — and then the
 line's ends:
 
 - **Line cap**: Round or Square. Square is a flush end exactly at the
@@ -3895,14 +3947,14 @@ line's ends:
 
 **Text annotations** (`lib/textAnnotationGeometry.ts`) are plain text
 drawn on the chart rather than a shape that contains text. They carry
-the rectangle's full text, fill, and border controls plus a **corner
-radius**, but their background box is auto-sized to the rendered label
+the rectangle's full text styling plus a background box with a
+**corner radius**, but that box is auto-sized to the rendered label
 (measured at its actual font) plus the text padding — the user never
 sizes it. That's why position is a single anchor point, x and y, with
 the same Percent / Values toggle every other kind has:
 
 - `y` always centers the box vertically on the anchor.
-- **Alignment** picks which horizontal edge lands on `x` — `left`
+- **Align** picks which horizontal edge lands on `x` — `left`
   starts the box there, `center` straddles it, `right` ends there — in
   addition to aligning the lines of multi-line text. So the control
   stays meaningful for a one-line label, where line alignment alone
@@ -3914,11 +3966,20 @@ included (there is nothing to size the box to).
 The text annotation's editor leads with its **Text** box, sitting
 directly under the header outside any collapsible subsection — the
 text is the annotation, so it is never hidden behind a collapsed
-header. Its font controls follow in a **Text formatting** subsection,
-then Position (ending with the layer toggle), Fill, and Border. (The
-rectangle keeps its
-optional inner label inside its "Text" subsection, after Fill and
-Border.)
+header. Its font controls follow in a **Text** subsection — **Align**
+(with a note that it also sets the anchor), then the shared font
+editor's Family · Color · Size · Weight · Style (italic / underline,
+stored as `textItalic` / `textUnderline`; absent = off) — then Position
+(ending with the layer toggle), then one **Box** subsection: Background
+· Opacity · Corner radius · Padding · **Border** toggle · Border color ·
+Border thickness · Border opacity · Dash. The Border toggle has no field
+of its own: "on" means a visible border (thickness and opacity both above
+0). Off stores thickness 0; on restores the last non-zero thickness (or
+the default) and lifts an opacity of 0 to the default (or fully opaque);
+the color / thickness / opacity / dash rows show only while it is on. (The rectangle keeps its optional
+inner label inside its "Text" subsection — the same Align + font rows,
+plus Padding, since a rectangle has no Box — after its separate Fill
+and Border subsections, which circles share.)
 
 New annotations seed their style (fill, border, text font, line
 stroke) from the active theme's **Annotations** defaults (§12), and
@@ -4133,7 +4194,7 @@ A small catch-all panel:
   its normal position relative to the figure (the figure + legend
   pair centers in the viewport).
   Faceted charts apply the shape to each panel individually. While
-  on, the ratio overrides the Facet panel's Panel Spacing & Sizing (pixel
+  on, the ratio overrides the Facet panel's Panel spacing and sizing (pixel
   panel width/height), proportional panel weights — differently
   sized panels can't all honor one shape — and scroll-mode panel
   minimums (panels shrink to fit instead of scrolling over blank

@@ -547,6 +547,15 @@ export const PatternOptionsPanel = () => {
 
 	// No field mapped — show default pattern picker + ink color + background
 	if (!patternFieldMapped) {
+		// The panel-wide reset below shows only when a value it clears differs
+		// from its default: the fill defaults always, the connection line-dash
+		// state outside pure-fill mode, the polygon defaults on filled radars.
+		// (No field is mapped here, so the subsection flags read their
+		// no-field branches — the same fields the reset writes.)
+		const panelResetChanged =
+			fillSubsectionChanged ||
+			(patternMode !== "fill" && dashSubsectionChanged) ||
+			(radarPolygonFilled && polygonSubsectionChanged)
 		const defaultPatternIdx = configs.defaultPattern ?? null
 		const defaultInk = configs.defaultPatternInk ?? DEFAULT_PATTERN_INK
 		const defaultScale = cfg.defaultScale ?? DEFAULT_PATTERN_SCALE
@@ -872,51 +881,53 @@ export const PatternOptionsPanel = () => {
 						</div>
 					</>
 				)}
-				<ResetLink
-					onClick={() => {
-						setDefaultCustomDashOpen(false)
-						setConfigs((prev) => ({
-							...prev,
-							defaultPattern: null,
-							defaultPatternInk: theme.patternInkColor,
-							// Line-chart contexts: also clear the line-dash state this
-							// panel owns on the connection config (default dash, gap
-							// fill, range window).
-							...(patternMode === "fill"
-								? {}
-								: {
-										connection: {
-											...connectionConfigFromTheme(liveTheme),
-											...prev.connection,
-											defaultDashPattern: "solid",
-											customDashPattern: null,
-											dashGapFill: null,
-											dashGapColor: null,
-											dashAlternateColors: {},
-											dashRange: DEFAULT_DASH_RANGE,
-										},
-									}),
-						}))
-						updateCfg({
-							backgroundColor: theme.patternBackgroundColor,
-							// Only cleared once set, so untouched saves don't grow a
-							// null key.
-							...(cfg.defaultScale != null ? { defaultScale: null } : {}),
-							// Filled-radar polygon defaults live on the pattern config;
-							// only touched where the Polygon fill section exists, so
-							// other charts' saves don't grow null keys.
-							...(radarPolygonFilled
-								? {
-										defaultPolygonPattern: null,
-										defaultPolygonPatternInk: null,
-										defaultPolygonScale: null,
-									}
-								: {}),
-						})
-					}}
-					underline
-					className="self-start"
-				/>
+				{panelResetChanged && (
+					<ResetLink
+						onClick={() => {
+							setDefaultCustomDashOpen(false)
+							setConfigs((prev) => ({
+								...prev,
+								defaultPattern: null,
+								defaultPatternInk: theme.patternInkColor,
+								// Line-chart contexts: also clear the line-dash state this
+								// panel owns on the connection config (default dash, gap
+								// fill, range window).
+								...(patternMode === "fill"
+									? {}
+									: {
+											connection: {
+												...connectionConfigFromTheme(liveTheme),
+												...prev.connection,
+												defaultDashPattern: "solid",
+												customDashPattern: null,
+												dashGapFill: null,
+												dashGapColor: null,
+												dashAlternateColors: {},
+												dashRange: DEFAULT_DASH_RANGE,
+											},
+										}),
+							}))
+							updateCfg({
+								backgroundColor: theme.patternBackgroundColor,
+								// Only cleared once set, so untouched saves don't grow a
+								// null key.
+								...(cfg.defaultScale != null ? { defaultScale: null } : {}),
+								// Filled-radar polygon defaults live on the pattern config;
+								// only touched where the Polygon fill section exists, so
+								// other charts' saves don't grow null keys.
+								...(radarPolygonFilled
+									? {
+											defaultPolygonPattern: null,
+											defaultPolygonPatternInk: null,
+											defaultPolygonScale: null,
+										}
+									: {}),
+							})
+						}}
+						underline
+						className="self-start"
+					/>
+				)}
 				{modeDef.canvas.statOverlays && regressionOn(configs) && (
 					<RegressionDashSubsection />
 				)}
@@ -1038,7 +1049,7 @@ export const PatternOptionsPanel = () => {
 		// Inherit mode: no per-category ink = the hue-paired / default ink,
 		// which `ink` already resolves to (previewed in the swatch).
 		<ColorInput
-			label="Color"
+			label="Ink color"
 			labelClassName="vc-muted"
 			value={hasInk ? ink : null}
 			onChange={(color) => target.set(v, color)}

@@ -221,6 +221,17 @@
 		outline-color: var(--color-brand-300);
 	}
 
+	/* The Edit dialog grid's focus cell (the one the keyboard acts on): a
+	 * solid brand frame, inset like the edited-cell outline it replaces
+	 * while the cell has focus. */
+	.vc-grid-focus {
+		outline: 2px solid var(--color-vc-brand-text);
+		outline-offset: -2px;
+	}
+	.dark .vc-grid-focus {
+		outline-color: var(--color-brand-300);
+	}
+
 	/* Inline group header: titles a run of related control rows inside a
 	 * panel without being a collapsible subsection. Sits visually between
 	 * CollapsibleSubsection's uppercase text-xs header and a plain row label. */

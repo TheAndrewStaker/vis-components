@@ -205,7 +205,7 @@ export const LabelColorPanel = ({
 												// — surface that as the explicit default option so the
 												// dropdown matches what actually renders. Without a
 												// mapping, base fill IS the single color, so the plain
-												// "Single color" default already tells the truth.
+												// "— none —" default already tells the truth.
 												inheritLabel={
 													hueFieldMapped
 														? `Main Color mapping${hueField ? ` (${hueField})` : ""}`

@@ -503,7 +503,7 @@ export const FacetOptionsPanel = () => {
 				<CollapsibleSubsection title="Angle axis">
 					<div className="flex items-start gap-2 text-sm">
 						<span className={`shrink-0 pt-1 ${LABEL_COL}`}>
-							Share angle axis
+							Share Angle axis
 						</span>
 						<div>
 							<PolarShareAxisPicker
@@ -515,7 +515,7 @@ export const FacetOptionsPanel = () => {
 								}
 								perRowAvailable={perRowAvailable}
 								perColAvailable={perColAvailable}
-								ariaLabel="Share angle axis"
+								ariaLabel="Share Angle axis"
 								onChange={(next) => updateCfg({ shareAngle: next })}
 							/>
 						</div>
@@ -758,8 +758,8 @@ export const FacetOptionsPanel = () => {
 				</CollapsibleSubsection>
 			)}
 
-			{/* ─── Panel Spacing & Sizing ──────────────────────────────────────── */}
-			<CollapsibleSubsection title="Panel Spacing & Sizing">
+			{/* ─── Panel spacing and sizing ──────────────────────────────────────── */}
+			<CollapsibleSubsection title="Panel spacing and sizing">
 				<GapInput
 					label="Horizontal gap"
 					value={cfg.gapX}

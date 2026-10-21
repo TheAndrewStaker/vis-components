@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { useChartModeDef } from "../../store/useChartModeDef"
-import { formatPresetSelection, formatPresetValueFor } from "../../lib/formatPresets"
-import { FormatPresetOptions } from "./FormatPresetOptions"
-import { FORMAT_BOX_HELP } from "./channelOptions/AxisOptionsPanel"
+import { TickFormatControl } from "./channelOptions/AxisOptionsPanel"
 import {
 	densityCurveGroupField,
 	densityCurveOn,
@@ -199,34 +197,15 @@ const QuantLegendChannelControls = ({
 			{/* Rows subordinate to the section label indent by ml-6; the narrower
 			 * LABEL_COL_NESTED keeps their controls on the shared 104px column
 			 * (24px indent + 72px label + 8px gap). */}
+			{/* The shared format control (preset dropdown over the custom box)
+			 *  sits on the panel's main label column, so its select lines up
+			 *  with the nested Breaks rows below (both start at 104px). */}
+			<TickFormatControl
+				value={cfg.format}
+				changed={cfg.format !== ""}
+				onChange={(format) => onChange({ ...cfg, format })}
+			/>
 			<div className="ml-6 flex flex-col gap-2">
-				<label className="flex items-center gap-2 text-sm">
-					<span className={LABEL_COL_NESTED}>
-						Text format
-					</span>
-					<Select
-						value={formatPresetValueFor(cfg.format)}
-						onChange={(e) => {
-							const spec = formatPresetSelection(e.target.value)
-							if (spec !== null) onChange({ ...cfg, format: spec })
-						}}
-						className="flex-1"
-					>
-						<FormatPresetOptions selected={formatPresetValueFor(cfg.format)} />
-					</Select>
-				</label>
-				<div className="flex items-center gap-2">
-					<LabelSpacerNested />
-					<Input
-						type="text"
-						value={cfg.format}
-						onChange={(e) => onChange({ ...cfg, format: e.target.value })}
-						placeholder="Auto"
-						aria-label="Custom text format"
-						title={FORMAT_BOX_HELP}
-						className="flex-1 font-mono"
-					/>
-				</div>
 				<div className="flex items-center gap-2 text-sm">
 					<NumberInput
 						label="Breaks"
@@ -1082,94 +1061,6 @@ export const LegendPanel = () => {
 					</div>
 
 					<div className="vc-divider-group">
-						<Toggle
-							label="Border box"
-							checked={merged.showBorder}
-							onChange={(showBorder) => update({ showBorder })}
-						/>
-						{merged.showBorder && (
-							<>
-								<div className="flex flex-wrap items-center gap-2">
-									<ColorInput
-										label="Color"
-										labelClassName={LABEL_COL}
-										value={merged.borderColor}
-										onChange={(borderColor) => update({ borderColor })}
-									/>
-									{merged.borderColor !== DEFAULT_LEGEND_CONFIG.borderColor && (
-										<ResetLink
-											onClick={() =>
-												update({ borderColor: DEFAULT_LEGEND_CONFIG.borderColor })
-											}
-										/>
-									)}
-								</div>
-								<div className="flex items-center gap-2">
-									<NumberInput
-										label="Corner radius"
-										labelClassName={LABEL_COL}
-										value={merged.borderRadius}
-										min={0}
-										step={1}
-										onChange={(borderRadius) => update({ borderRadius })}
-										inputClassName="w-16"
-										suffix="px"
-									/>
-									{merged.borderRadius !== DEFAULT_LEGEND_CONFIG.borderRadius && (
-										<ResetLink
-											onClick={() =>
-												update({
-													borderRadius: DEFAULT_LEGEND_CONFIG.borderRadius,
-												})
-											}
-										/>
-									)}
-								</div>
-							</>
-						)}
-					</div>
-
-					<div className="vc-divider-group">
-						<RadioGroup
-							legend="Background"
-							value={bgKind}
-							options={[
-								{ value: "transparent", label: "Transparent" },
-								{
-									value: "themeDefault",
-									label: "Theme default",
-									trailing: theme.legendBackgroundColor ? (
-										<span
-											className="ml-1 inline-block h-6 w-10 rounded border border-stone-300 dark:border-stone-700"
-											style={{ backgroundColor: theme.legendBackgroundColor }}
-										/>
-									) : null,
-								},
-								{
-									value: "custom",
-									label: "Custom",
-									// Render the inline color picker on the custom row so
-									// the swatch is visible whether or not "custom" is
-									// currently selected.
-									trailing: (
-										<ColorInput
-											label="Custom legend background color"
-											labelClassName="sr-only"
-											value={merged.backgroundColor ?? "#ffffff"}
-											onChange={(backgroundColor) =>
-												update({ backgroundColor })
-											}
-											disabled={bgKind !== "custom"}
-											showHexInput={false}
-										/>
-									),
-								},
-							]}
-							onChange={setBgKind}
-						/>
-					</div>
-
-					<div className="vc-divider-group">
 						<div className="flex items-center gap-2">
 							<NumberInput
 								label="Legend columns"
@@ -1224,6 +1115,102 @@ export const LegendPanel = () => {
 				</CollapsibleSubsection>
 			)}
 
+			{/* Box — the legend box's fill and border. Corner radius rounds the
+			 *  border, so it (and the border color) only shows while Border is
+			 *  on. */}
+			{anyLegendVisible && (
+				<CollapsibleSubsection title="Box" changed={groupChanged("box")}>
+					<div className="flex flex-col gap-2">
+						<RadioGroup
+							legend="Background"
+							value={bgKind}
+							options={[
+								{ value: "transparent", label: "Transparent" },
+								{
+									value: "themeDefault",
+									label: "Theme default",
+									trailing: theme.legendBackgroundColor ? (
+										<span
+											className="ml-1 inline-block h-6 w-10 rounded border border-stone-300 dark:border-stone-700"
+											style={{ backgroundColor: theme.legendBackgroundColor }}
+										/>
+									) : null,
+								},
+								{
+									value: "custom",
+									label: "Custom",
+									// Render the inline color picker on the custom row so
+									// the swatch is visible whether or not "custom" is
+									// currently selected.
+									trailing: (
+										<ColorInput
+											label="Custom legend background color"
+											labelClassName="sr-only"
+											value={merged.backgroundColor ?? "#ffffff"}
+											onChange={(backgroundColor) =>
+												update({ backgroundColor })
+											}
+											disabled={bgKind !== "custom"}
+											showHexInput={false}
+										/>
+									),
+								},
+							]}
+							onChange={setBgKind}
+						/>
+					</div>
+
+					<div className="vc-divider-group">
+						<Toggle
+							label="Border"
+							checked={merged.showBorder}
+							onChange={(showBorder) => update({ showBorder })}
+						/>
+						{merged.showBorder && (
+							<>
+								<div className="flex items-center gap-2">
+									<NumberInput
+										label="Corner radius"
+										labelClassName={LABEL_COL}
+										value={merged.borderRadius}
+										min={0}
+										step={1}
+										onChange={(borderRadius) => update({ borderRadius })}
+										inputClassName="w-16"
+										suffix="px"
+									/>
+									{merged.borderRadius !== DEFAULT_LEGEND_CONFIG.borderRadius && (
+										<ResetLink
+											onClick={() =>
+												update({
+													borderRadius: DEFAULT_LEGEND_CONFIG.borderRadius,
+												})
+											}
+										/>
+									)}
+								</div>
+								<div className="flex flex-wrap items-center gap-2">
+									<ColorInput
+										label="Border color"
+										labelClassName={LABEL_COL}
+										value={merged.borderColor}
+										onChange={(borderColor) => update({ borderColor })}
+									/>
+									{merged.borderColor !== DEFAULT_LEGEND_CONFIG.borderColor && (
+										<ResetLink
+											onClick={() =>
+												update({ borderColor: DEFAULT_LEGEND_CONFIG.borderColor })
+											}
+										/>
+									)}
+								</div>
+							</>
+						)}
+					</div>
+
+				</CollapsibleSubsection>
+			)}
+
 			{/* Legend text — the labels beside each swatch. Separate from
 			 *  "Legend titles" in the Labels panel (those style the section
 			 *  headings) and from the theme's Legend text defaults, which this
@@ -1267,7 +1254,7 @@ export const LegendPanel = () => {
 			{(quantChannelGroups.length > 0 || measureFormatGroups.length > 0) &&
 				dataset && (
 				<CollapsibleSubsection
-						title="Label formatting"
+						title="Label format"
 						changed={groupChanged("formatting")}
 					>
 					{measureFormatGroups.map(({ channel, values }) => {
@@ -1539,7 +1526,7 @@ export const LegendPanel = () => {
 					{showAuxSwatchStroke && (
 						<div className="flex flex-wrap items-center gap-2">
 							<ColorInput
-								label="Swatch border"
+								label="Swatch outline"
 								labelClassName={LABEL_COL}
 								value={resolvedAuxSwatchStroke}
 								onChange={(auxLegendSwatchStroke) =>
@@ -1772,7 +1759,7 @@ export const LegendPanel = () => {
 					<div className="flex flex-col gap-2">
 					<div className="flex flex-wrap items-center gap-2">
 						<ColorInput
-							label="Fill"
+							label="Swatch color"
 							labelClassName={LABEL_COL}
 							value={
 								merged.shapeLegendFillColor ??
@@ -1791,7 +1778,7 @@ export const LegendPanel = () => {
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
 						<ColorInput
-							label="Stroke"
+							label="Swatch outline"
 							labelClassName={LABEL_COL}
 							value={
 								merged.shapeLegendStrokeColor ??

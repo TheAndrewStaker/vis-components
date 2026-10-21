@@ -104,9 +104,9 @@ const expand = (container: HTMLElement, title: string) => {
 describe("DataLabelsPanel — sunburst fine-tuning", () => {
 	afterEach(cleanup)
 
-	it("sunburst shows Text background, Adjust position, and selection/overlap", () => {
+	it("sunburst shows Box, Adjust position, and selection/overlap", () => {
 		const c = mountPanel("sunburst")
-		expect(sectionHeader(c, "Text background")).not.toBeNull()
+		expect(sectionHeader(c, "Box")).not.toBeNull()
 		expect(sectionHeader(c, "Adjust position and alignment")).not.toBeNull()
 		expect(sectionHeader(c, "Label selection")).not.toBeNull()
 		// Position rows stay hidden — the layout places labels.
@@ -137,10 +137,10 @@ describe("DataLabelsPanel — sunburst fine-tuning", () => {
 	it("treemap and packed circles keep the fine-tuning hidden (self-drawn labels)", () => {
 		for (const layout of ["treemap", "pack"] as const) {
 			const c = mountPanel(layout)
-			expect(sectionHeader(c, "Text background")).toBeNull()
+			expect(sectionHeader(c, "Box")).toBeNull()
 			expect(sectionHeader(c, "Adjust position and alignment")).toBeNull()
 			expect(sectionHeader(c, "Label selection")).toBeNull()
-			expect(sectionHeader(c, "Text properties")).not.toBeNull()
+			expect(sectionHeader(c, "Text")).not.toBeNull()
 			cleanup()
 		}
 	})

@@ -91,7 +91,7 @@ const OutlineColorFieldDropdown = () => {
 	const { value, fieldOptions, onChange, disabled } = useOutlineHueField()
 	return (
 		<SelectInput
-			label="Vary outline by"
+			label="Vary by"
 			labelClassName={LABEL_COL}
 			value={value ?? ""}
 			options={fieldOptions}
@@ -126,11 +126,7 @@ export const OutlineColorRow = () => {
 
 	// Same shape as the color slots (Line / Rug / …): a "Vary by" selector, then
 	// a single-color swatch (with reset) when unmapped, or the palette / gradient
-	// editor when a field is mapped. "Single color" replaces the field dropdown's
-	// "— none —".
-	const varyByOptions = fieldOptions.map((o) =>
-		o.value === "" ? { value: "", label: "Single color" } : o,
-	)
+	// editor when a field is mapped. "— none —" (no field) = the single color.
 
 	return (
 		<div className="flex flex-col gap-2">
@@ -138,7 +134,7 @@ export const OutlineColorRow = () => {
 				label="Vary by"
 				labelClassName={LABEL_COL}
 				value={value ?? ""}
-				options={varyByOptions}
+				options={fieldOptions}
 				onChange={onChange}
 				disabled={disabled}
 				selectClassName="flex-1"

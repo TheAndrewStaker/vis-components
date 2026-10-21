@@ -119,7 +119,7 @@ describe("FacetOptionsPanel — Y range editors on a length-encoded bar chart", 
 		expect(utils.queryByText(/size (row|panel) heights by unit range/i)).toBeTruthy()
 	})
 
-	it("wrap mode per-panel Custom breaks store yTicks on that facet value's entry", () => {
+	it("wrap mode per-panel Replace ticks store yTicks on that facet value's entry", () => {
 		const utils = mount(
 			lengthBarEncodings({ facet: { field: "panel" } }),
 			facetConfigs({ shareY: "none" }),
@@ -127,8 +127,8 @@ describe("FacetOptionsPanel — Y range editors on a length-encoded bar chart", 
 		)
 		expand(utils, /rows/i)
 		expand(utils, /Y axis range per panel/i)
-		fireEvent.click(utils.getByLabelText("Custom breaks for Home"))
-		const ticks = utils.getByLabelText("Breaks") as HTMLInputElement
+		fireEvent.click(utils.getByLabelText("Replace ticks for Home"))
+		const ticks = utils.getByLabelText("Ticks at") as HTMLInputElement
 		fireEvent.change(ticks, { target: { value: "0, 25, 50" } })
 		fireEvent.blur(ticks)
 		expect(

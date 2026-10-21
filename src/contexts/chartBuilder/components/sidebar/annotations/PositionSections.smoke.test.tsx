@@ -179,7 +179,7 @@ describe("annotation Position — Adjust by + From", () => {
 			/>
 		)
 		expandPosition()
-		expect(screen.getByLabelText<HTMLInputElement>("y").value).toBe("-14")
+		expect(screen.getByLabelText<HTMLInputElement>("Y").value).toBe("-14")
 		expect(screen.getByText(/bottom-left corner/)).toBeTruthy()
 		expect(screen.queryByText(/top-left corner/)).toBeNull()
 	})
@@ -202,9 +202,9 @@ describe("annotation Position — Adjust by + From", () => {
 			/>
 		)
 		expandPosition()
-		expect(screen.getByLabelText<HTMLInputElement>("x").value).toBe("-8")
-		expect(screen.getByLabelText<HTMLInputElement>("y").value).toBe("24")
-		fireEvent.change(screen.getByLabelText("y"), { target: { value: "14" } })
+		expect(screen.getByLabelText<HTMLInputElement>("X").value).toBe("-8")
+		expect(screen.getByLabelText<HTMLInputElement>("Y").value).toBe("24")
+		fireEvent.change(screen.getByLabelText("Y"), { target: { value: "14" } })
 		expect(onChange).toHaveBeenCalledWith({ y: 14 })
 	})
 
@@ -312,14 +312,14 @@ describe("annotation Position — Values unit on a date axis", () => {
 			/>
 		)
 		expandPosition()
-		const left = screen.getByLabelText<HTMLInputElement>("left")
-		const right = screen.getByLabelText<HTMLInputElement>("right")
+		const left = screen.getByLabelText<HTMLInputElement>("Left")
+		const right = screen.getByLabelText<HTMLInputElement>("Right")
 		expect(left.value).toBe("2020-06-01")
 		expect(right.value).toBe("2021-06-01")
 		// Each date box has its own calendar button; the y axis keeps a
 		// plain number input.
 		expect(screen.getAllByRole("button", { name: "Pick a date" })).toHaveLength(2)
-		expect(screen.getByLabelText<HTMLInputElement>("bottom").value).toBe("10")
+		expect(screen.getByLabelText<HTMLInputElement>("Bottom").value).toBe("10")
 
 		// A typed date stores epoch ms at local midnight — the unit the
 		// renderer's time scale places directly.
@@ -360,7 +360,7 @@ describe("annotation Position — Values unit on a date axis", () => {
 		expect(patch.y).toBe(50)
 		// ...which the date box shows as the day it fell on.
 		rerender(ui({ ...start, ...patch, coordSystem: "values" }))
-		expect(screen.getByLabelText<HTMLInputElement>("x").value).toBe("2020-12-31")
-		expect(screen.getByLabelText<HTMLInputElement>("y").value).toBe("50")
+		expect(screen.getByLabelText<HTMLInputElement>("X").value).toBe("2020-12-31")
+		expect(screen.getByLabelText<HTMLInputElement>("Y").value).toBe("50")
 	})
 })

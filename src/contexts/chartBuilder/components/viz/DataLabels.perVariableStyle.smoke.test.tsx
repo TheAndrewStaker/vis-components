@@ -169,6 +169,24 @@ describe("Data labels — per-label size / font / background / rules", () => {
 		for (const r of rects) expect(r.getAttribute("fill")).toBe("#112233")
 	})
 
+	it("strokes the background box with its border; no stroke when the border is off", () => {
+		const withBorder = mount({
+			...base,
+			textBackground: true,
+			textBackgroundBorderColor: "#445566",
+			textBackgroundBorderWidth: 1.5,
+			fieldBackgrounds: { sales: { textBackgroundBorderWidth: 0 } },
+		})
+		const stroked = withBorder.rects.filter((r) => r.getAttribute("stroke"))
+		expect(stroked.length).toBe(2)
+		for (const r of stroked) {
+			expect(r.getAttribute("stroke")).toBe("#445566")
+			expect(r.getAttribute("stroke-width")).toBe("1.5")
+		}
+		// The sales labels turned their border off: unstroked rects.
+		expect(withBorder.rects.length).toBe(4)
+	})
+
 	it("applies a label's own color rule against its variable's value", () => {
 		const { texts } = mount({
 			...base,

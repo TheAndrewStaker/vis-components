@@ -370,6 +370,16 @@ type LabelPiece = {
 	bg: ResolvedLabelBackground | null
 }
 
+/** The text-background rect's border, as SVG stroke props — none at all
+ *  (not a 0-width stroke) when the border is off, so the historical render
+ *  is unchanged. */
+const bgBorderProps = (
+	bg: ResolvedLabelBackground
+): { stroke?: string; strokeWidth?: number } =>
+	bg.borderWidth > 0
+		? { stroke: bg.borderColor, strokeWidth: bg.borderWidth }
+		: {}
+
 /** A line of a segmented label laid out for drawing: each piece's start x
  *  and width (the same CHAR_WIDTH_RATIO heuristic the layout boxes use),
  *  the line's start x per the label's alignment, and its total width. */
@@ -516,6 +526,7 @@ const renderPieceBackgrounds = (
 						height={h}
 						rx={bg.radius}
 						fill={bg.color}
+						{...bgBorderProps(bg)}
 					/>
 				)
 			}
@@ -619,6 +630,7 @@ const renderLabels = (
 							height={h}
 							rx={layerBg.radius}
 							fill={layerBg.color}
+							{...bgBorderProps(layerBg)}
 						/>
 					)
 				}

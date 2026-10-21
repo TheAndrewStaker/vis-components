@@ -86,7 +86,7 @@ describe("CircleEditor — radius unit when the radius axis has no data units", 
 			screen.getByRole("button", { name: "%" }).getAttribute("aria-pressed")
 		).toBe("true")
 		// The stored fraction shows as a whole-number percent, like Percent mode.
-		expect(screen.getByLabelText<HTMLInputElement>("radius (x)").value).toBe(
+		expect(screen.getByLabelText<HTMLInputElement>("Radius (X)").value).toBe(
 			"20"
 		)
 	})
@@ -109,7 +109,7 @@ describe("CircleEditor — radius unit when the radius axis has no data units", 
 			onChange
 		)
 		expandPosition()
-		const box = screen.getByLabelText<HTMLInputElement>("radius (x)")
+		const box = screen.getByLabelText<HTMLInputElement>("Radius (X)")
 		expect(box.value).toBe("80")
 		fireEvent.change(box, { target: { value: "40" } })
 		expect(onChange).toHaveBeenCalledWith({ radius: 40 })
@@ -119,7 +119,7 @@ describe("CircleEditor — radius unit when the radius axis has no data units", 
 		const onChange = vi.fn()
 		renderEditor(bothCategorical, CAT, CAT, onChange)
 		expandPosition()
-		fireEvent.change(screen.getByLabelText("radius (x)"), {
+		fireEvent.change(screen.getByLabelText("Radius (X)"), {
 			target: { value: "40" },
 		})
 		expect(onChange).toHaveBeenCalledWith({ radius: 0.4 })

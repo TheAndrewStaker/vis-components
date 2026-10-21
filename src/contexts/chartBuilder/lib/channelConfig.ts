@@ -262,7 +262,7 @@ export type HexbinConfig = {
 /** Fixed panel shape (Aesthetics → Aspect ratio). When enabled, every
  * panel's inner plot rect is shrunk so height : width = length : width —
  * regardless of viewport size, and per panel when faceted. While on it
- * OVERRIDES the Facet panel's Panel Spacing & Sizing pixel dims and proportional
+ * OVERRIDES the Facet panel's Panel spacing and sizing pixel dims and proportional
  * panel weights (differently sized panels can't all honor one ratio
  * while sharing row/col tracks). */
 export type AspectRatioConfig = {
@@ -2246,6 +2246,13 @@ export type DataLabelsConfig = {
 	/** Vertical padding (px) added to the top and bottom of the text inside
 	 *  the background rect. */
 	textBackgroundPadY?: number
+	/** Border (stroke) color of the text-background rect. Unset = a
+	 *  neutral grey (`DEFAULT_BG_BORDER_COLOR`). Only drawn while
+	 *  `textBackgroundBorderWidth` is above 0. */
+	textBackgroundBorderColor?: string
+	/** Border thickness (px) of the text-background rect. Unset / `0` = no
+	 *  border (the historical look, so no migration is needed). */
+	textBackgroundBorderWidth?: number
 	/** Packed circles only: container depths (1 = top level) whose labels
 	 *  wrap around the OUTSIDE of their circle on an arc instead of sitting
 	 *  inside the top rim. Managed by the Data Labels panel's "Text
@@ -2308,6 +2315,8 @@ export type LabelBackgroundOverrides = {
 	textBackgroundRadius?: number | null
 	textBackgroundPadX?: number | null
 	textBackgroundPadY?: number | null
+	textBackgroundBorderColor?: string | null
+	textBackgroundBorderWidth?: number | null
 }
 export type LabelPointsScope = "series" | "group" | "stack"
 
