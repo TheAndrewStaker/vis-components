@@ -117,7 +117,7 @@ curl -X POST https://charts.example.com/api/visuals \
 | `stack` | Optional `"stack"`, `"group"` or `"overlay"`; needs `hue`. |
 | `order` | Optional field → its levels in display order (every level, once). |
 | `dataLabels` | Optional `true`, or `{format, position, color}`. Bar, area and scatter charts; `position` is for bars. |
-| `themeId` | Optional theme; the server's default theme otherwise. |
+| `themeId` | Optional theme, by id or by name (any case); the server's default theme otherwise. |
 | `sort` | Optional field → `{by, decreasing}`: order a categorical field's levels by another field's total, or `"alphabetical"`. Computed once, like the Fields panel's "Order by". |
 | `colorThreshold` | Optional `{field, at, below, above}`: color each hue level by which side of `at` its `field` value falls. Pinned as per-level colors; a level with values on both sides is an error. `colors` given with it wins for the levels it names. |
 | `stems` | Optional `{axis, at}`: a line from each point along `axis` to `at` on it (lollipops), or to the other axis's line without `at`. Scatter charts. |
@@ -228,10 +228,10 @@ stored.
 ### What a spec can say
 
 `GET /api/chart-spec` lists the channels (with the field types each takes and
-the channels it can't be mapped with), the field types, and the chart
-families with the channels each quick-start variation fills. It is read from
-the same tables the editor uses, so a chart name that isn't listed isn't one
-the app knows.
+the channels it can't be mapped with), the field types, the chart families
+with the channels each quick-start variation fills, and the library's themes
+as `{id, name, default}`. Channels and families are read from the same tables
+the editor uses, so a chart name that isn't listed isn't one the app knows.
 
 `GET /api/chart-spec/settings` lists every setting a `settings` patch can name,
 as `{path, type, value}`: a new chart's defaults, or with `?visualId=` that

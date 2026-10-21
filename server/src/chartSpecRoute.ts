@@ -161,6 +161,22 @@ const defaultThemeId = (db: DatabaseSync): string | null => {
 	return typeof setting?.themeId === "string" ? setting.themeId : null
 }
 
+/** The theme a new visual takes when its spec names none. */
+const defaultTheme = (db: DatabaseSync, themes: readonly SavedTheme[]): SavedTheme =>
+	themes.find((t) => t.id === defaultThemeId(db)) ?? SYSTEM_LIGHT_THEME
+
+/** The themes a spec's `themeId` can name, for GET /api/chart-spec. */
+const themeList = (db: DatabaseSync): Array<{ id: string; name: string; default: boolean }> => {
+	const themes = loadThemes(db)
+	const fallback = defaultTheme(db, themes)
+	return themes.map((t) => ({ id: t.id, name: t.name, default: t.id === fallback.id }))
+}
+
+/** A spec's theme by id, else by name ignoring case. */
+const themeNamed = (themes: readonly SavedTheme[], wanted: string): SavedTheme | undefined =>
+	themes.find((t) => t.id === wanted) ??
+	themes.find((t) => t.name.trim().toLowerCase() === wanted.trim().toLowerCase())
+
 const assertStampsCurrent = (
 	db: DatabaseSync,
 	only?: keyof typeof READ_VERSIONS
@@ -321,9 +337,7 @@ export const listSettings = (
 		if (!parsed) throw new HttpError(404, "Not found")
 		visual = hydrateVisual(structuredVisual(parsed))
 	} else {
-		const themes = loadThemes(db)
-		const saved = themes.find((t) => t.id === defaultThemeId(db)) ?? SYSTEM_LIGHT_THEME
-		visual = newVisualDraft(themeOf(saved)) as Visual
+		visual = newVisualDraft(themeOf(defaultTheme(db, loadThemes(db)))) as Visual
 	}
 	const count = (name: string, min: number): number | undefined => {
 		const raw = query.get(name)
@@ -368,19 +382,18 @@ export const createVisualFromSpec = async (
 		themeId?: unknown
 	}
 	const themes = loadThemes(db)
-	const wantedThemeId =
-		typeof spec.themeId === "string" ? spec.themeId : defaultThemeId(db)
 	const saved =
-		themes.find((t) => t.id === wantedThemeId) ??
-		(typeof spec.themeId === "string" ? undefined : SYSTEM_LIGHT_THEME)
+		typeof spec.themeId === "string" ? themeNamed(themes, spec.themeId) : defaultTheme(db, themes)
 	const folders = loadFolders(db)
 
 	const id = mintId()
-	const result = composeChartSpec(input, {
+	const named = saved && spec.themeId !== undefined && spec.themeId !== saved.id
+	const result = composeChartSpec(named ? { ...spec, themeId: saved.id } : input, {
 		dataset: await loadDataset(db, config.dataDir, spec.datasetId, spec.datasetVersionId),
 		folders,
 		theme: themeOf(saved ?? SYSTEM_LIGHT_THEME),
 		themeId: saved?.id ?? null,
+		themes,
 		now: Date.now(),
 		id,
 	})
@@ -624,7 +637,7 @@ export const handleChartSpec = async (
 	if (collection === "chart-spec" && rest.length === 0 && (!id || id === "settings")) {
 		if (method !== "GET") throw new HttpError(405, "Method not allowed")
 		if (id) listSettings(res, db, params)
-		else sendJson(res, 200, JSON.stringify(chartVocabulary()))
+		else sendJson(res, 200, JSON.stringify({ ...chartVocabulary(), themes: themeList(db) }))
 		return true
 	}
 	if (method === "POST" && collection === "datasets" && !id) {
