@@ -121,6 +121,14 @@ describe("parseChartSpec", () => {
 		expect(errors[0].message).toMatch(/"bar"/)
 	})
 
+	it("answers a label on a line with a text annotation beside it", () => {
+		const [error] = errorsOf({ ...valid(), annotations: [{ kind: "line", x: [0, 1], y: [2, 2], label: "Target" }] })
+		expect(error).toEqual({
+			path: "annotations[0].label",
+			message: `unknown line annotation key "label"; a line has no label: add {kind: "text", x, y, text} beside it`,
+		})
+	})
+
 	it("rejects an unknown field type", () => {
 		expect(paths({ ...valid(), fieldTypes: { month: "date" } })).toEqual([
 			"fieldTypes.month",

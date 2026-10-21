@@ -702,6 +702,11 @@ const ANNOTATION_KEYS: Record<(typeof ANNOTATION_KINDS)[number], readonly string
 	line: ["kind", "x", "y", "color", "thickness", "dash", "front"],
 	text: ["kind", "x", "y", "text", "color"],
 }
+const ANNOTATION_HINTS: Record<(typeof ANNOTATION_KINDS)[number], Record<string, string>> = {
+	band: {},
+	line: { label: `; a line has no label: add {kind: "text", x, y, text} beside it` },
+	text: {},
+}
 const DASHES: readonly LineDashPattern[] = ["solid", "dashed", "dotted", "dash-dot"]
 /** More than this many annotations from one spec is a drawing, not a chart. */
 export const MAX_SPEC_ANNOTATIONS = 20
@@ -719,11 +724,12 @@ const unknownKeys = (
 	path: (key: string) => string,
 	what: string,
 	problem: (path: string, message: string) => void,
-	hint: (name: string, candidates: readonly string[]) => string
+	hint: (name: string, candidates: readonly string[]) => string,
+	hints: Record<string, string> = {}
 ) => {
 	for (const key of Object.keys(raw)) {
 		if (allowed.includes(key)) continue
-		problem(path(key), `unknown ${what} key "${named(key)}"${hint(key, allowed)}`)
+		problem(path(key), `unknown ${what} key "${named(key)}"${ownHint(hints, key) ?? hint(key, allowed)}`)
 	}
 }
 
@@ -923,7 +929,7 @@ const readExtras = (
 					return
 				}
 				const kind = raw.kind
-				unknownKeys(raw, ANNOTATION_KEYS[kind], (k) => at(k), `${kind} annotation`, problem, hint)
+				unknownKeys(raw, ANNOTATION_KEYS[kind], (k) => at(k), `${kind} annotation`, problem, hint, ANNOTATION_HINTS[kind])
 				const before = count()
 				const pair = (k: "x" | "y"): [AxisValue, AxisValue] | undefined => {
 					const v = raw[k]
