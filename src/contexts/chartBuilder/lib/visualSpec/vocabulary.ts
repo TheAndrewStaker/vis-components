@@ -9,10 +9,11 @@ import {
 	QUICK_START_CHART_TYPES,
 	QUICK_START_VARIATIONS,
 	type QuickStartChartType,
+	type QuickStartVariation,
 } from "../quickStartVariations"
 import type { EncodingChannel, FieldType } from "../types"
 import { SPEC_CHANNELS, type SpecChannel } from "./chartSpec"
-import { FAMILY_MODES } from "./composeVisual"
+import { FAMILY_MODES, GEO_NEEDS } from "./composeVisual"
 
 export type ChartVocabulary = {
 	channels: Array<{
@@ -30,9 +31,22 @@ export type ChartVocabulary = {
 			/** Channels the variation fills from another channel's field. */
 			sameFieldAs?: Partial<Record<EncodingChannel, EncodingChannel>>
 			stack?: StackMode
+			/** A map variation: where its geographic fields go. */
+			note?: string
 		}>
 	}>
 	fieldTypes: readonly FieldType[]
+}
+
+/** The channels a map variation's geo mode fills from detected fields,
+ *  which the quick-start variation leaves out of `channels`. */
+const GEO_CHANNELS: Record<
+	NonNullable<QuickStartVariation["geo"]>,
+	Partial<Record<EncodingChannel, readonly FieldType[]>>
+> = {
+	choropleth: { connection: CHANNELS.connection.accepts },
+	symbols: { connection: CHANNELS.connection.accepts },
+	points: { x: ["quantitative"], y: ["quantitative"] },
 }
 
 export const chartVocabulary = (): ChartVocabulary => ({
@@ -51,9 +65,10 @@ export const chartVocabulary = (): ChartVocabulary => ({
 			if (v.hueFrom) sameFieldAs.hue = v.hueFrom
 			return {
 				name: v.name,
-				channels: v.channels,
+				channels: v.geo ? { ...GEO_CHANNELS[v.geo], ...v.channels } : v.channels,
 				...(Object.keys(sameFieldAs).length > 0 ? { sameFieldAs } : {}),
 				...(v.stackMode ? { stack: v.stackMode } : {}),
+				...(v.geo ? { note: GEO_NEEDS[v.geo] } : {}),
 			}
 		}),
 	})),

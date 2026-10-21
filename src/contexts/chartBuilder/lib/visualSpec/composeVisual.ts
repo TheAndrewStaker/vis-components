@@ -48,7 +48,7 @@ import {
 import { applyDollarConversionToView } from "../dollarCells"
 import { effectiveType } from "../fieldType"
 import { applyPercentConversionToView } from "../percentCells"
-import { detectGeoFields } from "../geo/detectGeoFields"
+import { detectGeoFields, type GeoFieldDetection } from "../geo/detectGeoFields"
 import {
 	mapConfigForVariation,
 	scaffoldVariation,
@@ -144,6 +144,14 @@ export const FAMILY_MODES: Record<QuickStartChartType, readonly ChartMode[]> = {
 	sunburst: ["sunburst"],
 	sankey: ["sankey"],
 	chord: ["chord"],
+}
+
+/** What each map variation's geo mode needs, per its rule in
+ *  chartModes/geo*.ts; the region or lat/long fields are found by value. */
+export const GEO_NEEDS: Record<NonNullable<QuickStartVariation["geo"]>, string> = {
+	choropleth: `the region field on "connection", the measure on "hue", nothing on "x", "y" or "area"`,
+	symbols: `the region field on "connection", a quantitative field on "area", nothing on "x" or "y"`,
+	points: `longitude on "x", latitude on "y"`,
 }
 
 const DISCRETE: readonly FieldType[] = ["categorical", "ordinal"]
@@ -596,7 +604,7 @@ const compose = (
 	let labels: LabelPlacement | null = null
 	if (encodingsOk) {
 		if (spec.family && base && !(FAMILY_MODES[spec.family] as readonly string[]).includes(mode.id)) {
-			problem("family", familyMismatch(spec.family, mode.id))
+			problem("family", familyMismatch(spec.family, mode.id, undefined, () => detectGeoFields(view.fields, view.rows, overrides)))
 		}
 		if (spec.family && !base && !variant && !spec.variation) {
 			problem("family", `${familyNeeds(spec.family, fields, typeOf)}; these encodings make a "${mode.id}" chart`)
@@ -746,17 +754,13 @@ const compose = (
 			...(spec.stack ? { stackMode: spec.stack } : {}),
 		}
 		const scaffold = scaffoldVariation(variation, assignments, draft.channelConfigs, ctx.theme)
+		const geo = () => detectGeoFields(view.fields, view.rows, overrides)
 		const mapConfig = variant?.geo
-			? mapConfigForVariation(
-					variation,
-					assignments,
-					detectGeoFields(view.fields, view.rows, overrides),
-					draft.mapConfig
-				)
+			? mapConfigForVariation(variation, assignments, geo(), draft.mapConfig)
 			: draft.mapConfig
 		const made = getChartModeDef(scaffold.encodings, typeOf, scaffold.configs, mapConfig)
 		if (spec.family && !(FAMILY_MODES[spec.family] as readonly string[]).includes(made.id)) {
-			return { ok: false, errors: [{ path: "family", message: familyMismatch(spec.family, made.id) }] }
+			return { ok: false, errors: [{ path: "family", message: familyMismatch(spec.family, made.id, typeof picked === "object" ? picked : undefined, geo) }] }
 		}
 		start = {
 			...draft,
@@ -961,8 +965,26 @@ export const namedVariation = (
 	return missing.length > 0 ? `"${v.name}" needs ${missing.join(", ")}` : v
 }
 
-const familyMismatch = (family: QuickStartChartType, made: string): string =>
-	`a "${family}" chart is ${list(FAMILY_MODES[family])}; these encodings make a "${made}" chart`
+/** For a map, also what the named variation (else each map variation)
+ *  needs and which fields hold regions. */
+const familyMismatch = (
+	family: QuickStartChartType,
+	made: string,
+	variant: QuickStartVariation | undefined,
+	geo: () => GeoFieldDetection
+): string => {
+	const base = `a "${family}" chart is ${list(FAMILY_MODES[family])}; these encodings make a "${made}" chart`
+	if (family !== "map") return base
+	const needs = (variant?.geo ? [variant] : QUICK_START_VARIATIONS.map)
+		.map((v) => (v.geo ? `"${v.name}" needs ${GEO_NEEDS[v.geo]}` : null))
+		.filter(Boolean)
+	const { regionFields } = geo()
+	const regions =
+		regionFields.length > 0
+			? `region fields: ${regionFields.map((r) => `"${r.field.name}" (${r.level})`).join(", ")}`
+			: "no field joins a states, counties or countries table"
+	return [base, ...needs, regions].join("; ")
+}
 
 /** What the closest variation of `family` still needs. */
 const familyNeeds = (
