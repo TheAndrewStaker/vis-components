@@ -116,8 +116,8 @@ test("text annotation box is measured to fit its label", async ({ page }) => {
 	// Alignment moves which edge of the box sits on the anchor point, so the
 	// box shifts by its own width between left- and right-aligned — while its
 	// vertical center (the y anchor) stays put. Alignment lives in the
-	// collapsed "Text formatting" subsection.
-	await page.getByRole("button", { name: "Text formatting" }).click()
+	// collapsed "Text" subsection (anchored: "+ Text" is the add button).
+	await page.getByRole("button", { name: /^text$/i }).click()
 	await page.getByRole("button", { name: "Align left" }).click()
 	const leftAligned = await boxRect(page)
 	await page.getByRole("button", { name: "Align right" }).click()

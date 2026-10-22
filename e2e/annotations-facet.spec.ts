@@ -355,8 +355,10 @@ test.describe("Annotations — per-panel clipping", () => {
 				const rect = p.querySelector('[data-annotation="val"]')
 				const key = p.getAttribute("data-panel") ?? ""
 				if (!rect) return { key, hasRect: false, hasClip: false, visibleArea: NaN }
-				// The clip region lives in the same annotation layer <g> as the rect.
-				const layer = rect.closest('g[aria-hidden="true"]')
+				// The clip region's <defs> lives in the annotation layer <g>. Only the
+				// shapes carry aria-hidden (the author's text stays readable), so the
+				// layer is found by its data attribute, not by that.
+				const layer = rect.closest("[data-annotation-layer]")
 				const clip = layer?.querySelector("clipPath rect")
 				const rx = num(rect, "x")
 				const rw = num(rect, "width")
