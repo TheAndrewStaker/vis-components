@@ -464,6 +464,16 @@ export const createVisualFromSpec = async (
  *  and send it back unchanged. */
 type UndoEnvelope = { visualsVersion: number; visual: Visual }
 
+const isRecord = (v: unknown): boolean => typeof v === "object" && v !== null && !Array.isArray(v)
+
+/** The first required Visual key `visual` lacks or holds the wrong kind of
+ *  value in, or undefined when it has them all. */
+const missingVisualKey = (visual: Record<string, unknown>): string | undefined => {
+	if (typeof visual.name !== "string") return "name"
+	if (visual.datasetId !== null && typeof visual.datasetId !== "string") return "datasetId"
+	return ["encodings", "channelConfigs", "labelsConfig"].find((key) => !isRecord(visual[key]))
+}
+
 /** POST /api/visuals/<id>/restore: put back the visual an edit replaced,
  *  from the `undo` that edit answered. `If-Match` carries the `updatedAt`
  *  the edit answered; a visual changed since answers 412 and is left alone.
@@ -484,6 +494,10 @@ export const restoreVisual = async (
 		throw new HttpError(400, "Send the `undo` the edit answered: {visualsVersion, visual}")
 	}
 	if (before.id !== id) throw new HttpError(400, `This undo is for visual "${String(before.id)}", not "${id}"`)
+	const missing = missingVisualKey(before as Record<string, unknown>)
+	if (missing !== undefined) {
+		throw new HttpError(400, `This undo's visual has no valid "${missing}"; send the \`undo\` the edit answered, unchanged`)
+	}
 	assertStampsCurrent(db)
 	if (input.visualsVersion !== VISUALS_VERSION) {
 		throw new HttpError(
