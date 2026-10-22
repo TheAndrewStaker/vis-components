@@ -858,6 +858,15 @@ describe("temporal and removal review findings", () => {
 		expect(v2.channelConfigs.y && "max" in v2.channelConfigs.y).toBe(false)
 	})
 
+	it("refuses one new bound that crosses the bound the chart already has", () => {
+		const v1 = ok(edit(line(), { axes: { y: { min: 0, max: 10 } } }))
+		const low = errorsOf(edit(v1, { axes: { y: { min: 20 } } }))
+		expect(low.map((e) => e.path)).toEqual(["axes.y.min"])
+		expect(low[0]?.message).toMatch(/"min" \(20\) must be below "max" \(10\)/)
+		expect(errorsOf(edit(v1, { axes: { y: { max: 0 } } })).map((e) => e.path)).toEqual(["axes.y.max"])
+		expect(ok(edit(v1, { axes: { y: { min: 5 } } })).channelConfigs.y).toMatchObject({ min: 5, max: 10 })
+	})
+
 	it("refuses a rule naming a field that isn't there", () => {
 		const r = edit(scatter(), {
 			derivedVariables: [{ name: "Big", kind: "rules", rules: { rules: [{ condition: "{Nope} > 1", output: "yes" }], fallback: "no" } }],
