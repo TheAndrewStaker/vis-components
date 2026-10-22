@@ -90,7 +90,7 @@ import {
 import { NumberInput } from "../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../components/ui/SelectInput"
-import { Toggle } from "../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../components/ui/Checkbox"
 import { AlignmentControl } from "./LabelsPanel"
 import { FacetScopeControl } from "./FacetScopeControl"
 import { DataLabelChannelRow } from "./dataLabels/DataLabelChannelRow"
@@ -112,6 +112,8 @@ import type { DataLabelsChannel } from "./dataLabels/shared"
  *  onChange handler can switch the `value` encoding into multi-field mode
  *  (which leaves `value.field` null and drives text off `value.fields`). */
 const DATA_LABELS_MULTI_VALUE = "__multiple__"
+// "Characters" (wrap width) default — also its reset target.
+const DEFAULT_WRAP_CHARS = DEFAULT_DATA_LABELS_CONFIG.wrapMaxChars ?? 20
 
 /** "Which labels" choices — shared by the single-field select and the
  *  per-variable selects of multi-field mode. With the scope select showing
@@ -584,7 +586,7 @@ export const DataLabelsPanel = () => {
 	 *  a label with a single variable (it IS the whole label). */
 	const splitToggleFor = (section: LabelPieceSection) => (key: string) =>
 		splittable(key) ? (
-			<Toggle
+			<Checkbox
 				label="Split into individual variables"
 				checked={labelPieceSplit(merged, key, section)}
 				onChange={(next) => setPieceSplit(key, section, next)}
@@ -1177,7 +1179,7 @@ export const DataLabelsPanel = () => {
 				 *  from the theme's Maps section. */}
 				{isGeoMode && (
 					<>
-						<Toggle
+						<Checkbox
 							label="Show leader lines"
 							checked={merged.leaderLines === true}
 							onChange={(leaderLines) => updateCfg({ leaderLines })}
@@ -1364,7 +1366,7 @@ export const DataLabelsPanel = () => {
 										<ResetLink onClick={() => patchLayout({ textAngle: 0 })} />
 									)}
 								</div>
-								<Toggle
+								<Checkbox
 									label="Wrap text"
 									checked={wrap}
 									onChange={(wrapText) => patchLayout({ wrapText })}
@@ -1374,15 +1376,21 @@ export const DataLabelsPanel = () => {
 										<NumberInput
 											label="Characters"
 											labelClassName={LABEL_COL_NESTED}
-											value={ownLayout.wrapMaxChars ?? merged.wrapMaxChars ?? 20}
+											value={ownLayout.wrapMaxChars ?? merged.wrapMaxChars ?? DEFAULT_WRAP_CHARS}
 											min={1}
 											step={1}
 											onChange={(wrapMaxChars) => patchLayout({ wrapMaxChars })}
 											inputClassName="w-16"
 										/>
+										{(ownLayout.wrapMaxChars ?? merged.wrapMaxChars ?? DEFAULT_WRAP_CHARS) !==
+											DEFAULT_WRAP_CHARS && (
+											<ResetLink
+												onClick={() => patchLayout({ wrapMaxChars: DEFAULT_WRAP_CHARS })}
+											/>
+										)}
 									</div>
 								)}
-								<Toggle
+								<Checkbox
 									label="Avoid overlapping labels"
 									checked={avoid}
 									onChange={(avoidOverlaps) => patchLayout({ avoidOverlaps })}
@@ -1396,24 +1404,34 @@ export const DataLabelsPanel = () => {
 								)}
 								<div className="vc-divider-group">
 									<span className="vc-group-header">Adjust position</span>
-									<NumberInput
-										label="X"
-										labelClassName={LABEL_COL}
-										value={ownOffsets.xOffset ?? merged.xOffset}
-										step={1}
-										onChange={(xOffset) => patchOffsets({ xOffset })}
-										inputClassName="w-16"
-										suffix="px"
-									/>
-									<NumberInput
-										label="Y"
-										labelClassName={LABEL_COL}
-										value={-(ownOffsets.yOffset ?? merged.yOffset)}
-										step={1}
-										onChange={(n) => patchOffsets({ yOffset: -n })}
-										inputClassName="w-16"
-										suffix="px"
-									/>
+									<div className="flex items-center gap-2">
+										<NumberInput
+											label="X"
+											labelClassName={LABEL_COL}
+											value={ownOffsets.xOffset ?? merged.xOffset}
+											step={1}
+											onChange={(xOffset) => patchOffsets({ xOffset })}
+											inputClassName="w-16"
+											suffix="px"
+										/>
+										{(ownOffsets.xOffset ?? merged.xOffset) !== 0 && (
+											<ResetLink onClick={() => patchOffsets({ xOffset: 0 })} />
+										)}
+									</div>
+									<div className="flex items-center gap-2">
+										<NumberInput
+											label="Y"
+											labelClassName={LABEL_COL}
+											value={-(ownOffsets.yOffset ?? merged.yOffset)}
+											step={1}
+											onChange={(n) => patchOffsets({ yOffset: -n })}
+											inputClassName="w-16"
+											suffix="px"
+										/>
+										{(ownOffsets.yOffset ?? merged.yOffset) !== 0 && (
+											<ResetLink onClick={() => patchOffsets({ yOffset: 0 })} />
+										)}
+									</div>
 									{/* This label's own rules, under its own header —
 									 *  each label positions on its own, so each gets its
 									 *  own "+ Add rule". */}
@@ -1497,7 +1515,7 @@ export const DataLabelsPanel = () => {
 					)}
 				</div>
 				<hr className="border-stone-200 dark:border-stone-700" />
-				<Toggle
+				<Checkbox
 					label="Wrap text"
 					checked={merged.wrapText === true}
 					onChange={(wrapText) => updateCfg({ wrapText })}
@@ -1507,18 +1525,23 @@ export const DataLabelsPanel = () => {
 						<NumberInput
 							label="Characters"
 							labelClassName={LABEL_COL_NESTED}
-							value={merged.wrapMaxChars ?? 20}
+							value={merged.wrapMaxChars ?? DEFAULT_WRAP_CHARS}
 							min={1}
 							step={1}
 							onChange={(wrapMaxChars) => updateCfg({ wrapMaxChars })}
 							inputClassName="w-16"
 						/>
+						{(merged.wrapMaxChars ?? DEFAULT_WRAP_CHARS) !== DEFAULT_WRAP_CHARS && (
+							<ResetLink
+								onClick={() => updateCfg({ wrapMaxChars: DEFAULT_WRAP_CHARS })}
+							/>
+						)}
 					</div>
 				)}
 				{/* Collision handling sits with the other placement knobs: it
 				 *  moves labels, so it belongs beside wrap / nudges rather than
 				 *  with the selection of WHICH labels render. */}
-				<Toggle
+				<Checkbox
 					label="Avoid overlapping labels"
 					checked={merged.avoidOverlaps === true}
 					onChange={(avoidOverlaps) => updateCfg({ avoidOverlaps })}
@@ -1526,8 +1549,7 @@ export const DataLabelsPanel = () => {
 				</>
 				)}
 				{isBarMode && primaryLabel && (
-					<>
-						<hr className="border-stone-200 dark:border-stone-700" />
+					<div className="vc-divider-group">
 						<span className="vc-group-header">Placement</span>
 						<SelectInput
 							label={isVerticalBars ? "Vertical" : "Horizontal"}
@@ -1562,7 +1584,7 @@ export const DataLabelsPanel = () => {
 								? " Labels beside a vertical bar hang away from it, so alignment is set for you."
 								: ""}
 						</p>
-					</>
+					</div>
 				)}
 				{isAreaMode && (
 					<>
@@ -1590,161 +1612,208 @@ export const DataLabelsPanel = () => {
 					</>
 				)}
 				{(primaryLabel || isPolarMode || isRingLabels) && (
-					<>
-						<hr className="border-stone-200 dark:border-stone-700" />
+					<div className="vc-divider-group">
 						<span className="vc-group-header">Adjust position</span>
-					</>
-				)}
-				{/* Angle / R are polar-only — they only make sense around a pie,
-				 *  so they're hidden for cartesian charts. The X/Y pixel nudge
-				 *  below applies to every chart type, pies included. */}
-				{isPolarMode && (
-					<>
-						<div className="flex items-center gap-2 text-sm">
-							<NumberInput
-								label="Angle"
-								labelClassName="w-12 vc-muted"
-								value={merged.polarLabelAngle ?? 0}
-								step={5}
-								onChange={(polarLabelAngle) => updateCfg({ polarLabelAngle })}
-								inputClassName="w-16"
-								suffix="°"
-							/>
-							<NumberInput
-								label="R"
-								labelClassName="w-8 vc-muted"
-								value={merged.polarLabelRadius ?? 100}
-								min={0}
-								max={200}
-								step={5}
-								onChange={(polarLabelRadius) => updateCfg({ polarLabelRadius })}
-								inputClassName="w-16"
-								suffix="%"
-							/>
-						</div>
-						<p className="vc-help">
-							Angle rotates every label off its slice&apos;s midpoint (positive =
-							clockwise). R is the distance from each pie&apos;s center as a percent
-							of its radius — 100% is the border, lower pulls labels inside the
-							wedge, higher pushes them outside.
-						</p>
-					</>
-				)}
-				{/* Sunburst: same Angle nudge; R is RING-relative (percent across
-				 *  the ring's thickness) since each ring sits at its own radius. */}
-				{isRingLabels && (
-					<>
-						<div className="flex flex-col gap-2 text-sm">
-							<NumberInput
-								label="Angle"
-								labelClassName={LABEL_COL}
-								value={merged.polarLabelAngle ?? 0}
-								step={5}
-								onChange={(polarLabelAngle) => updateCfg({ polarLabelAngle })}
-								inputClassName="w-16"
-								suffix="°"
-							/>
-							<NumberInput
-								label="R"
-								labelClassName={LABEL_COL}
-								value={merged.ringLabelRadius ?? 50}
-								min={0}
-								max={200}
-								step={5}
-								onChange={(ringLabelRadius) => updateCfg({ ringLabelRadius })}
-								inputClassName="w-16"
-								suffix="%"
-							/>
-						</div>
-						<p className="vc-help">
-							Angle rotates every label off its arc&apos;s midpoint (positive =
-							clockwise). R is the label&apos;s position across its ring as a
-							percent of the ring&apos;s thickness — 50% is the middle, 0% the
-							inner edge, 100% the outer edge, higher pushes labels outside the
-							ring.
-						</p>
-					</>
-				)}
-				{!primaryLabel ? null : splitEndpoints ? (
-					<>
-						{/* One X/Y pair per population — effective values shown; the
-						 *  all-labels pair writes the base offsets, the series ends
-						 *  write their endpoint override blocks. */}
-						{splitPopulations.map((pop) => {
-							const patch = (p: { xOffset?: number; yOffset?: number }) =>
-								pop === "all"
-									? updateCfg(p)
-									: patchEndpoint(`${pop}Label`, p)
-							const xValue =
-								pop === "all"
-									? merged.xOffset
-									: (merged[`${pop}Label`]?.xOffset ?? merged.xOffset)
-							const yValue =
-								pop === "all"
-									? merged.yOffset
-									: (merged[`${pop}Label`]?.yOffset ?? merged.yOffset)
-							return (
-								<div key={pop} className="flex flex-col gap-2">
-									<span className="text-sm vc-muted">
-										{POPULATION_LABEL[pop]}
-									</span>
-									<div className="ml-6 flex flex-col gap-2 text-sm">
+						{/* Angle / R are polar-only — they only make sense around a pie,
+						 *  so they're hidden for cartesian charts. The X/Y pixel nudge
+						 *  below applies to every chart type, pies included. */}
+						{isPolarMode && (
+							<>
+								<div className="flex flex-col gap-2 text-sm">
+									<div className="flex items-center gap-2">
 										<NumberInput
-											label="X"
-											labelClassName={LABEL_COL_NESTED}
-											value={xValue}
-											step={1}
-											onChange={(xOffset) => patch({ xOffset })}
+											label="Angle"
+											labelClassName={LABEL_COL}
+											value={merged.polarLabelAngle ?? 0}
+											step={5}
+											onChange={(polarLabelAngle) => updateCfg({ polarLabelAngle })}
 											inputClassName="w-16"
-											suffix="px"
+											suffix="°"
 										/>
+										{(merged.polarLabelAngle ?? 0) !== 0 && (
+											<ResetLink onClick={() => updateCfg({ polarLabelAngle: 0 })} />
+										)}
+									</div>
+									<div className="flex items-center gap-2">
 										<NumberInput
-											label="Y"
-											labelClassName={LABEL_COL_NESTED}
-											value={-yValue}
-											step={1}
-											onChange={(n) => patch({ yOffset: -n })}
+											label="R"
+											labelClassName={LABEL_COL}
+											value={merged.polarLabelRadius ?? 100}
+											min={0}
+											max={200}
+											step={5}
+											onChange={(polarLabelRadius) => updateCfg({ polarLabelRadius })}
 											inputClassName="w-16"
-											suffix="px"
+											suffix="%"
 										/>
+										{(merged.polarLabelRadius ?? 100) !== 100 && (
+											<ResetLink onClick={() => updateCfg({ polarLabelRadius: 100 })} />
+										)}
 									</div>
 								</div>
-							)
-						})}
-					</>
-				) : (
-					<div className="flex flex-col gap-2 text-sm">
-						<NumberInput
-							label="X"
-							labelClassName={LABEL_COL}
-							value={merged.xOffset}
-							step={1}
-							onChange={(xOffset) => updateCfg({ xOffset })}
-							inputClassName="w-16"
-							suffix="px"
-						/>
-						<NumberInput
-							label="Y"
-							labelClassName={LABEL_COL}
-							value={-merged.yOffset}
-							step={1}
-							onChange={(n) => updateCfg({ yOffset: -n })}
-							inputClassName="w-16"
-							suffix="px"
-						/>
+								<p className="vc-help">
+									Angle rotates every label off its slice&apos;s midpoint (positive =
+									clockwise). R is the distance from each pie&apos;s center as a percent
+									of its radius — 100% is the border, lower pulls labels inside the
+									wedge, higher pushes them outside.
+								</p>
+							</>
+						)}
+						{/* Sunburst: same Angle nudge; R is RING-relative (percent across
+						 *  the ring's thickness) since each ring sits at its own radius. */}
+						{isRingLabels && (
+							<>
+								<div className="flex flex-col gap-2 text-sm">
+									<div className="flex items-center gap-2">
+										<NumberInput
+											label="Angle"
+											labelClassName={LABEL_COL}
+											value={merged.polarLabelAngle ?? 0}
+											step={5}
+											onChange={(polarLabelAngle) => updateCfg({ polarLabelAngle })}
+											inputClassName="w-16"
+											suffix="°"
+										/>
+										{(merged.polarLabelAngle ?? 0) !== 0 && (
+											<ResetLink onClick={() => updateCfg({ polarLabelAngle: 0 })} />
+										)}
+									</div>
+									<div className="flex items-center gap-2">
+										<NumberInput
+											label="R"
+											labelClassName={LABEL_COL}
+											value={merged.ringLabelRadius ?? 50}
+											min={0}
+											max={200}
+											step={5}
+											onChange={(ringLabelRadius) => updateCfg({ ringLabelRadius })}
+											inputClassName="w-16"
+											suffix="%"
+										/>
+										{(merged.ringLabelRadius ?? 50) !== 50 && (
+											<ResetLink onClick={() => updateCfg({ ringLabelRadius: 50 })} />
+										)}
+									</div>
+								</div>
+								<p className="vc-help">
+									Angle rotates every label off its arc&apos;s midpoint (positive =
+									clockwise). R is the label&apos;s position across its ring as a
+									percent of the ring&apos;s thickness — 50% is the middle, 0% the
+									inner edge, 100% the outer edge, higher pushes labels outside the
+									ring.
+								</p>
+							</>
+						)}
+						{!primaryLabel ? null : splitEndpoints ? (
+							<>
+								{/* One X/Y pair per population — effective values shown; the
+								 *  all-labels pair writes the base offsets, the series ends
+								 *  write their endpoint override blocks. */}
+								{splitPopulations.map((pop) => {
+									const patch = (p: { xOffset?: number; yOffset?: number }) =>
+										pop === "all"
+											? updateCfg(p)
+											: patchEndpoint(`${pop}Label`, p)
+									const xValue =
+										pop === "all"
+											? merged.xOffset
+											: (merged[`${pop}Label`]?.xOffset ?? merged.xOffset)
+									const yValue =
+										pop === "all"
+											? merged.yOffset
+											: (merged[`${pop}Label`]?.yOffset ?? merged.yOffset)
+									// Reset: the all-labels pair back to 0; a series end back to
+									// inheriting the all-labels pair (its override cleared).
+									const ownOf = (k: "xOffset" | "yOffset") =>
+										pop === "all" ? null : (merged[`${pop}Label`]?.[k] ?? null)
+									const xChanged =
+										pop === "all" ? merged.xOffset !== 0 : ownOf("xOffset") != null
+									const yChanged =
+										pop === "all" ? merged.yOffset !== 0 : ownOf("yOffset") != null
+									const resetPop = (k: "xOffset" | "yOffset") =>
+										pop === "all"
+											? updateCfg({ [k]: 0 })
+											: patchEndpoint(`${pop}Label`, { [k]: null })
+									return (
+										<div key={pop} className="flex flex-col gap-2">
+											<span className="text-sm vc-muted">
+												{POPULATION_LABEL[pop]}
+											</span>
+											<div className="ml-6 flex flex-col gap-2 text-sm">
+												<div className="flex items-center gap-2">
+													<NumberInput
+														label="X"
+														labelClassName={LABEL_COL_NESTED}
+														value={xValue}
+														step={1}
+														onChange={(xOffset) => patch({ xOffset })}
+														inputClassName="w-16"
+														suffix="px"
+													/>
+													{xChanged && <ResetLink onClick={() => resetPop("xOffset")} />}
+												</div>
+												<div className="flex items-center gap-2">
+													<NumberInput
+														label="Y"
+														labelClassName={LABEL_COL_NESTED}
+														value={-yValue}
+														step={1}
+														onChange={(n) => patch({ yOffset: -n })}
+														inputClassName="w-16"
+														suffix="px"
+													/>
+													{yChanged && <ResetLink onClick={() => resetPop("yOffset")} />}
+												</div>
+											</div>
+										</div>
+									)
+								})}
+							</>
+						) : (
+							<div className="flex flex-col gap-2 text-sm">
+								<div className="flex items-center gap-2">
+									<NumberInput
+										label="X"
+										labelClassName={LABEL_COL}
+										value={merged.xOffset}
+										step={1}
+										onChange={(xOffset) => updateCfg({ xOffset })}
+										inputClassName="w-16"
+										suffix="px"
+									/>
+									{merged.xOffset !== 0 && (
+										<ResetLink onClick={() => updateCfg({ xOffset: 0 })} />
+									)}
+								</div>
+								<div className="flex items-center gap-2">
+									<NumberInput
+										label="Y"
+										labelClassName={LABEL_COL}
+										value={-merged.yOffset}
+										step={1}
+										onChange={(n) => updateCfg({ yOffset: -n })}
+										inputClassName="w-16"
+										suffix="px"
+									/>
+									{merged.yOffset !== 0 && (
+										<ResetLink onClick={() => updateCfg({ yOffset: 0 })} />
+									)}
+								</div>
+							</div>
+						)}
+						{/* The ARRANGED label's rules. With the variables separate there is
+						 *  no arranged label, and every own label carries its rules in its
+						 *  own subsection above. */}
+						{primaryLabel && (
+							<PositionRulesEditor
+								rules={merged.positionRules ?? []}
+								onChange={(positionRules) => updateCfg({ positionRules })}
+								baseXOffset={merged.xOffset}
+								baseYOffset={merged.yOffset}
+								nested={splitEndpoints}
+							/>
+						)}
 					</div>
-				)}
-				{/* The ARRANGED label's rules. With the variables separate there is
-				 *  no arranged label, and every own label carries its rules in its
-				 *  own subsection above. */}
-				{primaryLabel && (
-					<PositionRulesEditor
-						rules={merged.positionRules ?? []}
-						onChange={(positionRules) => updateCfg({ positionRules })}
-						baseXOffset={merged.xOffset}
-						baseYOffset={merged.yOffset}
-						nested={splitEndpoints}
-					/>
 				)}
 				</div>
 			</CollapsibleSubsection>

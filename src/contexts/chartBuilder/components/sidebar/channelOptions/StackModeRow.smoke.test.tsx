@@ -106,7 +106,7 @@ describe("StackModeRow — labels and config writes", () => {
 				<StackModeRow channel="pattern" />
 			</>
 		)
-		const groups = getAllByRole("group", { name: "Layout" })
+		const groups = getAllByRole("radiogroup", { name: "Layout" })
 		expect(groups).toHaveLength(2)
 		// Each row offers all three modes, defaulting to Stack.
 		for (const group of groups) {
@@ -117,7 +117,7 @@ describe("StackModeRow — labels and config writes", () => {
 				"Overlay",
 			])
 			expect(
-				buttons.map((b) => b.getAttribute("aria-pressed"))
+				buttons.map((b) => b.getAttribute("aria-checked"))
 			).toEqual(["true", "false", "false"])
 		}
 	})
@@ -131,8 +131,8 @@ describe("StackModeRow — labels and config writes", () => {
 				<StackModeRow channel="pattern" />
 			</>
 		)
-		expect(getAllByRole("group", { name: "Stacking" })).toHaveLength(1)
-		expect(queryAllByRole("group", { name: "Layout" })).toHaveLength(0)
+		expect(getAllByRole("radiogroup", { name: "Stacking" })).toHaveLength(1)
+		expect(queryAllByRole("radiogroup", { name: "Layout" })).toHaveLength(0)
 	})
 
 	it("clicking a mode writes only that channel's stackMode", () => {
@@ -144,15 +144,15 @@ describe("StackModeRow — labels and config writes", () => {
 				<StackModeRow channel="pattern" />
 			</>
 		)
-		const [hueGroup, patternGroup] = getAllByRole("group", { name: "Layout" })
+		const [hueGroup, patternGroup] = getAllByRole("radiogroup", { name: "Layout" })
 		const groupBtn = [...hueGroup!.querySelectorAll("button")].find(
 			(b) => b.textContent === "Group"
 		)!
 		fireEvent.click(groupBtn)
 		// Hue row flips to Group; pattern row stays on Stack.
-		expect(groupBtn.getAttribute("aria-pressed")).toBe("true")
+		expect(groupBtn.getAttribute("aria-checked")).toBe("true")
 		const patternPressed = [...patternGroup!.querySelectorAll("button")].map(
-			(b) => b.getAttribute("aria-pressed")
+			(b) => b.getAttribute("aria-checked")
 		)
 		expect(patternPressed).toEqual(["true", "false", "false"])
 	})
@@ -193,6 +193,6 @@ describe("StackModeRow — chart-mode gate", () => {
 			},
 			<StackModeRow channel="hue" />
 		)
-		expect(getAllByRole("group", { name: "Stacking" })).toHaveLength(1)
+		expect(getAllByRole("radiogroup", { name: "Stacking" })).toHaveLength(1)
 	})
 })

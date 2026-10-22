@@ -57,7 +57,9 @@ import { LABEL_COL, LabelSpacer } from "../../../../../components/ui/LabeledFiel
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
-import { Toggle } from "../../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../../components/ui/Checkbox"
+import { Segmented } from "../../../../../components/ui/Segmented"
+import { combine as c } from "../../../../../lib/cls"
 import {
 	ordinalSuffix,
 	SpineControls,
@@ -641,7 +643,7 @@ export const ConnectionOptionsPanel = () => {
 			 *  x / y position panels use. */}
 			{isRingFlow && connectionFieldName && (
 				<>
-					<Toggle
+					<Checkbox
 						label="Show axis"
 						className="px-2"
 						checked={axis.enabled}
@@ -733,7 +735,7 @@ export const ConnectionOptionsPanel = () => {
 								{/* Sparse flag: off writes `undefined` so an untouched
 								 *  axis carries no `verticalLabels` key. */}
 								<div>
-									<Toggle
+									<Checkbox
 										label="Make all tick labels vertical"
 										checked={axis.verticalLabels === true}
 										onChange={(on) =>
@@ -767,25 +769,12 @@ export const ConnectionOptionsPanel = () => {
 			{isLineOrAreaMode && !!connectionFieldName && (
 				<CollapsibleSubsection title="Polygon" changed={ch.fill}>
 					<div className="flex flex-col gap-2">
-						<label className="flex items-center gap-2 text-sm">
-							<input
-								type="checkbox"
-								checked={isAreaMode}
-								onChange={(e) =>
-									e.target.checked ? switchToArea() : switchToLine()
-								}
-								className="h-3 w-3"
-							/>
-							<span
-								className={
-									ch.fill
-										? "font-semibold !text-vc-section-header"
-										: "vc-muted"
-								}
-							>
-								Fill polygon
-							</span>
-						</label>
+						<Checkbox
+							label="Fill polygon"
+							checked={isAreaMode}
+							onChange={(on) => (on ? switchToArea() : switchToLine())}
+							changed={ch.fill}
+						/>
 						{isAreaMode && (
 							<StackingRow
 								encodings={encodings}
@@ -803,28 +792,17 @@ export const ConnectionOptionsPanel = () => {
 				>
 					{lineThicknessRow}
 					<div className="flex flex-col gap-1.5">
-						<label className="flex items-center gap-2 text-sm">
-							<input
-								type="checkbox"
-								checked={ch.smoothing}
-								onChange={(e) =>
-									// Single stored field: on → a sensible default amount,
-									// off → 0. The Amount slider (shown below when on) is
-									// the fine control; no separate boolean is kept.
-									updateCfg({ smoothing: e.target.checked ? 0.6 : 0 })
-								}
-								className="h-3 w-3"
-							/>
-							<span
-								className={
-									ch.smoothing
-										? "text-sm font-semibold !text-vc-section-header"
-										: "vc-muted"
-								}
-							>
-								Smooth line
-							</span>
-						</label>
+						<Checkbox
+							label="Smooth line"
+							checked={ch.smoothing}
+							onChange={(on) =>
+								// Single stored field: on → a sensible default amount,
+								// off → 0. The Amount slider (shown below when on) is
+								// the fine control; no separate boolean is kept.
+								updateCfg({ smoothing: on ? 0.6 : 0 })
+							}
+							changed={ch.smoothing}
+						/>
 						{ch.smoothing && (
 							<label className="flex items-center gap-2 text-sm">
 								<span className={LABEL_COL}>
@@ -846,35 +824,23 @@ export const ConnectionOptionsPanel = () => {
 								</span>
 							</label>
 						)}
-						<span
-							className={
-								ch.lineCap
-									? "text-sm font-semibold !text-vc-section-header"
-									: "text-sm vc-muted"
-							}
-						>
-							Line cap
-						</span>
-						{(
-							[
-								["round", "Round"],
-								["square", "Square"],
-							] as const
-						).map(([value, label]) => (
-							<label key={value} className="flex items-center gap-2 text-sm">
-								<input
-									type="radio"
-									name="connection-line-cap"
-									value={value}
-									checked={(cfg.lineCap ?? "round") === value}
-									onChange={() => updateCfg({ lineCap: value })}
-									className="h-3 w-3"
-								/>
-								<span className="vc-muted">
-									{label}
-								</span>
-							</label>
-						))}
+						<div className="flex items-center gap-2 text-sm">
+							<span
+								className={c(
+									"shrink-0",
+									LABEL_COL,
+									ch.lineCap && "font-semibold !text-vc-section-header"
+								)}
+							>
+								Line cap
+							</span>
+							<Segmented
+								ariaLabel="Line cap"
+								value={cfg.lineCap ?? "round"}
+								segments={LINE_CAP_SEGMENTS}
+								onChange={(lineCap) => updateCfg({ lineCap })}
+							/>
+						</div>
 					</div>
 				</CollapsibleSubsection>
 			)}
@@ -951,23 +917,12 @@ export const ConnectionOptionsPanel = () => {
 			{isPolygonMode && !!connectionFieldName && (
 				<CollapsibleSubsection title="Polygon" changed={ch.fill}>
 					<div className="flex flex-col gap-2">
-						<label className="flex items-center gap-2 text-sm">
-							<input
-								type="checkbox"
-								checked={cfg.fillPolygon === true}
-								onChange={(e) => updateCfg({ fillPolygon: e.target.checked })}
-								className="h-3 w-3"
-							/>
-							<span
-								className={
-									ch.fill
-										? "font-semibold !text-vc-section-header"
-										: "vc-muted"
-								}
-							>
-								Fill polygon
-							</span>
-						</label>
+						<Checkbox
+							label="Fill polygon"
+							checked={cfg.fillPolygon === true}
+							onChange={(fillPolygon) => updateCfg({ fillPolygon })}
+							changed={ch.fill}
+						/>
 						<p className="vc-help">
 							Adjust line and fill opacity in Opacity.
 						</p>
@@ -1060,39 +1015,30 @@ const StackingRow = ({
 		setConfigs((prev) => writeStackMode(prev, channel, next))
 	}
 
-	const buttonClass = (active: boolean) =>
-		active
-			? "vc-toggle-on px-2 py-1 text-sm"
-			: "vc-toggle-off px-2 py-1 text-sm"
-
 	return (
 		<div className="flex items-center gap-2 text-sm">
-			<span className={LABEL_COL}>Stacking</span>
-			<div
-				role="group"
-				aria-label="Stacking"
-				className="inline-flex overflow-hidden rounded border border-vc-brand-text"
-			>
-				<button
-					type="button"
-					onClick={() => setValue("stack")}
-					className={buttonClass(value === "stack")}
-					aria-pressed={value === "stack"}
-				>
-					Stack
-				</button>
-				<button
-					type="button"
-					onClick={() => setValue("overlay")}
-					className={buttonClass(value === "overlay")}
-					aria-pressed={value === "overlay"}
-				>
-					Overlay
-				</button>
-			</div>
+			<span className={`shrink-0 ${LABEL_COL}`}>Stacking</span>
+			<Segmented
+				ariaLabel="Stacking"
+				value={value}
+				segments={STACKING_SEGMENTS}
+				onChange={setValue}
+			/>
 		</div>
 	)
 }
+
+/** An area chart offers only Stack / Overlay (a stored "group" from a bar
+ *  chart highlights neither). */
+const STACKING_SEGMENTS: ReadonlyArray<{ key: StackMode; label: string }> = [
+	{ key: "stack", label: "Stack" },
+	{ key: "overlay", label: "Overlay" },
+]
+
+const LINE_CAP_SEGMENTS = [
+	{ key: "round", label: "Round" },
+	{ key: "square", label: "Square" },
+] as const
 
 /** Write a new stackMode into the primary color channel's config slot.
  *  Mirrors the helper in `StackModeRow` so the Connection-panel toggle

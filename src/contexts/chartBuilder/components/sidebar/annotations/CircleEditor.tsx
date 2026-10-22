@@ -2,6 +2,8 @@ import type { ReactNode } from "react"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
+import { Segmented } from "../../../../../components/ui/Segmented"
+import { Select } from "../../../../../components/ui/Select"
 import {
 	radiusUnitOf,
 	type BoxAnnotationStyle,
@@ -27,11 +29,16 @@ import {
 	usePlotDims,
 } from "./sections"
 
-/** The px / % toggle's buttons, in display order. */
+/** The px / % unit dropdown's options, in display order. */
 const RADIUS_UNITS: ReadonlyArray<readonly [RadiusUnit, string]> = [
 	["px", "px"],
 	["percent", "%"],
 ]
+
+const RADIUS_AXIS_SEGMENTS = [
+	{ key: "x", label: "x" },
+	{ key: "y", label: "y" },
+] as const
 
 /** Helper line under the radius box when its axis has no data units. */
 const radiusUnitHelpFor = (axis: "x" | "y"): string =>
@@ -207,43 +214,37 @@ export const CircleEditor = ({
 								onChange={(v) => onChange({ centerY: v })}
 							/>
 							{showRadiusUnit ? (
-								<div className="flex items-center gap-2">
-									<NumberInput
-										label={`Radius (${circle.radiusAxis.toUpperCase()})`}
-										labelClassName={LABEL_COL}
-										value={cleanNumber(
-											radiusUnit === "px"
-												? toNumber(circle.radius)
-												: toNumber(circle.radius) * 100
-										)}
-										step={1}
-										min={0}
-										onChange={(v) =>
-											onChange({ radius: radiusUnit === "px" ? v : v / 100 })
-										}
-									/>
-									<div
-										role="group"
-										aria-label="Radius unit"
-										className="inline-flex overflow-hidden rounded border border-vc-brand-text"
-									>
-										{RADIUS_UNITS.map(([unit, text]) => (
-											<button
-												key={unit}
-												type="button"
-												onClick={() => setRadiusUnit(unit)}
-												className={
-													radiusUnit === unit
-														? "vc-toggle-on px-2 py-1 text-sm"
-														: "vc-toggle-off px-2 py-1 text-sm"
-												}
-												aria-pressed={radiusUnit === unit}
-											>
-												{text}
-											</button>
-										))}
-									</div>
-								</div>
+								// Unit dropdown beside the box — the same pattern as the
+								// Caption panel's px / % offset fields.
+								<NumberInput
+									label={`Radius (${circle.radiusAxis.toUpperCase()})`}
+									labelClassName={LABEL_COL}
+									value={cleanNumber(
+										radiusUnit === "px"
+											? toNumber(circle.radius)
+											: toNumber(circle.radius) * 100
+									)}
+									step={1}
+									min={0}
+									onChange={(v) =>
+										onChange({ radius: radiusUnit === "px" ? v : v / 100 })
+									}
+									suffix={
+										<Select
+											aria-label="Radius unit"
+											value={radiusUnit}
+											onChange={(e) =>
+												setRadiusUnit(e.target.value as RadiusUnit)
+											}
+										>
+											{RADIUS_UNITS.map(([unit, text]) => (
+												<option key={unit} value={unit}>
+													{text}
+												</option>
+											))}
+										</Select>
+									}
+								/>
 							) : (
 								<NumberInput
 									label={isRadar ? "Radius (R)" : `Radius (${circle.radiusAxis.toUpperCase()})`}
@@ -295,39 +296,13 @@ export const CircleEditor = ({
 					    radius-axis choice is meaningless there — hide it. */}
 					{!isRadar && (
 						<div className="flex items-center gap-2 text-sm">
-							<span className={LABEL_COL}>
-								Radius axis
-							</span>
-							<div
-								role="group"
-								aria-label="Radius axis"
-								className="inline-flex overflow-hidden rounded border border-vc-brand-text"
-							>
-								<button
-									type="button"
-									onClick={() => onChange({ radiusAxis: "x" })}
-									className={
-										circle.radiusAxis === "x"
-											? "vc-toggle-on px-2 py-1 text-sm"
-											: "vc-toggle-off px-2 py-1 text-sm"
-									}
-									aria-pressed={circle.radiusAxis === "x"}
-								>
-									x
-								</button>
-								<button
-									type="button"
-									onClick={() => onChange({ radiusAxis: "y" })}
-									className={
-										circle.radiusAxis === "y"
-											? "vc-toggle-on px-2 py-1 text-sm"
-											: "vc-toggle-off px-2 py-1 text-sm"
-									}
-									aria-pressed={circle.radiusAxis === "y"}
-								>
-									y
-								</button>
-							</div>
+							<span className={`shrink-0 ${LABEL_COL}`}>Radius axis</span>
+							<Segmented
+								ariaLabel="Radius axis"
+								value={circle.radiusAxis}
+								segments={RADIUS_AXIS_SEGMENTS}
+								onChange={(radiusAxis) => onChange({ radiusAxis })}
+							/>
 						</div>
 					)}
 				</div>

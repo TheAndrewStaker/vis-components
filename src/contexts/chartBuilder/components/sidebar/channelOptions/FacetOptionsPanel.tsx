@@ -11,6 +11,7 @@ import {
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
+import { SidebarJumpLink } from "../../../../../components/ui/SidebarJumpLink"
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { axisFieldsFor, axisRangeIsContinuous } from "../../../lib/axisFields"
 import { isPieModeId } from "../../../lib/chartModes/families"
@@ -809,6 +810,10 @@ export const FacetOptionsPanel = () => {
 							</>
 						)
 					})()}
+				<SidebarJumpLink
+					label="Edit facet titles →"
+					target={{ section: "Titles", subsection: "facet-titles" }}
+				/>
 			</CollapsibleSubsection>
 		</div>
 	)

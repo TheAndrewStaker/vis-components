@@ -17,6 +17,7 @@ import {
 import { CHIP_INK } from "../../../lib/previewInk"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
+import { ResetLink } from "../../../../../components/ui/ResetLink"
 
 import { PREVIEW_SIZE, swatchChipClass } from "./glyphShared"
 import { Button } from "../../../../../components/ui/Button"
@@ -274,24 +275,42 @@ export const CustomGlyphEditor = ({
 					<span className="vc-group-header">Adjust position</span>
 					<div className="flex flex-wrap items-center gap-2">
 						<div className="flex flex-col gap-2">
-							<NumberInput
-								label="X"
-								labelClassName={LABEL_COL}
-								value={nudgeX}
-								step={5}
-								onChange={setNudgeX}
-								inputClassName="w-20"
-								suffix="%"
-							/>
-							<NumberInput
-								label="Y"
-								labelClassName={LABEL_COL}
-								value={nudgeY}
-								step={5}
-								onChange={setNudgeY}
-								inputClassName="w-20"
-								suffix="%"
-							/>
+							<div className="flex items-center gap-2">
+								<NumberInput
+									label="X"
+									labelClassName={LABEL_COL}
+									value={nudgeX}
+									step={5}
+									onChange={setNudgeX}
+									inputClassName="w-20"
+									suffix="%"
+								/>
+								{nudgeX !== 0 && (
+									<ResetLink
+										ariaLabel="Reset X position"
+										onClick={() => setNudgeX(0)}
+										underline
+									/>
+								)}
+							</div>
+							<div className="flex items-center gap-2">
+								<NumberInput
+									label="Y"
+									labelClassName={LABEL_COL}
+									value={nudgeY}
+									step={5}
+									onChange={setNudgeY}
+									inputClassName="w-20"
+									suffix="%"
+								/>
+								{nudgeY !== 0 && (
+									<ResetLink
+										ariaLabel="Reset Y position"
+										onClick={() => setNudgeY(0)}
+										underline
+									/>
+								)}
+							</div>
 						</div>
 						<NudgePreview
 							glyph={{

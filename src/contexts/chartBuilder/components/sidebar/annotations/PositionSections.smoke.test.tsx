@@ -50,9 +50,9 @@ describe("annotation Position — Adjust by + From", () => {
 			/>
 		)
 		// The layer toggle lives at the bottom of Position, not loose in the card.
-		expect(screen.queryByRole("group", { name: "Layer order" })).toBeNull()
+		expect(screen.queryByRole("radiogroup", { name: "Layer order" })).toBeNull()
 		expandPosition()
-		expect(screen.getByRole("group", { name: "Layer order" })).toBeTruthy()
+		expect(screen.getByRole("radiogroup", { name: "Layer order" })).toBeTruthy()
 		const options = Array.from(
 			screen.getByLabelText<HTMLSelectElement>("Adjust by").options
 		).map((o) => o.value)

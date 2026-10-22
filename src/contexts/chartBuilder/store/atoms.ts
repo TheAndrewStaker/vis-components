@@ -982,6 +982,14 @@ export const sidebarCollapsedAtom = persistedAtom<Record<string, boolean>>(
 	saveSidebarCollapsed
 )
 
+/** Transient "jump here" request for the sidebar: a link elsewhere in the
+ * sidebar (e.g. Legend text's "Edit legend titles →") sets it, the
+ * `CollapsibleSubsection` whose `jumpId` matches `subsection` opens, scrolls
+ * itself into view and clears it. Never persisted. See `useSidebarJump`
+ * (components/ui/SidebarJumpLink). */
+export type SidebarJumpTarget = { section: string; subsection?: string }
+export const sidebarJumpTargetAtom = atom<SidebarJumpTarget | null>(null)
+
 /** Which library folders are collapsed. Missing id = expanded. Persisted so
  * the tree keeps its shape across editor round-trips and reloads, and synced
  * across tabs so a stale library tab can't save its old set over a newer one. */

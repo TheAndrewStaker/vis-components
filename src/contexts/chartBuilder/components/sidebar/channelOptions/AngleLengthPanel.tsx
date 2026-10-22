@@ -31,6 +31,8 @@ import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
+import { Segmented } from "../../../../../components/ui/Segmented"
+import { combine as c } from "../../../../../lib/cls"
 import { SpineControls, TickFormatControl, ordinalSuffix } from "./AxisOptionsPanel"
 
 // ---------------------------------------------------------------------------
@@ -227,6 +229,16 @@ const AngleExtentControls = ({
 	</>
 )
 
+const PIE_DONUT_SEGMENTS = [
+	{ key: "pie", label: "Pie" },
+	{ key: "donut", label: "Donut" },
+] as const
+
+const LINE_CAP_SEGMENTS = [
+	{ key: "round", label: "Round" },
+	{ key: "square", label: "Square" },
+] as const
+
 /** Pie ↔ Donut toggle plus the donut hole-radius input, styled to match
  *  the Line/Area "Chart type" toggle in ConnectionOptionsPanel. "Donut"
  *  sets the hole to a sensible default; "Pie" zeroes it. The hole-radius
@@ -240,53 +252,44 @@ const PieDonutControls = ({
 	holeRadius: number
 	updateCfg: (next: Partial<AngleConfig>) => void
 }) => {
-	const buttonClass = (active: boolean) =>
-		active
-			? "vc-toggle-on px-2 py-1 text-sm"
-			: "vc-toggle-off px-2 py-1 text-sm"
-
 	return (
 		<>
 			<div className="flex items-center gap-2 text-sm">
-				<span className={LABEL_COL}>Chart type</span>
-				<div
-					role="group"
-					aria-label="Chart type"
-					className="inline-flex overflow-hidden rounded border border-vc-brand-text"
-				>
-					<button
-						type="button"
-						onClick={() => updateCfg({ donutHoleRadius: 0 })}
-						className={buttonClass(!isDonut)}
-						aria-pressed={!isDonut}
-					>
-						Pie
-					</button>
-					<button
-						type="button"
-						onClick={() =>
-							updateCfg({ donutHoleRadius: DEFAULT_DONUT_HOLE_RADIUS })
-						}
-						className={buttonClass(isDonut)}
-						aria-pressed={isDonut}
-					>
-						Donut
-					</button>
-				</div>
+				<span className={`shrink-0 ${LABEL_COL}`}>Chart type</span>
+				<Segmented
+					ariaLabel="Chart type"
+					value={isDonut ? "donut" : "pie"}
+					segments={PIE_DONUT_SEGMENTS}
+					onChange={(kind) =>
+						updateCfg({
+							donutHoleRadius: kind === "donut" ? DEFAULT_DONUT_HOLE_RADIUS : 0,
+						})
+					}
+				/>
 			</div>
 			{isDonut && (
-				<NumberInput
-					label="Hole radius"
-					labelClassName={LABEL_COL}
-					value={holeRadius}
-					min={5}
-					max={90}
-					step={5}
-					clamp
-					onChange={(n) => updateCfg({ donutHoleRadius: n })}
-					inputClassName="w-16"
-					suffix="%"
-				/>
+				<div className="flex items-center gap-2">
+					<NumberInput
+						label="Hole radius"
+						labelClassName={LABEL_COL}
+						value={holeRadius}
+						min={5}
+						max={90}
+						step={5}
+						clamp
+						onChange={(n) => updateCfg({ donutHoleRadius: n })}
+						inputClassName="w-16"
+						suffix="%"
+					/>
+					{holeRadius !== DEFAULT_DONUT_HOLE_RADIUS && (
+						<ResetLink
+							onClick={() =>
+								updateCfg({ donutHoleRadius: DEFAULT_DONUT_HOLE_RADIUS })
+							}
+							underline
+						/>
+					)}
+				</div>
 			)}
 		</>
 	)
@@ -823,34 +826,22 @@ const SegmentPropertiesSection = () => {
 						)}
 					</div>
 				)}
-				<div className="flex flex-col gap-1.5">
+				<div className="flex items-center gap-2 text-sm">
 					<span
-						className={
-							ch.lineCap
-								? "text-sm font-semibold !text-vc-section-header"
-								: "text-sm vc-muted"
-						}
+						className={c(
+							"shrink-0",
+							LABEL_COL,
+							ch.lineCap && "font-semibold !text-vc-section-header"
+						)}
 					>
 						Line cap
 					</span>
-					{(
-						[
-							["round", "Round"],
-							["square", "Square"],
-						] as const
-					).map(([value, label]) => (
-						<label key={value} className="flex items-center gap-2 text-sm">
-							<input
-								type="radio"
-								name="segment-line-cap"
-								value={value}
-								checked={lineCap === value}
-								onChange={() => updateLength({ segmentLineCap: value })}
-								className="h-3 w-3"
-							/>
-							<span className="vc-muted">{label}</span>
-						</label>
-					))}
+					<Segmented
+						ariaLabel="Line cap"
+						value={lineCap}
+						segments={LINE_CAP_SEGMENTS}
+						onChange={(segmentLineCap) => updateLength({ segmentLineCap })}
+					/>
 				</div>
 			</div>
 		</CollapsibleSubsection>

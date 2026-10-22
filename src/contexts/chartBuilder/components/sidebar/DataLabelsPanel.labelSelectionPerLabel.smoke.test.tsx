@@ -160,10 +160,15 @@ const labelledControl = (root: ParentNode, text: string) => {
 	)
 }
 
-const checkboxFor = (root: ParentNode, text: string) =>
-	[...root.querySelectorAll("label")]
-		.find((l) => l.textContent?.trim() === text)
-		?.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? null
+const checkboxFor = (root: ParentNode, text: string) => {
+	const label = [...root.querySelectorAll("label")].find(
+		(l) => l.textContent?.trim() === text
+	)
+	if (!label) return null
+	return label.htmlFor
+		? root.querySelector<HTMLInputElement>(`#${CSS.escape(label.htmlFor)}`)
+		: label.querySelector<HTMLInputElement>('input[type="checkbox"]')
+}
 
 describe("DataLabelsPanel — per-label Of each and Apply to all facets", () => {
 	afterEach(cleanup)

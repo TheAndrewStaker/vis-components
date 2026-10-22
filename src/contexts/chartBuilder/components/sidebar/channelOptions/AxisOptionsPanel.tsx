@@ -47,7 +47,8 @@ import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 import { Select } from "../../../../../components/ui/Select"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
-import { Toggle } from "../../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../../components/ui/Checkbox"
+import { Segmented } from "../../../../../components/ui/Segmented"
 import { AlignmentControl, FontEditor } from "../LabelsPanel"
 import { Input } from "../../../../../components/ui/Input"
 import { DateInput } from "../../../../../components/ui/DateInput"
@@ -654,7 +655,7 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 					)}
 				</div>
 				<div className="flex flex-col gap-1">
-					<Toggle
+					<Checkbox
 						label="Wrap text"
 						checked={config.wrapTickLabels === true}
 						onChange={(wrapTickLabels) => update({ wrapTickLabels })}
@@ -726,10 +727,19 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 							offset: undefined,
 						})
 					}
-					onReset={() =>
+					// Each reset zeroes its own axis and keeps the other's effective
+					// value; the legacy `offset` is folded out like any other write.
+					onResetX={() =>
 						update({
 							offset: undefined,
 							offsetX: undefined,
+							offsetY: effOffsetY === 0 ? undefined : effOffsetY,
+						})
+					}
+					onResetY={() =>
+						update({
+							offset: undefined,
+							offsetX: effOffsetX === 0 ? undefined : effOffsetX,
 							offsetY: undefined,
 						})
 					}
@@ -746,7 +756,7 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 					/>
 					{showSpineAtZero && (
 						<div className="flex flex-col gap-1">
-							<Toggle
+							<Checkbox
 								label="Set spine at 0"
 								checked={config.spineAtZero === true}
 								onChange={(on) =>
@@ -878,45 +888,50 @@ const AxisAdjustPositionControl = ({
 	offsetY,
 	changed,
 	onChange,
-	onReset,
+	onResetX,
+	onResetY,
 }: {
 	/** Effective nudge in screen px (legacy `offset` already folded in). */
 	offsetX: number
 	offsetY: number
 	changed: boolean
 	onChange: (next: { offsetX?: number; offsetY?: number }) => void
-	onReset: () => void
+	/** Per-input resets: each axis returns to 0 on its own. */
+	onResetX: () => void
+	onResetY: () => void
 }) => (
 	<div className="vc-divider-group">
+		<span className="vc-group-header">Adjust position</span>
 		<div className="flex items-center gap-2">
-			<span className="vc-group-header">Adjust position</span>
-			{(offsetX !== 0 || offsetY !== 0) && (
-				<ResetLink
-					onClick={onReset}
-					underline
-				/>
+			<NumberInput
+				label="X"
+				labelClassName={LABEL_COL}
+				value={offsetX}
+				step={1}
+				onChange={(n) => onChange({ offsetX: n })}
+				inputClassName="w-20"
+				suffix="px"
+				changed={changed}
+			/>
+			{offsetX !== 0 && (
+				<ResetLink onClick={onResetX} ariaLabel="Reset X position" underline />
 			)}
 		</div>
-		<NumberInput
-			label="X"
-			labelClassName={LABEL_COL}
-			value={offsetX}
-			step={1}
-			onChange={(n) => onChange({ offsetX: n })}
-			inputClassName="w-20"
-			suffix="px"
-			changed={changed}
-		/>
-		<NumberInput
-			label="Y"
-			labelClassName={LABEL_COL}
-			value={-offsetY}
-			step={1}
-			onChange={(n) => onChange({ offsetY: -n })}
-			inputClassName="w-20"
-			suffix="px"
-			changed={changed}
-		/>
+		<div className="flex items-center gap-2">
+			<NumberInput
+				label="Y"
+				labelClassName={LABEL_COL}
+				value={-offsetY}
+				step={1}
+				onChange={(n) => onChange({ offsetY: -n })}
+				inputClassName="w-20"
+				suffix="px"
+				changed={changed}
+			/>
+			{offsetY !== 0 && (
+				<ResetLink onClick={onResetY} ariaLabel="Reset Y position" underline />
+			)}
+		</div>
 	</div>
 )
 
@@ -1160,7 +1175,7 @@ const MirroredAxisControls = ({
 				: "Only variables with exactly two options are listed."
 	return (
 		<div className={divider ? "vc-divider-group" : "flex flex-col gap-2"}>
-			<Toggle
+			<Checkbox
 				label="Use a mirrored axis"
 				checked={mirror.enabled}
 				onChange={(on) =>
@@ -1366,7 +1381,7 @@ const GridlineControls = ({
 
 	return (
 		<div className="flex flex-col gap-2">
-			<Toggle
+			<Checkbox
 				label="Show gridlines"
 				checked={grid.enabled}
 				onChange={(enabled) => set({ enabled })}
@@ -1408,7 +1423,7 @@ const GridlineControls = ({
 					</div>
 					<div className="flex items-center gap-2">
 						<LabelSpacer />
-						<Toggle
+						<Checkbox
 							label="Match tick count"
 							checked={grid.count === null}
 							onChange={(matchTicks) => set({ count: matchTicks ? null : 5 })}
@@ -1473,18 +1488,8 @@ export const TickmarkControls = ({
 			: DEFAULT_TICKMARK_CONFIG.length
 
 	return (
-		<div
-			className={`flex flex-col gap-2 ${
-				divider
-					? "mt-3 border-t border-stone-200 pt-3 dark:border-stone-700"
-					: ""
-			}`}
-		>
-			{divider && (
-				<span className="text-sm vc-muted">
-					Tick marks
-				</span>
-			)}
+		<div className={divider ? "vc-divider-group" : "flex flex-col gap-2"}>
+			{divider && <span className="vc-group-header">Tick marks</span>}
 			<div className="flex flex-wrap items-center gap-2">
 				<ColorInput
 					label="Color"
@@ -1655,6 +1660,10 @@ const JitterControl = ({
 	</label>
 )
 
+const DEFAULT_RUG_TICK_LENGTH = DEFAULT_HISTOGRAM_CONFIG.rugTickLength ?? 10
+const DEFAULT_RUG_TICK_THICKNESS =
+	DEFAULT_HISTOGRAM_CONFIG.rugTickThickness ?? 1
+
 /** The rug (points) toggle + tassel length/width, bound to the shared
  * `histogram` config so the same ticks, sizes, color, and opacity carry across
  * the Histogram ⇄ Density switch (both displays read `histogram.showRug` /
@@ -1667,47 +1676,73 @@ const RugControls = ({
 	onChange: (next: Partial<AxisConfig>) => void
 }) => (
 	<>
-		<label className="flex items-center gap-2 text-sm">
-			<input
-				type="checkbox"
-				checked={histogram.showRug}
-				onChange={(e) =>
-					onChange({ histogram: { ...histogram, showRug: e.target.checked } })
-				}
-				className="h-3 w-3"
-			/>
-			<span className="vc-muted">
-				Show points (rug)
-			</span>
-		</label>
+		<Checkbox
+			label="Show points (rug)"
+			checked={histogram.showRug}
+			onChange={(showRug) => onChange({ histogram: { ...histogram, showRug } })}
+		/>
 		{histogram.showRug && (
 			<>
-				<NumberInput
-					label="Tassel length"
-					labelClassName={LABEL_COL}
-					value={histogram.rugTickLength ?? 10}
-					min={1}
-					max={100}
-					step={1}
-					clamp
-					onChange={(rugTickLength) =>
-						onChange({ histogram: { ...histogram, rugTickLength } })
-					}
-					inputClassName="w-20"
-				/>
-				<NumberInput
-					label="Tassel width"
-					labelClassName={LABEL_COL}
-					value={histogram.rugTickThickness ?? 1}
-					min={0}
-					max={20}
-					step={0.5}
-					clamp
-					onChange={(rugTickThickness) =>
-						onChange({ histogram: { ...histogram, rugTickThickness } })
-					}
-					inputClassName="w-20"
-				/>
+				<div className="flex items-center gap-2">
+					<NumberInput
+						label="Tassel length"
+						labelClassName={LABEL_COL}
+						value={histogram.rugTickLength ?? DEFAULT_RUG_TICK_LENGTH}
+						min={1}
+						max={100}
+						step={1}
+						clamp
+						onChange={(rugTickLength) =>
+							onChange({ histogram: { ...histogram, rugTickLength } })
+						}
+						inputClassName="w-20"
+					/>
+					{(histogram.rugTickLength ?? DEFAULT_RUG_TICK_LENGTH) !==
+						DEFAULT_RUG_TICK_LENGTH && (
+						<ResetLink
+							ariaLabel="Reset tassel length"
+							onClick={() =>
+								onChange({
+									histogram: {
+										...histogram,
+										rugTickLength: DEFAULT_RUG_TICK_LENGTH,
+									},
+								})
+							}
+							underline
+						/>
+					)}
+				</div>
+				<div className="flex items-center gap-2">
+					<NumberInput
+						label="Tassel width"
+						labelClassName={LABEL_COL}
+						value={histogram.rugTickThickness ?? DEFAULT_RUG_TICK_THICKNESS}
+						min={0}
+						max={20}
+						step={0.5}
+						clamp
+						onChange={(rugTickThickness) =>
+							onChange({ histogram: { ...histogram, rugTickThickness } })
+						}
+						inputClassName="w-20"
+					/>
+					{(histogram.rugTickThickness ?? DEFAULT_RUG_TICK_THICKNESS) !==
+						DEFAULT_RUG_TICK_THICKNESS && (
+						<ResetLink
+							ariaLabel="Reset tassel width"
+							onClick={() =>
+								onChange({
+									histogram: {
+										...histogram,
+										rugTickThickness: DEFAULT_RUG_TICK_THICKNESS,
+									},
+								})
+							}
+							underline
+						/>
+					)}
+				</div>
 				<p className="vc-help">
 					Ticks are centered on the axis (length splits evenly above and
 					below). Set the rug color under <strong>Color</strong> →{" "}
@@ -1749,15 +1784,7 @@ const DensityCurveControls = ({
 				{bandwidthScale.toFixed(1)}×
 			</span>
 		</label>
-		<label className="flex items-center gap-2 text-sm">
-			<input
-				type="checkbox"
-				checked={fill}
-				onChange={(e) => onChangeFill(e.target.checked)}
-				className="h-3 w-3"
-			/>
-			<span className="vc-muted">Fill under curve</span>
-		</label>
+		<Checkbox label="Fill under curve" checked={fill} onChange={onChangeFill} />
 		<p className="vc-help">
 			Smoothing scales the kernel bandwidth — higher is smoother. Set the curve
 			color under <strong>Color</strong> → <strong>Density curve</strong>.
@@ -1835,32 +1862,14 @@ const DistributionTypeControls = ({
 	const setOverlay = (next: Partial<DistributionOverlayConfig>) =>
 		onChange({ distributionOverlay: { ...overlay, ...next } })
 
-	const segBase = "px-2 py-1 text-sm border-l first:border-l-0 border-vc-brand-text"
-	const segClass = (active: boolean) =>
-		active
-			? `${segBase} vc-toggle-on`
-			: `${segBase} vc-toggle-off`
-
 	return (
 		<div className="flex flex-col gap-2">
-			<div
-				role="radiogroup"
-				aria-label="Distribution type"
-				className="inline-flex self-start overflow-hidden rounded border border-vc-brand-text"
-			>
-				{segments.map((s) => (
-					<button
-						key={s.key}
-						type="button"
-						role="radio"
-						aria-checked={selected === s.key}
-						onClick={() => select(s.key)}
-						className={segClass(selected === s.key)}
-					>
-						{s.label}
-					</button>
-				))}
-			</div>
+			<Segmented
+				ariaLabel="Distribution type"
+				value={selected}
+				segments={segments}
+				onChange={select}
+			/>
 			{selected === "histogram" && (
 				<>
 					{/* Histogram shape: counts / density, bins, bin labels. */}
@@ -1878,21 +1887,13 @@ const DistributionTypeControls = ({
 					    their count / relative-frequency units. Divided off as its own
 					    cluster, like the rug above. */}
 					<div className="vc-divider-group">
-						<label className="flex items-center gap-2 text-sm">
-							<input
-								type="checkbox"
-								checked={histogram.showDensity === true}
-								onChange={(e) =>
-									onChange({
-										histogram: { ...histogram, showDensity: e.target.checked },
-									})
-								}
-								className="h-3 w-3"
-							/>
-							<span className="vc-muted">
-								Show density curve
-							</span>
-						</label>
+						<Checkbox
+							label="Show density curve"
+							checked={histogram.showDensity === true}
+							onChange={(showDensity) =>
+								onChange({ histogram: { ...histogram, showDensity } })
+							}
+						/>
 						{histogram.showDensity && (
 							<DensityCurveControls
 								bandwidthScale={histogram.densityBandwidthScale ?? 1}
@@ -1931,17 +1932,11 @@ const DistributionTypeControls = ({
 			)}
 			{(selected === "violin" || selected === "box") && (
 				<>
-					<label className="flex items-center gap-2 text-sm">
-						<input
-							type="checkbox"
-							checked={overlay.showPoints}
-							onChange={(e) => setOverlay({ showPoints: e.target.checked })}
-							className="h-3 w-3"
-						/>
-						<span className="vc-muted">
-							Show points
-						</span>
-					</label>
+					<Checkbox
+						label="Show points"
+						checked={overlay.showPoints}
+						onChange={(showPoints) => setOverlay({ showPoints })}
+					/>
 					{selected === "box" && (
 						<label className="flex items-center gap-2 text-sm">
 							<span className={LABEL_COL}>
@@ -1975,47 +1970,6 @@ const DistributionTypeControls = ({
 	)
 }
 
-/** Shared segmented-radio row (the Distribution type control's idiom, reused
- * by the Regression section's Type / Position pickers). */
-const SegmentedRadioRow = <K extends string>({
-	ariaLabel,
-	value,
-	segments,
-	onChange,
-}: {
-	ariaLabel: string
-	value: K
-	segments: ReadonlyArray<{ key: K; label: string }>
-	onChange: (key: K) => void
-}) => {
-	const segBase =
-		"px-2 py-1 text-sm border-l first:border-l-0 border-vc-brand-text"
-	const segClass = (active: boolean) =>
-		active
-			? `${segBase} vc-toggle-on`
-			: `${segBase} vc-toggle-off`
-	return (
-		<div
-			role="radiogroup"
-			aria-label={ariaLabel}
-			className="inline-flex self-start overflow-hidden rounded border border-vc-brand-text"
-		>
-			{segments.map((s) => (
-				<button
-					key={s.key}
-					type="button"
-					role="radio"
-					aria-checked={value === s.key}
-					onClick={() => onChange(s.key)}
-					className={segClass(value === s.key)}
-				>
-					{s.label}
-				</button>
-			))}
-		</div>
-	)
-}
-
 /** The Regression section's controls: enable, fit type + degree, draw
  * position, per-group fits, and the confidence band. Styling is
  * intentionally NOT here — colors / width / opacities live under the Color
@@ -2039,24 +1993,18 @@ const RegressionControls = ({
 	]
 	return (
 		<div className="flex flex-col gap-2">
-			<label className="flex items-center gap-2 text-sm">
-				<input
-					type="checkbox"
-					checked={regression.enabled}
-					onChange={(e) => onChange({ enabled: e.target.checked })}
-					className="h-3 w-3"
-				/>
-				<span className="vc-muted">
-					Add regression line
-				</span>
-			</label>
+			<Checkbox
+				label="Add regression line"
+				checked={regression.enabled}
+				onChange={(enabled) => onChange({ enabled })}
+			/>
 			{regression.enabled && (
 				<>
 					<div className="flex items-center gap-2 text-sm">
 						<span className={`shrink-0 ${LABEL_COL}`}>
 							Type
 						</span>
-						<SegmentedRadioRow
+						<Segmented
 							ariaLabel="Regression type"
 							value={regression.kind}
 							segments={[
@@ -2082,7 +2030,7 @@ const RegressionControls = ({
 						<span className={`shrink-0 ${LABEL_COL}`}>
 							Layer
 						</span>
-						<SegmentedRadioRow
+						<Segmented
 							ariaLabel="Regression layer"
 							value={regression.drawPosition}
 							segments={[
@@ -2093,29 +2041,23 @@ const RegressionControls = ({
 						/>
 					</div>
 					<div className="vc-divider-group">
-						<label className="flex items-center gap-2 text-sm">
-							<input
-								type="checkbox"
-								checked={regression.perGroup}
-								onChange={(e) =>
-									onChange(
-										// Pre-fill the grouping variable from the hue field the
-										// moment per-group is switched on (only when nothing is
-										// chosen yet); blank otherwise until the user picks one.
-										e.target.checked
-											? {
-													perGroup: true,
-													groupField: regression.groupField ?? hueField,
-												}
-											: { perGroup: false }
-									)
-								}
-								className="h-3 w-3"
-							/>
-							<span className="vc-muted">
-								Line per group
-							</span>
-						</label>
+						<Checkbox
+							label="Line per group"
+							checked={regression.perGroup}
+							onChange={(on) =>
+								onChange(
+									// Pre-fill the grouping variable from the hue field the
+									// moment per-group is switched on (only when nothing is
+									// chosen yet); blank otherwise until the user picks one.
+									on
+										? {
+												perGroup: true,
+												groupField: regression.groupField ?? hueField,
+											}
+										: { perGroup: false }
+								)
+							}
+						/>
 						{regression.perGroup && (
 							<SelectInput
 								label="Group by"
@@ -2130,17 +2072,11 @@ const RegressionControls = ({
 						)}
 					</div>
 					<div className="vc-divider-group">
-						<label className="flex items-center gap-2 text-sm">
-							<input
-								type="checkbox"
-								checked={regression.showCi}
-								onChange={(e) => onChange({ showCi: e.target.checked })}
-								className="h-3 w-3"
-							/>
-							<span className="vc-muted">
-								Confidence interval
-							</span>
-						</label>
+						<Checkbox
+							label="Confidence interval"
+							checked={regression.showCi}
+							onChange={(showCi) => onChange({ showCi })}
+						/>
 						{regression.showCi && (
 							<NumberInput
 								label="Level %"

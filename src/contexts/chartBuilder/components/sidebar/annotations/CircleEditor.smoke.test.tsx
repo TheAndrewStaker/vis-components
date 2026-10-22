@@ -63,7 +63,9 @@ const renderEditor = (
 const expandPosition = () =>
 	fireEvent.click(screen.getByRole("button", { name: /position/i }))
 
-const unitGroup = () => screen.queryByRole("group", { name: "Radius unit" })
+/** The px / % unit dropdown beside the radius box. */
+const unitGroup = () =>
+	screen.queryByRole<HTMLSelectElement>("combobox", { name: "Radius unit" })
 
 /** A circle in Values mode on two categorical axes, 20% of the x extent. */
 const bothCategorical: CircleAnnotation = {
@@ -82,9 +84,7 @@ describe("CircleEditor — radius unit when the radius axis has no data units", 
 		renderEditor(bothCategorical, CAT, CAT)
 		expandPosition()
 		expect(unitGroup()).toBeTruthy()
-		expect(
-			screen.getByRole("button", { name: "%" }).getAttribute("aria-pressed")
-		).toBe("true")
+		expect(unitGroup()!.value).toBe("percent")
 		// The stored fraction shows as a whole-number percent, like Percent mode.
 		expect(screen.getByLabelText<HTMLInputElement>("Radius (X)").value).toBe(
 			"20"
@@ -95,7 +95,7 @@ describe("CircleEditor — radius unit when the radius axis has no data units", 
 		const onChange = vi.fn()
 		renderEditor(bothCategorical, CAT, CAT, onChange)
 		expandPosition()
-		fireEvent.click(screen.getByRole("button", { name: "px" }))
+		fireEvent.change(unitGroup()!, { target: { value: "px" } })
 		// 20% of the 400px-wide x extent.
 		expect(onChange).toHaveBeenCalledWith({ radiusUnit: "px", radius: 80 })
 	})

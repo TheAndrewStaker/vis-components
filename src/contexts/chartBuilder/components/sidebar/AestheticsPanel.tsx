@@ -1,8 +1,10 @@
 import { useAtom, useAtomValue } from "jotai"
+import { Checkbox } from "../../../../components/ui/Checkbox"
 import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
 import { ColorInput } from "../../../../components/ui/ColorInput"
 import { LABEL_COL } from "../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../components/ui/NumberInput"
+import { ResetLink } from "../../../../components/ui/ResetLink"
 import {
 	CANVAS_SIDES,
 	withCanvasMargin,
@@ -28,6 +30,9 @@ import { Select } from "../../../../components/ui/Select"
 
 // Smallest usable canvas edge, in px (matches the Export modal's floor).
 const MIN_CANVAS_DIM = 50
+// What "Set canvas size" seeds (px) — also the Width / Height reset target.
+const DEFAULT_CANVAS_WIDTH = 1000
+const DEFAULT_CANVAS_HEIGHT = 600
 
 const SIDE_LABEL: Record<CanvasSide, string> = {
 	top: "Top",
@@ -141,22 +146,18 @@ export const AestheticsPanel = () => {
 			</CollapsibleSubsection>
 			<CollapsibleSubsection title="Canvas size" changed={canvasChanged}>
 				<div className="flex flex-col gap-2">
-					<label className="flex items-center gap-2 text-sm vc-text">
-						<input
-							type="checkbox"
-							checked={canvasSize?.enabled ?? false}
-							onChange={(e) =>
-								setCanvasSize({
-									enabled: e.target.checked,
-									width: canvasSize?.width ?? 1000,
-									height: canvasSize?.height ?? 600,
-									unit: canvasSize?.unit,
-								})
-							}
-							className="cursor-pointer"
-						/>
-						Set canvas size
-					</label>
+					<Checkbox
+						label="Set canvas size"
+						checked={canvasSize?.enabled ?? false}
+						onChange={(enabled) =>
+							setCanvasSize({
+								enabled,
+								width: canvasSize?.width ?? DEFAULT_CANVAS_WIDTH,
+								height: canvasSize?.height ?? DEFAULT_CANVAS_HEIGHT,
+								unit: canvasSize?.unit,
+							})
+						}
+					/>
 					{canvasSize?.enabled && (
 						<>
 							<label className="flex items-center gap-2 text-sm">
@@ -178,38 +179,58 @@ export const AestheticsPanel = () => {
 									))}
 								</Select>
 							</label>
-							<NumberInput
-								label="Width"
-								labelClassName={LABEL_COL}
-								value={pxToUnit(canvasSize.width, canvasUnit)}
-								onChange={(v) =>
-									setCanvasSize({
-										...canvasSize,
-										// Preserve the raw input's guard: an all-cleared / zero
-										// entry falls back to the default rather than committing 0.
-										width: unitToPx(v, canvasUnit) || 1000,
-									})
-								}
-								min={pxToUnit(MIN_CANVAS_DIM, canvasUnit)}
-								step={UNIT_STEP[canvasUnit]}
-								clamp
-								suffix={canvasUnit}
-							/>
-							<NumberInput
-								label="Height"
-								labelClassName={LABEL_COL}
-								value={pxToUnit(canvasSize.height, canvasUnit)}
-								onChange={(v) =>
-									setCanvasSize({
-										...canvasSize,
-										height: unitToPx(v, canvasUnit) || 600,
-									})
-								}
-								min={pxToUnit(MIN_CANVAS_DIM, canvasUnit)}
-								step={UNIT_STEP[canvasUnit]}
-								clamp
-								suffix={canvasUnit}
-							/>
+							<div className="flex items-center gap-2">
+								<NumberInput
+									label="Width"
+									labelClassName={LABEL_COL}
+									value={pxToUnit(canvasSize.width, canvasUnit)}
+									onChange={(v) =>
+										setCanvasSize({
+											...canvasSize,
+											// Preserve the raw input's guard: an all-cleared / zero
+											// entry falls back to the default rather than committing 0.
+											width: unitToPx(v, canvasUnit) || DEFAULT_CANVAS_WIDTH,
+										})
+									}
+									min={pxToUnit(MIN_CANVAS_DIM, canvasUnit)}
+									step={UNIT_STEP[canvasUnit]}
+									clamp
+									suffix={canvasUnit}
+								/>
+								{canvasSize.width !== DEFAULT_CANVAS_WIDTH && (
+									<ResetLink
+										ariaLabel="Reset canvas width"
+										onClick={() =>
+											setCanvasSize({ ...canvasSize, width: DEFAULT_CANVAS_WIDTH })
+										}
+									/>
+								)}
+							</div>
+							<div className="flex items-center gap-2">
+								<NumberInput
+									label="Height"
+									labelClassName={LABEL_COL}
+									value={pxToUnit(canvasSize.height, canvasUnit)}
+									onChange={(v) =>
+										setCanvasSize({
+											...canvasSize,
+											height: unitToPx(v, canvasUnit) || DEFAULT_CANVAS_HEIGHT,
+										})
+									}
+									min={pxToUnit(MIN_CANVAS_DIM, canvasUnit)}
+									step={UNIT_STEP[canvasUnit]}
+									clamp
+									suffix={canvasUnit}
+								/>
+								{canvasSize.height !== DEFAULT_CANVAS_HEIGHT && (
+									<ResetLink
+										ariaLabel="Reset canvas height"
+										onClick={() =>
+											setCanvasSize({ ...canvasSize, height: DEFAULT_CANVAS_HEIGHT })
+										}
+									/>
+								)}
+							</div>
 						</>
 					)}
 				</div>
@@ -229,8 +250,8 @@ export const AestheticsPanel = () => {
 										? String(pxToUnit(canvasSlack[side], canvasUnit))
 										: "auto"
 							return (
+								<div key={side} className="flex items-center gap-2">
 								<NumberInput
-									key={side}
 									label={SIDE_LABEL[side]}
 									labelClassName={LABEL_COL}
 									value={px == null ? null : pxToUnit(px, canvasUnit)}
@@ -246,6 +267,14 @@ export const AestheticsPanel = () => {
 									suffix={canvasUnit}
 									changed={px != null && px !== themePx}
 								/>
+								{/* Reset = clear to inherit (theme default / auto). */}
+								{px != null && (
+									<ResetLink
+										ariaLabel={`Reset ${SIDE_LABEL[side].toLowerCase()} margin`}
+										onClick={() => setCanvasMargin(side, null)}
+									/>
+								)}
+								</div>
 							)
 						})}
 						<p className="vc-help">
@@ -258,17 +287,11 @@ export const AestheticsPanel = () => {
 					</div>
 				)}
 				<div className="vc-divider-group">
-					<label className="flex items-center gap-2 text-sm vc-text">
-						<input
-							type="checkbox"
-							checked={scrollMode === "scroll"}
-							onChange={(e) =>
-								setScrollMode(e.target.checked ? "scroll" : "fit")
-							}
-							className="cursor-pointer"
-						/>
-						Allow scrolling for tall/wide charts
-					</label>
+					<Checkbox
+						label="Allow scrolling for tall/wide charts"
+						checked={scrollMode === "scroll"}
+						onChange={(on) => setScrollMode(on ? "scroll" : "fit")}
+					/>
 					<p className="vc-help">
 						Off: the chart shrinks to fit the available space.
 						Panels and category labels may compress when there are many of
@@ -281,41 +304,53 @@ export const AestheticsPanel = () => {
 			</CollapsibleSubsection>
 			<CollapsibleSubsection title="Aspect ratio" changed={aspectChanged}>
 				<div className="flex flex-col gap-2">
-					<label className="flex items-center gap-2 text-sm vc-text">
-						<input
-							type="checkbox"
-							checked={aspect?.enabled ?? false}
-							onChange={(e) =>
-								setAspect({
-									enabled: e.target.checked,
-									length: aspect?.length ?? 1,
-									width: aspect?.width ?? 1,
-								})
-							}
-							className="cursor-pointer"
-						/>
-						Fix aspect ratio
-					</label>
+					<Checkbox
+						label="Fix aspect ratio"
+						checked={aspect?.enabled ?? false}
+						onChange={(enabled) =>
+							setAspect({
+								enabled,
+								length: aspect?.length ?? 1,
+								width: aspect?.width ?? 1,
+							})
+						}
+					/>
 					{aspect?.enabled && (
 						<>
-							<NumberInput
-								label="Width"
-								labelClassName={LABEL_COL}
-								value={aspect.width}
-								onChange={(width) => setAspect({ ...aspect, width })}
-								min={0.1}
-								step={0.1}
-								clamp
-							/>
-							<NumberInput
-								label="Height"
-								labelClassName={LABEL_COL}
-								value={aspect.length}
-								onChange={(length) => setAspect({ ...aspect, length })}
-								min={0.1}
-								step={0.1}
-								clamp
-							/>
+							<div className="flex items-center gap-2">
+								<NumberInput
+									label="Width"
+									labelClassName={LABEL_COL}
+									value={aspect.width}
+									onChange={(width) => setAspect({ ...aspect, width })}
+									min={0.1}
+									step={0.1}
+									clamp
+								/>
+								{aspect.width !== 1 && (
+									<ResetLink
+										ariaLabel="Reset aspect width"
+										onClick={() => setAspect({ ...aspect, width: 1 })}
+									/>
+								)}
+							</div>
+							<div className="flex items-center gap-2">
+								<NumberInput
+									label="Height"
+									labelClassName={LABEL_COL}
+									value={aspect.length}
+									onChange={(length) => setAspect({ ...aspect, length })}
+									min={0.1}
+									step={0.1}
+									clamp
+								/>
+								{aspect.length !== 1 && (
+									<ResetLink
+										ariaLabel="Reset aspect height"
+										onClick={() => setAspect({ ...aspect, length: 1 })}
+									/>
+								)}
+							</div>
 						</>
 					)}
 					<p className="vc-help">
@@ -383,15 +418,11 @@ export const AestheticsPanel = () => {
 						the drawing order, never the data.
 					</p>
 					<div className="vc-divider-group">
-						<label className="flex items-center gap-2 text-sm vc-text">
-							<input
-								type="checkbox"
-								checked={axesBehindMarks}
-								onChange={(e) => setAxesBehindMarks(e.target.checked)}
-								className="cursor-pointer"
-							/>
-							Draw axes behind marks
-						</label>
+						<Checkbox
+							label="Draw axes behind marks"
+							checked={axesBehindMarks}
+							onChange={setAxesBehindMarks}
+						/>
 						<p className="vc-help">
 							Off: axis spines, ticks, and labels paint over any marks
 							that cross them. On: marks paint over the axes.

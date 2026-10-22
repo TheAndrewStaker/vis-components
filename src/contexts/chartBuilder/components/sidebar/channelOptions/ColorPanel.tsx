@@ -185,16 +185,27 @@ const RegressionLineStyleControls = () => {
 		}))
 	return (
 		<div className="vc-divider-group">
-			<NumberInput
-				label="Line thickness"
-				labelClassName={LABEL_COL}
-				value={regression.strokeWidth}
-				min={0}
-				max={12}
-				step={0.5}
-				clamp
-				onChange={(strokeWidth) => update({ strokeWidth })}
-			/>
+			<div className="flex items-center gap-2">
+				<NumberInput
+					label="Line thickness"
+					labelClassName={LABEL_COL}
+					value={regression.strokeWidth}
+					min={0}
+					max={12}
+					step={0.5}
+					clamp
+					onChange={(strokeWidth) => update({ strokeWidth })}
+				/>
+				{regression.strokeWidth !== themeRegression(theme).strokeWidth && (
+					<ResetLink
+						ariaLabel="Reset regression line thickness"
+						onClick={() =>
+							update({ strokeWidth: themeRegression(theme).strokeWidth })
+						}
+						underline
+					/>
+				)}
+			</div>
 			<p className="vc-help">
 				Set the dash pattern under <strong>Pattern</strong> →{" "}
 				<strong>Regression line</strong>.

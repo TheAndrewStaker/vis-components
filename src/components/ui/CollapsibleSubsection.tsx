@@ -1,5 +1,7 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useAtom } from "jotai"
 
+import { sidebarJumpTargetAtom } from "../../contexts/chartBuilder/store/atoms"
 import { SectionChevron } from "./Chevron"
 
 /** A collapsible subsection inside an option panel ("purple box"). Renders
@@ -40,6 +42,10 @@ export const CollapsibleSubsection = ({
 	 *  deviates from its default — mirrors the encoding-row chevron dot so the
 	 *  user can follow the dots down to the exact subsection. */
 	changed = false,
+	/** Target name for sidebar jump links (`useSidebarJump`): when the
+	 *  transient jump target names this id, the subsection opens, scrolls
+	 *  itself into view and clears the target. */
+	jumpId,
 }: {
 	title: React.ReactNode
 	children: React.ReactNode
@@ -47,10 +53,23 @@ export const CollapsibleSubsection = ({
 	right?: React.ReactNode
 	boxed?: boolean
 	changed?: boolean
+	jumpId?: string
 }) => {
 	const [open, setOpen] = useState(defaultOpen)
+	const rootRef = useRef<HTMLDivElement>(null)
+	const [jumpTarget, setJumpTarget] = useAtom(sidebarJumpTargetAtom)
+	const jumpHit = jumpId != null && jumpTarget?.subsection === jumpId
+	// Open during render (the "adjust state on prop change" pattern) so the
+	// body is already mounted when the effect below scrolls and clears.
+	if (jumpHit && !open) setOpen(true)
+	useEffect(() => {
+		if (!jumpHit) return
+		setJumpTarget(null)
+		// happy-dom / jsdom may not implement scrollIntoView.
+		rootRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" })
+	}, [jumpHit, setJumpTarget])
 	return (
-		<div className="flex flex-col gap-2">
+		<div ref={rootRef} className="flex flex-col gap-2">
 			<div className="flex items-center justify-between gap-2">
 				<button
 					type="button"

@@ -5,7 +5,7 @@ import { ColorInput } from "../../../../components/ui/ColorInput"
 import { LABEL_COL, LabelSpacer } from "../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../components/ui/ResetLink"
-import { Toggle } from "../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../components/ui/Checkbox"
 import {
 	DEFAULT_CAPTION_CONFIG,
 	type CaptionConfig,
@@ -23,20 +23,24 @@ import { Select } from "../../../../components/ui/Select"
 import { Textarea } from "../../../../components/ui/Input"
 
 /** A NumberInput with a trailing px/% unit selector — used for the position
- *  offsets, which sensibly start stepping from 0. */
+ *  offsets, which sensibly start stepping from 0. `onReset` (passed only
+ *  while the offset differs from its default) shows the row's reset link. */
 const OffsetField = ({
 	label,
 	value,
 	unit,
 	onValue,
 	onUnit,
+	onReset,
 }: {
 	label: string
 	value: number
 	unit: CaptionUnit
 	onValue: (v: number) => void
 	onUnit: (u: CaptionUnit) => void
+	onReset?: () => void
 }) => (
+	<div className="flex items-center gap-2">
 	<NumberInput
 		label={label}
 		labelClassName={LABEL_COL}
@@ -54,6 +58,10 @@ const OffsetField = ({
 			</Select>
 		}
 	/>
+	{onReset && (
+		<ResetLink ariaLabel={`Reset ${label}`} onClick={onReset} />
+	)}
+	</div>
 )
 
 /** Adapter: the caption's text styling as the shared `FontEditor`'s
@@ -217,6 +225,9 @@ export const CaptionPanel = () => {
 					<option value="px">px</option>
 					<option value="%">%</option>
 				</Select>
+				{value > 0 && (
+					<ResetLink ariaLabel={`Reset ${label}`} onClick={() => setValue(0)} />
+				)}
 			</div>
 		)
 	}
@@ -225,15 +236,12 @@ export const CaptionPanel = () => {
 		<div className="vc-option-panel">
 			{/* px-2 keeps this bare row aligned with the rows inside the p-2
 			 * subsection cards below. */}
-			<label className="flex items-center gap-2 px-2 text-sm">
-				<input
-					type="checkbox"
-					checked={merged.enabled}
-					onChange={(e) => update({ enabled: e.target.checked })}
-					className="h-3 w-3"
-				/>
-				<span className="vc-muted">Show caption</span>
-			</label>
+			<Checkbox
+				className="px-2"
+				label="Show caption"
+				checked={merged.enabled}
+				onChange={(enabled) => update({ enabled })}
+			/>
 
 			{merged.enabled && (
 				<>
@@ -258,6 +266,11 @@ export const CaptionPanel = () => {
 								unit={merged.offsetXUnit}
 								onValue={(v) => update({ offsetX: v })}
 								onUnit={(u) => update({ offsetXUnit: u })}
+								onReset={
+									merged.offsetX !== d.offsetX
+										? () => update({ offsetX: d.offsetX })
+										: undefined
+								}
 							/>
 							{/* Y shows math convention (positive = up); the stored value
 							 * stays in screen coords (positive = down), so the sign flips
@@ -268,6 +281,11 @@ export const CaptionPanel = () => {
 								unit={merged.offsetYUnit}
 								onValue={(v) => update({ offsetY: -v })}
 								onUnit={(u) => update({ offsetYUnit: u })}
+								onReset={
+									merged.offsetY !== d.offsetY
+										? () => update({ offsetY: d.offsetY })
+										: undefined
+								}
 							/>
 						</div>
 					</CollapsibleSubsection>
@@ -388,7 +406,7 @@ export const CaptionPanel = () => {
 							</div>
 							<div className="flex items-center gap-2">
 								<LabelSpacer />
-								<Toggle
+								<Checkbox
 									label="Border"
 									checked={merged.borderEnabled}
 									onChange={(on) => update({ borderEnabled: on })}

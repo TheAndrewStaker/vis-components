@@ -134,9 +134,9 @@ test("Layout toggle round-trip: flipping hue to Group regroups live", async ({
 	// With hue AND pattern mapped, the Color panel's toggle row is labeled
 	// "Layout" (not "Stacking"). Flip hue to Group.
 	await page.getByRole("button", { name: /Toggle options for Color/i }).click()
-	const layoutRow = page.getByRole("group", { name: "Layout" })
+	const layoutRow = page.getByRole("radiogroup", { name: "Layout" })
 	await expect(layoutRow).toBeVisible()
-	await layoutRow.getByRole("button", { name: "Group", exact: true }).click()
+	await layoutRow.getByRole("radio", { name: "Group", exact: true }).click()
 
 	// The chart regroups live: two hue sub-bands, still two stacked
 	// pattern segments in each.
@@ -152,5 +152,5 @@ test("Layout toggle round-trip: flipping hue to Group regroups live", async ({
 	await page
 		.getByRole("button", { name: /Toggle options for Pattern/i })
 		.click()
-	expect(await page.getByRole("group", { name: "Layout" }).count()).toBeGreaterThanOrEqual(1)
+	expect(await page.getByRole("radiogroup", { name: "Layout" }).count()).toBeGreaterThanOrEqual(1)
 })

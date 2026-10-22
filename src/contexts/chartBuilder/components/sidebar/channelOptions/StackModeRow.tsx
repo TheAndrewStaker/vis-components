@@ -1,5 +1,6 @@
 import { useAtom, useAtomValue } from "jotai"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
+import { Segmented } from "../../../../../components/ui/Segmented"
 import {
 	DEFAULT_BRIGHTNESS_CONFIG,
 	DEFAULT_CATEGORICAL_HUE_CONFIG,
@@ -69,15 +70,6 @@ export const StackModeRow = ({
 		setConfigs((prev) => writeStackMode(prev, channel, next))
 	}
 
-	// Non-area stacking modes (bars) get all three options here. The area
-	// case returns null above — its Stack/Overlay toggle lives in the
-	// Connection panel where the user already manages line-vs-area.
-	const options: Array<{ id: StackMode; label: string }> = [
-		{ id: "stack", label: "Stack" },
-		{ id: "group", label: "Group" },
-		{ id: "overlay", label: "Overlay" },
-	]
-
 	return (
 		<div
 			className={`flex items-center gap-2 text-sm${className ? ` ${className}` : ""}`}
@@ -85,33 +77,24 @@ export const StackModeRow = ({
 			<span className={`shrink-0 ${LABEL_COL}`}>
 				{rowLabel}
 			</span>
-			<div
-				role="group"
-				aria-label={rowLabel}
-				className="flex flex-1 overflow-hidden rounded border border-vc-brand-text"
-			>
-				{options.map((opt) => {
-					const active = opt.id === value
-					return (
-						<button
-							key={opt.id}
-							type="button"
-							onClick={() => setValue(opt.id)}
-							aria-pressed={active}
-							className={
-								active
-									? "vc-toggle-on flex-1 px-1.5 py-1 text-sm"
-									: "vc-toggle-off flex-1 px-1.5 py-1 text-sm"
-							}
-						>
-							{opt.label}
-						</button>
-					)
-				})}
-			</div>
+			<Segmented
+				ariaLabel={rowLabel}
+				value={value}
+				segments={STACK_MODE_SEGMENTS}
+				onChange={setValue}
+			/>
 		</div>
 	)
 }
+
+/** Non-area stacking modes (bars) get all three options. The area case
+ *  returns null above — its Stack/Overlay toggle lives in the Connection
+ *  panel where the user already manages line-vs-area. */
+const STACK_MODE_SEGMENTS: ReadonlyArray<{ key: StackMode; label: string }> = [
+	{ key: "stack", label: "Stack" },
+	{ key: "group", label: "Group" },
+	{ key: "overlay", label: "Overlay" },
+]
 
 /** Build the next channelConfigs with the given stackMode written into the
  *  channel's config slot. Every stack channel (hue, pattern, saturation,

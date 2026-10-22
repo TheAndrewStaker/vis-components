@@ -6,9 +6,9 @@ import {
 	LABEL_COL_NESTED,
 } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
-import { RadioGroup } from "../../../../../components/ui/RadioGroup"
+import { Segmented } from "../../../../../components/ui/Segmented"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
-import { Toggle } from "../../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../../components/ui/Checkbox"
 import {
 	ARROWHEAD_STYLES,
 	DEFAULT_LINE_END_STYLE,
@@ -246,14 +246,12 @@ export const LineSegmentEditor = ({
 					<div className="vc-divider-group">
 						<div className="flex items-center gap-2 text-sm">
 							<span className={`${LABEL_COL} shrink-0`}>Line cap</span>
-							<RadioGroup
-								legend="Line cap"
-								legendClassName="sr-only"
-								orientation="horizontal"
+							<Segmented
+								ariaLabel="Line cap"
 								value={ends.lineCap}
-								options={[
-									{ value: "round", label: "Round" },
-									{ value: "square", label: "Square" },
+								segments={[
+									{ key: "round", label: "Round" },
+									{ key: "square", label: "Square" },
 								]}
 								onChange={(lineCap) => onChange({ lineCap })}
 							/>
@@ -265,7 +263,7 @@ export const LineSegmentEditor = ({
 								/>
 							)}
 						</div>
-						<Toggle
+						<Checkbox
 							label="Add arrowhead"
 							checked={ends.arrowhead}
 							onChange={(arrowhead) => onChange({ arrowhead })}

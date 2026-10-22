@@ -150,50 +150,73 @@ export const ShapeOptionsPanel = () => {
 
 	return (
 		<div className="vc-option-panel">
-			<NumberInput
-				label="Outline width"
-				labelClassName={LABEL_COL}
-				value={cfg.outlineWidth}
-				min={0}
-				max={10}
-				step={0.5}
-				clamp
-				onChange={(outlineWidth) => updateCfg({ outlineWidth })}
-				suffix="px"
-				changed={valueChanged(cfg.outlineWidth, theme.outlineWidth)}
-			/>
+			<div className="flex items-center gap-2">
+				<NumberInput
+					label="Outline width"
+					labelClassName={LABEL_COL}
+					value={cfg.outlineWidth}
+					min={0}
+					max={10}
+					step={0.5}
+					clamp
+					onChange={(outlineWidth) => updateCfg({ outlineWidth })}
+					suffix="px"
+					changed={valueChanged(cfg.outlineWidth, theme.outlineWidth)}
+				/>
+				{cfg.outlineWidth !== theme.outlineWidth && (
+					<ResetLink
+						ariaLabel="Reset outline width"
+						onClick={() => updateCfg({ outlineWidth: theme.outlineWidth })}
+						underline
+					/>
+				)}
+			</div>
 			{/* Border width for the violin outline / box strokes — its own knob,
 			 *  independent of the point marks' outline width above. Only shown
 			 *  while a violin/box overlay is actually rendering — the mode draws
 			 *  the axis overlays (`canvas.statOverlays`) and one is on. */}
 			{modeDef.canvas.statOverlays && overlayOn(configs) && (
-				<NumberInput
-					label="Violin / box outline"
-					labelClassName={LABEL_COL}
-					value={cfg.distributionOutlineWidth ?? 1}
-					min={0}
-					max={10}
-					step={0.5}
-					clamp
-					onChange={(distributionOutlineWidth) =>
-						updateCfg({ distributionOutlineWidth })
-					}
-					suffix="px"
-					changed={valueChanged(
+				<div className="flex items-center gap-2">
+					<NumberInput
+						label="Violin / box outline"
+						labelClassName={LABEL_COL}
+						value={cfg.distributionOutlineWidth ?? 1}
+						min={0}
+						max={10}
+						step={0.5}
+						clamp
+						onChange={(distributionOutlineWidth) =>
+							updateCfg({ distributionOutlineWidth })
+						}
+						suffix="px"
+						changed={valueChanged(
+							cfg.distributionOutlineWidth,
+							DEFAULT_SHAPE_CONFIG.distributionOutlineWidth
+						)}
+					/>
+					{valueChanged(
 						cfg.distributionOutlineWidth,
 						DEFAULT_SHAPE_CONFIG.distributionOutlineWidth
+					) && (
+						<ResetLink
+							ariaLabel="Reset violin / box outline"
+							onClick={() =>
+								updateCfg({
+									distributionOutlineWidth:
+										DEFAULT_SHAPE_CONFIG.distributionOutlineWidth,
+								})
+							}
+							underline
+						/>
 					)}
-				/>
+				</div>
 			)}
 			{/* Outline COLOR now lives in the unified Color menu (Outline
 			 *  subheader) — only outline WIDTH remains here. */}
 			{!fieldMapped && !glyphsInert && (
 				<>
-					<hr className="border-stone-200 dark:border-stone-700" />
-					<div className="flex flex-col gap-1 text-sm">
-						<span className="vc-muted">
-							Default shape
-						</span>
+					<div className="vc-divider-group text-sm">
+						<span className="vc-group-header">Default shape</span>
 						<div className="flex flex-wrap gap-1">
 							{SHAPE_PALETTE.map((_, idx) => {
 								const selected = idx === defaultShapeIdx

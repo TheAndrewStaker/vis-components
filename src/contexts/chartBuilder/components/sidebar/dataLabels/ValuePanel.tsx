@@ -5,6 +5,7 @@ import {
 } from "../../../lib/dataLabelsSelection"
 
 import { TickFormatControl } from "../channelOptions/AxisOptionsPanel"
+import { Checkbox } from "../../../../../components/ui/Checkbox"
 import { Input } from "../../../../../components/ui/Input"
 
 // ---------------------------------------------------------------------------
@@ -56,14 +57,13 @@ export const ValuePanel = ({
 					</p>
 				) : (
 					allFields.map((name) => (
-						<label key={name} className="flex items-center gap-2 text-sm">
-							<input
-								type="checkbox"
-								checked={fields.includes(name)}
-								onChange={(e) => toggleField(name, e.target.checked)}
-							/>
-							<span className="truncate">{name}</span>
-						</label>
+						<Checkbox
+							key={name}
+							className="min-w-0 [&>label]:min-w-0 [&>label]:truncate"
+							label={name}
+							checked={fields.includes(name)}
+							onChange={(on) => toggleField(name, on)}
+						/>
 					))
 				)}
 			</div>
@@ -71,7 +71,7 @@ export const ValuePanel = ({
 			{/* Per-field format — the same preset dropdown (+ custom spec) the
 			 *  x / y axes use, one per selected field. */}
 			{fields.length > 0 && (
-				<div className="flex flex-col gap-1">
+				<div className="vc-divider-group">
 					<span className="vc-group-header">
 						Label format
 					</span>
@@ -97,7 +97,7 @@ export const ValuePanel = ({
 			 *  arrangement of the checked variables in braces with literal
 			 *  text. The × removes a label; the link adds an empty one. */}
 			{fields.length > 0 && (
-				<div className="flex flex-col gap-2">
+				<div className="vc-divider-group">
 					<span className="vc-group-header">Compose labels</span>
 					{labels.map((l, i) => (
 						<div key={l.id} className="flex items-center gap-1">

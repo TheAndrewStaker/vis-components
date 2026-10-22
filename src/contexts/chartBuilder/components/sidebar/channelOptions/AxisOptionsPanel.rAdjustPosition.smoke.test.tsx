@@ -102,18 +102,24 @@ describe("R panel — Tick Labels 'Adjust position' nudge", () => {
 		expect(r.offset).toBeUndefined()
 	})
 
-	it("Reset clears both nudge fields", async () => {
+	it("X and Y each reset on their own", async () => {
 		const store = seed()
 		const q = await mount()
 		openTickLabels(q)
+		// No reset while both are at their 0 default.
+		expect(q.queryByRole("button", { name: "Reset X position" })).toBeNull()
+		expect(q.queryByRole("button", { name: "Reset Y position" })).toBeNull()
 		fireEvent.change(q.getByLabelText("X"), { target: { value: "10" } })
+		fireEvent.change(q.getByLabelText("Y"), { target: { value: "5" } })
 		expect(readSavedR(store).offsetX).toBe(10)
-		// The reset link sits right after the "Adjust position" group header.
-		const header = q.getByText("Adjust position")
-		const reset = header.parentElement?.querySelector("button")
-		expect(reset).not.toBeNull()
-		fireEvent.click(reset!)
-		const r = readSavedR(store)
+		// Resetting X leaves Y's nudge in place.
+		fireEvent.click(q.getByRole("button", { name: "Reset X position" }))
+		let r = readSavedR(store)
+		expect(r.offsetX).toBeUndefined()
+		expect(r.offsetY).toBe(-5)
+		expect(q.queryByRole("button", { name: "Reset X position" })).toBeNull()
+		fireEvent.click(q.getByRole("button", { name: "Reset Y position" }))
+		r = readSavedR(store)
 		expect(r.offsetX).toBeUndefined()
 		expect(r.offsetY).toBeUndefined()
 	})

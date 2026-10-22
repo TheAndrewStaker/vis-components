@@ -151,9 +151,12 @@ describe("DataLabelsPanel — flow diagrams", () => {
 		fireEvent.click(
 			c.querySelector('button[aria-label="Toggle settings for Value"]')!
 		)
-		const startBox = [...c.querySelectorAll("label")]
-			.find((l) => l.textContent?.trim() === "Start")
-			?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+		const startLabel = [...c.querySelectorAll("label")].find(
+			(l) => l.textContent?.trim() === "Start"
+		)
+		const startBox = startLabel?.htmlFor
+			? c.querySelector<HTMLInputElement>(`#${CSS.escape(startLabel.htmlFor)}`)
+			: null
 		expect(startBox?.checked).toBe(true)
 	})
 

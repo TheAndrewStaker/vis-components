@@ -17,6 +17,8 @@ import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleS
 import { LABEL_COL, LabelSpacer } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
+import { Checkbox } from "../../../../../components/ui/Checkbox"
+import { Segmented } from "../../../../../components/ui/Segmented"
 import { BreaksField } from "./BreaksField"
 
 /** Segmented control for one axis's share mode. Three options:
@@ -27,9 +29,8 @@ import { BreaksField } from "./BreaksField"
  *  per-group sharing requires the grid to have 2+ panels in BOTH
  *  directions, otherwise it degenerates to one of the other choices.
  *
- *  Styled to match the existing segmented controls in
- *  `ConnectionOptionsPanel` (Chart type, Stacking) for visual
- *  consistency across the sidebar. */
+ *  Renders through the shared `Segmented` control, like every other
+ *  choose-one-of-a-few row in the sidebar. */
 export type ShareAxisPickerProps = {
 	value: "none" | "perGroup" | "all"
 	perGroupLabel: string
@@ -38,53 +39,26 @@ export type ShareAxisPickerProps = {
 	onChange: (next: "none" | "perGroup" | "all") => void
 }
 
-const buttonClass = (active: boolean) =>
-	active
-		? "vc-toggle-on flex items-center justify-center px-2 py-1 text-sm"
-		: "vc-toggle-off flex items-center justify-center px-2 py-1 text-sm"
-
 const ShareAxisPicker = ({
 	value,
 	perGroupLabel,
 	perGroupAvailable,
 	ariaLabel,
 	onChange,
-}: ShareAxisPickerProps) => {
-	return (
-		<div
-			role="group"
-			aria-label={ariaLabel}
-			className="inline-flex overflow-hidden rounded border border-vc-brand-text"
-		>
-			<button
-				type="button"
-				aria-pressed={value === "none"}
-				className={buttonClass(value === "none")}
-				onClick={() => onChange("none")}
-			>
-				None
-			</button>
-			{perGroupAvailable && (
-				<button
-					type="button"
-					aria-pressed={value === "perGroup"}
-					className={buttonClass(value === "perGroup")}
-					onClick={() => onChange("perGroup")}
-				>
-					{perGroupLabel}
-				</button>
-			)}
-			<button
-				type="button"
-				aria-pressed={value === "all"}
-				className={buttonClass(value === "all")}
-				onClick={() => onChange("all")}
-			>
-				All panels
-			</button>
-		</div>
-	)
-}
+}: ShareAxisPickerProps) => (
+	<Segmented
+		ariaLabel={ariaLabel}
+		value={value}
+		segments={[
+			{ key: "none", label: "None" },
+			...(perGroupAvailable
+				? [{ key: "perGroup" as const, label: perGroupLabel }]
+				: []),
+			{ key: "all", label: "All panels" },
+		]}
+		onChange={onChange}
+	/>
+)
 
 /** Polar-chart share picker. Polar axes (R, angle) don't have a
  *  natural row vs. col bias the way cartesian Y / X do, so the picker
@@ -108,52 +82,21 @@ export const PolarShareAxisPicker = ({
 	perColAvailable,
 	ariaLabel,
 	onChange,
-}: PolarShareAxisPickerProps) => {
-	return (
-		<div
-			role="group"
-			aria-label={ariaLabel}
-			className="inline-flex overflow-hidden rounded border border-vc-brand-text"
-		>
-			<button
-				type="button"
-				aria-pressed={value === "none"}
-				className={buttonClass(value === "none")}
-				onClick={() => onChange("none")}
-			>
-				None
-			</button>
-			{perRowAvailable && (
-				<button
-					type="button"
-					aria-pressed={value === "perRow"}
-					className={buttonClass(value === "perRow")}
-					onClick={() => onChange("perRow")}
-				>
-					Per row
-				</button>
-			)}
-			{perColAvailable && (
-				<button
-					type="button"
-					aria-pressed={value === "perCol"}
-					className={buttonClass(value === "perCol")}
-					onClick={() => onChange("perCol")}
-				>
-					Per column
-				</button>
-			)}
-			<button
-				type="button"
-				aria-pressed={value === "all"}
-				className={buttonClass(value === "all")}
-				onClick={() => onChange("all")}
-			>
-				All panels
-			</button>
-		</div>
-	)
-}
+}: PolarShareAxisPickerProps) => (
+	<Segmented
+		ariaLabel={ariaLabel}
+		value={value}
+		segments={[
+			{ key: "none", label: "None" },
+			...(perRowAvailable ? [{ key: "perRow" as const, label: "Per row" }] : []),
+			...(perColAvailable
+				? [{ key: "perCol" as const, label: "Per column" }]
+				: []),
+			{ key: "all", label: "All panels" },
+		]}
+		onChange={onChange}
+	/>
+)
 
 /* ────────────────────────────────────────────────────────────────────
  * Shared layout pieces. Each takes an optional `className` appended to
@@ -203,15 +146,7 @@ export const SizeByCheckboxRow = ({
 }) => (
 	<div className={cls("mt-2 flex items-center gap-2 text-sm", className)}>
 		<LabelSpacer />
-		<label className="flex items-center gap-2 vc-text">
-			<input
-				type="checkbox"
-				checked={checked}
-				onChange={(e) => onChange(e.target.checked)}
-				className="cursor-pointer"
-			/>
-			{label}
-		</label>
+		<Checkbox label={label} checked={checked} onChange={onChange} />
 	</div>
 )
 
@@ -247,18 +182,18 @@ const CustomTicksControl = ({
 	<>
 		<div className="flex items-center gap-2 text-sm">
 			<LabelSpacer />
-			<label className="flex items-center gap-2 vc-text">
-				<input
-					type="checkbox"
-					checked={ticks !== undefined}
-					onChange={(e) => onChange(e.target.checked ? [] : undefined)}
-					aria-label={
-						entryLabel ? `Replace ticks for ${entryLabel}` : undefined
-					}
-					className="cursor-pointer"
-				/>
-				Replace ticks
-			</label>
+			<Checkbox
+				// The entry name rides along for screen readers (and tests) so the
+				// per-panel checkboxes are distinguishable.
+				label={
+					<>
+						Replace ticks
+						{entryLabel && <span className="sr-only"> for {entryLabel}</span>}
+					</>
+				}
+				checked={ticks !== undefined}
+				onChange={(on) => onChange(on ? [] : undefined)}
+			/>
 		</div>
 		{ticks !== undefined && (
 			<BreaksField

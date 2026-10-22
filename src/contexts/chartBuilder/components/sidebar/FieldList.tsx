@@ -25,6 +25,7 @@ import {
 } from "../../store/useRenameField"
 import { Disclosure } from "@headlessui/react"
 
+import { Checkbox } from "../../../../components/ui/Checkbox"
 import { DisclosureChevron } from "../../../../components/ui/Chevron"
 import { SelectInput } from "../../../../components/ui/SelectInput"
 
@@ -735,20 +736,14 @@ const LevelReorderPanel = ({
 						</div>
 					)}
 					{orderBy !== "" && (
-						<label className="flex items-center gap-2 text-xs">
+						<div className="flex items-center gap-2">
 							<span className="w-14 shrink-0" aria-hidden />
-							<input
-								type="checkbox"
+							<Checkbox
+								label="Decreasing"
 								checked={decreasing}
-								onChange={(e) => {
-									applyOrderBy(orderBy, e.target.checked, scopeVar, scopeLevel)
-								}}
-								className="h-3 w-3"
+								onChange={(on) => applyOrderBy(orderBy, on, scopeVar, scopeLevel)}
 							/>
-							<span className="vc-muted">
-								Decreasing
-							</span>
-						</label>
+						</div>
 					)}
 				</div>
 			)}

@@ -58,10 +58,12 @@ describe("LineSegmentEditor — Line properties", () => {
 
 	it("offers a Round / Square line cap, Square (flush) by default", () => {
 		const onChange = mount()
-		const round = screen.getByRole<HTMLInputElement>("radio", { name: "Round" })
-		const square = screen.getByRole<HTMLInputElement>("radio", { name: "Square" })
-		expect(square.checked).toBe(true)
-		expect(round.checked).toBe(false)
+		// A segmented toggle (radiogroup of radio buttons).
+		expect(screen.getByRole("radiogroup", { name: "Line cap" })).toBeTruthy()
+		const round = screen.getByRole("radio", { name: "Round" })
+		const square = screen.getByRole("radio", { name: "Square" })
+		expect(square.getAttribute("aria-checked")).toBe("true")
+		expect(round.getAttribute("aria-checked")).toBe("false")
 		fireEvent.click(round)
 		expect(onChange).toHaveBeenCalledWith({ lineCap: "round" })
 	})

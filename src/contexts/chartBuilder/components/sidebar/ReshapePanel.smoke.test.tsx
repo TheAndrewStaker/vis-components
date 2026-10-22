@@ -152,12 +152,12 @@ describe("ReshapePanel", () => {
 		// "monday" appears in both lists (ID list always shows every column).
 		const [idCheckbox] = utils
 			.getAllByRole("checkbox")
-			.filter((el) => el.closest("label")?.textContent === "monday")
+			.filter((el) => el.parentElement?.textContent === "monday")
 		fireEvent.click(idCheckbox)
 		// Now it's an ID column: it leaves the Combine list entirely.
 		const mondayBoxes = utils
 			.getAllByRole("checkbox")
-			.filter((el) => el.closest("label")?.textContent === "monday")
+			.filter((el) => el.parentElement?.textContent === "monday")
 		expect(mondayBoxes).toHaveLength(1)
 		expect((mondayBoxes[0] as HTMLInputElement).checked).toBe(true)
 	})
@@ -196,7 +196,7 @@ describe("ReshapePanel", () => {
 		// only exists after the melt) is in neither.
 		const idLabels = utils
 			.getAllByRole("checkbox")
-			.map((el) => el.closest("label")?.textContent ?? "")
+			.map((el) => el.parentElement?.textContent ?? "")
 		expect(idLabels.filter((t) => t.includes("total"))).toHaveLength(2)
 		expect(idLabels.some((t) => t.includes("sign"))).toBe(false)
 		expect(idLabels.indexOf("ƒtotal")).toBeGreaterThan(idLabels.indexOf("tuesday"))
@@ -212,7 +212,7 @@ describe("ReshapePanel", () => {
 		// The ƒ click edits — it does not toggle the checkbox it sits in.
 		const [idCheckbox] = utils
 			.getAllByRole("checkbox")
-			.filter((el) => el.closest("label")?.textContent === "ƒtotal")
+			.filter((el) => el.parentElement?.textContent === "ƒtotal")
 		expect((idCheckbox as HTMLInputElement).checked).toBe(false)
 	})
 

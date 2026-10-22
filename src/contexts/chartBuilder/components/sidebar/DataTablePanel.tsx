@@ -5,7 +5,7 @@ import { Input } from "../../../../components/ui/Input"
 import { LABEL_COL, LabelSpacer } from "../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../components/ui/NumberInput"
 import { SelectInput } from "../../../../components/ui/SelectInput"
-import { Toggle } from "../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../components/ui/Checkbox"
 import {
 	defaultDataTableCaption,
 	migrateDataTableConfig,
@@ -71,7 +71,7 @@ export const DataTablePanel = () => {
 
 	return (
 		<div className="vc-option-panel">
-			<Toggle
+			<Checkbox
 				label="Show a data table under the chart"
 				checked={cfg.enabled}
 				onChange={(enabled) => update({ enabled })}
@@ -139,7 +139,7 @@ export const DataTablePanel = () => {
 					/>
 					<div className="flex items-center gap-2">
 						<LabelSpacer />
-						<Toggle
+						<Checkbox
 							label="Download link"
 							checked={cfg.showDownload}
 							onChange={(showDownload) => update({ showDownload })}
@@ -209,7 +209,7 @@ export const DataTablePanel = () => {
 						/>
 						<div className="flex items-center gap-2">
 							<LabelSpacer />
-							<Toggle
+							<Checkbox
 								label="Bold"
 								checked={cfg.headerBold}
 								onChange={(headerBold) => update({ headerBold })}
@@ -229,7 +229,7 @@ export const DataTablePanel = () => {
 						/>
 						<div className="flex items-center gap-2">
 							<LabelSpacer />
-							<Toggle
+							<Checkbox
 								label="Striped rows"
 								checked={cfg.striped}
 								onChange={(striped) => update({ striped })}

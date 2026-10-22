@@ -140,30 +140,30 @@ describe("FacetAxisOptionsPanel — both axes on both panels", () => {
 		expand(utils, /columns/i, 1)
 
 		// DOM order: row panel's Y picker, then the col panel's Y picker.
-		const yGroups = utils.getAllByRole("group", { name: "Share Y axis" })
-		const xGroups = utils.getAllByRole("group", { name: "Share X axis" })
+		const yGroups = utils.getAllByRole("radiogroup", { name: "Share Y axis" })
+		const xGroups = utils.getAllByRole("radiogroup", { name: "Share X axis" })
 		expect(yGroups).toHaveLength(2)
 		expect(xGroups).toHaveLength(2)
 		// 2x2 grid → the per-group option surfaces on both, axis-named.
-		expect(within(yGroups[0]!).getByRole("button", { name: "Per row" })).toBeTruthy()
+		expect(within(yGroups[0]!).getByRole("radio", { name: "Per row" })).toBeTruthy()
 		expect(
-			within(xGroups[1]!).getByRole("button", { name: "Per column" }),
+			within(xGroups[1]!).getByRole("radio", { name: "Per column" }),
 		).toBeTruthy()
 
 		// Clicking "None" on the COL panel's Y picker writes shareY — the
 		// row panel's Y picker follows (one config bit) and neither X
 		// picker moves (they write shareX).
-		fireEvent.click(within(yGroups[1]!).getByRole("button", { name: "None" }))
+		fireEvent.click(within(yGroups[1]!).getByRole("radio", { name: "None" }))
 		for (const g of yGroups) {
 			expect(
-				within(g).getByRole("button", { name: "None" }).getAttribute("aria-pressed"),
+				within(g).getByRole("radio", { name: "None" }).getAttribute("aria-checked"),
 			).toBe("true")
 		}
 		for (const g of xGroups) {
 			expect(
 				within(g)
-					.getByRole("button", { name: "All panels" })
-					.getAttribute("aria-pressed"),
+					.getByRole("radio", { name: "All panels" })
+					.getAttribute("aria-checked"),
 			).toBe("true")
 		}
 	})
@@ -360,7 +360,7 @@ describe("FacetAxisOptionsPanel — preserved asymmetries", () => {
 		expand(utils, /columns/i, 0)
 		expand(utils, /columns/i, 1)
 		expect(
-			utils.getAllByRole("group", { name: "Share Angle axis" }),
+			utils.getAllByRole("radiogroup", { name: "Share Angle axis" }),
 		).toHaveLength(2)
 	})
 

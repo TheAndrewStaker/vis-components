@@ -78,6 +78,7 @@ import { useCurrentTheme } from "../../store/useCurrentTheme"
 
 import { AlignmentControl, FontEditor } from "./LabelsPanel"
 import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
+import { SidebarJumpLink } from "../../../../components/ui/SidebarJumpLink"
 import { ColorInput } from "../../../../components/ui/ColorInput"
 import {
 	LABEL_COL,
@@ -88,8 +89,9 @@ import { NumberInput } from "../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../components/ui/ResetLink"
 import { SwatchShapePicker } from "./SwatchShapePicker"
 import { RadioGroup } from "../../../../components/ui/RadioGroup"
+import { Segmented } from "../../../../components/ui/Segmented"
 import { SelectInput } from "../../../../components/ui/SelectInput"
-import { Toggle } from "../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../components/ui/Checkbox"
 import { Input } from "../../../../components/ui/Input"
 import { Select } from "../../../../components/ui/Select"
 
@@ -188,11 +190,15 @@ const QuantLegendChannelControls = ({
 	const extent = legendDataExtent(values, fieldType)
 	const dataHint = extent ? `data range ${extent[0]} — ${extent[1]}` : null
 
+	// Each legend's block is a divider group (no rule above the first one,
+	// which sits right under the subsection header).
 	return (
-		<div className="flex flex-col gap-2">
-			<span className="text-xs vc-muted">
+		<div className="vc-divider-group first:border-t-0 first:pt-0">
+			<span className="vc-group-header">
 				{sectionLabel}
-				{dataHint && ` · ${dataHint}`}
+				{dataHint && (
+					<span className="font-normal vc-muted">{` · ${dataHint}`}</span>
+				)}
 			</span>
 			{/* Rows subordinate to the section label indent by ml-6; the narrower
 			 * LABEL_COL_NESTED keeps their controls on the shared 104px column
@@ -863,7 +869,7 @@ export const LegendPanel = () => {
 						changed={groupChanged("shown")}
 					>
 					{mappedLegendChannels.map((ch) => (
-						<Toggle
+						<Checkbox
 							key={ch}
 							label={LEGEND_FRIENDLY_NAME[ch]}
 							checked={!effHidden[ch]}
@@ -871,7 +877,7 @@ export const LegendPanel = () => {
 						/>
 					))}
 					{rugLegendMapped && (
-						<Toggle
+						<Checkbox
 							key="rug"
 							label={LEGEND_FRIENDLY_NAME.rug}
 							checked={!effHidden.rug}
@@ -879,7 +885,7 @@ export const LegendPanel = () => {
 						/>
 					)}
 					{densityCurveLegendMapped && (
-						<Toggle
+						<Checkbox
 							key="densityCurve"
 							label={LEGEND_FRIENDLY_NAME.densityCurve}
 							checked={!effHidden.densityCurve}
@@ -891,7 +897,7 @@ export const LegendPanel = () => {
 					 *  offered when there's actually a shared field to combine. */}
 					{sharedVariableExists && (
 						<div className="vc-divider-group">
-							<Toggle
+							<Checkbox
 								label="Combine legends with same variables"
 								checked={combineLegendSections}
 								onChange={(combineSameVariable) =>
@@ -954,14 +960,21 @@ export const LegendPanel = () => {
 										<ResetLink onClick={() => update({ insideX: null })} />
 									)}
 								</div>
-								<NumberInput
-									label="Y"
-									labelClassName={LABEL_COL}
-									value={merged.insideY}
-									onChange={(insideY) => update({ insideY })}
-									step={0.02}
-									inputClassName="w-16"
-								/>
+								<div className="flex items-center gap-2">
+									<NumberInput
+										label="Y"
+										labelClassName={LABEL_COL}
+										value={merged.insideY}
+										onChange={(insideY) => update({ insideY })}
+										step={0.02}
+										inputClassName="w-16"
+									/>
+									{merged.insideY !== DEFAULT_LEGEND_CONFIG.insideY && (
+										<ResetLink
+											onClick={() => update({ insideY: DEFAULT_LEGEND_CONFIG.insideY })}
+										/>
+									)}
+								</div>
 							</>
 						)}
 					</div>
@@ -1036,12 +1049,18 @@ export const LegendPanel = () => {
 					</div>
 
 					<div className="vc-divider-group">
-						<RadioGroup
-							legend="Orientation"
-							value={merged.orientation}
-							options={ORIENTATION_OPTIONS}
-							onChange={(orientation) => update({ orientation })}
-						/>
+						<div className="flex items-center gap-2 text-sm">
+							<span className={LABEL_COL}>Orientation</span>
+							<Segmented
+								ariaLabel="Orientation"
+								value={merged.orientation}
+								segments={ORIENTATION_OPTIONS.map((o) => ({
+									key: o.value,
+									label: o.label,
+								}))}
+								onChange={(orientation) => update({ orientation })}
+							/>
+						</div>
 					</div>
 
 					<div className="vc-divider-group">
@@ -1139,7 +1158,7 @@ export const LegendPanel = () => {
 					</div>
 
 					<div className="vc-divider-group">
-						<Toggle
+						<Checkbox
 							label="Border"
 							checked={merged.showBorder}
 							onChange={(showBorder) => update({ showBorder })}
@@ -1198,6 +1217,12 @@ export const LegendPanel = () => {
 						title="Legend text"
 						changed={groupChanged("text")}
 					>
+					{/* The legend section TITLES live in Titles → Legend titles;
+					 *  jump there rather than explain it in prose. */}
+					<SidebarJumpLink
+						label="Edit legend titles →"
+						target={{ section: "Titles", subsection: "legend-titles" }}
+					/>
 					{/* Align leads, matching the Labels panel's title rows
 					 *  (Align, then Family / Color / Size / Weight / Style). */}
 					<div className="flex items-center gap-2 text-sm">
@@ -1387,18 +1412,23 @@ export const LegendPanel = () => {
 							 *  the color picker, which is inert until there's a stroke
 							 *  to color. */}
 							<div className="vc-divider-group">
-								<NumberInput
-									label="Border thickness"
-									labelClassName={LABEL_COL}
-									value={merged.gradientBarBorderWidth ?? 0}
-									min={0}
-									step={0.5}
-									onChange={(gradientBarBorderWidth) =>
-										update({ gradientBarBorderWidth: Math.max(0, gradientBarBorderWidth) })
-									}
-									inputClassName="w-16"
-									suffix="px"
-								/>
+								<div className="flex items-center gap-2">
+									<NumberInput
+										label="Border thickness"
+										labelClassName={LABEL_COL}
+										value={merged.gradientBarBorderWidth ?? 0}
+										min={0}
+										step={0.5}
+										onChange={(gradientBarBorderWidth) =>
+											update({ gradientBarBorderWidth: Math.max(0, gradientBarBorderWidth) })
+										}
+										inputClassName="w-16"
+										suffix="px"
+									/>
+									{(merged.gradientBarBorderWidth ?? 0) !== 0 && (
+										<ResetLink onClick={() => update({ gradientBarBorderWidth: null })} />
+									)}
+								</div>
 								{(merged.gradientBarBorderWidth ?? 0) > 0 && (
 									<div className="flex flex-wrap items-center gap-2">
 										<ColorInput
@@ -1422,32 +1452,44 @@ export const LegendPanel = () => {
 								)}
 							</div>
 							<div className="vc-divider-group">
-								<NumberInput
-									label="Tick length"
-									labelClassName={LABEL_COL}
-									value={merged.gradientBarTickLength ?? 0}
-									min={0}
-									step={1}
-									onChange={(gradientBarTickLength) =>
-										update({ gradientBarTickLength })
-									}
-									inputClassName="w-16"
-									suffix="px"
-								/>
+								<div className="flex items-center gap-2">
+									<NumberInput
+										label="Tick length"
+										labelClassName={LABEL_COL}
+										value={merged.gradientBarTickLength ?? 0}
+										min={0}
+										step={1}
+										onChange={(gradientBarTickLength) =>
+											update({ gradientBarTickLength })
+										}
+										inputClassName="w-16"
+										suffix="px"
+									/>
+									{(merged.gradientBarTickLength ?? 0) !== 0 && (
+										<ResetLink onClick={() => update({ gradientBarTickLength: null })} />
+									)}
+								</div>
 								{(merged.gradientBarTickLength ?? 0) > 0 && (
 									<>
-										<NumberInput
-											label="Tick thickness"
-											labelClassName={LABEL_COL}
-											value={merged.gradientBarTickThickness ?? 1}
-											min={0}
-											step={0.5}
-											onChange={(gradientBarTickThickness) =>
-												update({ gradientBarTickThickness })
-											}
-											inputClassName="w-16"
-											suffix="px"
-										/>
+										<div className="flex items-center gap-2">
+											<NumberInput
+												label="Tick thickness"
+												labelClassName={LABEL_COL}
+												value={merged.gradientBarTickThickness ?? 1}
+												min={0}
+												step={0.5}
+												onChange={(gradientBarTickThickness) =>
+													update({ gradientBarTickThickness })
+												}
+												inputClassName="w-16"
+												suffix="px"
+											/>
+											{(merged.gradientBarTickThickness ?? 1) !== 1 && (
+												<ResetLink
+													onClick={() => update({ gradientBarTickThickness: null })}
+												/>
+											)}
+										</div>
 										<div className="flex flex-wrap items-center gap-2">
 											<ColorInput
 												label="Tick color"
@@ -1563,17 +1605,25 @@ export const LegendPanel = () => {
 									defaultShape={theme.legendSwatchShape}
 									onChange={(shape) => setSwatchShape(ch, shape)}
 								/>
-								<NumberInput
-									label="Swatch size"
-									labelClassName={LABEL_COL}
-									value={resolveLegendSwatchSize(merged, theme, ch)}
-									min={3}
-									max={20}
-									step={1}
-									clamp
-									onChange={(size) => setSwatchSize(ch, size)}
-									suffix="px"
-								/>
+								<div className="flex items-center gap-2">
+									<NumberInput
+										label="Swatch size"
+										labelClassName={LABEL_COL}
+										value={resolveLegendSwatchSize(merged, theme, ch)}
+										min={3}
+										max={20}
+										step={1}
+										clamp
+										onChange={(size) => setSwatchSize(ch, size)}
+										suffix="px"
+									/>
+									{resolveLegendSwatchSize(merged, theme, ch) !==
+										theme.legendSwatchSize && (
+										<ResetLink
+											onClick={() => setSwatchSize(ch, theme.legendSwatchSize)}
+										/>
+									)}
+								</div>
 								{/* Swatch color: opacity / saturation / brightness swatches
 								 *  paint with the shared aux color (no hue scale to inherit
 								 *  from), so its picker lives right in their group — the
@@ -1700,18 +1750,28 @@ export const LegendPanel = () => {
 												<ResetLink onClick={() => resetSwatchOutlineColor(ch)} />
 											)}
 										</div>
-										<NumberInput
-											label="Outline width"
-											labelClassName={LABEL_COL}
-											value={resolveLegendSwatchOutlineWidth(merged, theme, ch)}
-											min={0}
-											max={10}
-											step={0.5}
-											clamp
-											onChange={(width) => setSwatchOutlineWidth(ch, width)}
-											inputClassName="w-16"
-											suffix="px"
-										/>
+										<div className="flex items-center gap-2">
+											<NumberInput
+												label="Outline width"
+												labelClassName={LABEL_COL}
+												value={resolveLegendSwatchOutlineWidth(merged, theme, ch)}
+												min={0}
+												max={10}
+												step={0.5}
+												clamp
+												onChange={(width) => setSwatchOutlineWidth(ch, width)}
+												inputClassName="w-16"
+												suffix="px"
+											/>
+											{resolveLegendSwatchOutlineWidth(merged, theme, ch) !==
+												theme.legendSwatchOutlineWidth && (
+												<ResetLink
+													onClick={() =>
+														setSwatchOutlineWidth(ch, theme.legendSwatchOutlineWidth)
+													}
+												/>
+											)}
+										</div>
 									</>
 								)}
 							</div>
@@ -1769,17 +1829,25 @@ export const LegendPanel = () => {
 					 *  channel merged into this section — the size scale then owns
 					 *  each swatch's radius and this input would be inert. */}
 					{!auxSharingShapeField.includes("area") && (
-						<NumberInput
-							label="Swatch size"
-							labelClassName={LABEL_COL}
-							value={resolveLegendSwatchSize(merged, theme, "shape")}
-							min={3}
-							max={20}
-							step={1}
-							clamp
-							onChange={(size) => setSwatchSize("shape", size)}
-							suffix="px"
-						/>
+						<div className="flex items-center gap-2">
+							<NumberInput
+								label="Swatch size"
+								labelClassName={LABEL_COL}
+								value={resolveLegendSwatchSize(merged, theme, "shape")}
+								min={3}
+								max={20}
+								step={1}
+								clamp
+								onChange={(size) => setSwatchSize("shape", size)}
+								suffix="px"
+							/>
+							{resolveLegendSwatchSize(merged, theme, "shape") !==
+								theme.legendSwatchSize && (
+								<ResetLink
+									onClick={() => setSwatchSize("shape", theme.legendSwatchSize)}
+								/>
+							)}
+						</div>
 					)}
 					</div>
 				</CollapsibleSubsection>

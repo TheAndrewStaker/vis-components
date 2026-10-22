@@ -143,8 +143,9 @@ describe("Length panel — Segment properties", () => {
 		const q = await mount()
 		await openSection(q)
 		expect(q.getByLabelText("Thickness")).not.toBeNull()
-		expect(q.getByLabelText("Round")).not.toBeNull()
-		expect(q.getByLabelText("Square")).not.toBeNull()
+		expect(q.getByRole("radiogroup", { name: "Line cap" })).not.toBeNull()
+		expect(q.getByRole("radio", { name: "Round" })).not.toBeNull()
+		expect(q.getByRole("radio", { name: "Square" })).not.toBeNull()
 		// Vary by lists the categorical variable only.
 		const varyBy = q.getByLabelText("Vary by") as HTMLSelectElement
 		expect([...varyBy.options].map((o) => o.value)).toEqual(["", "region"])

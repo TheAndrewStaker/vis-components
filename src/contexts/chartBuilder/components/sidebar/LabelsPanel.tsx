@@ -57,7 +57,7 @@ import { ColorInput } from "../../../../components/ui/ColorInput"
 import { LABEL_COL } from "../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../components/ui/ResetLink"
-import { Toggle } from "../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../components/ui/Checkbox"
 import { Input, Textarea } from "../../../../components/ui/Input"
 import { Select } from "../../../../components/ui/Select"
 
@@ -439,6 +439,13 @@ export const LabelsPanel = () => {
 				]
 			: [{ key: "facetTitle", label: "Facet titles" }]
 	const showFacet = (key: LabelFontKey) => !isTitleHidden(labels, key)
+	// "Edit facet titles →" jump links (facet panels) land on the first
+	// RENDERED grid-split facet-title subsection, in on-screen order.
+	const firstGridFacetKey: LabelFontKey | undefined = (
+		["facetRowTitle", "facetColTitle", "facetPanelTitle"] as const
+	).find((k) => (k !== "facetPanelTitle" || hideEmptyOn) && showFacet(k))
+	const facetJumpId = (key: LabelFontKey) =>
+		key === firstGridFacetKey ? "facet-titles" : undefined
 	const titlesShownChanged =
 		!showTitle ||
 		!showSubtitle ||
@@ -503,7 +510,7 @@ export const LabelsPanel = () => {
 	const facetSwatchPalette = resolveTextPickerPalette(theme)
 	const facetColorControls = (values: string[], baseColor: string) => (
 		<div className="flex flex-col gap-1.5">
-			<Toggle
+			<Checkbox
 				label="Color by facet"
 				checked={colorByFacetOn}
 				onChange={setFacetColorByValue}
@@ -596,32 +603,32 @@ export const LabelsPanel = () => {
 			 *  checked here. Replaces typing a space to blank a title, which
 			 *  still drew (and reserved room for) an invisible one. */}
 			<CollapsibleSubsection title="Titles shown" changed={titlesShownChanged}>
-				<Toggle
+				<Checkbox
 					label="Title"
 					checked={showTitle}
 					onChange={(show) => setTitlesShown(["title"], show)}
 				/>
-				<Toggle
+				<Checkbox
 					label="Subtitle"
 					checked={showSubtitle}
 					onChange={(show) => setTitlesShown(["subtitle"], show)}
 				/>
 				{!xTitleInert && (
-					<Toggle
+					<Checkbox
 						label="X-axis title"
 						checked={showXTitle}
 						onChange={(show) => setTitlesShown(["xAxisTitle"], show)}
 					/>
 				)}
 				{!yTitleInert && (
-					<Toggle
+					<Checkbox
 						label="Y-axis title"
 						checked={showYTitle}
 						onChange={(show) => setTitlesShown(["yAxisTitle"], show)}
 					/>
 				)}
 				{facetBoxes.map((b) => (
-					<Toggle
+					<Checkbox
 						key={b.key}
 						label={b.label}
 						checked={showFacet(b.key)}
@@ -629,7 +636,7 @@ export const LabelsPanel = () => {
 					/>
 				))}
 				{legendTitleGroups.map((group) => (
-					<Toggle
+					<Checkbox
 						key={group.join("+")}
 						label={`${group
 							.map((c) => LEGEND_FRIENDLY_NAME[c])
@@ -767,7 +774,7 @@ export const LabelsPanel = () => {
 				}
 				extraControls={
 					<>
-						<Toggle
+						<Checkbox
 							label="Read y-axis title horizontally"
 							checked={!!labels.yAxisTitleHorizontal}
 							onChange={setYAxisHorizontal}
@@ -803,6 +810,7 @@ export const LabelsPanel = () => {
 					<CollapsibleSubsection
 						title="Facet titles (row)"
 						changed={facetRowChanged}
+						jumpId={facetJumpId("facetRowTitle")}
 					>
 						<LabelStyleControls
 							override={overrides.facetRowTitle}
@@ -849,6 +857,7 @@ export const LabelsPanel = () => {
 					<CollapsibleSubsection
 						title="Facet titles (column)"
 						changed={facetColChanged}
+						jumpId={facetJumpId("facetColTitle")}
 					>
 						<LabelStyleControls
 							override={overrides.facetColTitle}
@@ -891,6 +900,7 @@ export const LabelsPanel = () => {
 						<CollapsibleSubsection
 							title="Facet titles (panel)"
 							changed={facetPanelChanged}
+							jumpId={facetJumpId("facetPanelTitle")}
 						>
 							<LabelStyleControls
 								override={overrides.facetPanelTitle}
@@ -929,7 +939,11 @@ export const LabelsPanel = () => {
 				</>
 			)}
 			{isFaceted && !facetGridSplit && showFacet("facetTitle") && (
-				<CollapsibleSubsection title="Facet titles" changed={facetChanged}>
+				<CollapsibleSubsection
+					title="Facet titles"
+					changed={facetChanged}
+					jumpId="facet-titles"
+				>
 					<LabelStyleControls
 						override={overrides.facetTitle}
 						onOverride={(patch) => setOverride("facetTitle", patch)}
@@ -961,9 +975,13 @@ export const LabelsPanel = () => {
 				</CollapsibleSubsection>
 			)}
 			{shownLegendTitleGroups.length > 0 && (
-				<CollapsibleSubsection title="Legend titles" changed={legendChanged}>
+				<CollapsibleSubsection
+					title="Legend titles"
+					changed={legendChanged}
+					jumpId="legend-titles"
+				>
 					<div className="flex flex-col gap-2">
-					{shownLegendTitleGroups.map((group) => {
+					{shownLegendTitleGroups.map((group, gi) => {
 						// One row per shared-field group. Reads come from the first
 						// member that carries a value (so titles set before combining
 						// still surface); every write fans out to ALL members, keeping
@@ -976,7 +994,7 @@ export const LabelsPanel = () => {
 						const fKey = keys.find((k) => overrides[k]) ?? keys[0]
 						const aKey = keys.find((k) => titleAlignments[k]) ?? keys[0]
 						const oKey = keys.find((k) => labels.titleOffsets?.[k]) ?? keys[0]
-						return (
+						const row = (
 							<LabelRow
 								key={group.join("+")}
 								label={`${group
@@ -1020,6 +1038,15 @@ export const LabelsPanel = () => {
 									/>
 								}
 							/>
+						)
+						// Hairline between rows when there's more than one, the
+						// same divider Primary titles puts above Subtitle.
+						return gi === 0 ? (
+							row
+						) : (
+							<div key={group.join("+")} className="vc-divider-group">
+								{row}
+							</div>
 						)
 					})}
 					</div>
@@ -1250,16 +1277,22 @@ const OffsetControl = ({
 	// inputs line up with the Align / Family / Color controls above.
 	const row = (axis: "x" | "y", labelText: string) => {
 		const flip = axis === "y" ? -1 : 1
+		// Each axis carries its own reset (default 0), shown only when moved.
 		return (
-			<NumberInput
-				label={labelText}
-				labelClassName={LABEL_COL}
-				value={flip * (value[axis] ?? 0)}
-				step={1}
-				onChange={(n) => onChange(axis, flip * n)}
-				inputClassName="w-16"
-				suffix="px"
-			/>
+			<div className="flex items-center gap-2">
+				<NumberInput
+					label={labelText}
+					labelClassName={LABEL_COL}
+					value={flip * (value[axis] ?? 0)}
+					step={1}
+					onChange={(n) => onChange(axis, flip * n)}
+					inputClassName="w-16"
+					suffix="px"
+				/>
+				{(value[axis] ?? 0) !== 0 && (
+					<ResetLink onClick={() => onChange(axis, 0)} />
+				)}
+			</div>
 		)
 	}
 	return (
@@ -1293,7 +1326,7 @@ const TitlePrefixControl = ({
 	const on = value?.enabled === true
 	return (
 		<div className="flex flex-col gap-2">
-			<Toggle
+			<Checkbox
 				label="Add prefix"
 				checked={on}
 				onChange={(enabled) => onChange({ enabled })}

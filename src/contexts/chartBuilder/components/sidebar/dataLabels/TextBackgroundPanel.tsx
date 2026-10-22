@@ -12,7 +12,7 @@ import { ColorInput } from "../../../../../components/ui/ColorInput"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
-import { Toggle } from "../../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../../components/ui/Checkbox"
 
 /** What the controls emit: concrete values only (never null), so one
  *  patch type satisfies both the layer config and a variable's entry. */
@@ -76,7 +76,7 @@ const BackgroundControls = ({
 	const borderOn = borderWidth > 0
 	return (
 		<>
-			<Toggle
+			<Checkbox
 				id={toggleId}
 				label="Show text background"
 				checked={enabled}
@@ -142,7 +142,7 @@ const BackgroundControls = ({
 						{resetPadY && <ResetLink onClick={resetPadY} />}
 					</div>
 					<div className="flex items-center gap-2">
-						<Toggle
+						<Checkbox
 							label="Border"
 							checked={borderOn}
 							onChange={(on) =>

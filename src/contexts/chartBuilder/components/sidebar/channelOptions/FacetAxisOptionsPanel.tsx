@@ -32,6 +32,7 @@ import {
 } from "../../../store/atoms"
 import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
+import { SidebarJumpLink } from "../../../../../components/ui/SidebarJumpLink"
 import {
 	AxisRangeSection,
 	GapInput,
@@ -652,6 +653,10 @@ export const FacetAxisOptionsPanel = ({ axis }: { axis: "row" | "col" }) => {
 						onChange={(checked) => updateCfg({ hideEmptyPanels: checked })}
 					/>
 				)}
+				<SidebarJumpLink
+					label="Edit facet titles →"
+					target={{ section: "Titles", subsection: "facet-titles" }}
+				/>
 			</CollapsibleSubsection>
 		</div>
 	)

@@ -7,8 +7,9 @@ import {
 	LabelSpacer,
 } from "../../../../components/ui/LabeledField"
 import { ResetLink } from "../../../../components/ui/ResetLink"
+import { Segmented } from "../../../../components/ui/Segmented"
 import { SelectInput } from "../../../../components/ui/SelectInput"
-import { Toggle } from "../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../components/ui/Checkbox"
 import {
 	FOCUS_REGION_LABELS,
 	levelDefaultViewport,
@@ -121,48 +122,12 @@ const focusRegionOptions: {
 	{ value: "custom", label: "Custom (drag to center)" },
 ]
 
-/** Single-select segmented control for the coordinate system — the master
- *  switch. No map (the default) renders the usual x/y plots; Geographic draws
- *  maps. Modeled on the Distribution-type segmented control in
- *  AxisOptionsPanel so the two read the same. */
-const CoordSystemToggle = ({
-	value,
-	onChange,
-}: {
-	value: CoordSystemKind
-	onChange: (next: CoordSystemKind) => void
-}) => {
-	const segments: { key: CoordSystemKind; label: string }[] = [
-		{ key: "noMap", label: "No map" },
-		{ key: "geographic", label: "Geographic" },
-	]
-	const segBase =
-		"px-2 py-1 text-sm border-l first:border-l-0 border-vc-brand-text"
-	const segClass = (active: boolean) =>
-		active
-			? `${segBase} vc-toggle-on`
-			: `${segBase} vc-toggle-off`
-	return (
-		<div
-			role="radiogroup"
-			aria-label="Coordinate system"
-			className="inline-flex self-start overflow-hidden rounded border border-vc-brand-text"
-		>
-			{segments.map((s) => (
-				<button
-					key={s.key}
-					type="button"
-					role="radio"
-					aria-checked={value === s.key}
-					onClick={() => onChange(s.key)}
-					className={segClass(value === s.key)}
-				>
-					{s.label}
-				</button>
-			))}
-		</div>
-	)
-}
+/** The coordinate-system master switch, on the shared `Segmented` control.
+ *  No map (the default) renders the usual x/y plots; Geographic draws maps. */
+const COORD_SYSTEM_SEGMENTS: ReadonlyArray<{ key: CoordSystemKind; label: string }> = [
+	{ key: "noMap", label: "No map" },
+	{ key: "geographic", label: "Geographic" },
+]
 
 /** Read-only join summary: "{matched} of {total} matched" plus an optional
  *  "{n} unmatched (show)" disclosure that reveals the unmatched values. Helper
@@ -362,8 +327,10 @@ export const MapsSection = () => {
 	return (
 		<div className="vc-option-panel">
 			<CollapsibleSubsection title="Coordinate system" defaultOpen>
-				<CoordSystemToggle
+				<Segmented
+					ariaLabel="Coordinate system"
 					value={mapConfig.coordSystem}
+					segments={COORD_SYSTEM_SEGMENTS}
 					onChange={(coordSystem) => update({ coordSystem })}
 				/>
 			</CollapsibleSubsection>
@@ -484,7 +451,7 @@ export const MapsSection = () => {
 							<div className="flex items-start gap-2">
 								<LabelSpacer />
 								<div className="flex min-w-0 flex-1 flex-col gap-1">
-									<Toggle
+									<Checkbox
 										label="Show basemap"
 										checked={mapConfig.showBasemap}
 										onChange={(showBasemap) =>
@@ -501,7 +468,7 @@ export const MapsSection = () => {
 							<div className="flex items-start gap-2">
 								<LabelSpacer />
 								<div className="flex min-w-0 flex-1 flex-col gap-1">
-									<Toggle
+									<Checkbox
 										label="Fill regions with no data"
 										checked={mapConfig.showNoDataRegions}
 										onChange={(showNoDataRegions) =>

@@ -1569,8 +1569,8 @@ properties** subsection, modeled on Connection → Line properties:
   per-row reset. The stored `segmentThicknessField` IS the mode — no
   separate flag; "— none —" clears the field and the per-level map.
   Levels key on the stringified cell, like connection thickness.
-- **Line cap** — Round (default) or Square. Square maps to SVG's `butt`
-  cap so segments end flush at their endpoints.
+- **Line cap** — a Round (default) / Square segmented toggle. Square
+  maps to SVG's `butt` cap so segments end flush at their endpoints.
 
 The Length legend's segment swatches follow the single thickness and
 the line cap (the swatch box grows with the stroke).
@@ -1638,7 +1638,7 @@ Connection is the line/area glue. Controls:
   curve still passes through every data point, but sharp turns round
   off and can overshoot slightly. Applies to scatter connection lines
   and area/line-mode layer edges; radar polygons ignore it.
-- **Line cap** — Round (default) or Square, for the OPEN ends of
+- **Line cap** — a Round (default) / Square segmented toggle, for the OPEN ends of
   scatter connection polylines and area/line layer edges (dash
   segments included). "Square" maps to SVG's `butt` cap: the stroke
   ends flush at the endpoint's data position instead of extending half
@@ -1672,7 +1672,7 @@ Visible when `facet` is mapped. Controls:
 
 - **Rows / columns** — explicit grid dimensions. Max for each is the
   number of levels in the facet variable.
-- **Share axes** — separate toggles ("Share X axis" / "Share Y axis";
+- **Share axes** — separate segmented toggles ("Share X axis" / "Share Y axis";
   polar: "Share R axis" / "Share Angle axis") for sharing the x-axis or
   y-axis across panels in the same row or column. When shared, all axes have
   the same extent; tick labels render only on one row / column edge.
@@ -1744,6 +1744,13 @@ Visible when `facet` is mapped. Controls:
   and only overlap. (Before 2026-10-20 the gap ran between whole cells,
   plot plus axis chrome; saved visuals and imported bundles move onto the
   new measure by adding 30px — visuals v8.)
+- **Edit facet titles →** — the last item of the facet Row / Column /
+  wrap panels' "Panel spacing and sizing" subsection: a right-aligned
+  text link that jumps to Titles → **Facet titles** (in a grid split,
+  the first of the "(row)" / "(column)" / "(panel)" subsections that is
+  rendered). It opens the Titles section and that subsection and scrolls
+  it into view; if the target subsection isn't rendered (its Titles
+  shown box is off) it opens Titles and scrolls to the section instead.
 - **Panel order** — custom ordering of panels by the facet variable's
   levels.
 
@@ -1863,7 +1870,9 @@ The X-axis and Y-axis panels (under Encodings) configure:
   `components/viz/coords/cartesian.tsx` (the only place holding both
   scales), so it applies to every cartesian renderer and faceted
   panels alike. Cartesian only — radar/polar axes never see it.
-- **Tick marks** — color, thickness, length (Ticks section).
+- **Tick marks** — color, thickness, length (Ticks section). Where the
+  rows sit below other controls (the chord ring axis), they open with a
+  standard "Tick marks" group header behind a divider.
 - **Ticks + Scale: count, min / max, custom breaks** — the **Ticks**
   section holds the tick density (**Count** picks the automatic tick
   density, 0 = no automatic ticks) and the Tick marks rows. The
@@ -1979,6 +1988,8 @@ The X-axis and Y-axis panels (under Encodings) configure:
   new `offsetX`/`offsetY` are unset and cleared on their first write.
   The radar **R** panel has the same control: it moves the r-tick
   labels along the 12 o'clock spoke, and the rings and spokes stay put.
+  X and Y each carry their own reset link, shown only while that value
+  is non-zero; resetting one keeps the other's nudge.
 - **Angle** (Tick labels) — tick label rotation in degrees. Blank =
   auto: a categorical / ordinal x-axis rotates its labels to -45° when
   two NEIGHBORING labels would collide (half of each label's measured
@@ -2310,6 +2321,15 @@ input boundary, so saved charts are unaffected. This includes the
 axis "Adjust position" Y input. The one exception that keeps its own
 semantics is the inside-legend X/Y (fractional coordinates, not a
 nudge).
+
+**Every X / Y position input carries its own reset link** (title,
+facet-title and panel-title Adjust position, data-label X / Y at every
+scope plus the pie / sunburst Angle and R, caption Adjust position, the
+inside-legend X / Y), shown only while that one value differs from its
+default (0 for the nudges; the config default elsewhere). There is no
+shared reset on an "Adjust position" header. The same per-input rule
+covers the caption's Size Width / Height (reset = auto) and the data
+labels' wrap Characters (reset = 20).
 
 User-set per-title offsets (`xAxisTitle`, `yAxisTitle`, `title`,
 `subtitle`) shift the title in pixels with **asymmetric** auto-grow
@@ -3057,7 +3077,9 @@ titles** (X-axis, Y-axis), **Facet titles** (present only when a
 facet channel is mapped; a grid split shows the Column and Row title
 rows plus — when Hide empty panels is on — the textless **Panel
 titles** row, see §4.5a; otherwise the single Facet title row), and
-**Legend titles** (present only when legend channels are active).
+**Legend titles** (present only when legend channels are active;
+one row per legend, a shared-field group counting as one, with a
+hairline divider between rows when there is more than one).
 Each subsection header carries the standard changed dot (§4.6) when
 any row inside deviates in STYLING — a font override, a non-center
 alignment, a non-zero orientation, a position offset, or the y-axis
@@ -3164,8 +3186,8 @@ the border — **Corner radius** and **Border color**. Its settings dot
 is the `box` group of `explainLegendCustomization`.
 
 **Orientation and Legend columns are independent controls, and each
-owns exactly one axis of the layout.** Orientation (Stacked /
-Horizontal) governs how the ENTRIES flow inside a single legend
+owns exactly one axis of the layout.** Orientation (a Stacked /
+Horizontal segmented toggle) governs how the ENTRIES flow inside a single legend
 section. "Legend columns" (1–6) governs how the SECTIONS themselves
 are arranged, and nothing else does: `1` — the default — always means
 one column, so several legends stack whatever the position or
@@ -3226,7 +3248,9 @@ legend and chart read as one gesture. What "highlight" means is the
 Hover subsection's business (§10's tooltip config, shared with direct
 mark hover): non-matching marks fade by default (`hoverFade`, dropping
 to ~15% opacity), and matched marks can additionally be recolored
-(`hoverRecolor`) or outlined (`hoverOutline`), both opt-in. The whole
+(`hoverRecolor`) or outlined (`hoverOutline`), both opt-in. Recolor
+color, Outline color, Outline width and Fade amount each show a reset
+link back to their default while changed. The whole
 behavior is gated on the "Show hover" master toggle AND its
 legend-highlight sub-option (`hoverEnabled` + `legendHighlight`, both
 default on): with either off, entries never publish a hovered value
@@ -3290,6 +3314,11 @@ names or previews what it inherits — the family and weight dropdowns in
 their leading "(…)" entry, Size as the placeholder, Color in the swatch.
 This is the per-visual layer on top of the theme; the section TITLES above
 the entries are styled separately, in the Labels panel's "Legend titles".
+The subsection's first item is a right-aligned **Edit legend titles →**
+text link that jumps there: it opens the Titles section and its Legend
+titles subsection and scrolls it into view (if that subsection isn't
+rendered, it opens Titles and scrolls to the section). The jump state is
+transient, never saved.
 
 **Align** positions each label within the entry column, which is as wide
 as the longest entry in the section (or the fixed Legend width, when one
@@ -3369,7 +3398,7 @@ section that other group channels share (and so falls back to
 composed swatches even in "bar" style) does.
 
 **Swatch size** (px, radius-like; the theme's default, 5 out of the
-box) applies to every swatch
+box; a reset link returns to it whenever the value differs) applies to every swatch
 form: it's the symbol radius for a chosen glyph and proportionally
 scales the default rectangle (including pattern-filled rectangles), so
 the input is always live — not glyph-only.
@@ -3388,7 +3417,7 @@ a border drawn around that section's swatches — keeps pale swatches
 (e.g. the white midpoint of a diverging gradient) visible against the
 legend background. Width is the switch: 0 draws no outline, so there's
 no separate toggle; the theme's default width (0 out of the box) is
-where every section starts. The color starts from the theme's default
+where every section starts, and the width's reset link returns to it. The color starts from the theme's default
 outline color when it has one, else pipes in from the
 marks' outline color (Color → Outline), falling back to
 `#cccccc`; picking a color stores an override and "reset" returns to
@@ -3416,7 +3445,8 @@ and all the position / alignment / filter controls listed there.)
 
 ## 10. Tooltips
 
-Toggle on / off. The "Fields shown" list contains a checkbox for
+A "Show tooltips" checkbox turns them on / off. The "Fields shown"
+group (a standard group header under a divider) contains a checkbox for
 **every variable in the dataset** so the user can decide what goes in
 the tooltip — both mapped fields AND unmapped fields are eligible.
 For aggregating chart types (bars / areas / pies / tile), the tooltip
@@ -3922,7 +3952,8 @@ Values mode. When that axis has data units (quantitative or
 numeric-ordinal) the radius counts in them. When it has none —
 categorical, string-ordinal, or temporal, so e.g. a tile chart with a
 category on both axes — there is no axis unit a radius could count in,
-so the radius box grows a **px / %** toggle beside it (`radiusUnit`):
+so the radius box grows a **px / %** unit dropdown beside it, like
+Caption's offset fields (`radiusUnit`):
 a fixed on-screen px size, or a fraction of that axis's plot extent
 (the same number Percent mode reads; the default, so a circle toggled
 from Percent to Values keeps its size). Switching px ↔ % converts the
@@ -3935,7 +3966,7 @@ Left / Bottom and Right / Top). Their **Line properties** subsection
 holds the stroke — **Color**, thickness, opacity, dash — and then the
 line's ends:
 
-- **Line cap**: Round or Square. Square is a flush end exactly at the
+- **Line cap**: a Round / Square segmented toggle. Square is a flush end exactly at the
   endpoint (SVG's butt cap — the same mapping the Connection and
   segment line caps use, and what every line drew before the option
   existed, so lines saved without the field keep their look); Round
@@ -4170,7 +4201,8 @@ A small catch-all panel:
 - **Canvas size** — a "Set canvas size" checkbox that, when on, draws
   the chart inside a fixed Width × Height rectangle (default 1000 × 600,
   px / in / cm display units at 96 px/inch; stored in px) instead of
-  filling the viewport. The editor shows the rectangle as a white canvas
+  filling the viewport. Width and Height each show a reset link back to
+  that default when changed. The editor shows the rectangle as a white canvas
   centered in a gray viewport; exports default to its dimensions. Scroll
   mode and the aspect ratio operate within the rectangle. Published
   embeds ignore the size (the iframe is its own canvas).
@@ -4191,7 +4223,8 @@ A small catch-all panel:
   inherits the theme's Exporting default (§12) when the theme sets one,
   else it is auto (whatever the layout leaves today); either way the
   inherited amount shows as the placeholder and the spinner steps from
-  it, and a side the visual sets itself carries the changed dot. 0 puts
+  it, and a side the visual sets itself carries the changed dot and a
+  reset link that clears it back to inheriting. 0 puts
   the content flush against the edge. Enforced by measuring the rendered ink after
   each layout pass and shifting the chart box so the ink lands at the
   margin (LAYOUT.md §16); applies in the editor, in image exports, and
@@ -4201,7 +4234,8 @@ A small catch-all panel:
   needed). Avoids squishing very long or wide visuals so much that
   axis labels overlap.
 - **Aspect ratio** — a "Fix aspect ratio" checkbox that, when on,
-  reveals Length and Width inputs (default 1 : 1). The plot area holds
+  reveals Width and Height inputs (default 1 : 1; each has a reset link
+  back to 1 when changed). The plot area holds
   that Length : Width shape regardless of viewport size — the chart
   shrinks the longer dimension to fit rather than stretching to fill.
   The shrunk figure centers in the chart area, and the legend keeps

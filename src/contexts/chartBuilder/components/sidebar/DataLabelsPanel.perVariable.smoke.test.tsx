@@ -313,10 +313,14 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 	it("checking a field adds its label; unchecking removes the labels composing just it", () => {
 		const { container, readCfg } = mountPanel({ fields: ["y"] })
 		openChannel(container, "Value")
-		const checkbox = (name: string) =>
-			[...container.querySelectorAll("label")]
-				.find((l) => l.textContent?.trim() === name)
-				?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+		const checkbox = (name: string) => {
+			const label = [...container.querySelectorAll("label")].find(
+				(l) => l.textContent?.trim() === name
+			)
+			return label?.htmlFor
+				? container.querySelector<HTMLInputElement>(`#${CSS.escape(label.htmlFor)}`)
+				: label?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+		}
 		fireEvent.click(checkbox("g")!)
 		expect(readCfg().composedLabels?.map((l) => l.template)).toEqual(["{y}", "{g}"])
 	})

@@ -4,7 +4,7 @@ import { ColorInput } from "../../../../../components/ui/ColorInput"
 import { LABEL_COL, LabelSpacer } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
-import { Toggle } from "../../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../../components/ui/Checkbox"
 import {
 	type RectangleTextStyle,
 	type TextAnnotation,
@@ -190,7 +190,7 @@ export const TextAnnotationEditor = ({
 					/>
 					<div className="flex items-center gap-2">
 						<LabelSpacer />
-						<Toggle label="Border" checked={borderOn} onChange={setBorder} />
+						<Checkbox label="Border" checked={borderOn} onChange={setBorder} />
 					</div>
 					{borderOn && (
 						<>

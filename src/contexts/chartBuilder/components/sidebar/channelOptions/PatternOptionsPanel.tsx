@@ -54,6 +54,7 @@ import { useThemeInkFallback } from "../../../store/useThemeInkFallback"
 
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { ColorInput } from "../../../../../components/ui/ColorInput"
+import { Checkbox } from "../../../../../components/ui/Checkbox"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
@@ -349,17 +350,7 @@ export const PatternOptionsPanel = () => {
 	)
 	const gapFillRow = (
 		<div className="flex flex-col gap-2">
-			<label className="flex items-center gap-2 text-sm">
-				<input
-					type="checkbox"
-					checked={gapFillOn}
-					onChange={(e) => setGapFill(e.target.checked)}
-					className="h-3 w-3"
-				/>
-				<span className="vc-muted">
-					Fill dash gaps
-				</span>
-			</label>
+			<Checkbox label="Fill dash gaps" checked={gapFillOn} onChange={setGapFill} />
 			{gapColorRows}
 		</div>
 	)
@@ -614,9 +605,9 @@ export const PatternOptionsPanel = () => {
 			}
 		) => (
 			<div className="flex flex-col gap-1 text-sm">
-				{label && (
-					<span className="vc-muted">{label}</span>
-				)}
+				{/* Group title. These rows open the panel (nothing above to
+				 *  divide from), so the header carries no divider line. */}
+				{label && <span className="vc-group-header">{label}</span>}
 				<div className="flex flex-wrap gap-1">
 					{showNone && (
 						<button
@@ -668,7 +659,7 @@ export const PatternOptionsPanel = () => {
 		// below is on.
 		const renderDefaultDashRow = (label: string | null) => (
 			<div className="flex flex-col gap-1 text-sm">
-				{label && <span className="vc-muted">{label}</span>}
+				{label && <span className="vc-group-header">{label}</span>}
 				<DashStylePicker
 					pattern={connDefaultDash}
 					customDasharray={configs.connection?.customDashPattern ?? null}

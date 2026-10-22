@@ -18,6 +18,7 @@ import {
 import { useChartModeDef } from "../../store/useChartModeDef"
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
 import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
+import { Checkbox } from "../../../../components/ui/Checkbox"
 import { ColorInput } from "../../../../components/ui/ColorInput"
 import { LABEL_COL_NESTED } from "../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../components/ui/NumberInput"
@@ -134,28 +135,18 @@ export const TooltipPanel = () => {
 		<div className="vc-option-panel">
 			<CollapsibleSubsection title="Tooltips" defaultOpen changed={tooltipsChanged}>
 			<div className="flex flex-col gap-2">
-			<label className="flex items-center gap-2 text-sm">
-				<input
-					type="checkbox"
-					checked={merged.enabled}
-					onChange={(e) => update({ enabled: e.target.checked })}
-					className="h-3 w-3"
-				/>
-				<span className="vc-muted">
-					Show tooltips
-				</span>
-			</label>
+			<Checkbox
+				label="Show tooltips"
+				checked={merged.enabled}
+				onChange={(enabled) => update({ enabled })}
+			/>
 			{merged.enabled && isLineChart && (
 				<>
-					<label className="flex items-start gap-2 text-sm">
-						<input
-							type="checkbox"
-							checked={!!merged.pointsOnly}
-							onChange={(e) => update({ pointsOnly: e.target.checked })}
-							className="mt-0.5 h-3 w-3 flex-shrink-0"
-						/>
-						<span className="vc-text">Show tooltips only at points</span>
-					</label>
+					<Checkbox
+						label="Show tooltips only at points"
+						checked={!!merged.pointsOnly}
+						onChange={(pointsOnly) => update({ pointsOnly })}
+					/>
 					<p className="vc-help">
 						Between the points a line draws, the tooltip shows only that
 						line&apos;s {encodings.connection?.field} &mdash; and nothing
@@ -164,27 +155,17 @@ export const TooltipPanel = () => {
 				</>
 			)}
 			{merged.enabled && mappedFieldNames.length > 0 && (
-				<>
-					<hr className="border-stone-200 dark:border-stone-700" />
-					<span className="text-sm vc-muted">
-						Fields shown
-					</span>
+				<div className="vc-divider-group">
+					<span className="vc-group-header">Fields shown</span>
 					<div className="flex flex-col gap-1">
 						{mappedFieldNames.map((name) => (
-							<label key={name} className="flex items-center gap-2 text-sm">
-								<input
-									type="checkbox"
-									checked={isVisible(name)}
-									onChange={(e) => toggleField(name, e.target.checked)}
-									className="h-3 w-3"
-								/>
-								<span
-									className="min-w-0 truncate vc-text"
-									title={name}
-								>
-									{name}
-								</span>
-							</label>
+							<Checkbox
+								key={name}
+								className="min-w-0 [&>label]:min-w-0 [&>label]:truncate"
+								label={<span title={name}>{name}</span>}
+								checked={isVisible(name)}
+								onChange={(on) => toggleField(name, on)}
+							/>
 						))}
 					</div>
 					{missingFromDataset.length > 0 && (
@@ -193,36 +174,28 @@ export const TooltipPanel = () => {
 							{missingFromDataset.join(", ")}
 						</p>
 					)}
-				</>
+				</div>
 			)}
 			{merged.enabled && (
-				<>
-					<hr className="border-stone-200 dark:border-stone-700" />
-					<label className="flex items-center gap-2 text-sm">
-						<input
-							type="checkbox"
-							checked={!!merged.useCustomHtml}
-							onChange={(e) => {
-								const on = e.target.checked
-								// Seed empty boxes with the defaults on enable so the
-								// user starts from an editable template instead of a
-								// blank textarea; existing edits are left alone.
-								update({
-									useCustomHtml: on,
-									...(on && !merged.customHtml
-										? { customHtml: defaultHtml }
-										: {}),
-									...(on && !merged.customCss
-										? { customCss: DEFAULT_TOOLTIP_CSS }
-										: {}),
-								})
-							}}
-							className="h-3 w-3"
-						/>
-						<span className="vc-text">
-							Use custom HTML template
-						</span>
-					</label>
+				<div className="vc-divider-group">
+					<Checkbox
+						label="Use custom HTML template"
+						checked={!!merged.useCustomHtml}
+						onChange={(on) => {
+							// Seed empty boxes with the defaults on enable so the
+							// user starts from an editable template instead of a
+							// blank textarea; existing edits are left alone.
+							update({
+								useCustomHtml: on,
+								...(on && !merged.customHtml
+									? { customHtml: defaultHtml }
+									: {}),
+								...(on && !merged.customCss
+									? { customCss: DEFAULT_TOOLTIP_CSS }
+									: {}),
+							})
+						}}
+					/>
 					{merged.useCustomHtml && (
 					<>
 					<label className="flex flex-col gap-1 text-sm">
@@ -265,109 +238,95 @@ export const TooltipPanel = () => {
 					</label>
 					</>
 					)}
-				</>
+				</div>
 			)}
 			</div>
 			</CollapsibleSubsection>
 			<CollapsibleSubsection title="Hover" defaultOpen changed={hoverChanged}>
 				<div className="flex flex-col gap-2">
-					<label className="flex items-center gap-2 text-sm">
-						<input
-							type="checkbox"
-							checked={hoverEnabled}
-							onChange={(e) => update({ hoverEnabled: e.target.checked })}
-							className="h-3 w-3"
-						/>
-						<span className="vc-muted">
-							Show hover
-						</span>
-					</label>
+					<Checkbox
+						label="Show hover"
+						checked={hoverEnabled}
+						onChange={(on) => update({ hoverEnabled: on })}
+					/>
 					{hoverEnabled && (
 						<>
-							<label className="flex items-start gap-2 text-sm">
-								<input
-									type="checkbox"
-									checked={legendHighlight}
-									onChange={(e) =>
-										update({ legendHighlight: e.target.checked })
-									}
-									className="mt-0.5 h-3 w-3 flex-shrink-0"
-								/>
-								<span className="vc-text">
-									Hover over legend to highlight visual elements
-								</span>
-							</label>
-							<label className="flex items-start gap-2 text-sm">
-								<input
-									type="checkbox"
-									checked={hoverRecolor}
-									onChange={(e) =>
-										update({ hoverRecolor: e.target.checked })
-									}
-									className="mt-0.5 h-3 w-3 flex-shrink-0"
-								/>
-								<span className="vc-text">
-									Recolor hovered elements
-								</span>
-							</label>
+							<Checkbox
+								label="Hover over legend to highlight visual elements"
+								checked={legendHighlight}
+								onChange={(on) => update({ legendHighlight: on })}
+							/>
+							<Checkbox
+								label="Recolor hovered elements"
+								checked={hoverRecolor}
+								onChange={(on) => update({ hoverRecolor: on })}
+							/>
 							{hoverRecolor && (
-								<div className="ml-6">
+								<div className="ml-6 flex items-center gap-2">
 									<ColorInput
 										label="Recolor color"
 										labelClassName={LABEL_COL_NESTED}
 										value={hoverHighlightColor}
 										onChange={(c) => update({ hoverHighlightColor: c })}
 									/>
+									{hoverHighlightColor !== DEFAULT_HOVER_HIGHLIGHT_COLOR && (
+										<ResetLink
+											ariaLabel="Reset recolor color"
+											onClick={() => update({ hoverHighlightColor: DEFAULT_HOVER_HIGHLIGHT_COLOR })}
+										/>
+									)}
 								</div>
 							)}
-							<label className="flex items-start gap-2 text-sm">
-								<input
-									type="checkbox"
-									checked={hoverOutline}
-									onChange={(e) =>
-										update({ hoverOutline: e.target.checked })
-									}
-									className="mt-0.5 h-3 w-3 flex-shrink-0"
-								/>
-								<span className="vc-text">
-									Outline hovered elements
-								</span>
-							</label>
+							<Checkbox
+								label="Outline hovered elements"
+								checked={hoverOutline}
+								onChange={(on) => update({ hoverOutline: on })}
+							/>
 							{hoverOutline && (
 								<div className="ml-6 flex flex-col gap-2">
-									<ColorInput
-										label="Outline color"
-										labelClassName={LABEL_COL_NESTED}
-										value={hoverOutlineColor}
-										onChange={(c) => update({ hoverOutlineColor: c })}
-									/>
-									<NumberInput
-										label="Outline width"
-										labelClassName={LABEL_COL_NESTED}
-										value={hoverOutlineWidth}
-										min={0}
-										step={0.5}
-										clamp
-										suffix="px"
-										onChange={(n) =>
-											update({ hoverOutlineWidth: Math.max(n, 0) })
-										}
-									/>
+									<div className="flex items-center gap-2">
+										<ColorInput
+											label="Outline color"
+											labelClassName={LABEL_COL_NESTED}
+											value={hoverOutlineColor}
+											onChange={(c) => update({ hoverOutlineColor: c })}
+										/>
+										{hoverOutlineColor !== DEFAULT_HOVER_OUTLINE_COLOR && (
+											<ResetLink
+												ariaLabel="Reset outline color"
+												onClick={() => update({ hoverOutlineColor: DEFAULT_HOVER_OUTLINE_COLOR })}
+											/>
+										)}
+									</div>
+									<div className="flex items-center gap-2">
+										<NumberInput
+											label="Outline width"
+											labelClassName={LABEL_COL_NESTED}
+											value={hoverOutlineWidth}
+											min={0}
+											step={0.5}
+											clamp
+											suffix="px"
+											onChange={(n) =>
+												update({ hoverOutlineWidth: Math.max(n, 0) })
+											}
+										/>
+										{hoverOutlineWidth !== DEFAULT_HOVER_OUTLINE_WIDTH && (
+											<ResetLink
+												ariaLabel="Reset outline width"
+												onClick={() => update({ hoverOutlineWidth: DEFAULT_HOVER_OUTLINE_WIDTH })}
+											/>
+										)}
+									</div>
 								</div>
 							)}
-							<label className="flex items-start gap-2 text-sm">
-								<input
-									type="checkbox"
-									checked={hoverFade}
-									onChange={(e) => update({ hoverFade: e.target.checked })}
-									className="mt-0.5 h-3 w-3 flex-shrink-0"
-								/>
-								<span className="vc-text">
-									Fade other elements
-								</span>
-							</label>
+							<Checkbox
+								label="Fade other elements"
+								checked={hoverFade}
+								onChange={(on) => update({ hoverFade: on })}
+							/>
 							{hoverFade && (
-								<div className="ml-6">
+								<div className="ml-6 flex items-center gap-2">
 									<NumberInput
 										label="Fade amount"
 										labelClassName={LABEL_COL_NESTED}
@@ -384,6 +343,17 @@ export const TooltipPanel = () => {
 											})
 										}
 									/>
+									{(merged.hoverFadeAmount ?? 0.85) !==
+										DEFAULT_TOOLTIP_CONFIG.hoverFadeAmount && (
+										<ResetLink
+											ariaLabel="Reset fade amount"
+											onClick={() =>
+												update({
+													hoverFadeAmount: DEFAULT_TOOLTIP_CONFIG.hoverFadeAmount,
+												})
+											}
+										/>
+									)}
 								</div>
 							)}
 						</>

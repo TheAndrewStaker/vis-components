@@ -1,5 +1,6 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { Button } from "../../../../components/ui/Button"
+import { Checkbox } from "../../../../components/ui/Checkbox"
 import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
 import {
 	reshapeApplies,
@@ -97,6 +98,17 @@ export const ReshapePanel = () => {
 				ƒ
 			</button>
 		) : null
+	// The checkbox label: the ƒ edit marker (derived variables only) then the
+	// truncating column name. The marker is a button inside the label, so a
+	// click on it edits without toggling the box.
+	const columnLabel = (f: Field) => (
+		<>
+			{derivedMarker(f)}
+			<span className="min-w-0 truncate" title={f.name}>
+				{f.name}
+			</span>
+		</>
+	)
 
 	return (
 		// mt-2: the Data section body has no gap of its own and the upload
@@ -110,24 +122,20 @@ export const ReshapePanel = () => {
 					(long format). The uploaded data is never changed — uncheck every
 					Combine column to get the original table back.
 				</p>
-				<div className="flex flex-col gap-1">
+				<div className="vc-divider-group">
 					<span className="vc-group-header">ID columns</span>
 					<p className="vc-help">Kept as-is on every row (not combined).</p>
 					{fields.map((f) => (
-						<label key={f.name} className="flex items-center gap-2 text-sm">
-							<input
-								type="checkbox"
-								checked={idSet.has(f.name)}
-								onChange={(e) => toggleId(f.name, e.target.checked)}
-							/>
-							{derivedMarker(f)}
-							<span className="min-w-0 truncate" title={f.name}>
-								{f.name}
-							</span>
-						</label>
+						<Checkbox
+							key={f.name}
+							className="min-w-0 [&>label]:flex [&>label]:min-w-0 [&>label]:items-center [&>label]:gap-2"
+							label={columnLabel(f)}
+							checked={idSet.has(f.name)}
+							onChange={(on) => toggleId(f.name, on)}
+						/>
 					))}
 				</div>
-				<div className="flex flex-col gap-1">
+				<div className="vc-divider-group">
 					<span className="vc-group-header">Combine</span>
 					<p className="vc-help">
 						Each checked column becomes rows of the new pair. Columns
@@ -140,20 +148,13 @@ export const ReshapePanel = () => {
 						</p>
 					) : (
 						combineCandidates.map((f) => (
-							<label
+							<Checkbox
 								key={f.name}
-								className="flex items-center gap-2 text-sm"
-							>
-								<input
-									type="checkbox"
-									checked={config.meltFields.includes(f.name)}
-									onChange={(e) => toggleMelt(f.name, e.target.checked)}
-								/>
-								{derivedMarker(f)}
-								<span className="min-w-0 truncate" title={f.name}>
-									{f.name}
-								</span>
-							</label>
+								className="min-w-0 [&>label]:flex [&>label]:min-w-0 [&>label]:items-center [&>label]:gap-2"
+								label={columnLabel(f)}
+								checked={config.meltFields.includes(f.name)}
+								onChange={(on) => toggleMelt(f.name, on)}
+							/>
 						))
 					)}
 				</div>

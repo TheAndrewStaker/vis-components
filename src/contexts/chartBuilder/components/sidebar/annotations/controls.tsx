@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from "react"
 import { SectionChevron } from "../../../../../components/ui/Chevron"
 import { DateInput } from "../../../../../components/ui/DateInput"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
+import { Segmented } from "../../../../../components/ui/Segmented"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
 import {
 	LABEL_COL,
@@ -277,36 +278,17 @@ export const LayerRow = ({
 	onChange: (zOrder: "behind" | "front") => void
 }) => (
 	<div className="flex items-center gap-2 text-sm">
-		<span className={LABEL_COL}>Layer</span>
-		<div
-			role="group"
-			aria-label="Layer order"
-			className="inline-flex overflow-hidden rounded border border-vc-brand-text"
-		>
-			<button
-				type="button"
-				onClick={() => onChange("behind")}
-				className={
-					zOrder === "behind"
-						? "vc-toggle-on px-2 py-1 text-sm"
-						: "vc-toggle-off px-2 py-1 text-sm"
-				}
-				aria-pressed={zOrder === "behind"}
-			>
-				Behind chart
-			</button>
-			<button
-				type="button"
-				onClick={() => onChange("front")}
-				className={
-					zOrder === "front"
-						? "vc-toggle-on px-2 py-1 text-sm"
-						: "vc-toggle-off px-2 py-1 text-sm"
-				}
-				aria-pressed={zOrder === "front"}
-			>
-				In front
-			</button>
-		</div>
+		<span className={`shrink-0 ${LABEL_COL}`}>Layer</span>
+		<Segmented
+			ariaLabel="Layer order"
+			value={zOrder}
+			segments={LAYER_SEGMENTS}
+			onChange={onChange}
+		/>
 	</div>
 )
+
+const LAYER_SEGMENTS = [
+	{ key: "behind", label: "Behind chart" },
+	{ key: "front", label: "In front" },
+] as const

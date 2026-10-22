@@ -1,6 +1,6 @@
 import type { DataLabelsConfig } from "../../../lib/channelConfig"
 
-import { Toggle } from "../../../../../components/ui/Toggle"
+import { Checkbox } from "../../../../../components/ui/Checkbox"
 
 // ---------------------------------------------------------------------------
 // Text position — packed circles only. One checkbox per container level:
@@ -43,11 +43,9 @@ export const TextPositionPanel = ({
 	}
 	return (
 		<div className="flex flex-col gap-2">
-			<span className="text-sm vc-muted">
-				Wrap label around
-			</span>
+			<span className="vc-group-header">Wrap label around</span>
 			{levels.map((level) => (
-				<Toggle
+				<Checkbox
 					key={level}
 					label={wrapLevelLabel(level)}
 					checked={wrapped.includes(level)}

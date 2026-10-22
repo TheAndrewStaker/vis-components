@@ -23,6 +23,7 @@ import {
 
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
+import { Checkbox } from "../../../../../components/ui/Checkbox"
 
 import { LineDashGlyph, swatchChipClass } from "./glyphShared"
 import { Input } from "../../../../../components/ui/Input"
@@ -213,17 +214,11 @@ const DashRangeRows = ({
 	onChange: (next: Partial<DashRangeConfig>) => void
 }) => (
 	<div className="vc-divider-group">
-		<label className="flex items-center gap-2 text-sm">
-			<input
-				type="checkbox"
-				checked={range.enabled}
-				onChange={(e) => onChange({ enabled: e.target.checked })}
-				className="h-3 w-3"
-			/>
-			<span className="vc-muted">
-				Apply pattern to range
-			</span>
-		</label>
+		<Checkbox
+			label="Apply pattern to range"
+			checked={range.enabled}
+			onChange={(enabled) => onChange({ enabled })}
+		/>
 		{range.enabled && (
 			<>
 				{(
