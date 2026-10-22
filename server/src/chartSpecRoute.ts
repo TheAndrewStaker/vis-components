@@ -607,6 +607,13 @@ export const createDatasetFromRows = async (
 	)
 	if (taken) throw new HttpError(409, `A dataset named "${datasetName}" already exists`)
 
+	// Every row is stored with every column, each at least `"column":"",`:
+	// a floor on the stored size, checked before the rows are filled out.
+	const denseFloor =
+		records.length * columns.reduce((sum, c) => sum + Buffer.byteLength(JSON.stringify(c)) + 4, 0)
+	if (datasetSizeIssue(denseFloor) === "reject") {
+		throw new HttpError(413, datasetRejectMessage(denseFloor))
+	}
 	const text = records.map((r) =>
 		Object.fromEntries(columns.map((c) => [c, r[c] == null ? "" : String(r[c])]))
 	)
