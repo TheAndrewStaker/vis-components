@@ -944,7 +944,11 @@ const readExtras = (
 					if (Array.isArray(v) && v.length === 2 && v.every(isAxisValue)) {
 						return [v[0] as AxisValue, v[1] as AxisValue]
 					}
-					problem(at(k), `"${k}" must be [from, to]: numbers on a quantitative axis, level names on a categorical one`)
+					const across =
+						kind === "line" && v === undefined
+							? `; a line across the chart takes the ${k} axis's lowest and highest values (or first and last levels), as in ${k === "y" ? "x: [5, 5], y: [0, 100]" : "x: [0, 100], y: [5, 5]"}`
+							: ""
+					problem(at(k), `"${k}" must be [from, to]: numbers on a quantitative axis, level names on a categorical one${across}`)
 					return undefined
 				}
 				const single = (k: "x" | "y"): AxisValue | undefined => {
