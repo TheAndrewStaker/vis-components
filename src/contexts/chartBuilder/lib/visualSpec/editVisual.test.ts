@@ -544,6 +544,24 @@ describe("reshape and derived variables", () => {
 		expect(v.encodings.hue).toEqual({ field: "item" })
 	})
 
+	it("checks the family, variation and field types against the melted columns", () => {
+		const v = ok(
+			composeChartSpec(
+				{
+					datasetId: WIDE,
+					folderId: null,
+					family: "line",
+					variation: "Line chart",
+					fieldTypes: { sold: "quantitative", item: "categorical" },
+					reshape: { idFields: ["month"], meltFields: ["muffins", "coffees"], variableName: "item", valueName: "sold" },
+					encodings: { x: "month", y: "sold", connection: "item", hue: "item" },
+				},
+				ctx(CAFE.id)
+			)
+		)
+		expect(v.encodings.y).toEqual({ field: "sold" })
+	})
+
 	it("builds a custom legend from a rules variable (Ford's Long Type)", () => {
 		const v = ok(
 			composeChartSpec(
