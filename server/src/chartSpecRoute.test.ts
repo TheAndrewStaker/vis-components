@@ -539,6 +539,18 @@ describe("GET /api/chart-spec", () => {
 		expect(map.find((v) => v.name === "Dot map")?.channels).toEqual({ x: ["quantitative"], y: ["quantitative"] })
 		expect(body.families.find((f) => f.family === "bar")?.variations[0]?.note).toBeUndefined()
 	})
+
+	it("lists where a flow variation's source, weight and target go", async () => {
+		const base = await start()
+		const body = (await (await fetch(`${base}/api/chart-spec`)).json()) as {
+			families: Array<{ family: string; variations: Array<{ note?: string }> }>
+		}
+		for (const family of ["sankey", "chord"]) {
+			expect(body.families.find((f) => f.family === family)?.variations[0]?.note, family).toMatch(
+				/sources on "connection", edge weights on "area"; the target field in settings\.channelConfigs\.connection\.flowTargetField/
+			)
+		}
+	})
 })
 
 describe("GET /api/chart-spec/settings", () => {

@@ -33,7 +33,7 @@ export type ChartVocabulary = {
 			/** Channels the variation fills from another channel's field. */
 			sameFieldAs?: Partial<Record<EncodingChannel, EncodingChannel>>
 			stack?: StackMode
-			/** A map variation: where its geographic fields go. */
+			/** A map or flow variation: where the fields it needs go. */
 			note?: string
 		}>
 	}>
@@ -50,6 +50,11 @@ const GEO_CHANNELS: Record<
 	symbols: { connection: CHANNELS.connection.accepts },
 	points: { x: ["quantitative"], y: ["quantitative"] },
 }
+
+/** Where a flow variation's fields go; the target resolves as in
+ *  `resolveFlowTargetField`. */
+const FLOW_NOTE =
+	`edge sources on "connection", edge weights on "area"; the target field in settings.channelConfigs.connection.flowTargetField, else a field sharing values with the sources, else the first other categorical field`
 
 export const chartVocabulary = (): ChartVocabulary => ({
 	channels: SPEC_CHANNELS.map((channel) => ({
@@ -72,7 +77,7 @@ export const chartVocabulary = (): ChartVocabulary => ({
 				...(optional.length > 0 ? { optional } : {}),
 				...(Object.keys(sameFieldAs).length > 0 ? { sameFieldAs } : {}),
 				...(v.stackMode ? { stack: v.stackMode } : {}),
-				...(v.geo ? { note: GEO_NEEDS[v.geo] } : {}),
+				...(v.geo ? { note: GEO_NEEDS[v.geo] } : v.requiresFlowTarget ? { note: FLOW_NOTE } : {}),
 			}
 		}),
 	})),
