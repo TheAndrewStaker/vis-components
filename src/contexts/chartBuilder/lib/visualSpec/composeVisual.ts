@@ -805,6 +805,15 @@ const compose = (
 			if (b === null) delete next[bound]
 			else if (b !== undefined) next[bound] = b
 		}
+		// Only one bound can be new here: chartSpec.ts already compared a pair given together.
+		if (typeof next.min === "number" && typeof next.max === "number" && next.min >= next.max) {
+			const given = want.min !== undefined ? "min" : "max"
+			const message =
+				given === "min"
+					? `"min" (${String(want.min)}) must be below "max" (${next.max}), which the chart already has`
+					: `"max" (${String(want.max)}) must be above "min" (${next.min}), which the chart already has`
+			return { ok: false, errors: [{ path: pathOf("axes", axis, given), message }] }
+		}
 		if (want.format !== undefined) next.customFormat = want.format
 		channelConfigs[axis] = next
 	}
