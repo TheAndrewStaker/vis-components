@@ -39,6 +39,7 @@ export const CONCEPTS: ReadonlyMap<string, readonly string[]> = new Map([
 	["smaller", SIZE],
 	["thicker", ["thickness", "width"]],
 	["thinner", ["thickness", "width"]],
+	["width", ["thickness"]],
 	["colour", COLOR],
 	["line", ["line", "stroke", "connection"]],
 	["lines", ["line", "stroke", "connection"]],

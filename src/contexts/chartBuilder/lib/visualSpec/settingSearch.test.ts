@@ -139,6 +139,11 @@ describe("searchSettings on everyday requests", () => {
 		expect(paths("legend")[0]).toMatch(/^legendConfig\./)
 	})
 
+	it("finds thickness by width", () => {
+		const hit = searchSettings(rows, "line width").settings.find((s) => s.path === "channelConfigs.connection.thickness")
+		expect(hit?.matchedVia).toContain("width → thickness")
+	})
+
 	it("scores a plural like its singular", () => {
 		const plural = searchSettings(rows, "tick labels").settings
 		const singular = searchSettings(rows, "tick label").settings
