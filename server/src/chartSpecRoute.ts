@@ -141,7 +141,32 @@ const loadDataset = async (
 		: undefined
 	const rows =
 		own ?? rowsOf((await wholeBody())?.versions?.find((v) => v.id === chosen))
-	return { meta, rows: rows ?? [] }
+	if (rows === undefined) throw new RowsMissing()
+	return { meta, rows }
+}
+
+/** A listed dataset version whose rows are on neither the version file nor
+ *  the whole body: checking a spec against no rows would misjudge every
+ *  field, so the request is refused instead. */
+class RowsMissing extends Error {}
+
+const ROWS_MISSING: SpecProblem = {
+	path: "datasetId",
+	message:
+		"this dataset's rows can't be loaded (its data file is missing), so it can't be charted; upload the data again",
+}
+
+const loadDatasetOrRefuse = async (
+	res: ServerResponse,
+	...args: Parameters<typeof loadDataset>
+): Promise<ComposeContext["dataset"] | undefined> => {
+	try {
+		return await loadDataset(...args)
+	} catch (e) {
+		if (!(e instanceof RowsMissing)) throw e
+		specErrors(res, [ROWS_MISSING])
+		return undefined
+	}
 }
 
 /** Saved themes as the client normalizes them, system themes included. */
@@ -298,8 +323,10 @@ export const editVisualFromSpec = async (
 	const themes = loadThemes(db)
 	const saved =
 		themes.find((t) => t.id === (visual.themeId ?? defaultThemeId(db))) ?? SYSTEM_LIGHT_THEME
+	const dataset = await loadDatasetOrRefuse(res, db, config.dataDir, visual.datasetId, undefined)
+	if (dataset === undefined) return
 	const result = composeChartEdit(visual, input, {
-		dataset: await loadDataset(db, config.dataDir, visual.datasetId, undefined),
+		dataset,
 		folders: loadFolders(db),
 		theme: themeOf(saved),
 		themeId: visual.themeId ?? null,
@@ -393,10 +420,12 @@ export const createVisualFromSpec = async (
 		typeof spec.themeId === "string" ? themeNamed(themes, spec.themeId) : defaultTheme(db, themes)
 	const folders = loadFolders(db)
 
+	const dataset = await loadDatasetOrRefuse(res, db, config.dataDir, spec.datasetId, spec.datasetVersionId)
+	if (dataset === undefined) return
 	const id = mintId()
 	const named = saved && spec.themeId !== undefined && spec.themeId !== saved.id
 	const result = composeChartSpec(named ? { ...spec, themeId: saved.id } : input, {
-		dataset: await loadDataset(db, config.dataDir, spec.datasetId, spec.datasetVersionId),
+		dataset,
 		folders,
 		theme: themeOf(saved ?? SYSTEM_LIGHT_THEME),
 		themeId: saved?.id ?? null,

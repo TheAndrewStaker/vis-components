@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtempSync, readdirSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
@@ -84,6 +84,17 @@ const cafe = (extra: Record<string, unknown> = {}) => ({
 })
 
 describe("POST /api/visuals", () => {
+	it("refuses a dataset whose rows can't be loaded, instead of checking against none", async () => {
+		const base = await start()
+		await seedDataset(base, CAFE)
+		for (const entry of readdirSync(dataDir)) rmSync(join(dataDir, entry), { recursive: true, force: true })
+		const res = await post(base, cafe())
+		expect(res.status).toBe(400)
+		const { errors } = (await res.json()) as { errors: { path: string; message: string }[] }
+		expect(errors).toEqual([expect.objectContaining({ path: "datasetId", message: expect.stringMatching(/rows can't be loaded/) })])
+		expect(await visuals(base)).toEqual([])
+	})
+
 	it("creates a visual under a minted id that GET then returns", async () => {
 		const base = await start()
 		await seedDataset(base, CAFE)
