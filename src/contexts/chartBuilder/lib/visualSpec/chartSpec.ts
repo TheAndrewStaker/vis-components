@@ -14,7 +14,7 @@ import type {
 	LineDashPattern,
 	StackMode,
 } from "../channelConfig"
-import { LITERAL_FORMAT, parseFormatSpec } from "../formatTick"
+import { LITERAL_FORMAT, parseFormatSpec, YEAR_ENDS_FORMAT } from "../formatTick"
 import {
 	QUICK_START_CHART_TYPES,
 	QUICK_START_VARIATIONS,
@@ -337,11 +337,13 @@ export const pathOf = (...segments: string[]): string =>
 		""
 	)
 
-/** Why a Format-box string won't format, or null. Auto (""), `literal` and
- *  d3-time-format specs pass; anything else must be a d3-format spec. */
+/** Why a Format-box string won't format, or null. Auto (""), `literal`,
+ *  `year-ends` and d3-time-format specs pass; anything else must be a
+ *  d3-format spec. */
 export const formatProblem = (raw: string): string | null => {
 	const spec = parseFormatSpec(raw).spec.trim()
-	if (spec === "" || spec.toLowerCase() === LITERAL_FORMAT) return null
+	const lower = spec.toLowerCase()
+	if (spec === "" || lower === LITERAL_FORMAT || lower === YEAR_ENDS_FORMAT) return null
 	if (/%[a-zA-Z]/.test(spec)) return null
 	try {
 		formatSpecifier(spec)
