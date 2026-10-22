@@ -645,6 +645,18 @@ describe("POST /api/visuals/<id>/restore", () => {
 		expect((await visuals(base))[0]?.labelsConfig.title).toBe("Changed")
 	})
 
+	it("refuses an undo whose visual isn't whole, and keeps the chart", async () => {
+		const base = await start()
+		const { v0, edit, undo } = await edited(base)
+		const [kept] = await visuals(base)
+		const res = await restore(base, v0.id, { ...undo, visual: { id: v0.id } }, edit.updatedAt)
+		expect(res.status).toBe(400)
+		expect(((await res.json()) as { error: string }).error).toContain('"name"')
+		const { labelsConfig: _, ...noLabels } = undo.visual
+		expect((await restore(base, v0.id, { ...undo, visual: noLabels }, edit.updatedAt)).status).toBe(400)
+		expect((await visuals(base))[0]).toEqual(kept)
+	})
+
 	it("refuses a trashed or missing visual", async () => {
 		const base = await start()
 		const { v0, edit, undo } = await edited(base)

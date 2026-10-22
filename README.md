@@ -205,7 +205,7 @@ curl -X POST https://charts.example.com/api/visuals/vs-…/restore \
 It answers **200** `{id, updatedAt, editorUrl}`; **412** when the visual
 changed after the edit, changing nothing; **409** for a visual in the trash or
 an `undo` from another content version; **428** without `If-Match`; **400**
-for a body that isn't an `undo` for this visual. The preview image is cleared.
+for a body that isn't a whole `undo` for this visual. The preview image is cleared.
 
 ### Creating a dataset from rows
 
