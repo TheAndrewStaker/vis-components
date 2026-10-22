@@ -275,6 +275,20 @@ describe("POST /api/visuals", () => {
 		expect(error?.message).toMatch(/^no theme with id or name "Trilliant Health" \(themes: .*"System \(Dark\)" \(system-dark\).*"Trilliant Health Basic" \(th-basic\)\)$/)
 	})
 
+	it("matches a theme name ignoring spaces and punctuation, refusing ties", async () => {
+		const base = await start()
+		await seedDataset(base, CAFE)
+		const res = await post(base, cafe({ themeId: "System Dark" }), "?dryRun=1")
+		expect(res.status).toBe(200)
+		expect(((await res.json()) as { visual: Visual }).visual.themeId).toBe(SYSTEM_DARK_THEME.id)
+		await put(base, "/api/themes/th-a", { ...SYSTEM_LIGHT_THEME, id: "th-a", name: "Brand-A", isSystem: false })
+		await put(base, "/api/themes/th-b", { ...SYSTEM_LIGHT_THEME, id: "th-b", name: "Brand A", isSystem: false })
+		const tie = await post(base, cafe({ themeId: "brand a" }), "?dryRun=1")
+		expect(tie.status).toBe(400)
+		const [error] = ((await tie.json()) as { errors: Array<{ path: string }> }).errors
+		expect(error?.path).toBe("themeId")
+	})
+
 	it("refuses with 409 when stored visuals are at another content version", async () => {
 		const base = await start()
 		await seedDataset(base, CAFE)
