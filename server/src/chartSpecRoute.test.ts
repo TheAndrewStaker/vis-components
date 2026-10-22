@@ -779,6 +779,15 @@ describe("POST /api/datasets", () => {
 		expect(await index(base)).toEqual({})
 	})
 
+	it("refuses sparse rows whose filled-out size passes the limit, before filling them out", async () => {
+		const base = await start()
+		const rows = Array.from({ length: 4000 }, (_, i) => ({ [`c${i}`]: 1 }))
+		const res = await create(base, { name: "Sparse", rows })
+		expect(res.status).toBe(413)
+		expect(((await res.json()) as { error: string }).error).toContain("limit")
+		expect(await index(base)).toEqual({})
+	})
+
 	it("refuses a name already in the library", async () => {
 		const base = await start()
 		expect((await create(base, { name: "Visits", rows: [{ a: 1 }] })).status).toBe(201)
