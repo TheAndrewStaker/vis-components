@@ -172,10 +172,17 @@ const themeList = (db: DatabaseSync): Array<{ id: string; name: string; default:
 	return themes.map((t) => ({ id: t.id, name: t.name, default: t.id === fallback.id }))
 }
 
-/** A spec's theme by id, else by name ignoring case. */
-const themeNamed = (themes: readonly SavedTheme[], wanted: string): SavedTheme | undefined =>
-	themes.find((t) => t.id === wanted) ??
-	themes.find((t) => t.name.trim().toLowerCase() === wanted.trim().toLowerCase())
+/** A theme name with case, spaces and punctuation taken out. */
+const nameKey = (name: string): string => name.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")
+
+/** A spec's theme by id, else by the one name it matches ignoring case,
+ *  spaces and punctuation. */
+const themeNamed = (themes: readonly SavedTheme[], wanted: string): SavedTheme | undefined => {
+	const byId = themes.find((t) => t.id === wanted)
+	if (byId) return byId
+	const byName = themes.filter((t) => nameKey(t.name) === nameKey(wanted))
+	return byName.length === 1 ? byName[0] : undefined
+}
 
 const assertStampsCurrent = (
 	db: DatabaseSync,
