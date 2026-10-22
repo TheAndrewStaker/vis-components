@@ -173,7 +173,7 @@ describe("parseChartSpec", () => {
 	})
 
 	it("accepts the app's format grammar beyond bare d3 specs", () => {
-		for (const format of ["", ",.0f kg", "${,.2f}", "literal", "%Y"]) {
+		for (const format of ["", ",.0f kg", "${,.2f}", "literal", "year-ends", "%Y"]) {
 			expect(parseChartSpec({ ...valid(), axes: { y: { format } } }).ok).toBe(true)
 		}
 	})
