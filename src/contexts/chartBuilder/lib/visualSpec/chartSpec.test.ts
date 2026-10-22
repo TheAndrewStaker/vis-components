@@ -129,6 +129,13 @@ describe("parseChartSpec", () => {
 		})
 	})
 
+	it("says how a line spans the axis it leaves out", () => {
+		const [error] = errorsOf({ ...valid(), annotations: [{ kind: "line", x: [2020, 2020] }] })
+		expect(error?.path).toBe("annotations[0].y")
+		expect(error?.message).toMatch(/a line across the chart takes the y axis's lowest and highest values .*x: \[5, 5\], y: \[0, 100\]$/)
+		expect(errorsOf({ ...valid(), annotations: [{ kind: "line", x: [1], y: [2, 2] }] })[0]?.message).not.toMatch(/across the chart/)
+	})
+
 	it("answers a variation name sent as a family with the corrected call", () => {
 		const [error] = errorsOf({ ...valid(), family: "choropleth" })
 		expect(error).toEqual({
