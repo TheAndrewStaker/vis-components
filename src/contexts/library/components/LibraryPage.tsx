@@ -22,6 +22,7 @@ import { RailTab } from "../../../components/ui/RailTab"
 import { useNarrowLayout } from "../../../lib/useMediaQuery"
 import { Input } from "../../../components/ui/Input"
 import { ResetLink } from "../../../components/ui/ResetLink"
+import { Segmented } from "../../../components/ui/Segmented"
 import { Select } from "../../../components/ui/Select"
 import {
 	parseSort,
@@ -779,24 +780,16 @@ const ViewToggle = ({
 	view: "grid" | "table"
 	onChange: (next: "grid" | "table") => void
 }) => (
-	<div className="inline-flex overflow-hidden rounded-control border border-vc-brand-text">
-		<button
-			type="button"
-			onClick={() => onChange("grid")}
-			className={`px-3 py-1 text-sm ${view === "grid" ? "vc-toggle-on" : "vc-toggle-off"}`}
-			title="Grid view"
-			aria-pressed={view === "grid"}
-		>
-			Grid
-		</button>
-		<button
-			type="button"
-			onClick={() => onChange("table")}
-			className={`px-3 py-1 text-sm ${view === "table" ? "vc-toggle-on" : "vc-toggle-off"}`}
-			title="Table view"
-			aria-pressed={view === "table"}
-		>
-			Table
-		</button>
-	</div>
+	// The one segmented "choose one of a few" control, shared with the editor
+	// sidebar (Stack / Group / Overlay, Line cap …) so the two views are
+	// styled from a single place.
+	<Segmented
+		ariaLabel="Library view"
+		value={view}
+		segments={[
+			{ key: "grid", label: "Grid" },
+			{ key: "table", label: "Table" },
+		]}
+		onChange={onChange}
+	/>
 )
