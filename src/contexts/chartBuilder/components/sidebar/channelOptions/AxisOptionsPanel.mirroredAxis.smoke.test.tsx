@@ -10,12 +10,12 @@ import { emptyEncodings, type Dataset, type Encodings } from "../../../lib/types
 
 import { AxisOptionsPanel } from "./AxisOptionsPanel"
 
-/** The Ticks section's "Use a mirrored axis" mini-section: offered on a bar
+/** The Scale section's "Use a mirrored axis" mini-section: offered on a bar
  *  chart's IMPLIED measure axis only (the field-less position axis the
  *  `length` measure feeds). Checking it reveals the Direction picker (fields
  *  with exactly two values), the side maxes (Left/Right on a horizontal
  *  measure axis, Lower/Upper on a vertical one) and the mirrored custom
- *  breaks, and retires the plain Scale range + Custom breaks controls. */
+ *  breaks, and retires the plain Min / Max + Custom breaks controls. */
 
 const DATASET_ID = "ds-mirrored-axis-panel"
 
@@ -67,10 +67,11 @@ const mount = async (channel: "x" | "y") => {
 }
 
 /** Expand the collapsed-by-default Ticks subsection. */
-const openTicks = (q: ReturnType<typeof within>) => {
-	const header = q.queryByText("Ticks")
-	expect(header).not.toBeNull()
-	fireEvent.click(header!)
+/** Opens the Scale section when it renders (an axis with neither Min / Max
+ *  nor a mirror group has none — the negative cases rely on that). */
+const openScale = (q: ReturnType<typeof within>) => {
+	const header = q.queryByText("Scale")
+	if (header) fireEvent.click(header)
 }
 
 const HORIZONTAL: Encodings = {
@@ -92,21 +93,21 @@ describe("Use a mirrored axis — gating", () => {
 	it("is offered on the measure axis of horizontal bars (the X panel)", async () => {
 		seed(HORIZONTAL)
 		const q = await mount("x")
-		openTicks(q)
+		openScale(q)
 		expect(q.queryByText("Use a mirrored axis")).not.toBeNull()
 	})
 
 	it("is not offered on the category axis (the Y panel of horizontal bars)", async () => {
 		seed(HORIZONTAL)
 		const q = await mount("y")
-		openTicks(q)
+		openScale(q)
 		expect(q.queryByText("Use a mirrored axis")).toBeNull()
 	})
 
 	it("is not offered on a scatter's quantitative axis", async () => {
 		seed({ ...emptyEncodings(), x: { field: "pop" }, y: { field: "pop" } })
 		const q = await mount("x")
-		openTicks(q)
+		openScale(q)
 		expect(q.queryByText("Use a mirrored axis")).toBeNull()
 	})
 
@@ -117,8 +118,34 @@ describe("Use a mirrored axis — gating", () => {
 			{ x: { mirror: { enabled: true, directionField: "sex" } } }
 		)
 		const q = await mount("x")
-		openTicks(q)
+		openScale(q)
 		expect(q.queryByText("Use a mirrored axis")).not.toBeNull()
+	})
+})
+
+describe("Scale section", () => {
+	it("holds Min / Max, Custom breaks and the mirror group; Ticks keeps density + tick marks", async () => {
+		seed(HORIZONTAL)
+		const q = await mount("x")
+		fireEvent.click(q.getByText("Ticks"))
+		expect(q.queryByText("Count")).not.toBeNull()
+		expect(q.queryByText("Min")).toBeNull()
+		expect(q.queryByText("Custom breaks")).toBeNull()
+		expect(q.queryByText("Use a mirrored axis")).toBeNull()
+		fireEvent.click(q.getByText("Scale"))
+		expect(q.queryByText("Min")).not.toBeNull()
+		expect(q.queryByText("Max")).not.toBeNull()
+		expect(q.queryByText("Custom breaks")).not.toBeNull()
+		expect(q.queryByText("Use a mirrored axis")).not.toBeNull()
+		// No separate "Scale range" heading — the section title names it.
+		expect(q.queryByText("Scale range")).toBeNull()
+	})
+
+	it("is omitted on a categorical axis that can't be mirrored", async () => {
+		seed(HORIZONTAL)
+		const q = await mount("y")
+		expect(q.queryByText("Ticks")).not.toBeNull()
+		expect(q.queryByText("Scale")).toBeNull()
 	})
 })
 
@@ -126,14 +153,14 @@ describe("Use a mirrored axis — controls", () => {
 	it("checking it reveals Direction + Left/Right max + breaks and retires Scale range", async () => {
 		seed(HORIZONTAL)
 		const q = await mount("x")
-		openTicks(q)
-		expect(q.queryByText("Scale range")).not.toBeNull()
+		openScale(q)
+		expect(q.queryByText("Min")).not.toBeNull()
 		expect(q.queryByText("Direction")).toBeNull()
 		fireEvent.click(q.getByLabelText("Use a mirrored axis"))
 		expect(q.queryByText("Direction")).not.toBeNull()
 		expect(q.queryByText("Left max")).not.toBeNull()
 		expect(q.queryByText("Right max")).not.toBeNull()
-		expect(q.queryByText("Scale range")).toBeNull()
+		expect(q.queryByText("Min")).toBeNull()
 		// The mirrored breaks box takes over from the plain one — exactly one.
 		expect(q.getAllByText("Custom breaks")).toHaveLength(1)
 	})
@@ -141,7 +168,7 @@ describe("Use a mirrored axis — controls", () => {
 	it("labels the sides Lower / Upper on a vertical measure axis (the Y panel)", async () => {
 		seed(VERTICAL, { y: { mirror: { enabled: true, directionField: null } } })
 		const q = await mount("y")
-		openTicks(q)
+		openScale(q)
 		expect(q.queryByText("Lower max")).not.toBeNull()
 		expect(q.queryByText("Upper max")).not.toBeNull()
 		expect(q.queryByText("Left max")).toBeNull()
@@ -150,7 +177,7 @@ describe("Use a mirrored axis — controls", () => {
 	it("Direction lists only variables with exactly two options", async () => {
 		seed(HORIZONTAL, { x: { mirror: { enabled: true, directionField: null } } })
 		const q = await mount("x")
-		openTicks(q)
+		openScale(q)
 		const select = q.getByLabelText("Mirror direction variable") as HTMLSelectElement
 		const options = [...select.options].map((o) => o.value).filter((v) => v !== "")
 		// age (2 levels) and sex (2) qualify; pop (4 numbers) and region (3) don't.
@@ -160,7 +187,7 @@ describe("Use a mirrored axis — controls", () => {
 	it("explains which level draws on which side once a direction is chosen", async () => {
 		seed(HORIZONTAL, { x: { mirror: { enabled: true, directionField: "sex" } } })
 		const q = await mount("x")
-		openTicks(q)
+		openScale(q)
 		expect(q.queryByText(/“M” draws to the left of 0, “F” to the right/)).not.toBeNull()
 	})
 

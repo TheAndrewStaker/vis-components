@@ -150,7 +150,7 @@ describe("DataLabelsPanel — Apply to all facets", () => {
 		expandSelection(container)
 		expect(container.textContent).toContain("Which labels")
 		expect(container.textContent).not.toContain("Apply to all facets")
-		// Overlap avoidance moved out to Adjust position and alignment.
+		// Overlap avoidance moved out to Position and alignment.
 		expect(container.textContent).not.toContain("Avoid overlapping labels")
 	})
 

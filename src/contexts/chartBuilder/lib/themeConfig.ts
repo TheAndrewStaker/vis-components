@@ -1128,7 +1128,7 @@ export const explainLegendCustomization = (
 		{ group: "text", changed: differs(cfg.textAlign, base.textAlign) },
 		{ group: "formatting", changed: !isEmptyConfigValue(cfg.channels) },
 		{
-			group: "formatting",
+			group: "text",
 			changed: differs(cfg.gradientBarLabelAlign, base.gradientBarLabelAlign),
 		},
 		{

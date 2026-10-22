@@ -205,7 +205,7 @@ describe("DataLabelsPanel — flow diagrams", () => {
 
 	it("keeps Adjust position, Text and Box", () => {
 		const c = mountPanel("chord")
-		expect(sectionHeader(c, "Adjust position and alignment")).not.toBeNull()
+		expect(sectionHeader(c, "Position and alignment")).not.toBeNull()
 		expect(sectionHeader(c, "Text")).not.toBeNull()
 		expect(sectionHeader(c, "Box")).not.toBeNull()
 	})

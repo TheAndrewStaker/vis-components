@@ -1340,7 +1340,7 @@ type LabelStyleControlsProps = {
 	/** Theme-seeded default alignment displayed when no explicit alignment
 	 * is stored. Defaults to "center". */
 	baseAlignment?: LabelAlignment
-	/** When provided, a second "Vertical alignment" row is shown (top / middle
+	/** When provided, a second "Vertical align" row is shown (top / middle
 	 * / bottom) and the horizontal row's label switches to "Horizontal
 	 * alignment" to disambiguate. Only wired for the facet row-title slot. */
 	verticalAlignment?: VerticalAlignment
@@ -1393,7 +1393,7 @@ const LabelStyleControls = ({
 				/* div, not label: AlignmentControl is a button group, not a form control */
 				<div className="flex items-center gap-2 text-sm">
 					<span className={LABEL_COL}>
-						{onVerticalAlignment ? "Horizontal alignment" : "Align"}
+						{onVerticalAlignment ? "Horizontal align" : "Align"}
 					</span>
 					<AlignmentControl
 						value={alignment ?? baseAlignment}
@@ -1403,9 +1403,7 @@ const LabelStyleControls = ({
 			)}
 			{onVerticalAlignment && (
 				<div className="flex items-center gap-2 text-sm">
-					<span className={LABEL_COL}>
-						Vertical alignment
-					</span>
+					<span className={LABEL_COL}>Vertical align</span>
 					<VerticalAlignmentControl
 						value={verticalAlignment ?? "middle"}
 						onChange={onVerticalAlignment}

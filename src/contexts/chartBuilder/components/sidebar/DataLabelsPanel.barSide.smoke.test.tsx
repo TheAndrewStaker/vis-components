@@ -121,7 +121,7 @@ const mountPanel = (opts: {
 	const header = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
 		(b) =>
 			b.getAttribute("aria-expanded") !== null &&
-			b.textContent?.trim() === "Adjust position and alignment"
+			b.textContent?.trim() === "Position and alignment"
 	)
 	expect(header).toBeDefined()
 	fireEvent.click(header!)
@@ -162,7 +162,7 @@ const hasGroupHeader = (container: HTMLElement, text: string) =>
 
 const hasAlignmentRow = (container: HTMLElement) =>
 	[...container.querySelectorAll("span")].some(
-		(s) => s.textContent?.trim() === "Alignment"
+		(s) => s.textContent?.trim() === "Align"
 	)
 
 describe("DataLabelsPanel — bar side placement", () => {
@@ -260,7 +260,7 @@ describe("DataLabelsPanel — bar side placement", () => {
 		// One Alignment row left — cat's; val's side set its alignment.
 		expect(
 			[...container.querySelectorAll("span")].filter(
-				(s) => s.textContent?.trim() === "Alignment"
+				(s) => s.textContent?.trim() === "Align"
 			)
 		).toHaveLength(1)
 	})

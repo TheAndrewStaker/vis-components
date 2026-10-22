@@ -69,14 +69,14 @@ const openVisual = async (page: Page, fx: SeedFixture) => {
 	await page.waitForTimeout(300)
 }
 
-const openXTicks = async (page: Page) => {
+const openXScale = async (page: Page) => {
 	await page.getByRole("button", { name: "Toggle options for X position" }).click()
-	await page.getByRole("button", { name: "Ticks", exact: true }).click()
+	await page.getByRole("button", { name: "Scale", exact: true }).click()
 }
 
 test("min / max picked and typed pin a date axis; ticks lay out from the ends in one format", async ({ page }) => {
 	await openVisual(page, lineFixture("date-pins", (y) => String(y)))
-	await openXTicks(page)
+	await openXScale(page)
 
 	// min = 1949-01-01 through the picker: separate Month + Year selects,
 	// then one click on a day.

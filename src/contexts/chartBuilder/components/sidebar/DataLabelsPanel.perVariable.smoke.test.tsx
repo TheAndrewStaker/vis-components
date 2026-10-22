@@ -134,7 +134,7 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 		expect(sectionHeader(container, "Label selection and overlap")).toBeNull()
 		expand(container, "Label selection")
 		expect(container.textContent).not.toContain("Avoid overlapping labels")
-		expand(container, "Adjust position and alignment")
+		expand(container, "Position and alignment")
 		const text = container.textContent ?? ""
 		expect(text.indexOf("Avoid overlapping labels")).toBeGreaterThan(
 			text.indexOf("Wrap text")
@@ -230,7 +230,7 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 			fields: ["y", "g"],
 			cfg: { combineVariables: false },
 		})
-		expand(container, "Adjust position and alignment")
+		expand(container, "Position and alignment")
 		const text = container.textContent ?? ""
 		expect(text).not.toContain("All labels")
 		// The layer-wide controls hide; each variable is a collapsed block.
@@ -277,7 +277,7 @@ describe("DataLabelsPanel — per-variable blocks", () => {
 
 	it("a lone label keeps the shared Alignment row", () => {
 		const { container } = mountPanel({ fields: ["y"] })
-		expand(container, "Adjust position and alignment")
+		expand(container, "Position and alignment")
 		expect(container.querySelectorAll('button[aria-label="Align left"]').length).toBe(1)
 	})
 

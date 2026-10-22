@@ -25,7 +25,7 @@ const openPositionSubsection = async (
 	await page.getByRole("button", { name: "Data Labels" }).click()
 	await page.waitForTimeout(150)
 	await page
-		.getByRole("button", { name: "Adjust position and alignment" })
+		.getByRole("button", { name: "Position and alignment" })
 		.click()
 	await page.waitForTimeout(150)
 }
@@ -47,7 +47,7 @@ test("Bar placement lives in the Position subsection, only for bar charts", asyn
 	// Inside the subsection: Alignment + the bar "Placement" group both
 	// visible. Vertical bars name the measure-axis select "Vertical" and the
 	// side select "Horizontal" (the screen direction each moves labels in).
-	expect(await page.getByText("Alignment", { exact: true }).isVisible()).toBe(true)
+	expect(await page.getByText("Align", { exact: true }).isVisible()).toBe(true)
 	expect(await page.getByText("Placement", { exact: true }).isVisible()).toBe(
 		true
 	)
@@ -67,6 +67,6 @@ test("Bar placement is hidden on a non-bar (scatter) chart", async ({ page }) =>
 	await page.waitForSelector("svg", { timeout: 8_000 })
 	await openPositionSubsection(page)
 
-	expect(await page.getByText("Alignment", { exact: true }).isVisible()).toBe(true)
+	expect(await page.getByText("Align", { exact: true }).isVisible()).toBe(true)
 	expect(await page.getByText("Placement", { exact: true }).count()).toBe(0)
 })

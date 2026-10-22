@@ -469,6 +469,12 @@ export const DataLabelsPanel = () => {
 	// fall back to). Nothing here applies without series ends AND without
 	// facets, which is when `selectionControlsApply` is false.
 	const selectionControlsApply = !noSeriesEndpoints || isFaceted
+	// Whether the "Label selection" subsection has anything to show — the
+	// union of its children's own gates (flow "Which labels", the per-label
+	// selection block, map leader lines). An unfaceted sunburst has none, so
+	// the subsection is skipped rather than rendered empty.
+	const labelSelectionHasContent =
+		Boolean(flowGeometry) || selectionControlsApply || isGeoMode
 	const labelSelectionChanged = (key: string): boolean =>
 		merged.fieldLabelPoints?.[key] != null ||
 		merged.fieldLabelPointsScope?.[key] != null ||
@@ -594,7 +600,7 @@ export const DataLabelsPanel = () => {
 	const comboIds = new Set(
 		multiFields.filter((k) => !(encodings.value.fields ?? []).includes(k))
 	)
-	// "Changed" dot for the Position Adjustment and Alignment subsection —
+	// "Changed" dot for the Position and alignment subsection —
 	// lights when ANY control inside deviates from its default. Mode-gated
 	// values (polar nudges, bar position, endpoint overrides) only count when
 	// their controls are visible: a stored deviation the current panel can't
@@ -1093,7 +1099,7 @@ export const DataLabelsPanel = () => {
 			 *  charts / maps, where). Grouped under their own subsection so
 			 *  they read as a distinct concern from the per-channel mappings
 			 *  above. Overlap avoidance lives with the other placement knobs
-			 *  under "Adjust position and alignment". */}
+			 *  under "Position and alignment". */}
 			{/* Selection / overlap / position controls act on the shared label
 			 *  layer's positioned labels — inert for the self-drawn packed /
 			 *  treemap labels, so they stand down there (as does Text
@@ -1101,6 +1107,7 @@ export const DataLabelsPanel = () => {
 			 *  renders through the layer, so it keeps them. */}
 			{fineTuningApplies && (
 			<>
+			{labelSelectionHasContent && (
 			<CollapsibleSubsection
 				title="Label selection"
 				changed={selectionChanged}
@@ -1239,9 +1246,10 @@ export const DataLabelsPanel = () => {
 				)}
 				</div>
 			</CollapsibleSubsection>
+			)}
 
 			<CollapsibleSubsection
-				title="Adjust position and alignment"
+				title="Position and alignment"
 				changed={positionChanged}
 			>
 				<div className="flex flex-col gap-2">
@@ -1325,7 +1333,7 @@ export const DataLabelsPanel = () => {
 								{/* Beside a vertical bar the side sets the alignment. */}
 								{!sideLocksAlignmentFor(name) && (
 									<div className="flex items-center gap-2 text-sm">
-										<span className={LABEL_COL}>Alignment</span>
+										<span className={LABEL_COL}>Align</span>
 										<AlignmentControl
 											value={ownAlignment ?? merged.alignment ?? "center"}
 											onChange={(alignment) =>
@@ -1460,9 +1468,7 @@ export const DataLabelsPanel = () => {
 					</div>
 				) : (
 					<div className="flex items-center gap-2 text-sm">
-						<span className={LABEL_COL}>
-							Alignment
-						</span>
+						<span className={LABEL_COL}>Align</span>
 						<AlignmentControl
 							value={merged.alignment ?? "center"}
 							onChange={(alignment) => updateCfg({ alignment })}
@@ -1553,7 +1559,7 @@ export const DataLabelsPanel = () => {
 							the bar, Adjust position measures from the bar&apos;s edge, so
 							the label keeps its distance when the figure resizes.
 							{isVerticalBars
-								? " Labels beside a vertical bar hang away from it, so Alignment is set for you."
+								? " Labels beside a vertical bar hang away from it, so alignment is set for you."
 								: ""}
 						</p>
 					</>

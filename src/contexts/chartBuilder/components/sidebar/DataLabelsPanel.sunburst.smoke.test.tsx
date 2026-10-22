@@ -104,11 +104,13 @@ const expand = (container: HTMLElement, title: string) => {
 describe("DataLabelsPanel — sunburst fine-tuning", () => {
 	afterEach(cleanup)
 
-	it("sunburst shows Box, Adjust position, and selection/overlap", () => {
+	it("sunburst shows Box and Position and alignment; no empty Label selection", () => {
 		const c = mountPanel("sunburst")
 		expect(sectionHeader(c, "Box")).not.toBeNull()
-		expect(sectionHeader(c, "Adjust position and alignment")).not.toBeNull()
-		expect(sectionHeader(c, "Label selection")).not.toBeNull()
+		expect(sectionHeader(c, "Position and alignment")).not.toBeNull()
+		// Unfaceted sunburst: no series ends, no facets, not a map or flow —
+		// Label selection would be empty, so it is skipped.
+		expect(sectionHeader(c, "Label selection")).toBeNull()
 		// Position rows stay hidden — the layout places labels.
 		expect(c.textContent).not.toContain("X position")
 		expect(c.textContent).toContain("fine-tune placement")
@@ -116,21 +118,20 @@ describe("DataLabelsPanel — sunburst fine-tuning", () => {
 
 	it("sunburst hides the per-series 'Which labels' select but keeps Avoid overlaps", () => {
 		const c = mountPanel("sunburst")
-		expand(c, "Label selection")
 		expect(c.textContent).not.toContain("Which labels")
 		// Overlap avoidance lives with the placement knobs.
-		expand(c, "Adjust position and alignment")
+		expand(c, "Position and alignment")
 		expect(c.textContent).toContain("Avoid overlapping labels")
 	})
 
 	it("sunburst Adjust position carries the ring-relative Angle / R pair plus X / Y", () => {
 		const c = mountPanel("sunburst")
-		expand(c, "Adjust position and alignment")
+		expand(c, "Position and alignment")
 		expect(c.textContent).toContain("percent of the ring")
 		const inputs = [...c.querySelectorAll<HTMLInputElement>("input")]
 		// R defaults to 50 (the ring's middle), not the pie's 100 (the rim).
 		expect(inputs.some((i) => i.value === "50")).toBe(true)
-		expect(c.textContent).toContain("Alignment")
+		expect(c.textContent).toContain("Align")
 		expect(c.textContent).toContain("Wrap text")
 	})
 
@@ -138,7 +139,7 @@ describe("DataLabelsPanel — sunburst fine-tuning", () => {
 		for (const layout of ["treemap", "pack"] as const) {
 			const c = mountPanel(layout)
 			expect(sectionHeader(c, "Box")).toBeNull()
-			expect(sectionHeader(c, "Adjust position and alignment")).toBeNull()
+			expect(sectionHeader(c, "Position and alignment")).toBeNull()
 			expect(sectionHeader(c, "Label selection")).toBeNull()
 			expect(sectionHeader(c, "Text")).not.toBeNull()
 			cleanup()

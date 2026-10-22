@@ -139,20 +139,16 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 	const sectionChanged = {
 		Distribution: ch.histogram || ch.distributionOverlay || ch.jitter,
 		Regression: ch.regression,
-		// Custom breaks pin extra TICKS and scale range (min/max) pins the
-		// domain they lay out on, so both live with the density controls in
-		// the Ticks section. The r axis's Ticks section holds the density
-		// control only (the radar draws no r tick marks, ranges or breaks).
+		// Ticks = tick density + tick marks. The r axis's Ticks section holds
+		// the density control only (the radar draws no r tick marks).
 		Ticks:
 			channel === "r"
 				? ch.tickCount || ch.stride
-				: ch.tickmarks ||
-					ch.tickCount ||
-					ch.stride ||
-					ch.breaks ||
-					ch.min ||
-					ch.max ||
-					ch.mirror,
+				: ch.tickmarks || ch.tickCount || ch.stride,
+		// Scale = the domain controls: Min / Max, Custom breaks and the
+		// mirrored-axis group. x / y only (the radar has no r ranges/breaks).
+		Scale:
+			channel !== "r" && (ch.min || ch.max || ch.breaks || ch.mirror),
 		"Tick labels":
 			ch.format ||
 			ch.tickLabelAngle ||
@@ -401,6 +397,12 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 		!!encodings.facetRow?.field ||
 		!!encodings.facetCol?.field
 
+	// The Scale section (x / y only): Min / Max + Custom breaks on a
+	// continuous, un-mirrored axis; the mirrored-axis group by its own gate.
+	// Neither → no Scale section at all.
+	const showScaleRange = channel !== "r" && isContinuous && !mirrorApplies
+	const showScaleSection = showScaleRange || showMirror
+
 	// Effective "Adjust position" nudge in screen px, applied to the tick
 	// labels. The legacy single `offset` was perpendicular-only (x-axis:
 	// positive = down/away, y-axis: positive = left/away); it's folded in
@@ -415,8 +417,7 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 	// bins are categorical bands — labeling every bin gets crowded, so expose
 	// the same stride control the categorical axis uses (label every Nth bin).
 	// Otherwise: categorical → stride; continuous → tick count. Lives in the
-	// Ticks section on x/y; the r axis has no Ticks section, so it stays under
-	// Tick Labels there.
+	// Ticks section (x, y and r).
 	const tickDensityControls = isBinnedAxis ? (
 		<div className="flex items-center gap-2 text-sm">
 			<NumberInput
@@ -549,10 +550,20 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 			{channel !== "r" && (
 				<Section title="Ticks" changed={sectionChanged.Ticks}>
 					{tickDensityControls}
-					{/* Scale range + plain custom breaks step aside while the axis
+					<TickmarkControls
+						tick={config.tickmarks ?? DEFAULT_TICKMARK_CONFIG}
+						onChange={(t) => update({ tickmarks: t })}
+						theme={theme}
+					/>
+				</Section>
+			)}
+
+			{showScaleSection && (
+				<Section title="Scale" changed={sectionChanged.Scale}>
+					{/* Min / Max + plain custom breaks step aside while the axis
 					 *  is mirrored — the mirror's side maxes and mirrored breaks
 					 *  replace them. */}
-					{isContinuous && !mirrorApplies && (
+					{showScaleRange && (
 						<ScaleRangeControls
 							isTemporal={effectiveType === "temporal"}
 							min={config.min ?? null}
@@ -592,13 +603,9 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 							directionLevels={directionLevels}
 							changed={ch.mirror}
 							onChange={(next) => update({ mirror: next })}
+							divider={showScaleRange}
 						/>
 					)}
-					<TickmarkControls
-						tick={config.tickmarks ?? DEFAULT_TICKMARK_CONFIG}
-						onChange={(t) => update({ tickmarks: t })}
-						theme={theme}
-					/>
 				</Section>
 			)}
 
@@ -1032,8 +1039,8 @@ const boundLabelClass = (on: boolean | undefined) =>
  * The min/max here pin the scale's domain (the base default applied to every
  * panel — facet-level range overrides still win where set). Bounds are stored
  * as plain numbers on the config; temporal values are epoch milliseconds,
- * surfaced/parsed as ISO dates in the inputs. Renders in the Ticks section,
- * between the density controls and the custom-breaks box. */
+ * surfaced/parsed as ISO dates in the inputs. Opens the Scale section, above
+ * the custom-breaks box (the section title names it, so no heading here). */
 const ScaleRangeControls = ({
 	isTemporal,
 	min,
@@ -1056,10 +1063,7 @@ const ScaleRangeControls = ({
 	const inputClass = BOUND_INPUT_CLASS
 
 	return (
-		<div className="vc-divider-group">
-			<span className="text-sm vc-muted">
-				Scale range
-			</span>
+		<div className="flex flex-col gap-2">
 			<div className="vc-help">
 				{rangeHint ??
 					"Blank = auto-fit from the data. Set a bound to pin the axis (e.g. min = 0)."}
@@ -1104,12 +1108,12 @@ const ScaleRangeControls = ({
 	)
 }
 
-/** "Use a mirrored axis" mini-section at the bottom of the Ticks section
- * (its own rule above; the Tick marks block's rule closes it). Bar measure
+/** "Use a mirrored axis" mini-section at the bottom of the Scale section
+ * (its own rule above when Min / Max sit over it). Bar measure
  * axis only: a two-level Direction variable sends each row's bar to one
  * side of zero while the values stay positive — expenses left / profit
  * right, males left / females right. While on, the side maxes and the
- * mirrored custom breaks here replace the Scale range and plain Custom
+ * mirrored custom breaks here replace the Min / Max and plain Custom
  * breaks controls above. Unchecking clears the whole config (sparse). */
 const MirroredAxisControls = ({
 	mirror,
@@ -1118,6 +1122,7 @@ const MirroredAxisControls = ({
 	directionLevels,
 	changed,
 	onChange,
+	divider,
 }: {
 	mirror: MirrorAxisConfig
 	/** The measure axis's screen axis: "x" → sides are Left / Right;
@@ -1130,6 +1135,9 @@ const MirroredAxisControls = ({
 	directionLevels: [string, string] | null
 	changed: boolean
 	onChange: (next: MirrorAxisConfig | undefined) => void
+	/** Hairline above the group — only when Min / Max render above it; as the
+	 *  Scale section's first block it needs none. */
+	divider: boolean
 }) => {
 	const set = (next: Partial<MirrorAxisConfig>) =>
 		onChange({ ...mirror, ...next })
@@ -1151,7 +1159,7 @@ const MirroredAxisControls = ({
 				? "This variable no longer has exactly two options — pick another."
 				: "Only variables with exactly two options are listed."
 	return (
-		<div className="vc-divider-group">
+		<div className={divider ? "vc-divider-group" : "flex flex-col gap-2"}>
 			<Toggle
 				label="Use a mirrored axis"
 				checked={mirror.enabled}
@@ -1611,7 +1619,7 @@ const WrapAlignmentControl = ({
 						: "w-24 shrink-0 vc-muted"
 				}
 			>
-				Alignment
+				Align
 			</span>
 			<AlignmentControl
 				value={value ?? naturalAlign}

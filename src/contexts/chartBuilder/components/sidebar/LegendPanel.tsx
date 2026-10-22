@@ -1210,6 +1210,30 @@ export const LegendPanel = () => {
 							<ResetLink onClick={() => update({ textAlign: null })} />
 						)}
 					</div>
+					{/* The gradient bar's break labels align on their own —
+					 *  only while a bar-style gradient legend shows. */}
+					{showGradientLegendStyle &&
+						(merged.gradientLegendStyle ?? "bar") === "bar" && (
+							<div className="flex flex-col gap-1">
+								<div className="flex items-center gap-2 text-sm">
+									<span className={LABEL_COL}>Align break labels</span>
+									<AlignmentControl
+										value={
+											merged.gradientBarLabelAlign ??
+											(merged.orientation === "horizontal" ? "center" : "left")
+										}
+										onChange={(gradientBarLabelAlign) =>
+											update({ gradientBarLabelAlign })
+										}
+									/>
+								</div>
+								<p className="vc-help">
+									How the gradient bar&apos;s break labels align — against
+									each stop under a horizontal bar, within the label column
+									beside a stacked one.
+								</p>
+							</div>
+						)}
 					<FontEditor
 						value={merged.textFont ?? {}}
 						onChange={setTextFont}
@@ -1274,28 +1298,6 @@ export const LegendPanel = () => {
 							/>
 						)
 					})}
-					{showGradientLegendStyle &&
-						(merged.gradientLegendStyle ?? "bar") === "bar" && (
-							<div className="flex flex-col gap-1">
-								<div className="flex items-center gap-2">
-									<span className={`${LABEL_COL} text-sm`}>Label alignment</span>
-									<AlignmentControl
-										value={
-											merged.gradientBarLabelAlign ??
-											(merged.orientation === "horizontal" ? "center" : "left")
-										}
-										onChange={(gradientBarLabelAlign) =>
-											update({ gradientBarLabelAlign })
-										}
-									/>
-								</div>
-								<p className="vc-help">
-									How the gradient bar&apos;s break labels align — against
-									each stop under a horizontal bar, within the label column
-									beside a stacked one.
-								</p>
-							</div>
-						)}
 				</CollapsibleSubsection>
 			)}
 
@@ -1384,91 +1386,88 @@ export const LegendPanel = () => {
 							 *  convention): 0 (the default) draws no border and hides
 							 *  the color picker, which is inert until there's a stroke
 							 *  to color. */}
-							<NumberInput
-								label="Border thickness"
-								labelClassName={LABEL_COL}
-								value={merged.gradientBarBorderWidth ?? 0}
-								min={0}
-								step={0.5}
-								onChange={(gradientBarBorderWidth) =>
-									update({ gradientBarBorderWidth: Math.max(0, gradientBarBorderWidth) })
-								}
-								inputClassName="w-16"
-								suffix="px"
-							/>
-							{(merged.gradientBarBorderWidth ?? 0) > 0 && (
-								<div className="flex flex-wrap items-center gap-2">
-									<ColorInput
-										label="Border color"
-										labelClassName={LABEL_COL}
-										value={
-											merged.gradientBarBorderColor ??
-											DEFAULT_GRADIENT_BAR_BORDER_COLOR
-										}
-										onChange={(gradientBarBorderColor) =>
-											update({ gradientBarBorderColor })
-										}
-										showHexInput
-									/>
-									{merged.gradientBarBorderColor != null && (
-										<ResetLink
-											onClick={() => update({ gradientBarBorderColor: null })}
-										/>
-									)}
-								</div>
-							)}
-							<NumberInput
-								label="Tick length"
-								labelClassName={LABEL_COL}
-								value={merged.gradientBarTickLength ?? 0}
-								min={0}
-								step={1}
-								onChange={(gradientBarTickLength) =>
-									update({ gradientBarTickLength })
-								}
-								inputClassName="w-16"
-								suffix="px"
-							/>
-							{(merged.gradientBarTickLength ?? 0) > 0 && (
-								<>
-									<NumberInput
-										label="Tick thickness"
-										labelClassName={LABEL_COL}
-										value={merged.gradientBarTickThickness ?? 1}
-										min={0}
-										step={0.5}
-										onChange={(gradientBarTickThickness) =>
-											update({ gradientBarTickThickness })
-										}
-										inputClassName="w-16"
-										suffix="px"
-									/>
+							<div className="vc-divider-group">
+								<NumberInput
+									label="Border thickness"
+									labelClassName={LABEL_COL}
+									value={merged.gradientBarBorderWidth ?? 0}
+									min={0}
+									step={0.5}
+									onChange={(gradientBarBorderWidth) =>
+										update({ gradientBarBorderWidth: Math.max(0, gradientBarBorderWidth) })
+									}
+									inputClassName="w-16"
+									suffix="px"
+								/>
+								{(merged.gradientBarBorderWidth ?? 0) > 0 && (
 									<div className="flex flex-wrap items-center gap-2">
 										<ColorInput
-											label="Tick color"
+											label="Border color"
 											labelClassName={LABEL_COL}
 											value={
-												merged.gradientBarTickColor ??
-												DEFAULT_GRADIENT_BAR_TICK_COLOR
+												merged.gradientBarBorderColor ??
+												DEFAULT_GRADIENT_BAR_BORDER_COLOR
 											}
-											onChange={(gradientBarTickColor) =>
-												update({ gradientBarTickColor })
+											onChange={(gradientBarBorderColor) =>
+												update({ gradientBarBorderColor })
 											}
 											showHexInput
 										/>
-										{merged.gradientBarTickColor != null && (
-											<ResetLink onClick={() => update({ gradientBarTickColor: null })} />
+										{merged.gradientBarBorderColor != null && (
+											<ResetLink
+												onClick={() => update({ gradientBarBorderColor: null })}
+											/>
 										)}
 									</div>
-								</>
-							)}
-							<p className="vc-help">
-								Bar length is the gradient&apos;s height when the legend is
-								stacked, its width when horizontal — clear for the automatic
-								size. Bar thickness is the other dimension. Border thickness above 0 outlines the bar. Tick length
-								above 0 draws a mark at each break stop, between the bar and
-								its labels.
-							</p>
+								)}
+							</div>
+							<div className="vc-divider-group">
+								<NumberInput
+									label="Tick length"
+									labelClassName={LABEL_COL}
+									value={merged.gradientBarTickLength ?? 0}
+									min={0}
+									step={1}
+									onChange={(gradientBarTickLength) =>
+										update({ gradientBarTickLength })
+									}
+									inputClassName="w-16"
+									suffix="px"
+								/>
+								{(merged.gradientBarTickLength ?? 0) > 0 && (
+									<>
+										<NumberInput
+											label="Tick thickness"
+											labelClassName={LABEL_COL}
+											value={merged.gradientBarTickThickness ?? 1}
+											min={0}
+											step={0.5}
+											onChange={(gradientBarTickThickness) =>
+												update({ gradientBarTickThickness })
+											}
+											inputClassName="w-16"
+											suffix="px"
+										/>
+										<div className="flex flex-wrap items-center gap-2">
+											<ColorInput
+												label="Tick color"
+												labelClassName={LABEL_COL}
+												value={
+													merged.gradientBarTickColor ??
+													DEFAULT_GRADIENT_BAR_TICK_COLOR
+												}
+												onChange={(gradientBarTickColor) =>
+													update({ gradientBarTickColor })
+												}
+												showHexInput
+											/>
+											{merged.gradientBarTickColor != null && (
+												<ResetLink onClick={() => update({ gradientBarTickColor: null })} />
+											)}
+										</div>
+									</>
+								)}
+							</div>
 						</div>
 					)}
 				</CollapsibleSubsection>

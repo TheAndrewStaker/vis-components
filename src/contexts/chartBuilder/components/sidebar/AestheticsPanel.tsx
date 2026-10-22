@@ -212,12 +212,6 @@ export const AestheticsPanel = () => {
 							/>
 						</>
 					)}
-					<p className="vc-help">
-						Draws the chart inside a fixed rectangle instead of filling the
-						viewport, and exports default to these dimensions. Inches and cm
-						convert at the standard 96 px/inch. The canvas shows as a white
-						rectangle; the viewport area outside it is shaded gray.
-					</p>
 				</div>
 				{canvasSize?.enabled && (
 					<div className="vc-divider-group" data-canvas-margins>

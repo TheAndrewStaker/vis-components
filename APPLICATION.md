@@ -1863,25 +1863,33 @@ The X-axis and Y-axis panels (under Encodings) configure:
   `components/viz/coords/cartesian.tsx` (the only place holding both
   scales), so it applies to every cartesian renderer and faceted
   panels alike. Cartesian only — radar/polar axes never see it.
-- **Tick marks** — color, thickness, length.
-- **Ticks: count + custom breaks** — the Ticks section sets the tick
-  layout: **Count** picks the automatic tick density (0 = no automatic
-  ticks), and **Custom breaks** (continuous axes only) pins extra
+- **Tick marks** — color, thickness, length (Ticks section).
+- **Ticks + Scale: count, min / max, custom breaks** — the **Ticks**
+  section holds the tick density (**Count** picks the automatic tick
+  density, 0 = no automatic ticks) and the Tick marks rows. The
+  **Scale** section, right after Ticks and before Tick labels, holds
+  the domain controls: **Min** / **Max** (continuous axes; blank =
+  auto-fit — no separate "Scale range" heading, the section title
+  names it), **Custom breaks**, and the mirrored-axis group below. It
+  carries its own changed dot (min / max, custom breaks, mirror
+  settings) and is omitted when none of its groups apply (e.g. a
+  categorical axis that can't be mirrored). **Custom breaks**
+  (continuous axes only) pins extra
   ticks at listed positions, ADDED to the automatic layout — set Count
   to 0 and list breaks for fully custom ticks. Breaks outside the axis
   range are dropped, and a break coinciding with an automatic tick
   draws once. Tick labels simply follow the ticks — every tick gets a
   label; there is no separate label-position control.
-  **Scale range and breaks on a faceted visual**: the X / Y Scale range
-  is the global default for every panel; a range set in the Facet
+  **Scale range and breaks on a faceted visual**: the X / Y Scale
+  section's Min / Max is the global default for every panel; a range set in the Facet
   panels (overall, per row/column, or per panel) overrides it for the
   panels it covers. The help text says so while the visual is faceted.
   Custom breaks apply to every panel, except one whose facet range entry
   has Replace ticks checked — those replace the panel's ticks outright.
-  **Count composes with Scale range**: while the domain is auto-fit
+  **Count composes with Min / Max**: while the domain is auto-fit
   (either bound blank), Count is a density hint and the ticks snap to
   round "nice" values, so the exact number may differ. Once BOTH min
-  and max are pinned (Scale range, or a facet range override), the
+  and max are pinned (Scale Min / Max, or a facet range override), the
   axis lays out exactly Count evenly spaced ticks from min to max
   inclusive — 0.04–0.24 with Count 6 gives 0.04, 0.08, 0.12, 0.16,
   0.20, 0.24 — and "Match tick count" gridlines follow the same
@@ -1910,7 +1918,7 @@ The X-axis and Y-axis panels (under Encodings) configure:
   the bound. Pinned bounds are also respected exactly on bar / area
   measure axes (the auto-fit rounding-outward applies only to blank
   ends).
-- **Use a mirrored axis** (Ticks section, its own ruled mini-section
+- **Use a mirrored axis** (Scale section, its own ruled mini-section
   below Custom breaks; bar charts' IMPLIED measure axis only — the
   field-less position axis the `length` measure feeds, so the X panel
   on horizontal bars and the Y panel on vertical ones). For opposed
@@ -1929,7 +1937,7 @@ The X-axis and Y-axis panels (under Encodings) configure:
   data stays positive and every displayed value — tick labels (the
   format spec applies to the magnitude), data labels, tooltips — shows
   the magnitude. While on, **Left max / Right max** (Lower / Upper on
-  a vertical measure axis) replace Scale range: each pins how far its
+  a vertical measure axis) replace Min / Max: each pins how far its
   side extends (blank = auto-fit from that side's data), and a
   mirrored **Custom breaks** box replaces the plain one — each
   magnitude pins a tick on BOTH sides (`50, 100` → ±50, ±100), still
@@ -1944,7 +1952,7 @@ The X-axis and Y-axis panels (under Encodings) configure:
   section stays visible while checked so it can always be turned off.
 - **Gridlines** — enabled toggle, color, thickness, custom count
   (default: match tick count). "Match tick count" follows the
-  AUTOMATIC tick layout only — the Ticks section's custom breaks get
+  AUTOMATIC tick layout only — the Scale section's custom breaks get
   no gridlines of their own. **Custom breaks** here (continuous axes
   only) pins extra gridlines at listed positions, drawn in addition
   to the automatic lines (match-tick or explicit count); a break that
@@ -1988,7 +1996,8 @@ The X-axis and Y-axis panels (under Encodings) configure:
   storage version) clears it to blank. The tick density control
   (**Count** / **Tick every** / **Label every**) lives in the **Ticks**
   section on every axis, the radar r axis included — r's Ticks section
-  holds only that control, since the radar draws no r tick marks.
+  holds only that control, since the radar draws no r tick marks; r
+  has no Scale section (no r ranges or breaks).
 - **Wrap text** (Tick labels) — line-wraps long tick labels. X-axis
   labels wrap to their per-tick slot width; y-axis and radar r-axis
   labels wrap to a fixed font-relative max width (~8em). Wrapping
@@ -2005,7 +2014,7 @@ The X-axis and Y-axis panels (under Encodings) configure:
   single word longer than the target stays whole rather than being
   split. Applies to x, y and radar r axes; the solver pre-wraps with
   the same target so reserved room matches.
-- **Alignment** (Tick labels) — a left / center / right row (same
+- **Align** (Tick labels) — a left / center / right row (same
   glyph buttons as the Labels panel), shown while Wrap text is on.
   Wrapped labels align their lines within the wrapped
   block; the block itself stays anchored to its tick. Unwrapped
@@ -2351,7 +2360,7 @@ arc anchors (already placed, styled, and fit-gated) to this layer in a
 `"layout"` gate — no position or Value mapping required, and the
 per-series "Which labels" selection stands down (no series) — so it
 keeps the rest of the fine-tuning like a pie: Avoid overlaps (the 2-D
-spread, as on maps), Alignment, text Angle, Wrap text (the fit gate
+spread, as on maps), Align, text Angle, Wrap text (the fit gate
 then measures the widest wrapped line, so wrapping is how a long name
 fits a narrow arc), X/Y pixel nudges, position rules, and Text
 Background. Its **Adjust position** polar pair is Angle (the pie's
@@ -2404,8 +2413,8 @@ nothing mapped. The **X / Y position rows are greyed out, not hidden**
   reads as its chord equivalent, and when every node both sends and
   receives a hint says the three label the same nodes. The per-series
   "Which labels" / "Of each" stand down (no series).
-- **Adjust position and alignment**, **Text** and **Box** all
-  apply. Alignment's default (center) is automatic:
+- **Position and alignment**, **Text** and **Box** all
+  apply. Align's default (center) is automatic:
   text reads away from the node (end-anchored on the left half of the
   ring and on a sankey's last column); Left / Right force the anchor.
   The chord ring makes room for its labels: each selected node's widest
@@ -2423,7 +2432,7 @@ Labels → "Node titles" section are folded on intake (open, save,
 bundle import, example seed — `lib/foldFlowNodeTitles.ts`, beside
 `structureVisualKeys`; idempotent, no storage version bump): font
 family / size / weight / italic / underline / color → the Data Labels
-text fields, alignment → Alignment, x / y → the x / y nudges; the old
+text fields, alignment → Align, x / y → the x / y nudges; the old
 radial "Distance from figure" offset has no equivalent and is dropped.
 
 In the GEO modes (choropleth / bubble map / dot map) labels anchor to
@@ -2648,8 +2657,8 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   `arranged-first` / `arranged-last`) with its Label text and
   series-end overrides, so the chart looks the same until the list is
   edited, which persists it. Several
-  labels position PER LABEL: under Adjust position and alignment the
-  Alignment control and the X / Y nudges become one row per variable
+  labels position PER LABEL: under Position and alignment the
+  Align control and the X / Y nudges become one row per variable
   (each showing its effective value — its own, else the layer's — and
   writing `DataLabelsConfig.fieldAlignments` / `fieldOffsets`), so a
   value can sit centered in its bar while the category hangs left-aligned
@@ -2673,7 +2682,7 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
     inheritance: `{value}` on firsts, `{value} {series}` on lasts). There
     is still exactly ONE "Label format" section — per-field formats are
     shared across populations.
-  - Under **Adjust position and alignment**, the Alignment control
+  - Under **Position and alignment**, the Align control
     and the Adjust-position X/Y inputs each become one row / pair per
     population ("All labels" writes the base values; "First label" /
     "Last label" write the endpoint overrides). Wrap text stays a single
@@ -2689,7 +2698,7 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   so templates, per-field formats, and per-variable colors all apply to
   bar labels. Area / pie / tile labels are still pre-formatted single
   values and ignore multi-field templates.
-- **Avoid overlapping labels** (under Adjust position and alignment,
+- **Avoid overlapping labels** (under Position and alignment,
   right after Wrap text — it moves labels, so it sits with the other
   placement controls rather than with the selection of WHICH labels
   render) — colliding labels spread apart
@@ -2725,7 +2734,9 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   of "all facets" overrides a layer-wide list rather than falling back
   to it. It is also the one Label-selection control a map or a sunburst
   keeps (they have no series ends to select or scope; flow diagrams add
-  their own by-direction node selection). The list uses the
+  their own by-direction node selection). When none of its controls
+  apply — an unfaceted sunburst — the Label selection subsection is
+  skipped entirely rather than shown empty. The list uses the
   same panel references the annotations' "Apply to all facets" picker
   stores (`FacetPanelRef`: the facet value in wrap mode, a `{ row, col }`
   pair in grid mode), labeled as the rendered titles are (facet value,
@@ -2743,9 +2754,9 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   — center (default) / inside, near base / inside, near end / outside
   the end of the bar, along each slice's measure extent.
 - With separate variables (Combine variables unchecked) the whole
-  Adjust position and alignment section becomes one collapsible
+  Position and alignment section becomes one collapsible
   subsection PER VARIABLE (titled by field, like the Color / Size /
-  Text blocks), each holding that variable's Alignment,
+  Text blocks), each holding that variable's Align,
   Angle, Wrap text (+ Characters), Avoid overlapping labels, the bar
   Placement pair, and the Adjust position X / Y — effective values
   shown (the variable's own entry, else the layer's), writes to the
@@ -2760,7 +2771,7 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   labels of variables with it on move out of EACH OTHER's way, and a
   variable with it off never moves. So e.g. the category name sits
   beside the bar while the value stays centered inside it. A variable
-  beside a vertical bar loses only its own Alignment row.
+  beside a vertical bar loses only its own Align row.
 - **Side placement** (bars only; "Horizontal" on vertical bars) —
   which side of the bar labels sit on,
   across the category axis: centered on the bar (default), or beside
@@ -2772,10 +2783,10 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   back over it when the figure narrowed and the bar thinned). On a
   vertical bar the side also fixes the text alignment — the label
   hangs away from the bar (left of the bar ends at the anchor, right
-  of it starts there) — and the Alignment controls hide while a side
+  of it starts there) — and the Align controls hide while a side
   is set, series-end and per-variable alignments included. On a
   horizontal bar the side picks which edge of the label block meets
-  the anchor (above → block bottom, below → block top) and Alignment
+  the anchor (above → block bottom, below → block top) and Align
   stays the user's. The layout reserve for vertical bars follows the
   forced alignment and the pad so a label beside the last bar stays
   in the viewport.
@@ -2791,7 +2802,7 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   the top edge stand UP from theirs (block bottom on the anchor); on
   the top edge and center stay vertically centered. The 4px pad
   applies on top. Horizontal areas keep the label centered and leave
-  its horizontal edge to the Alignment control.
+  its horizontal edge to the Align control.
 - **Position rules** (Adjust position → "+ Add rule") — conditional
   X/Y offsets, evaluated against the label's backing value with the
   same condition grammar and first-match-wins walk as the text color
@@ -3055,9 +3066,9 @@ and never lights a dot.
 
 Facet **row** titles (the left-strip labels — the grid-split Row
 titles row, and the single Facet title row when only the facet-row
-axis is mapped) additionally expose a **Vertical alignment** control
-(top / middle / bottom, default middle) alongside their alignment
-control, which is relabeled **Horizontal alignment** there. It lines
+axis is mapped) additionally expose a **Vertical align** control
+(top / middle / bottom, default middle) alongside their **Align**
+control, which is relabeled **Horizontal align** there. It lines
 the title up with the panel's own y-axis tick LABELS — top with the
 top-most label, bottom with the bottom-most, middle centered — so on a
 categorical y-axis "bottom" sits level with the last category label
@@ -3288,14 +3299,17 @@ clears the setting rather than storing it. Center / right make each
 label's cell grow to fill the rest of its row first
 (`.vc-legend-text-align`), so the alignment has somewhere to work; the
 gradient bar's break labels are NOT affected — they keep their own
-**Label alignment** under Label format.
+**Align break labels** row, directly below Align in the same Legend
+text subsection (shown only while a quantitative hue legend is visible
+and its style is "Show gradient bar").
 
 The "Gradient legend style" toggle (quantitative hue only) switches
 between a gradient bar and sampled swatches; both honor the legend's
 orientation setting (horizontal swatches lay out in one no-wrap row).
 
 When "Show gradient bar" is selected, the subsection grows bar-styling
-controls:
+controls, in three hairline-divided groups with no headers — the bar
+rows, the border rows, then the tick rows:
 
 - **Bar length** (px, clear-to-auto) — the bar's height when the
   legend is stacked, its width when horizontal. Auto keeps the
@@ -3324,9 +3338,9 @@ as whole numbers with no trailing ".00"; once any break carries a
 fraction every label prints two decimals so the column stays aligned
 (0.00 / 0.50 / 1.00). Temporal breaks print as locale dates.
 
-The Label format subsection additionally offers **Label
-alignment** (left / center / right, via the shared AlignmentControl)
-whenever a gradient bar is active: under a horizontal bar each break
+The Legend text subsection additionally offers **Align break
+labels** (left / center / right, via the shared AlignmentControl),
+directly below Align, whenever a gradient bar is active: under a horizontal bar each break
 label anchors its left edge / center / right edge at its stop; beside
 a vertical bar the labels align within the label column. The default
 (unset) is the historical look — centered under a horizontal bar,
@@ -3882,7 +3896,7 @@ has:
     structure layouts — disable Values mode (there is no scale a data
     coordinate could resolve against). Numeric axes
     use the linear scale. A date axis presents the same date box as
-    the axis's Scale range bounds (type `YYYY-MM-DD` or pick from its
+    the axis's Scale Min / Max bounds (type `YYYY-MM-DD` or pick from its
     month / year calendar) and stores the coordinate as epoch ms at
     local midnight, which the time scale places directly — the
     percent ↔ values toggle computes the same unit, so a converted

@@ -32,7 +32,7 @@ import {
 import { DataLabelsPanel } from "./DataLabelsPanel"
 
 /** Position rules belong to a LABEL, so "+ Add rule" lives inside each
- *  label's own subsection under "Adjust position and alignment": one link
+ *  label's own subsection under "Position and alignment": one link
  *  per subheader — as many as the user mapped labels — and none loose at
  *  the bottom of the section. With the variables combined there's one
  *  label (the arranged one), so the one link stays layer-wide. */
@@ -136,7 +136,7 @@ describe("DataLabelsPanel — position rules live with each label", () => {
 
 	it("one variable: the single link stays with the layer-wide controls", () => {
 		const { container } = mountPanel({ fields: null })
-		expand(container, "Adjust position and alignment")
+		expand(container, "Position and alignment")
 		expect(addRuleLinks(container)).toHaveLength(1)
 	})
 
@@ -145,7 +145,7 @@ describe("DataLabelsPanel — position rules live with each label", () => {
 			fields: ["y", "g"],
 			cfg: { combineVariables: false },
 		})
-		expand(container, "Adjust position and alignment")
+		expand(container, "Position and alignment")
 		expand(container, "y")
 		expand(container, "g")
 		// Exactly one per variable — and each inside ITS subsection, so the
@@ -160,7 +160,7 @@ describe("DataLabelsPanel — position rules live with each label", () => {
 			fields: ["y", "g"],
 			cfg: { combineVariables: false, xOffset: 4, yOffset: -3 },
 		})
-		expand(container, "Adjust position and alignment")
+		expand(container, "Position and alignment")
 		expand(container, "g")
 		fireEvent.click(addRuleIn(container, "g"))
 		const cfg = readCfg()
@@ -189,7 +189,7 @@ describe("DataLabelsPanel — position rules live with each label", () => {
 				fieldOffsets: { y: { xOffset: 12, yOffset: 9 } },
 			},
 		})
-		expand(container, "Adjust position and alignment")
+		expand(container, "Position and alignment")
 		expand(container, "y")
 		fireEvent.click(addRuleIn(container, "y"))
 		expect(readCfg().fieldPositionRules?.y).toEqual([
@@ -207,7 +207,7 @@ describe("DataLabelsPanel — position rules live with each label", () => {
 				},
 			},
 		})
-		expand(container, "Adjust position and alignment")
+		expand(container, "Position and alignment")
 		expand(container, "g")
 		const remove = container.querySelector<HTMLButtonElement>(
 			'button[aria-label="Remove g position rule 1"]'
@@ -222,7 +222,7 @@ describe("DataLabelsPanel — position rules live with each label", () => {
 			fields: ["y", "g"],
 			cfg: { combineVariables: true },
 		})
-		expand(container, "Adjust position and alignment")
+		expand(container, "Position and alignment")
 		const links = addRuleLinks(container)
 		expect(links).toHaveLength(1)
 		fireEvent.click(links[0])

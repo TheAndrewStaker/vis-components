@@ -162,7 +162,7 @@ describe("DataLabelsPanel — composed labels", () => {
 		expect(sectionHeader(container, "y")).toBeNull()
 		expand(container, "Label selection")
 		expect(sectionHeader(container, "y + g")).not.toBeNull()
-		expand(container, "Adjust position and alignment")
+		expand(container, "Position and alignment")
 		expect(sectionHeader(container, "y + g")).not.toBeNull()
 		// No layer-wide Angle: every label has its own.
 		expect(
@@ -176,7 +176,7 @@ describe("DataLabelsPanel — composed labels", () => {
 		const { container, readCfg } = mountPanel({
 			composedLabels: [{ id: "lbl-1", template: "{y} ({g})" }],
 		})
-		expand(container, "Adjust position and alignment")
+		expand(container, "Position and alignment")
 		expect(
 			[...container.querySelectorAll("label")].some(
 				(l) => l.textContent?.trim() === "Angle"
