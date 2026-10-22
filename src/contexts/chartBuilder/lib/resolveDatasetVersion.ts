@@ -1,5 +1,6 @@
 import { datasetFromParts, type DatasetLike } from "./datasetMeta"
-import type { Dataset, DatasetMeta, DatasetView } from "./types"
+import type { Dataset, DatasetMeta, DatasetView, Field } from "./types"
+import { derivedVariablesOfVersion } from "./versionTransforms"
 
 /**
  * Resolve a Dataset to a specific DatasetVersion.
@@ -83,10 +84,31 @@ const remapRowsToFieldNames = (
 	return changed ? out : rows
 }
 
+/** Mark the columns a derived variable made — saved as a data version, so
+ * stored as plain columns — with the view-time `derived` flag the tray's ƒ
+ * marker and the Fields panel's ƒ pill read. Identity-preserving: a version
+ * with no such column keeps the input array. */
+const markDerivedFields = (
+	dataset: Pick<Dataset, "versions">,
+	versionId: string,
+	fields: Field[]
+): Field[] => {
+	const derived = derivedVariablesOfVersion(dataset.versions, versionId)
+	if (derived.size === 0) return fields
+	let changed = false
+	const out = fields.map((f) => {
+		if (f.derived || !derived.has(f.name)) return f
+		changed = true
+		return { ...f, derived: true }
+	})
+	return changed ? out : fields
+}
+
 /**
  * Build a flat DatasetView for renderers. Returns undefined when the dataset
- * is missing, otherwise pairs the dataset's invariant fields with the resolved
- * version's rows + version metadata. Rows of versions uploaded under a field's
+ * is missing, otherwise pairs the resolved version's columns — its own list
+ * when it carries one, else the dataset's (see `lib/versionFields.ts`) —
+ * with its rows + version metadata. Rows of versions uploaded under a field's
  * FORMER name are remapped to the current name (see `remapRowsToFieldNames`).
  */
 export const resolveDatasetView = (
@@ -97,16 +119,13 @@ export const resolveDatasetView = (
 	const version = resolveDatasetVersion(dataset, preferredVersionId)
 	if (!version) return undefined
 	const versionIndex = dataset.versions.findIndex((v) => v.id === version.id)
+	const fields = version.fields ?? dataset.fields
 	return {
 		id: dataset.id,
 		name: dataset.name,
 		filename: version.filename,
-		fields: dataset.fields,
-		rows: remapRowsToFieldNames(
-			dataset.fields,
-			version.rows,
-			version.keyAliases
-		),
+		fields: markDerivedFields(dataset, version.id, fields),
+		rows: remapRowsToFieldNames(fields, version.rows, version.keyAliases),
 		createdAt: dataset.createdAt,
 		versionId: version.id,
 		versionIndex: versionIndex + 1,

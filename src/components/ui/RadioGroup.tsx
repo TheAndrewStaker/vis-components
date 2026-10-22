@@ -28,6 +28,7 @@ export const RadioGroup = <V extends string>({
 	onChange,
 	disabled,
 	orientation = "vertical",
+	align = "center",
 	className,
 	legendClassName,
 }: {
@@ -44,7 +45,14 @@ export const RadioGroup = <V extends string>({
 	/** Lay options vertically (stacked rows, the default) or horizontally
 	 *  (e.g. an "On / Off / Auto" tri-state). */
 	orientation?: "vertical" | "horizontal"
+	/** Where each button sits against its label: centered on it (the
+	 *  default, right for a one-line label), or on the FIRST line of a
+	 *  label that wraps — the button is boxed to the line height. */
+	align?: "center" | "start"
 	className?: string
+	/** Replaces the legend's default bottom margin (`mb-1`) — `mb-0` for a
+	 *  screen-reader-only legend, which still takes its margin inside the
+	 *  fieldset otherwise. */
 	legendClassName?: string
 }) => {
 	const generatedId = useId()
@@ -61,28 +69,37 @@ export const RadioGroup = <V extends string>({
 			)}
 			disabled={disabled}
 		>
-			<legend
-				className={c(
-					"mb-1 vc-muted",
-					legendClassName
-				)}
-			>
+			<legend className={c(legendClassName ?? "mb-1", "vc-muted")}>
 				{legend}
 			</legend>
 			{options.map((opt) => {
 				const optionId = `${groupId}-${opt.value}`
+				const input = (
+					<input
+						id={optionId}
+						type="radio"
+						name={groupId}
+						value={opt.value}
+						checked={value === opt.value}
+						onChange={() => onChange(opt.value)}
+						disabled={opt.disabled}
+						className="cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+					/>
+				)
 				return (
-					<div key={opt.value} className="flex items-center gap-2">
-						<input
-							id={optionId}
-							type="radio"
-							name={groupId}
-							value={opt.value}
-							checked={value === opt.value}
-							onChange={() => onChange(opt.value)}
-							disabled={opt.disabled}
-							className="cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-						/>
+					<div
+						key={opt.value}
+						className={c(
+							"flex gap-2",
+							align === "start" ? "items-start" : "items-center"
+						)}
+					>
+						{align === "start" ? (
+							// text-sm line height, so the button centers on line one.
+							<span className="flex h-5 items-center">{input}</span>
+						) : (
+							input
+						)}
 						<label
 							htmlFor={optionId}
 							className={c(

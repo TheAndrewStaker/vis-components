@@ -124,25 +124,29 @@ export const describeDiff = (diff: ColumnDiff): string => {
 }
 
 /** Drop fields no remaining version's rows actually carry. Additive version
- * uploads merge net-new columns into the dataset's invariant field list, so
+ * uploads merge net-new columns into the dataset's shared field list, so
  * deleting the version that introduced a column leaves its field orphaned —
  * call this after any version removal (and in the one-shot store cleanup for
  * historical orphans).
  *
- * Column presence is judged by row keys unioned across every row of every
- * version (PapaParse omits trailing keys on short rows, so a single row isn't
- * authoritative). A version with zero rows makes its columns unknowable from
- * rows, so pruning is skipped entirely when any version is row-less rather
- * than risk dropping a live field. A RENAMED field's rows still carry its
- * original column key, so representation checks the field's former names
- * (`sourceNames`) too — judging by `name` alone would silently delete every
- * renamed field here. Returns the input unchanged (same reference) when
- * nothing is pruned. */
+ * Only the versions that SHARE the dataset's list count: a version carrying
+ * its own `fields` (the wide table before a reshape, say — see
+ * `lib/versionFields.ts`) is described by that list, and its rows say
+ * nothing about the shared one. Column presence is judged by row keys
+ * unioned across every row of every such version (PapaParse omits trailing
+ * keys on short rows, so a single row isn't authoritative). A version with
+ * zero rows makes its columns unknowable from rows, so pruning is skipped
+ * entirely when any counted version is row-less rather than risk dropping a
+ * live field. A RENAMED field's rows still carry its original column key, so
+ * representation checks the field's former names (`sourceNames`) too —
+ * judging by `name` alone would silently delete every renamed field here.
+ * Returns the input unchanged (same reference) when nothing is pruned. */
 export const pruneOrphanFields = (dataset: Dataset): Dataset => {
-	if (dataset.versions.length === 0) return dataset
-	if (dataset.versions.some((v) => v.rows.length === 0)) return dataset
+	const shared = dataset.versions.filter((v) => !v.fields)
+	if (shared.length === 0) return dataset
+	if (shared.some((v) => v.rows.length === 0)) return dataset
 	const represented = new Set<string>()
-	for (const v of dataset.versions)
+	for (const v of shared)
 		for (const row of v.rows)
 			for (const key of Object.keys(row)) represented.add(key)
 	const kept = dataset.fields.filter(

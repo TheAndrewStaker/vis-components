@@ -1,6 +1,5 @@
 import { useAtom, useAtomValue } from "jotai"
-import { useAtomCallback } from "jotai/utils"
-import { useCallback, useId, useMemo, useRef, useState } from "react"
+import { useId, useMemo, useRef, useState } from "react"
 import { Button } from "../../../../components/ui/Button"
 import { Input } from "../../../../components/ui/Input"
 import { ConfirmDialog, Modal } from "../../../../components/ui/Modal"
@@ -34,6 +33,7 @@ import {
 } from "../../lib/derivedVariables"
 import type { DatasetView } from "../../lib/types"
 import { effectiveType } from "../../lib/fieldType"
+import { nameCollides } from "../../lib/nameUniqueness"
 import {
 	currentDatasetIdAtom,
 	currentDerivedVariablesAtom,
@@ -42,12 +42,18 @@ import {
 	datasetIndexAtom,
 	derivedVariableEditorAtom,
 } from "../../store/atoms"
+import { saveModeFor, suggestedCopyName } from "../../store/commitDatasetVersion"
 import {
 	convertedWideDatasetViewAtom,
 	derivedReshapeStagesAtom,
+	materializedDerivedAtom,
 	preDerivedDatasetViewAtom,
 } from "../../store/useCurrentDatasetView"
-import { renameFieldAcrossEditorAtoms } from "../../store/useRenameField"
+import {
+	useRemoveDerivedVariable,
+	useSaveDerivedVariable,
+	type DerivedTarget,
+} from "../../store/useMaterializeVersion"
 import { Select } from "../../../../components/ui/Select"
 import type { InputProps } from "../../../../components/ui/Input"
 
@@ -146,31 +152,55 @@ const TokenInput = ({
 )
 
 /** The create/edit popup for derived variables (math / combine text /
- * if-else). Opened by the data tray's "+" column and the Fields panel's
- * pencil on a derived field; which variable it shows lives in the transient
- * `derivedVariableEditorAtom`. Save is disabled while the draft can't apply
- * (name collision, parse error, missing variable) — unlike the view seam,
- * which tolerates broken variables from stale data, the editor refuses to
- * mint them. */
+ * if-else). Opened by the data tray's "+" column and the Fields panel's ƒ
+ * pill on a derived field; which variable it shows lives in the transient
+ * `derivedVariableEditorAtom`. Saving computes the column and stores it as
+ * a NEW DATA VERSION (`store/useMaterializeVersion.ts`) — the first change
+ * to imported data forks a working copy (the popup takes the copy's name),
+ * a change to a working copy appends a version. Editing a variable a
+ * version made recomputes its column in place; editing one that still
+ * lives in an older visual's config folds that config into the version.
+ * Save is disabled while the draft can't apply (name collision, parse
+ * error, missing variable) — unlike the view seam, which tolerates broken
+ * variables from stale data, the editor refuses to mint them. */
 export const DerivedVariableModal = () => {
 	const [target, setTarget] = useAtom(derivedVariableEditorAtom)
 	const config = useAtomValue(currentDerivedVariablesAtom)
+	const materialized = useAtomValue(materializedDerivedAtom)
 	const stages = useAtomValue(derivedReshapeStagesAtom)
 	const reshape = useAtomValue(currentReshapeConfigAtom)
 	const longView = useAtomValue(preDerivedDatasetViewAtom)
 	const wideView = useAtomValue(convertedWideDatasetViewAtom)
 	if (!target) return null
-	const existing =
+	// What an edit targets: an older visual's live definition by id, else
+	// the definition a data version recorded for one of its columns.
+	const legacyExisting =
 		target.mode === "edit"
 			? config.variables.find((v) => v.id === target.id)
 			: undefined
+	const storedExisting =
+		target.mode === "edit" && !legacyExisting
+			? [...materialized.values()].find((v) => v.id === target.id)
+			: undefined
 	// A stale edit target (variable deleted elsewhere) has nothing to show.
-	if (target.mode === "edit" && !existing) return null
-	// A variable the reshape uses evaluates against the WIDE table (that's
-	// where it runs); everything else — including every new variable —
-	// against the table as shown, long once a reshape is on.
+	if (target.mode === "edit" && !legacyExisting && !storedExisting) return null
+	const editing: DerivedTarget | null = legacyExisting
+		? { kind: "legacy", variable: legacyExisting }
+		: storedExisting
+			? { kind: "materialized", variable: storedExisting }
+			: null
+	const existing = legacyExisting
+	// A live variable the reshape uses evaluates against the WIDE table
+	// (that's where it runs); everything else — including every new variable
+	// — against the table as shown, long once a reshape is on. A stored
+	// column is recomputed over that table minus itself: a variable never
+	// reads its own column.
 	const before = existing !== undefined && stages.beforeIds.has(existing.id)
-	const preView = before ? wideView : longView
+	const base = before ? wideView : longView
+	const preView =
+		base && storedExisting
+			? { ...base, fields: base.fields.filter((f) => f.name !== storedExisting.name) }
+			: base
 	if (!preView) return null
 	// Names a before-melt variable must not reach: the melt's own pair and
 	// the variables that only exist after it.
@@ -187,7 +217,7 @@ export const DerivedVariableModal = () => {
 			// Remount per target so a reopened modal starts from the stored
 			// variable (or blank), never a stale draft.
 			key={target.mode === "edit" ? target.id : "new"}
-			existing={existing}
+			target={editing}
 			preView={preView}
 			stageIds={before ? stages.beforeIds : stages.afterIds}
 			lockedNames={lockedNames}
@@ -197,13 +227,14 @@ export const DerivedVariableModal = () => {
 }
 
 const DerivedVariableEditor = ({
-	existing,
+	target,
 	preView,
 	stageIds,
 	lockedNames,
 	onClose,
 }: {
-	existing: DerivedVariable | undefined
+	/** The variable being edited and where it lives; null for a new one. */
+	target: DerivedTarget | null
 	preView: DatasetView
 	/** The variables that run in the same stage as this one (before or
 	 * after the melt) — only those are visible upstream of it. */
@@ -214,6 +245,7 @@ const DerivedVariableEditor = ({
 	onClose: () => void
 }) => {
 	const config = useAtomValue(currentDerivedVariablesAtom)
+	const existing = target?.variable
 	const [name, setName] = useState(existing?.name ?? "")
 	const [kind, setKind] = useState<DerivedVariableKind>(
 		existing?.kind ?? "math"
@@ -239,10 +271,12 @@ const DerivedVariableEditor = ({
 
 	// This variable's position in the evaluation order — it may reference the
 	// variables BEFORE it (and the upstream view columns), never itself or a
-	// later one.
-	const editIndex = existing
-		? config.variables.findIndex((v) => v.id === existing.id)
-		: config.variables.length
+	// later one. A stored column, like a new variable, comes after every live
+	// definition an older visual still carries.
+	const editIndex =
+		target?.kind === "legacy"
+			? config.variables.findIndex((v) => v.id === target.variable.id)
+			: config.variables.length
 
 	/** The view this variable evaluates against: the pre-derived view plus
 	 * every EARLIER derived variable of the same stage. Full rows, not a
@@ -570,56 +604,60 @@ const DerivedVariableEditor = ({
 		})
 	}
 
-	const commit = useAtomCallback(
-		useCallback(
-			(get, set, saved: DerivedVariable, previousName: string | null) => {
-				const cfg = get(currentDerivedVariablesAtom)
-				const exists = cfg.variables.some((v) => v.id === saved.id)
-				set(currentDerivedVariablesAtom, {
-					variables: exists
-						? cfg.variables.map((v) => (v.id === saved.id ? saved : v))
-						: [...cfg.variables, saved],
-				})
-				// Renaming a derived variable rewrites this visual's references —
-				// encodings, per-field maps, templates, and later variables'
-				// expressions. Per-visual scope only: derived names can't be
-				// referenced by sibling visuals or the dataset.
-				if (previousName !== null && previousName !== saved.name) {
-					const datasetId = get(currentDatasetIdAtom)
-					const fields = datasetId
-						? (get(datasetIndexAtom)[datasetId]?.fields ?? [])
-						: []
-					renameFieldAcrossEditorAtoms(
-						get,
-						set,
-						fields,
-						previousName,
-						saved.name
-					)
-				}
-			},
-			[]
-		)
+	// Where the save lands: the first change to imported data forks a working
+	// copy and needs a name for it; a working copy takes a new version.
+	const datasetId = useAtomValue(currentDatasetIdAtom)
+	const datasetIndex = useAtomValue(datasetIndexAtom)
+	const meta = datasetId ? datasetIndex[datasetId] : undefined
+	const mode = meta ? saveModeFor(meta) : "fork"
+	const [datasetName, setDatasetName] = useState(() =>
+		mode === "fork" ? suggestedCopyName(preView.name, "edited") : preView.name
 	)
-
-	const removeVariable = useAtomCallback(
-		useCallback((get, set, id: string) => {
-			const cfg = get(currentDerivedVariablesAtom)
-			set(currentDerivedVariablesAtom, {
-				variables: cfg.variables.filter((v) => v.id !== id),
-			})
-		}, [])
+	const datasetNameId = useId()
+	// Same-named data sets are allowed (the id is the identity); a collision
+	// only warns. Appending keeps the data set, so its own name doesn't count.
+	const collides = nameCollides(
+		datasetName,
+		Object.values(datasetIndex),
+		mode === "append" ? (datasetId ?? undefined) : undefined
 	)
+	const [busy, setBusy] = useState(false)
+	const [submitError, setSubmitError] = useState<string | null>(null)
+	const saveDerived = useSaveDerivedVariable()
+	const removeDerived = useRemoveDerivedVariable()
 
-	const onSave = () => {
-		commit(
+	const onSave = async () => {
+		setBusy(true)
+		setSubmitError(null)
+		const result = await saveDerived(
 			{ ...draft, id: existing?.id ?? newDerivedVariableId() },
-			existing?.name ?? null
+			target,
+			datasetName
 		)
+		setBusy(false)
+		if (!result.ok) {
+			setSubmitError(result.error)
+			return
+		}
 		onClose()
 	}
 
-	const saveDisabled = issues.length > 0 || anyRuleError
+	const onDelete = async () => {
+		if (!target) return
+		setConfirmingDelete(false)
+		setBusy(true)
+		setSubmitError(null)
+		const result = await removeDerived(target, datasetName)
+		setBusy(false)
+		if (!result.ok) {
+			setSubmitError(result.error)
+			return
+		}
+		onClose()
+	}
+
+	const saveDisabled =
+		issues.length > 0 || anyRuleError || busy || datasetName.trim() === ""
 
 	return (
 		<Modal
@@ -994,6 +1032,48 @@ const DerivedVariableEditor = ({
 						</table>
 					</div>
 				)}
+
+				{mode === "fork" ? (
+					<div className="flex flex-col gap-1">
+						<p className="text-sm vc-muted">
+							Saving creates a new data set altogether.{" "}
+							<span className="font-medium vc-text">
+								&ldquo;{preView.name}&rdquo;
+							</span>{" "}
+							stays as it is, and this visualization moves to the copy with the
+							new column.
+						</p>
+						<label htmlFor={datasetNameId} className="text-sm vc-muted">
+							Data set name
+						</label>
+						<Input
+							id={datasetNameId}
+							value={datasetName}
+							onChange={(e) => setDatasetName(e.target.value)}
+						/>
+						{collides && (
+							<div className="rounded-sm border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+								A data set named &ldquo;{datasetName.trim()}&rdquo; already
+								exists. This will be saved as a separate data set with the same
+								name.
+							</div>
+						)}
+					</div>
+				) : (
+					<p className="text-sm vc-muted">
+						Saving adds a new version of this data set with the{" "}
+						{existing ? "recomputed" : "new"} column; the version list takes
+						you back.
+					</p>
+				)}
+				{submitError && (
+					<p
+						role="alert"
+						className="rounded-sm bg-red-50 px-2 py-1 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300"
+					>
+						{submitError}
+					</p>
+				)}
 			</div>
 
 			<div className="mt-4 flex flex-shrink-0 items-center justify-between gap-2 border-t border-stone-200 pt-3 dark:border-stone-700">
@@ -1008,7 +1088,7 @@ const DerivedVariableEditor = ({
 					<Button compact onClick={onClose}>
 						Cancel
 					</Button>
-					<Button compact disabled={saveDisabled} onClick={onSave}>
+					<Button compact disabled={saveDisabled} onClick={() => void onSave()}>
 						Save
 					</Button>
 				</div>
@@ -1019,18 +1099,18 @@ const DerivedVariableEditor = ({
 				title="Delete derived variable"
 				message={
 					<>
-						Delete <strong>{existing?.name}</strong>? Anything mapped to it
-						will show no data until you map something else.
+						Delete <strong>{existing?.name}</strong>?{" "}
+						{target?.kind === "materialized"
+							? "Its column leaves the data in a new version. "
+							: ""}
+						Anything mapped to it will show no data until you map something
+						else.
 					</>
 				}
 				confirmLabel="Delete"
 				destructive
 				onCancel={() => setConfirmingDelete(false)}
-				onConfirm={() => {
-					if (existing) removeVariable(existing.id)
-					setConfirmingDelete(false)
-					onClose()
-				}}
+				onConfirm={() => void onDelete()}
 			/>
 		</Modal>
 	)

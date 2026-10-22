@@ -31,6 +31,7 @@ const renderCard = (
 		<AccessibilityCheckCard
 			findings={findings}
 			level="AA"
+			algorithm="wcag2"
 			onLevelChange={noop}
 			onRecheck={noop}
 			onHighlight={noop}
@@ -75,6 +76,21 @@ describe("AccessibilityCheckCard", () => {
 		).toBeTruthy()
 	})
 
+	it("names the levels after the contrast model", () => {
+		renderCard([finding("b", "fail-aaa", "Strict only")], { algorithm: "apca" })
+		expect(screen.getByText("APCA")).toBeTruthy()
+		expect(screen.getByLabelText("Lc 60")).toBeTruthy()
+		expect(screen.getByLabelText("Lc 75")).toBeTruthy()
+		expect(screen.getByRole("heading", { level: 3 }).textContent).toBe(
+			"Fails at Lc 75 only (1)"
+		)
+	})
+
+	it("shows the empty state for the chosen level under APCA", () => {
+		renderCard([], { algorithm: "apca", level: "AAA" })
+		expect(screen.getByText("No accessibility issues found at Lc 75.")).toBeTruthy()
+	})
+
 	it("minimizes to its heading bar with an aria-expanded toggle", () => {
 		const onToggleCollapsed = vi.fn()
 		const findings = [finding("a", "fail", "Low contrast")]
@@ -88,6 +104,7 @@ describe("AccessibilityCheckCard", () => {
 			<AccessibilityCheckCard
 				findings={findings}
 				level="AA"
+				algorithm="wcag2"
 				onLevelChange={noop}
 				onRecheck={noop}
 				onHighlight={noop}

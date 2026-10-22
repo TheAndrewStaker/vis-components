@@ -5,16 +5,19 @@ import {
 	splitDerivedVariablesAroundReshape,
 	type DerivedReshapeStages,
 } from "../lib/derivedReshapeStages"
-import { applyDerivedVariablesToView } from "../lib/derivedVariables"
-import { applyDollarConversionToView } from "../lib/dollarCells"
-import { applyPercentConversionToView } from "../lib/percentCells"
+import {
+	applyDerivedVariablesToView,
+	type DerivedVariable,
+} from "../lib/derivedVariables"
+import { applyCellConversions } from "../lib/materializeTransforms"
 import { applyReshapeToView } from "../lib/reshape"
 import {
 	resolveDatasetView,
 	resolveDatasetViewFromMeta,
 	resolveVersionIdFromMeta,
 } from "../lib/resolveDatasetVersion"
-import type { DatasetView, FieldType } from "../lib/types"
+import type { DatasetView } from "../lib/types"
+import { derivedVariablesOfVersion } from "../lib/versionTransforms"
 
 import {
 	currentDatasetIdAtom,
@@ -33,11 +36,13 @@ import {
 } from "./atoms"
 
 /** The currently-bound dataset resolved to a flat DatasetView at the latest
- * version (or the preview version, when one is pinned), BEFORE the
- * wide→long reshape. Only reshape-adjacent code should read this — the
- * Reshape panel needs the wide column list, and the upload/version flows
- * compare against the raw `Dataset` directly. Everything else wants
- * {@link currentDatasetViewAtom}. */
+ * version (or the preview version, when one is pinned), BEFORE any live
+ * per-visual transform: the version's stored rows as they are. The Edit
+ * dialog, the Reshape panel and the save paths that make new versions read
+ * this (a change is always made from what is STORED); everything that
+ * draws wants {@link currentDatasetViewAtom}. For a visual made since
+ * reshapes and derived variables became data versions the two are the same
+ * table (up to the cell conversions). */
 export const currentRawDatasetViewAtom = atom(
 	(get): DatasetView | undefined => {
 		const datasetId = get(currentDatasetIdAtom)
@@ -63,10 +68,38 @@ export const currentRawDatasetViewAtom = atom(
 	}
 )
 
+const NO_MATERIALIZED: ReadonlyMap<string, DerivedVariable> = new Map()
+
+/** The derived variables behind the current version's columns — the ones
+ * saved as data versions (`lib/versionTransforms.ts`), by column name,
+ * restricted to the columns the version still has. The tray's ƒ marker and
+ * the Fields panel's ƒ pill reopen these in the editor; the live per-visual
+ * definitions of older visuals (`currentDerivedVariablesAtom`) are separate. */
+export const materializedDerivedAtom = atom(
+	(get): ReadonlyMap<string, DerivedVariable> => {
+		const datasetId = get(currentDatasetIdAtom)
+		const view = get(currentRawDatasetViewAtom)
+		if (!datasetId || !view) return NO_MATERIALIZED
+		const meta = get(datasetIndexAtom)[datasetId]
+		if (!meta) return NO_MATERIALIZED
+		const all = derivedVariablesOfVersion(meta.versions, view.versionId)
+		if (all.size === 0) return NO_MATERIALIZED
+		// In column order, so a list built from this reads like the table.
+		const out = new Map<string, DerivedVariable>()
+		for (const f of view.fields) {
+			const v = all.get(f.name)
+			if (v) out.set(f.name, v)
+		}
+		return out.size === 0 ? NO_MATERIALIZED : out
+	}
+)
+
 /** Which derived variables run before the melt (the ones the reshape uses)
  * and which after — see `derivedReshapeStages.ts`. Read by the Reshape
  * panel (its column lists) and the derived-variable editor (which table a
- * variable evaluates against). */
+ * variable evaluates against). Both are the LIVE, per-visual configs of
+ * visuals saved before reshapes and derived variables became data versions;
+ * a visual made since has nothing here. */
 export const derivedReshapeStagesAtom = atom(
 	(get): DerivedReshapeStages =>
 		splitDerivedVariablesAroundReshape(
@@ -75,15 +108,6 @@ export const derivedReshapeStagesAtom = atom(
 			get(currentReshapeConfigAtom)
 		)
 )
-
-const applyCellConversions = (
-	view: DatasetView | undefined,
-	overrides: Record<string, FieldType>
-): DatasetView | undefined =>
-	applyDollarConversionToView(
-		applyPercentConversionToView(view, overrides),
-		overrides
-	)
 
 /** The wide table with the cell conversions applied and nothing else: what
  * a before-melt derived variable evaluates against. Exported for the

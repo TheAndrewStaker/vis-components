@@ -9,6 +9,7 @@ import {
 } from "../../store/atoms"
 import {
 	currentRawDatasetViewAtom,
+	materializedDerivedAtom,
 	reshapeAppliedAtom,
 	useCurrentDatasetView,
 } from "../../store/useCurrentDatasetView"
@@ -92,18 +93,18 @@ export const DataTable = () => {
 	const dataset = useCurrentDatasetView()
 	const setDerivedEditor = useSetAtom(derivedVariableEditorAtom)
 	// View column name → derived-variable id, so the header ƒ marker can
-	// reopen that variable in the editor popup.
+	// reopen that variable in the editor popup: the columns data versions
+	// made, plus an older visual's live definitions.
 	const derivedConfig = useAtomValue(currentDerivedVariablesAtom)
-	const derivedIdByName = useMemo(
-		() =>
-			new Map(
-				derivedConfig.variables.map((v, i) => [
-					effectiveDerivedName(v, i),
-					v.id,
-				])
-			),
-		[derivedConfig]
-	)
+	const materialized = useAtomValue(materializedDerivedAtom)
+	const derivedIdByName = useMemo(() => {
+		const byName = new Map(
+			derivedConfig.variables.map((v, i) => [effectiveDerivedName(v, i), v.id])
+		)
+		for (const [name, v] of materialized)
+			if (!byName.has(name)) byName.set(name, v.id)
+		return byName
+	}, [derivedConfig, materialized])
 	const [sort, setSort] = useState<SortState>(null)
 	// Cells changed by hand since the last import (the tray's Edit dialog),
 	// keyed by RAW row index. The view's rows map 1:1 onto the raw rows

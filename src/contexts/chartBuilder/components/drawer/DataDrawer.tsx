@@ -200,10 +200,10 @@ export const DataDrawer = () => {
 					{dataset && (
 						<button
 							type="button"
-							title="Reshape wide data into long format (options open under Data in the left menu)"
-							// Toggles only the options MENU — an applied reshape stays
-							// applied with the menu closed (uncheck its Combine columns
-							// to undo it).
+							title="Reshape wide data into long format, saved as a new data version (options open under Data in the left menu)"
+							// Toggles only the options MENU. An older visual's live reshape
+							// stays applied with the menu closed; a reshape saved as a
+							// version is undone from the version list.
 							onClick={() => {
 								const opening = !reshapeOpen
 								setReshapeOpen(opening)
@@ -228,7 +228,7 @@ export const DataDrawer = () => {
 					{dataset && (
 						<button
 							type="button"
-							title="Edit the data by hand (saves as a new data set)"
+							title="Edit the data by hand (saved as a new data version)"
 							onClick={() => setEditOpen(true)}
 							className="text-sm transition-colors hover:text-stone-900 pointer-coarse:px-2 pointer-coarse:py-1.5 dark:hover:text-white vc-muted"
 						>

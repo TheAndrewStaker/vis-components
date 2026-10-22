@@ -1,82 +1,144 @@
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
+import { useMemo, useState } from "react"
 import { Button } from "../../../../components/ui/Button"
 import { Checkbox } from "../../../../components/ui/Checkbox"
 import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
+import { Input } from "../../../../components/ui/Input"
+import { splitDerivedVariablesAroundReshape } from "../../lib/derivedReshapeStages"
+import { bakeTransforms } from "../../lib/materializeTransforms"
+import { nameCollides } from "../../lib/nameUniqueness"
 import {
 	reshapeApplies,
 	reshapeIssues,
 	type ReshapeConfig,
 } from "../../lib/reshape"
-import type { Field } from "../../lib/types"
+import type { DatasetView, Field } from "../../lib/types"
 import {
+	currentDatasetIdAtom,
+	currentDerivedVariablesAtom,
+	currentFieldOverridesAtom,
 	currentReshapeConfigAtom,
+	datasetIndexAtom,
 	derivedVariableEditorAtom,
 	reshapePanelOpenAtom,
 } from "../../store/atoms"
-import {
-	currentDatasetViewAtom,
-	currentRawDatasetViewAtom,
-	derivedReshapeStagesAtom,
-	preReshapeDatasetViewAtom,
-} from "../../store/useCurrentDatasetView"
-import { Input } from "../../../../components/ui/Input"
+import { saveModeFor, suggestedCopyName } from "../../store/commitDatasetVersion"
+import { currentRawDatasetViewAtom } from "../../store/useCurrentDatasetView"
+import { useApplyReshape } from "../../store/useMaterializeVersion"
 
-/** Wide→long reshape options under Data, shown/hidden by the data tray's
- * "Reshape" button and the "Save and close" button below — closing the menu
- * never un-applies the reshape; unchecking every Combine column is what
- * restores the wide table. The checkboxes list the RAW (wide) columns plus
- * the derived variables that can be computed from them (ƒ-marked, after the
- * data columns like the tray) — everything else in the editor sees the
- * reshaped view — and apply live: the tray table and the chart re-render
- * as columns are checked. Checking a derived variable is what makes it
- * compute BEFORE the melt (see derivedReshapeStages.ts); nothing else
- * changes for it.
- * Half-configured states (no Combine column yet, name collisions) simply
- * pass the wide data through, so the panel can be explored without blanking
- * the chart; blanked name boxes fall back to the "category" / "value"
- * defaults shown as placeholders. */
+/** Wide→long reshape options under Data, shown by the data tray's "Reshape"
+ * button. The checkboxes are a DRAFT: nothing changes until "Apply reshape",
+ * which melts the version shown and saves the long table as a NEW DATA
+ * VERSION (`store/useMaterializeVersion.ts`) — the first change to imported
+ * data forks a working copy, a change to a working copy appends a version —
+ * then closes the menu. The stored wide table is never rewritten; the
+ * version list takes you back to it. The lists hold the columns of the
+ * version shown plus, for a visual saved before reshapes became versions,
+ * the live derived variables that can be computed from them (ƒ-marked,
+ * after the data columns like the tray; such a visual's live reshape seeds
+ * the draft, and applying folds it all into the version).
+ * Half-configured drafts (no Combine column yet, name collisions) just
+ * disable Apply, with the reason shown; blanked name boxes fall back to the
+ * "category" / "value" defaults shown as placeholders. */
 export const ReshapePanel = () => {
-	const [open, setOpen] = useAtom(reshapePanelOpenAtom)
-	const [config, setConfig] = useAtom(currentReshapeConfigAtom)
+	const open = useAtomValue(reshapePanelOpenAtom)
 	const raw = useAtomValue(currentRawDatasetViewAtom)
-	const stages = useAtomValue(derivedReshapeStagesAtom)
-	const wide = useAtomValue(preReshapeDatasetViewAtom)
-	const reshaped = useAtomValue(currentDatasetViewAtom)
-	const setDerivedEditor = useSetAtom(derivedVariableEditorAtom)
-	if (!open || !raw || !wide) return null
+	if (!open || !raw) return null
+	// Mounted only while the menu is open, and keyed by what it reshapes, so
+	// every opening starts a fresh draft from the stored state.
+	return <ReshapeForm key={`${raw.id}:${raw.versionId}`} raw={raw} />
+}
 
-	// Only the names matter to the reshape checks; the type is a stand-in.
-	const fields: Field[] = [
-		...raw.fields,
-		...stages.candidates.map(
-			(c): Field => ({ name: c.name, inferredType: "categorical", derived: true })
-		),
-	]
+const ReshapeForm = ({ raw }: { raw: DatasetView }) => {
+	const setOpen = useSetAtom(reshapePanelOpenAtom)
+	const legacy = useAtomValue(currentReshapeConfigAtom)
+	const legacyDerived = useAtomValue(currentDerivedVariablesAtom)
+	const overrides = useAtomValue(currentFieldOverridesAtom)
+	const datasetId = useAtomValue(currentDatasetIdAtom)
+	const datasetIndex = useAtomValue(datasetIndexAtom)
+	const setDerivedEditor = useSetAtom(derivedVariableEditorAtom)
+	const applyReshape = useApplyReshape()
+	// The draft: seeded from the live config an older visual still carries
+	// (so its reshape can be saved as it stands), the defaults otherwise.
+	const [config, setConfig] = useState<ReshapeConfig>(legacy)
+	const meta = datasetId ? datasetIndex[datasetId] : undefined
+	const mode = meta ? saveModeFor(meta) : "fork"
+	const [name, setName] = useState(() =>
+		mode === "fork" ? suggestedCopyName(raw.name, "reshaped") : raw.name
+	)
+	const [busy, setBusy] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+
+	// Which live derived variables the draft could list and would compute
+	// before the melt — see derivedReshapeStages.ts. Empty for a visual
+	// made since derived variables became data versions.
+	const stages = useMemo(
+		() => splitDerivedVariablesAroundReshape(raw.fields, legacyDerived, config),
+		[raw, legacyDerived, config]
+	)
+	// The columns the lists offer (only the names matter to the reshape
+	// checks; the type is a stand-in), the draft's naming issues, and what
+	// Apply would save — the counts line reads it out. One memo, so the melt
+	// reruns on a draft change, not on every keystroke in the name box.
+	const { fields, issues, applies, baked } = useMemo(() => {
+		const all: Field[] = [
+			...raw.fields,
+			...stages.candidates.map(
+				(c): Field => ({ name: c.name, inferredType: "categorical", derived: true })
+			),
+		]
+		const ok = reshapeApplies(all, config)
+		return {
+			fields: all,
+			issues: reshapeIssues(all, config),
+			applies: ok,
+			baked: ok ? bakeTransforms(raw, overrides, config, legacyDerived) : null,
+		}
+	}, [raw, stages, config, overrides, legacyDerived])
 	const derivedIdByName = new Map(stages.candidates.map((c) => [c.name, c.id]))
 	const idSet = new Set(config.idFields)
 	const combineCandidates = fields.filter((f) => !idSet.has(f.name))
-	const issues = reshapeIssues(fields, config)
-	const applies = reshapeApplies(fields, config)
+	// Same-named data sets are allowed (the id is the identity); a collision
+	// only warns. Appending keeps the data set, so its own name doesn't count.
+	const collides = nameCollides(
+		name,
+		Object.values(datasetIndex),
+		mode === "append" ? (datasetId ?? undefined) : undefined
+	)
+	const canApply = applies && !busy && name.trim() !== ""
 
-	const toggleId = (name: string, on: boolean) =>
+	const toggleId = (fieldName: string, on: boolean) =>
 		setConfig((prev: ReshapeConfig) => ({
 			...prev,
 			idFields: on
-				? [...prev.idFields, name]
-				: prev.idFields.filter((n) => n !== name),
+				? [...prev.idFields, fieldName]
+				: prev.idFields.filter((n) => n !== fieldName),
 			// A column can't be both kept and combined — checking it as an ID
 			// column withdraws it from the Combine list.
 			meltFields: on
-				? prev.meltFields.filter((n) => n !== name)
+				? prev.meltFields.filter((n) => n !== fieldName)
 				: prev.meltFields,
 		}))
-	const toggleMelt = (name: string, on: boolean) =>
+	const toggleMelt = (fieldName: string, on: boolean) =>
 		setConfig((prev: ReshapeConfig) => ({
 			...prev,
 			meltFields: on
-				? [...prev.meltFields, name]
-				: prev.meltFields.filter((n) => n !== name),
+				? [...prev.meltFields, fieldName]
+				: prev.meltFields.filter((n) => n !== fieldName),
 		}))
+
+	const onApply = async () => {
+		if (!canApply) return
+		setBusy(true)
+		setError(null)
+		const result = await applyReshape(config, name)
+		setBusy(false)
+		if (!result.ok) {
+			setError(result.error)
+			return
+		}
+		setOpen(false)
+	}
 
 	/** The tray header's italic ƒ, as a button that reopens the variable's
 	 * editor — a derived variable under Combine has no column of its own
@@ -119,8 +181,9 @@ export const ReshapePanel = () => {
 			<CollapsibleSubsection title="Reshape (wide → long)" defaultOpen>
 				<p className="vc-help">
 					Combine several columns into one category + value pair of columns
-					(long format). The uploaded data is never changed — uncheck every
-					Combine column to get the original table back.
+					(long format). The reshaped table is saved as a new data version;
+					the imported data is never changed, and the version list takes you
+					back to the wide table.
 				</p>
 				<div className="vc-divider-group">
 					<span className="vc-group-header">ID columns</span>
@@ -159,9 +222,7 @@ export const ReshapePanel = () => {
 					)}
 				</div>
 				<label className="flex flex-col gap-1 text-sm">
-					<span className="vc-muted">
-						Combined variable name
-					</span>
+					<span className="vc-muted">Combined variable name</span>
 					<Input
 						type="text"
 						className="w-full"
@@ -176,9 +237,7 @@ export const ReshapePanel = () => {
 					/>
 				</label>
 				<label className="flex flex-col gap-1 text-sm">
-					<span className="vc-muted">
-						Value variable name
-					</span>
+					<span className="vc-muted">Value variable name</span>
 					<Input
 						type="text"
 						className="w-full"
@@ -200,18 +259,65 @@ export const ReshapePanel = () => {
 						{issue}
 					</p>
 				))}
-				{applies && reshaped && (
+				{baked && (
 					<p className="vc-help">
-						{wide.rows.length} rows × {wide.fields.length} columns →{" "}
-						{reshaped.rows.length} rows × {reshaped.fields.length} columns.
+						{baked.wide.rows.length} rows × {baked.wide.fields.length} columns
+						→ {baked.rows.length} rows × {baked.fields.length} columns.
 					</p>
 				)}
-				{/* Same as re-clicking the tray's Reshape button: hides this menu
-				 *  and nothing else — the reshape (auto-saved like every other
-				 *  option) stays applied. */}
-				<Button compact onClick={() => setOpen(false)} className="w-full">
-					Save and close
-				</Button>
+				{mode === "fork" ? (
+					<>
+						<p className="vc-help">
+							Reshaping creates a new data set altogether.{" "}
+							<span className="font-medium vc-text">&ldquo;{raw.name}&rdquo;</span>{" "}
+							stays as it is, and this visualization moves to the reshaped
+							copy.
+						</p>
+						<label className="flex flex-col gap-1 text-sm">
+							<span className="vc-muted">Data set name</span>
+							<Input
+								type="text"
+								className="w-full"
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+							/>
+						</label>
+						{collides && (
+							<p className="rounded-sm border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+								A data set named &ldquo;{name.trim()}&rdquo; already exists.
+								This will be saved as a separate data set with the same name.
+							</p>
+						)}
+					</>
+				) : (
+					<p className="vc-help">
+						Reshaping adds a new version to this data set; the versions before
+						it keep the wide table.
+					</p>
+				)}
+				{error && (
+					<p
+						role="alert"
+						className="rounded-sm bg-red-50 px-2 py-1 text-xs text-red-800 dark:bg-red-900/20 dark:text-red-300"
+					>
+						{error}
+					</p>
+				)}
+				<div className="flex gap-2">
+					<Button
+						compact
+						onClick={() => void onApply()}
+						disabled={!canApply}
+						className="flex-1"
+					>
+						Apply reshape
+					</Button>
+					{/* Same as re-clicking the tray's Reshape button: hides this menu
+					 *  and drops the draft. */}
+					<Button compact onClick={() => setOpen(false)}>
+						Cancel
+					</Button>
+				</div>
 			</CollapsibleSubsection>
 		</div>
 	)

@@ -1,6 +1,7 @@
 import { createRoute } from "@tanstack/react-router"
 
 import { rootRoute } from "../../routes/router"
+import { AccessibilityPage } from "./components/AccessibilityPage"
 import { FontsPage } from "./components/FontsPage"
 import { SettingsLayout } from "./components/SettingsLayout"
 import { SharingPage } from "./components/SharingPage"
@@ -51,6 +52,12 @@ export const settingsFontsRoute = createRoute({
 	getParentRoute: () => settingsRoute,
 	path: "/fonts",
 	component: FontsPage,
+})
+
+export const settingsAccessibilityRoute = createRoute({
+	getParentRoute: () => settingsRoute,
+	path: "/accessibility",
+	component: AccessibilityPage,
 })
 
 // Default: /settings shows the theme gallery

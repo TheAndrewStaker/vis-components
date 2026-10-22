@@ -1,18 +1,23 @@
 /** Hand edits to a data set (the data tray's Edit dialog).
  *
- *  Editing a value by hand never mutates imported data: the first edit of
- *  an imported data set FORKS it (a new data set whose v1 is a copy of the
- *  version shown and whose v2 is the edit), and later edits of that copy
- *  APPEND versions to it. Every hand-edited version names the version it
- *  was edited from (`DatasetVersion.editedFrom`); the chain ends at an
- *  imported version — the BASE — and the data table outlines every cell
- *  that differs from it. The pieces here are pure:
+ *  Changing the data never mutates imported data: the first change to an
+ *  imported data set — a hand edit, a reshape, a derived variable — FORKS
+ *  it (a new data set whose v1 is a copy of the version shown and whose v2
+ *  is the change), and later changes to that WORKING COPY append versions to
+ *  it (`store/commitDatasetVersion.ts`). Every such version names the
+ *  version it was made from (`DatasetVersion.editedFrom`); a hand-edited
+ *  one records nothing else, a computed one records its `transform`. The
+ *  data table outlines every cell a hand edit changed against the nearest
+ *  version that wasn't one — the BASE: follow `editedFrom` through
+ *  hand-edited versions and stop at an import, a reshape or a derived
+ *  variable. The pieces here are pure:
  *
  *  - {@link planEditedFields}: which columns of the edited text are the
  *    old columns (same or former name), which are renamed, added, dropped.
  *  - {@link alignEditedRows}: which cells of the edited rows differ from
  *    the base rows, tolerant of rows added, removed and re-ordered.
- *  - {@link editBaseVersionId}: the base of a version's edit chain. */
+ *  - {@link editBaseVersionId}: the base of a version's hand-edit chain.
+ *  - {@link isWorkingCopy}: whether a change forks or appends. */
 
 import { typeCompatible } from "./datasetCompat"
 import { renameDatasetField } from "./renameField"
@@ -334,19 +339,21 @@ export const alignEditedRows = (
 	return { cells, changedCellCount, addedRowCount, removedRowCount }
 }
 
-/** The base of `versionId`'s edit chain: follow `editedFrom` to the first
- *  version without it (an imported one). Null when the version is itself
- *  imported — nothing to outline — or can't be resolved. */
+/** The base of `versionId`'s hand-edit chain: follow `editedFrom` through
+ *  hand-edited versions to the first that isn't one — an import, or a
+ *  version a reshape or derived variable made (it has a `transform`).
+ *  Null when the version is itself not a hand edit — nothing to outline —
+ *  or can't be resolved. */
 export const editBaseVersionId = (
 	dataset: Pick<DatasetLike, "versions">,
 	versionId: string
 ): string | null => {
 	const byId = new Map(dataset.versions.map((v) => [v.id, v]))
 	const start = byId.get(versionId)
-	if (!start?.editedFrom) return null
+	if (!start?.editedFrom || start.transform) return null
 	const seen = new Set<string>([versionId])
 	let current = start
-	while (current.editedFrom) {
+	while (current.editedFrom && !current.transform) {
 		const next = byId.get(current.editedFrom)
 		// A dangling or cyclic pointer (a deleted base): the nearest surviving
 		// ancestor is the best base there is.
@@ -357,8 +364,10 @@ export const editBaseVersionId = (
 	return current.id === versionId ? null : current.id
 }
 
-/** True when the data set already holds a hand-edited version — the Edit
- *  dialog then appends a version instead of forking a new data set. */
-export const isHandEditedDataset = (
+/** True when the data set is a WORKING COPY — it already holds a version
+ *  made from another (a hand edit, a reshape, a derived variable). A change
+ *  then appends a version to it; a change to a data set that holds only
+ *  imported versions forks a copy and leaves it untouched. */
+export const isWorkingCopy = (
 	dataset: Pick<DatasetLike, "versions">
 ): boolean => dataset.versions.some((v) => v.editedFrom !== undefined)

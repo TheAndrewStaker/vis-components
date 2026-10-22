@@ -12,7 +12,13 @@
  *  repaired the same way, by loading the body and deriving from it. */
 
 import { datasetContentHash } from "./datasetDedupe"
-import type { Dataset, DatasetMeta, DatasetVersionMeta, Field } from "./types"
+import type {
+	Dataset,
+	DatasetMeta,
+	DatasetVersionMeta,
+	Field,
+	VersionTransform,
+} from "./types"
 
 /** Everything about a data set that can be answered without its rows.
  *
@@ -30,6 +36,8 @@ export type DatasetLike = {
 		createdAt: number
 		note?: string
 		editedFrom?: string
+		transform?: VersionTransform
+		fields?: Field[]
 	}>
 	latestVersionId: string
 	createdAt: number

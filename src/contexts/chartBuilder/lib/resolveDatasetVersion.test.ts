@@ -109,3 +109,63 @@ describe("resolveDatasetView row remapping for renamed fields", () => {
 		expect(resolveDatasetView(d, null)?.rows[0]).toEqual({ other: "x" })
 	})
 })
+
+describe("resolveDatasetView per-version columns and derived markers", () => {
+	it("uses a version's own field list when it carries one", () => {
+		const wide: Field[] = [
+			{ name: "x", inferredType: "quantitative" },
+			{ name: "y", inferredType: "quantitative" },
+		]
+		const d = dataset(
+			[
+				{ name: "k", inferredType: "categorical" },
+				{ name: "v", inferredType: "quantitative" },
+			],
+			[
+				{ ...version("v1", [{ x: "1", y: "2" }]), fields: wide },
+				version("v2", [{ k: "x", v: "1" }]),
+			]
+		)
+		expect(resolveDatasetView(d, "v1")?.fields).toBe(wide)
+		expect(resolveDatasetView(d, "v2")?.fields).toBe(d.fields)
+	})
+
+	it("remaps a renamed field inside a version's own list", () => {
+		const d = dataset(
+			[{ name: "k", inferredType: "categorical" }],
+			[
+				{
+					...version("v1", [{ x: "1" }]),
+					fields: [{ name: "ex", inferredType: "quantitative", sourceNames: ["x"] }],
+				},
+				version("v2", [{ k: "a" }]),
+			]
+		)
+		expect(resolveDatasetView(d, "v1")?.rows[0]?.["ex"]).toBe("1")
+	})
+
+	it("marks the columns a derived-variable version made, and only those", () => {
+		const d = dataset(
+			[
+				{ name: "x", inferredType: "quantitative" },
+				{ name: "double", inferredType: "quantitative" },
+			],
+			[
+				version("v1", [{ x: "1" }]),
+				{
+					...version("v2", [{ x: "1", double: "2" }]),
+					editedFrom: "v1",
+					transform: {
+						added: [{ id: "d", name: "double", kind: "math", math: { formula: "{x} * 2" } }],
+					},
+				},
+			]
+		)
+		const v2 = resolveDatasetView(d, "v2")!
+		expect(v2.fields.map((f) => f.derived ?? false)).toEqual([false, true])
+		// Stored fields are never mutated, and a version with no such column
+		// keeps the dataset's array.
+		expect(d.fields[1]!.derived).toBeUndefined()
+		expect(resolveDatasetView(d, "v1")?.fields).toBe(d.fields)
+	})
+})

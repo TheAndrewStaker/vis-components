@@ -2,15 +2,18 @@ import { describe, expect, it } from "vitest"
 import {
 	colorDistance,
 	compositeOver,
+	apcaContrast,
 	contrastRatio,
 	emptyAccessibilityInput,
 	evaluateAccessibility,
 	findConfusablePairs,
 	isLargeText,
+	isLargeTextApca,
 	isRedGreenRamp,
 	patternDistinguishesLevels,
 	shapeDrawsGlyphs,
 	requiredContrast,
+	requiredContrastApca,
 	simulateCvd,
 	type AccessibilityInput,
 	type TextSample,
@@ -47,6 +50,28 @@ describe("contrastRatio", () => {
 	})
 })
 
+describe("apcaContrast", () => {
+	it("matches the published reference values (apca-w3 0.1.9)", () => {
+		const cases: Array<[string, string, number]> = [
+			["#888", "#fff", 63.056],
+			["#fff", "#888", -68.541],
+			["#000", "#aaa", 58.146],
+			["#aaa", "#000", -56.241],
+			["#123", "#def", 91.668],
+			["#def", "#123", -93.068],
+			["#123", "#444", 8.323],
+			["#444", "#123", -7.527],
+		]
+		for (const [text, bg, lc] of cases) {
+			expect(apcaContrast(text, bg)).toBeCloseTo(lc, 2)
+		}
+	})
+	it("is zero for the same color and for unparseable input", () => {
+		expect(apcaContrast("#abcdef", "#abcdef")).toBe(0)
+		expect(apcaContrast("nope", "#ffffff")).toBe(0)
+	})
+})
+
 describe("compositeOver", () => {
 	it("blends a translucent color onto its background", () => {
 		expect(compositeOver("#000000", 0.5, "#ffffff")).toBe("#808080")
@@ -67,6 +92,21 @@ describe("thresholds", () => {
 		expect(requiredContrast("AA", true)).toBe(3)
 		expect(requiredContrast("AAA", false)).toBe(7)
 		expect(requiredContrast("AAA", true)).toBe(4.5)
+	})
+})
+
+describe("APCA thresholds", () => {
+	it("treats 36px, or 24px bold, as large text", () => {
+		expect(isLargeTextApca(36, false)).toBe(true)
+		expect(isLargeTextApca(35, false)).toBe(false)
+		expect(isLargeTextApca(24, true)).toBe(true)
+		expect(isLargeTextApca(24, false)).toBe(false)
+	})
+	it("asks Lc 60 / 45 at the lower level and Lc 75 / 60 at the stricter one", () => {
+		expect(requiredContrastApca("AA", false)).toBe(60)
+		expect(requiredContrastApca("AA", true)).toBe(45)
+		expect(requiredContrastApca("AAA", false)).toBe(75)
+		expect(requiredContrastApca("AAA", true)).toBe(60)
 	})
 })
 
@@ -121,7 +161,7 @@ describe("isRedGreenRamp", () => {
 
 describe("evaluateAccessibility", () => {
 	it("fails #777 on white at AA, with the ratio in the message", () => {
-		const [f] = evaluateAccessibility(input({ texts: [text()] }), "AA")
+		const [f] = evaluateAccessibility(input({ texts: [text()] }), "AA", "wcag2")
 		expect(f?.rule).toBe("text-contrast")
 		expect(f?.level).toBe("fail")
 		expect(f?.message).toContain("4.4:1")
@@ -130,20 +170,20 @@ describe("evaluateAccessibility", () => {
 	})
 	it("lets large text pass at 3:1", () => {
 		const big = text({ fontSizePx: 24 })
-		expect(evaluateAccessibility(input({ texts: [big] }), "AA")).toEqual([])
+		expect(evaluateAccessibility(input({ texts: [big] }), "AA", "wcag2")).toEqual([])
 	})
 	it("marks AA-passing text that misses AAA as fail-aaa", () => {
 		const t = text({ color: "#595959" }) // 7.0 — passes AAA
 		const u = text({ id: "t2", color: "#666666" }) // 5.7 — AA only
-		const out = evaluateAccessibility(input({ texts: [t, u] }), "AAA")
+		const out = evaluateAccessibility(input({ texts: [t, u] }), "AAA", "wcag2")
 		expect(out).toHaveLength(1)
 		expect(out[0]?.level).toBe("fail-aaa")
-		expect(evaluateAccessibility(input({ texts: [t, u] }), "AA")).toEqual([])
+		expect(evaluateAccessibility(input({ texts: [t, u] }), "AA", "wcag2")).toEqual([])
 	})
 	it("composites the text and translucent layers before measuring", () => {
 		// Black text at 30% on white reads as #b3b3b3 — 2.07:1, shown floored so a near-miss never reads as a pass.
 		const faint = text({ color: "#000000", alpha: 0.3 })
-		expect(evaluateAccessibility(input({ texts: [faint] }), "AA")[0]?.message).toContain("2.0:1")
+		expect(evaluateAccessibility(input({ texts: [faint] }), "AA", "wcag2")[0]?.message).toContain("2.0:1")
 		// White text on a 50% black layer over white: #808080 bg → 3.9:1.
 		const onLayer = text({
 			color: "#ffffff",
@@ -152,12 +192,12 @@ describe("evaluateAccessibility", () => {
 				{ color: "#ffffff", alpha: 1, label: "the chart background" },
 			],
 		})
-		const [f] = evaluateAccessibility(input({ texts: [onLayer] }), "AA")
+		const [f] = evaluateAccessibility(input({ texts: [onLayer] }), "AA", "wcag2")
 		expect(f?.message).toContain("against its bar")
 	})
 	it("groups identical failures into one finding with every target", () => {
 		const texts = [text({ id: "a", role: "tick label" }), text({ id: "b", role: "tick label" })]
-		const out = evaluateAccessibility(input({ texts }), "AA")
+		const out = evaluateAccessibility(input({ texts }), "AA", "wcag2")
 		expect(out).toHaveLength(1)
 		expect(out[0]?.message).toMatch(/^2 tick labels are as low as 4\.4:1/)
 		expect(out[0]?.targets.map((t) => t.id)).toEqual(["a", "b"])
@@ -168,19 +208,19 @@ describe("evaluateAccessibility", () => {
 			text({ id: "b", text: "Worst", color: "#bbbbbb" }),
 			text({ id: "c", text: "🐶", color: "#eeeeee" }),
 		]
-		const [f, ...rest] = evaluateAccessibility(input({ texts }), "AA")
+		const [f, ...rest] = evaluateAccessibility(input({ texts }), "AA", "wcag2")
 		expect(rest).toEqual([])
 		expect(f?.message).toContain("“Worst”")
 		expect(f?.targets.map((t) => t.id)).toEqual(["b", "a"])
 	})
 	it("skips text whose background couldn't be resolved", () => {
-		expect(evaluateAccessibility(input({ texts: [text({ background: [] })] }), "AA")).toEqual([])
+		expect(evaluateAccessibility(input({ texts: [text({ background: [] })] }), "AA", "wcag2")).toEqual([])
 	})
 	it("flags small text in points: advisory under 9pt, fail under 7pt", () => {
 		const black = { color: "#000000" }
 		const eight = text({ ...black, fontSizePx: (8 * 4) / 3 })
 		const six = text({ ...black, id: "t6", fontSizePx: 8 })
-		const out = evaluateAccessibility(input({ texts: [eight, six] }), "AA")
+		const out = evaluateAccessibility(input({ texts: [eight, six] }), "AA", "wcag2")
 		expect(out.map((f) => [f.rule, f.level])).toEqual([
 			["small-text", "fail"],
 			["small-text", "advisory"],
@@ -193,7 +233,8 @@ describe("evaluateAccessibility", () => {
 				tooltipsEnabled: true,
 				texts: [text({ id: "aa", color: "#999999" }), text({ id: "aaa", color: "#666666" })],
 			}),
-			"AAA"
+			"AAA",
+			"wcag2"
 		)
 		expect(out.map((f) => f.level)).toEqual(["fail", "fail-aaa", "advisory"])
 	})
@@ -209,7 +250,7 @@ describe("evaluateAccessibility", () => {
 	})
 
 	it("names the two levels and the vision type for confusable colors", () => {
-		const out = evaluateAccessibility(input({ hue: hue(["#d62728", "#2ca02c"]) }), "AA")
+		const out = evaluateAccessibility(input({ hue: hue(["#d62728", "#2ca02c"]) }), "AA", "wcag2")
 		const f = out.find((x) => x.rule === "palette-distinguishable")
 		expect(f?.message).toContain("“L0”")
 		expect(f?.message).toContain("“L1”")
@@ -218,21 +259,22 @@ describe("evaluateAccessibility", () => {
 	it("skips palette checks for gradient color", () => {
 		const out = evaluateAccessibility(
 			input({ hue: hue(["#d62728", "#2ca02c"], { discrete: false }) }),
-			"AA"
+			"AA",
+			"wcag2"
 		)
 		expect(out.filter((f) => f.rule === "palette-distinguishable")).toEqual([])
 		expect(out.filter((f) => f.rule === "color-only")).toEqual([])
 	})
 	it("lets a strong lightness difference count as a second cue", () => {
 		const rules = (colors: string[]) =>
-			evaluateAccessibility(input({ hue: hue(colors) }), "AA").map((f) => f.rule)
+			evaluateAccessibility(input({ hue: hue(colors) }), "AA", "wcag2").map((f) => f.rule)
 		expect(rules(["#08306b", "#c6dbef"])).not.toContain("color-only")
 		expect(rules(["#1f77b4", "#ff7f0e"])).toContain("color-only")
 	})
 	it("flags color as the only encoding unless something else distinguishes it", () => {
 		const h = hue(["#1f77b4", "#ff7f0e"])
 		expect(
-			evaluateAccessibility(input({ hue: h }), "AA").map((f) => f.rule)
+			evaluateAccessibility(input({ hue: h }), "AA", "wcag2").map((f) => f.rule)
 		).toContain("color-only")
 		for (const k of ["shape", "pattern", "dataLabels", "position"] as const) {
 			const redundantEncoding = {
@@ -243,7 +285,7 @@ describe("evaluateAccessibility", () => {
 				[k]: true,
 			}
 			expect(
-				evaluateAccessibility(input({ hue: h, redundantEncoding }), "AA").map((f) => f.rule)
+				evaluateAccessibility(input({ hue: h, redundantEncoding }), "AA", "wcag2").map((f) => f.rule)
 			).not.toContain("color-only")
 		}
 	})
@@ -252,7 +294,7 @@ describe("evaluateAccessibility", () => {
 			ordered: true,
 			ends: ["#47DDA7", "#DB0000"],
 		})
-		const rules = evaluateAccessibility(input({ hue: h }), "AA").map((f) => f.rule)
+		const rules = evaluateAccessibility(input({ hue: h }), "AA", "wcag2").map((f) => f.rule)
 		expect(rules).toContain("red-green-ramp")
 	})
 	it("flags faint and thin data marks", () => {
@@ -264,15 +306,16 @@ describe("evaluateAccessibility", () => {
 					dataOutlineWidthPx: 0.5,
 				},
 			}),
-			"AA"
+			"AA",
+			"wcag2"
 		)
 		expect(out.map((f) => f.id)).toEqual(["faint-opacity", "thin-lines", "thin-outlines"])
 		expect(out[0]?.message).toContain("30%")
 	})
 	it("flags hover-only values unless data labels show", () => {
-		expect(evaluateAccessibility(input({ tooltipsEnabled: true }), "AA")[0]?.rule).toBe("hover-only")
+		expect(evaluateAccessibility(input({ tooltipsEnabled: true }), "AA", "wcag2")[0]?.rule).toBe("hover-only")
 		expect(
-			evaluateAccessibility(input({ tooltipsEnabled: true, dataLabelsShown: true }), "AA")
+			evaluateAccessibility(input({ tooltipsEnabled: true, dataLabelsShown: true }), "AA", "wcag2")
 		).toEqual([])
 	})
 	it("words missing and deliberately hidden titles differently", () => {
@@ -281,7 +324,8 @@ describe("evaluateAccessibility", () => {
 				axes: { x: "hidden", y: "empty" },
 				legends: [{ field: "Region", title: "hidden" }],
 			}),
-			"AA"
+			"AA",
+			"wcag2"
 		)
 		expect(out.map((f) => f.id)).toEqual(["axis-title-x", "axis-title-y", "legend-title-0"])
 		expect(out[0]?.message).toContain("hidden")
@@ -291,9 +335,49 @@ describe("evaluateAccessibility", () => {
 		expect(
 			evaluateAccessibility(
 				input({ texts: [text({ color: "#000000" })], axes: { x: "shown", y: "shown" } }),
-				"AAA"
+				"AAA",
+				"wcag2"
 			)
 		).toEqual([])
+	})
+})
+
+describe("evaluateAccessibility under APCA", () => {
+	it("fails #999 on white at Lc 60, with the Lc in the message", () => {
+		const [f] = evaluateAccessibility(input({ texts: [text({ color: "#999999" })] }), "AA", "apca")
+		expect(f?.rule).toBe("text-contrast")
+		expect(f?.level).toBe("fail")
+		expect(f?.message).toBe(
+			"The data label “Label” is Lc 54 against the chart background; at least Lc 60 is needed."
+		)
+	})
+	it("passes #888 on white at Lc 60 but lists it as Lc 75-only at the stricter level", () => {
+		const t = text({ color: "#888888" }) // Lc 63
+		expect(evaluateAccessibility(input({ texts: [t] }), "AA", "apca")).toEqual([])
+		const [f] = evaluateAccessibility(input({ texts: [t] }), "AAA", "apca")
+		expect(f?.level).toBe("fail-aaa")
+		expect(f?.message).toContain("at least Lc 75 is needed")
+	})
+	it("uses APCA's own large-text sizes: Lc 45 from 36px, or 24px bold", () => {
+		const faint = { color: "#aaaaaa" } // Lc 45.8
+		const at = (over: Partial<TextSample>, level: "AA" | "AAA") =>
+			evaluateAccessibility(input({ texts: [text({ ...faint, ...over })] }), level, "apca")
+		expect(at({ fontSizePx: 36 }, "AA")).toEqual([])
+		expect(at({ fontSizePx: 24, bold: true }, "AA")).toEqual([])
+		expect(at({ fontSizePx: 24 }, "AA")[0]?.message).toContain("at least Lc 60 is needed.")
+		expect(at({ fontSizePx: 36 }, "AAA")[0]?.message).toContain(
+			"at least Lc 60 is needed for large text."
+		)
+	})
+	it("judges light-on-dark text by the magnitude of its negative Lc", () => {
+		const t = text({
+			color: "#ffffff",
+			background: [{ color: "#808080", alpha: 1, label: "its bar" }],
+		}) // Lc −72
+		expect(evaluateAccessibility(input({ texts: [t] }), "AA", "apca")).toEqual([])
+		expect(evaluateAccessibility(input({ texts: [t] }), "AAA", "apca")[0]?.message).toContain(
+			"is Lc 72 against its bar"
+		)
 	})
 })
 
@@ -350,7 +434,7 @@ describe("rule 9 — description", () => {
 			},
 		}).description
 	const run = (d: AccessibilityInput["description"]) =>
-		evaluateAccessibility(input({ description: d }), "AA").filter(
+		evaluateAccessibility(input({ description: d }), "AA", "wcag2").filter(
 			(f) => f.rule === "description"
 		)
 

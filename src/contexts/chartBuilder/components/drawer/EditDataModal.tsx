@@ -19,6 +19,7 @@ import type { DatasetView } from "../../lib/types"
 import { currentDatasetIdAtom, datasetIndexAtom } from "../../store/atoms"
 import { parsePastedData } from "../../store/useCreateNewDataset"
 import { currentRawDatasetViewAtom } from "../../store/useCurrentDatasetView"
+import { suggestedCopyName } from "../../store/commitDatasetVersion"
 import {
 	editSaveMode,
 	planOptionsFor,
@@ -37,11 +38,12 @@ type Props = {
 
 /** The data tray's Edit dialog: the version shown as a grid of cells the
  *  user changes in place (`EditDataGrid`), saved as hand-edited data. The
- *  first edit of imported data creates a NEW data set (the imported one is
+ *  first change to imported data creates a NEW data set (the imported one is
  *  never touched — other visuals may share it); an edit of a data set that
- *  is already a hand-edited copy adds a version to it. The grid serializes
- *  to the same CSV text the dialog's text box used to hold, so the save
- *  path (`store/useEditDataset.ts`) is unchanged. */
+ *  is already a working copy — edited, reshaped, or given a derived
+ *  variable — adds a version to it. The grid serializes to the same CSV
+ *  text the dialog's text box used to hold, so the save path
+ *  (`store/useEditDataset.ts`) is unchanged. */
 export const EditDataModal = ({ open, onClose }: Props) => (
 	<Modal open={open} onClose={onClose} title="Edit data" widthClass="max-w-5xl">
 		{/* The Modal renders nothing while closed, so the form (and its draft
@@ -49,9 +51,6 @@ export const EditDataModal = ({ open, onClose }: Props) => (
 		<EditDataForm onClose={onClose} />
 	</Modal>
 )
-
-const suggestedName = (name: string) =>
-	/\(edited\)$/.test(name) ? name : `${name} (edited)`
 
 const EditDataForm = ({ onClose }: { onClose: () => void }) => {
 	const view = useAtomValue(currentRawDatasetViewAtom)
@@ -88,7 +87,7 @@ const EditDataBody = ({
 		[history.grid, issue]
 	)
 	const [name, setName] = useState(() =>
-		mode === "fork" ? suggestedName(view.name) : view.name
+		mode === "fork" ? suggestedCopyName(view.name, "edited") : view.name
 	)
 	const [submitError, setSubmitError] = useState<string | null>(null)
 	const [busy, setBusy] = useState(false)
@@ -146,7 +145,7 @@ const EditDataBody = ({
 					</>
 				) : (
 					<>
-						This data set is already a hand-edited copy; saving adds a new version
+						This data set is already a working copy; saving adds a new version
 						with your changes.
 					</>
 				)}{" "}

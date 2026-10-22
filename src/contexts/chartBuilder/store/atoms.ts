@@ -8,6 +8,7 @@ import {
 } from "../lib/annotationsConfig"
 import { type CaptionConfig } from "../lib/captionConfig"
 import { type DataTableConfig } from "../lib/dataTableConfig"
+import { type ContrastAlgorithm } from "../lib/accessibilityCheck"
 import { type AccessibilityConfig } from "../lib/accessibilityConfig"
 import { type CanvasZoom } from "../lib/canvasZoom"
 import {
@@ -47,6 +48,7 @@ import {
 	loadDatasets,
 	loadDrawerHeight,
 	loadEmbedInstances,
+	loadContrastAlgorithm,
 	loadExportSizes,
 	loadExportUnit,
 	loadFolders,
@@ -84,11 +86,13 @@ import {
 	saveCurrentVisualId,
 	saveCurrentVisualName,
 	saveDrawerHeight,
+	saveContrastAlgorithm,
 	saveExportSizes,
 	saveExportUnit,
 	saveLibraryCollapsedFolders,
 	saveEditorSidebarHidden,
 	saveLibraryRailCollapsed,
+	watchContrastAlgorithm,
 	watchLibraryCollapsedFolders,
 	watchLibraryRailCollapsed,
 	saveLibrarySidebarWidth,
@@ -1208,9 +1212,20 @@ export const blackAndWhiteModeAtom = atom<boolean>(false)
  * preview — NOT persisted, never saved with a visual. */
 export const accessibilityCheckAtom = atom<boolean>(false)
 
-/** The WCAG conformance level the accessibility check measures text
- * contrast against. Transient, resets to AA with the page. */
+/** Which of the contrast model's two levels the accessibility check measures
+ * text against: AA / AAA under WCAG 2, Lc 60 / Lc 75 under APCA. Transient,
+ * resets to the lower level with the page. */
 export const accessibilityCheckLevelAtom = atom<"AA" | "AAA">("AA")
+
+/** The contrast model the accessibility check measures text with — the
+ * Settings → Accessibility preference. Device-local (never saved with a
+ * visual), and kept in step across tabs so an open editor picks up a change
+ * made on the settings page in another one. */
+export const contrastAlgorithmAtom = persistedAtom<ContrastAlgorithm>(
+	loadContrastAlgorithm,
+	saveContrastAlgorithm,
+	watchContrastAlgorithm
+)
 
 /** How many findings the open accessibility check currently lists — drives
  * the header button's count badge. Written only by AccessibilityCheckPanel;

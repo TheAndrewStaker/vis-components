@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from "@testing-library/react"
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import { buildDataset as buildDatasetFixture } from "../../../../testSupport/fixtures"
 import { installInMemoryLocalStorage } from "../../../../testSupport/localStorageShim"
@@ -52,34 +52,59 @@ const buildDataset = (rows = ROWS): Dataset =>
 		rows,
 	})
 
+/** A working copy whose v2 added `doubled` as a data version. */
+const withStoredColumn = (): Dataset =>
+	buildDatasetFixture({
+		id: ID,
+		name: "derived (edited)",
+		fields: [...FIELDS, { name: "doubled", inferredType: "quantitative" }],
+		versions: [
+			{ id: "v1", filename: "derived.csv", rows: ROWS, createdAt: 0, fields: FIELDS },
+			{
+				id: "v2",
+				filename: "Derived data",
+				rows: ROWS.map((r) => ({ ...r, doubled: String(Number(r.sales) * 2) })),
+				createdAt: 1,
+				editedFrom: "v1",
+				transform: {
+					added: [{ id: "dvr-stored", name: "doubled", kind: "math", math: { formula: "{sales} * 2" } }],
+				},
+			},
+		],
+	})
+
 const mount = (
 	editor: null | { mode: "new" } | { mode: "edit"; id: string },
 	config: DerivedVariablesConfig = DEFAULT_DERIVED_VARIABLES_CONFIG,
-	rows = ROWS
+	rows = ROWS,
+	dataset: Dataset = buildDataset(rows)
 ) => {
 	// Atom storage effects re-load from localStorage on init and would reset a
 	// snapshot-only seed to defaults, so the fixture goes into BOTH.
 	const store = installInMemoryLocalStorage()
 	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => store.set(k, JSON.stringify(v))
-	set("vis-components:datasets", { [ID]: buildDataset(rows) })
+	set("vis-components:datasets", { [ID]: dataset })
 	set("vis-components:currentDatasetId", ID)
 	set("vis-components:previewVersionId", null)
 	set("vis-components:currentDerivedVariables", { _v: 1, data: config })
 	/* eslint-enable @vc/use-wrapped-json-functions */
+	let snapshot: TestStore | undefined
 	const init = (snap: TestStore) => {
-		snap.set(loadedDatasetsAtom, { [ID]: buildDataset(rows) })
+		snapshot = snap
+		snap.set(loadedDatasetsAtom, { [ID]: dataset })
 		snap.set(currentDatasetIdAtom, ID)
 		snap.set(previewVersionIdAtom, null)
 		snap.set(currentDerivedVariablesAtom, config)
 		// Transient editor target — not persisted, so snapshot-only.
 		snap.set(derivedVariableEditorAtom, editor)
 	}
-	return render(
+	const utils = render(
 		<TestProvider initializeState={init}>
 			<DerivedVariableModal />
 		</TestProvider>
 	)
+	return { ...utils, store: () => snapshot! }
 }
 
 describe("DerivedVariableModal", () => {
@@ -444,6 +469,66 @@ describe("DerivedVariableModal", () => {
 			(utils.getByLabelText("Rule 2 condition") as HTMLInputElement).value
 		).toBe("{sales} > 5 AND {sales} < 20")
 		expect(utils.queryByLabelText("Rule 2 left side")).toBeNull()
+	})
+
+	it("saves a new variable as a new data set, the column stored and marked derived", async () => {
+		const utils = mount({ mode: "new" })
+		expect(utils.baseElement.textContent).toContain("creates a new data set altogether")
+		const name = utils.getByLabelText("Data set name") as HTMLInputElement
+		expect(name.value).toBe("derived (edited)")
+		fireEvent.change(utils.getByLabelText("Name"), { target: { value: "doubled" } })
+		fireEvent.change(utils.getByPlaceholderText("{Sales} / {Count}"), {
+			target: { value: "{sales} * 2" },
+		})
+		fireEvent.click(utils.getByRole("button", { name: "Save" }))
+
+		const store = utils.store()
+		await waitFor(() => expect(store.get(currentDatasetIdAtom)).not.toBe(ID))
+		const forked = store.get(loadedDatasetsAtom)[store.get(currentDatasetIdAtom)!]!
+		expect(forked.name).toBe("derived (edited)")
+		expect(forked.fields.map((f) => f.name)).toEqual(["region", "sales", "doubled"])
+		const v2 = forked.versions[1]!
+		expect(v2.filename).toBe("Derived data")
+		expect(v2.transform?.added?.[0]).toMatchObject({ name: "doubled", math: { formula: "{sales} * 2" } })
+		expect(v2.rows).toEqual([
+			{ region: "West", sales: "10", doubled: "20" },
+			{ region: "East", sales: "9", doubled: "18" },
+		])
+		// Nothing lands in the live config; the popup closed.
+		expect(store.get(currentDerivedVariablesAtom)).toEqual(DEFAULT_DERIVED_VARIABLES_CONFIG)
+		expect(store.get(derivedVariableEditorAtom)).toBeNull()
+		expect(store.get(loadedDatasetsAtom)[ID]).toEqual(buildDataset())
+	})
+
+	it("edits a stored column: pre-fills from the version that made it and recomputes it as a new version", async () => {
+		const utils = mount(
+			{ mode: "edit", id: "dvr-stored" },
+			DEFAULT_DERIVED_VARIABLES_CONFIG,
+			ROWS,
+			withStoredColumn()
+		)
+		expect(
+			(utils.getByPlaceholderText("{Sales} / {Count}") as HTMLInputElement).value
+		).toBe("{sales} * 2")
+		// The column itself isn't offered as an input.
+		expect(utils.getByRole("group", { name: "Insert variable" }).textContent).toBe(
+			"regionsales"
+		)
+		expect(utils.baseElement.textContent).toContain("adds a new version of this data set")
+		fireEvent.change(utils.getByPlaceholderText("{Sales} / {Count}"), {
+			target: { value: "{sales} * 3" },
+		})
+		fireEvent.click(utils.getByRole("button", { name: "Save" }))
+
+		const store = utils.store()
+		await waitFor(() =>
+			expect(store.get(loadedDatasetsAtom)[ID]!.versions).toHaveLength(3)
+		)
+		const ds = store.get(loadedDatasetsAtom)[ID]!
+		const v3 = ds.versions[2]!
+		expect(v3.transform?.recomputed?.[0]).toMatchObject({ math: { formula: "{sales} * 3" } })
+		expect(v3.rows[0]).toEqual({ region: "West", sales: "10", doubled: "30" })
+		expect(ds.fields.map((f) => f.name)).toEqual(["region", "sales", "doubled"])
 	})
 
 	it("pre-fills when editing an existing variable and offers Delete", () => {

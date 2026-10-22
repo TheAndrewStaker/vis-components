@@ -588,3 +588,60 @@ describe("computeDataLabelOverflow — per-variable bar side (separate variables
 		expect(r.left).toBe(0)
 	})
 })
+
+/** The derived Bar total (`lib/barTotalLabel.ts`) has no column: on bars the
+ *  reserve extends each row with its bar's total and measures that. */
+describe("computeDataLabelOverflow — the derived Bar total", () => {
+	const totalsView = (withColumn: boolean): DatasetView => ({
+		...view([]),
+		fields: [
+			{ name: "cat", inferredType: "categorical" },
+			{ name: "val", inferredType: "quantitative" },
+			{ name: "name", inferredType: "categorical" },
+			...(withColumn
+				? [{ name: "tot", inferredType: "quantitative" as const }]
+				: []),
+		],
+		rows: [
+			{ cat: "a", val: "1000000", name: "x", tot: "3000000" },
+			{ cat: "a", val: "2000000", name: "y", tot: "3000000" },
+			{ cat: "b", val: "1", name: "z", tot: "1" },
+		],
+	})
+
+	it("horizontal stacked bars: a Bar total label reserves as if the totals were a column", () => {
+		// Horizontal bars stacked by name: y = cat, length = val, hue = name.
+		const e = emptyEncodings()
+		e.y = { field: "cat" }
+		e.length = { field: "val" }
+		e.hue = { field: "name" }
+		const dataLabels = labelsOn({ alignment: "left", xOffset: 0 })
+		const derived = computeDataLabelOverflow({
+			...base,
+			dataset: totalsView(false),
+			encodings: e,
+			dataLabels,
+			dataLabelsEncodings: { ...positionEncodings(), value: { field: "Bar total" } },
+		})
+		const column = computeDataLabelOverflow({
+			...base,
+			dataset: totalsView(true),
+			encodings: e,
+			dataLabels,
+			dataLabelsEncodings: { ...positionEncodings(), value: { field: "tot" } },
+		})
+		expect(derived.right).toBeGreaterThan(0)
+		expect(derived).toEqual(column)
+	})
+
+	it("off bars a stored Bar total is no column, so it reserves nothing", () => {
+		const r = computeDataLabelOverflow({
+			...base,
+			dataset: totalsView(false),
+			encodings: scatterEncodings(),
+			dataLabels: labelsOn({ alignment: "left" }),
+			dataLabelsEncodings: { ...positionEncodings(), value: { field: "Bar total" } },
+		})
+		expect(r).toEqual({ left: 0, right: 0 })
+	})
+})

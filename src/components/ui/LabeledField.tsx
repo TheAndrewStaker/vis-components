@@ -59,27 +59,37 @@ export const LabeledField = ({
 	 *  color the caller set via `labelClassName`. */
 	changed?: boolean
 	children: ReactNode
-}) => (
-	<div
-		className={c(
-			inline
-				? "flex items-center gap-2 text-sm"
-				: "flex flex-col gap-1 text-sm",
-			className
-		)}
-	>
-		<label
-			htmlFor={id}
+}) => {
+	// A caller that flattens the field into its own row (`className=
+	// "contents"`) must not get the row layout as well: `contents` and
+	// `flex` both set `display`, and the stylesheet's order — not the class
+	// list's — decides, with `flex` winning. The field then rendered as a
+	// nested flex item of the caller's row, which can't shrink below its
+	// content, so a squeezed row overflowed instead of the hex box giving up
+	// its slack (ColorInput's `min-w-18`).
+	const flattened = className?.split(/\s+/).includes("contents") === true
+	return (
+		<div
 			className={c(
-				inline
-					? "shrink-0 vc-text"
-					: "vc-text",
-				labelClassName,
-				changed && "font-semibold !text-vc-section-header"
+				flattened
+					? "text-sm"
+					: inline
+						? "flex items-center gap-2 text-sm"
+						: "flex flex-col gap-1 text-sm",
+				className
 			)}
 		>
-			{label}
-		</label>
-		{children}
-	</div>
-)
+			<label
+				htmlFor={id}
+				className={c(
+					inline ? "shrink-0 vc-text" : "vc-text",
+					labelClassName,
+					changed && "font-semibold !text-vc-section-header"
+				)}
+			>
+				{label}
+			</label>
+			{children}
+		</div>
+	)
+}

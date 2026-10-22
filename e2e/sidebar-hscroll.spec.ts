@@ -2,11 +2,19 @@ import { expect, test, type Page } from "@playwright/test"
 
 import { seedFixtureScript, type SeedFixture } from "./seed"
 
-/** The editor sidebar holds a fixed content floor (Sidebar's `min-w-80`) and
- *  scrolls horizontally below it, rather than squeezing its control rows.
- *  Before the floor, dragging the sidebar down to its 240px minimum collapsed
- *  the flexible dropdowns from ~172px to ~68px; now they keep their width and
- *  the aside scrolls. */
+/** The editor sidebar column never goes narrower than the width that shows
+ *  every control row in full (SIDEBAR_MIN_WIDTH, the default width): the
+ *  resize handle stops there, and dragging well past it collapses the column
+ *  away instead. Before this, the handle went down to 240px and the aside
+ *  scrolled horizontally, so the trailing control of each row (the palette
+ *  picker, a dropdown's right half) sat out of view and read as missing.
+ *  The floor covers the widest row — an overridden color row, whose "reset"
+ *  link used to be clipped at the aside's edge. The column also grows by the
+ *  gutter the aside reserves for a vertical scrollbar (which otherwise ate
+ *  the slack); sidebar-scrollbar-gutter.spec.ts covers that with the
+ *  scrollbars headless Chrome normally hides. */
+
+import { SIDEBAR_MIN_WIDTH } from "../src/contexts/chartBuilder/lib/storage"
 
 const rows = Array.from({ length: 12 }, (_, i) => ({
 	val: String(i * 3),
@@ -77,24 +85,76 @@ test("sidebar at its default width shows every control row without horizontal sc
 	expect(m.maxRowRight).toBeLessThanOrEqual(m.clientWidth)
 })
 
-test("narrowed sidebar scrolls horizontally instead of squeezing its controls", async ({
+test("dragging the sidebar narrower stops at the floor, with no row cut off", async ({
 	page,
 }) => {
 	await openEditor(page)
 	const wide = await measureSidebar(page)
-	await dragSidebarTo(page, 240) // the drag handle's MIN_WIDTH
-	const narrow = await measureSidebar(page)
+	expect(wide.clientWidth).toBe(SIDEBAR_MIN_WIDTH)
 
-	expect(narrow.clientWidth).toBeLessThan(wide.clientWidth)
-	// Horizontal scroll is available, and covers the widest row in full.
-	expect(narrow.scrollWidth).toBeGreaterThan(narrow.clientWidth)
-	expect(narrow.maxRowRight).toBeLessThanOrEqual(narrow.scrollWidth)
+	// Widen it, then pull it back a little past the floor (inside the
+	// collapse dead zone): it clamps at the floor rather than collapsing.
+	await dragSidebarTo(page, 460)
+	expect((await measureSidebar(page)).clientWidth).toBeGreaterThan(
+		SIDEBAR_MIN_WIDTH
+	)
+	await dragSidebarTo(page, SIDEBAR_MIN_WIDTH - 40)
+	const m = await measureSidebar(page)
+	expect(m.clientWidth).toBe(SIDEBAR_MIN_WIDTH)
+	expect(m.scrollWidth).toBeLessThanOrEqual(m.clientWidth + 1)
+	expect(m.maxRowRight).toBeLessThanOrEqual(m.clientWidth)
+	// Nothing squeezed: every dropdown keeps its full width.
+	expect(m.selectWidths).toEqual(wide.selectWidths)
+})
 
-	// Controls keep (near) their full-width size instead of collapsing. The
-	// flexible dropdowns give up at most the slack between the content floor
-	// and the default width; they used to lose well over half their width.
-	expect(narrow.selectWidths.length).toBe(wide.selectWidths.length)
-	narrow.selectWidths.forEach((w, i) => {
-		expect(w).toBeGreaterThanOrEqual(wide.selectWidths[i]! - 8)
+test("an overridden color row fits at the floor: reset link and picker inside their boxes", async ({
+	page,
+}) => {
+	await openEditor(page)
+	const hex = page.getByLabel("Color for B hex")
+	await hex.fill("#123456")
+	await hex.blur()
+	await page.waitForTimeout(200)
+
+	const m = await page.evaluate(() => {
+		const aside = document.querySelector("aside")!
+		const reset = [...aside.querySelectorAll("button")].find(
+			(b) => b.textContent?.trim() === "reset"
+		)!
+		const row = reset.parentElement!
+		const picker = row.querySelector("button[aria-label^='Pick palette']")!
+		const card = picker.closest(".vc-subsection-card")!
+		return {
+			scrollWidth: aside.scrollWidth,
+			clientWidth: aside.clientWidth,
+			resetRight: reset.getBoundingClientRect().right,
+			asideRight: aside.getBoundingClientRect().right,
+			pickerRight: picker.getBoundingClientRect().right,
+			cardRight: card.getBoundingClientRect().right,
+			hexWidth: row.querySelector("input[type=text]")!.getBoundingClientRect()
+				.width,
+		}
 	})
+	expect(m.scrollWidth).toBeLessThanOrEqual(m.clientWidth + 1)
+	expect(m.resetRight).toBeLessThanOrEqual(m.asideRight)
+	expect(m.pickerRight).toBeLessThanOrEqual(m.cardRight)
+	// Nothing squeezed to make it fit: the hex box keeps its full `w-24`.
+	expect(m.hexWidth).toBe(96)
+})
+
+test("dragging the sidebar well past the floor collapses it; the tab reopens it at the floor", async ({
+	page,
+}) => {
+	await openEditor(page)
+	await dragSidebarTo(page, 160)
+
+	await expect(page.locator("aside")).toHaveCount(0)
+	const showTab = page.getByRole("button", { name: "Show menu" })
+	await expect(showTab).toBeVisible()
+
+	await showTab.click()
+	await page.waitForSelector("aside", { timeout: 8_000 })
+	const m = await measureSidebar(page)
+	expect(m.clientWidth).toBe(SIDEBAR_MIN_WIDTH)
+	expect(m.scrollWidth).toBeLessThanOrEqual(m.clientWidth + 1)
 })

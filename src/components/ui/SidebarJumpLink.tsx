@@ -40,9 +40,10 @@ export const useSidebarJump = () => {
 	)
 }
 
-/** Underlined muted text link (same look as `ResetLink`'s underlined
- *  variant), right-aligned like the "+ Add …" links, that jumps to another
- *  spot in the sidebar. */
+/** Underlined brand-purple text link, right-aligned like the "+ Add …"
+ *  links, that jumps to another spot in the sidebar. Place it LAST in its
+ *  subsection so it reads as "done here? go there" rather than leading the
+ *  controls. */
 export const SidebarJumpLink = ({
 	label,
 	target,
@@ -55,7 +56,7 @@ export const SidebarJumpLink = ({
 		<button
 			type="button"
 			onClick={() => jumpTo(target)}
-			className="vc-muted self-end text-sm underline hover:text-stone-900 dark:hover:text-white"
+			className="text-vc-brand-text self-end text-sm underline hover:opacity-80 dark:text-brand-300"
 		>
 			{label}
 		</button>

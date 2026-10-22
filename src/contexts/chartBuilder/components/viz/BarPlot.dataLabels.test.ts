@@ -2,6 +2,7 @@ import { scaleBand, scaleLinear } from "d3-scale"
 import { describe, expect, it } from "vitest"
 
 import { buildBarAnchors } from "./BarPlot"
+import type { StackModeEntry } from "../../lib/stackMode"
 
 /** Phase-1 evidence test for "data labels not respecting stack/overlay
  *  in Hue". Anchors are pure logic — no React or Jotai — so we can
@@ -565,5 +566,150 @@ describe("buildBarAnchors — per-variable bar placements (separate variables)",
 			(x) => x.key === "A|north"
 		)
 		expect(a?.fieldPlacements).toBeUndefined()
+	})
+})
+
+/** The derived BAR TOTAL (`lib/barTotalLabel.ts`): the sum of the layers in
+ *  a slice's physical bar — its leaf sub-band on its sign side. As the
+ *  single-field Value it is every layer's label; in multi-field mode it
+ *  rides on the slice's row under its name, unless a data set column has
+ *  that name (then the column aggregates like any field). */
+describe("buildBarAnchors — Bar total (the derived label value)", () => {
+	const stackModes: StackModeEntry[] = [{ channel: "hue", mode: "stack" }]
+	const base = {
+		 
+		aggregation: aggregation as any,
+		categoryScale,
+		measureScale,
+		decimals: null,
+		modes: stackModes,
+		valueFieldMapped: true,
+		valueIsBarTotal: true,
+	}
+	const find = (anchors: ReturnType<typeof buildBarAnchors>, key: string) =>
+		anchors.find((a) => a.key === key)
+	const divergingScale = scaleLinear().domain([-100, 100]).range([400, 0])
+
+	it("as the single-field Value, every layer labels its bar's total", () => {
+		const anchors = buildBarAnchors(base)
+		expect(find(anchors, "A|north")?.label).toBe("40")
+		expect(find(anchors, "A|south")?.label).toBe("40")
+		expect(find(anchors, "B|north")?.label).toBe("60")
+		// The raw number rides along for text-color / position rules.
+		expect(find(anchors, "B|south")?.labelValue).toBe(60)
+	})
+
+	it("takes the Value's Label format like any field", () => {
+		const anchors = buildBarAnchors({ ...base, formatSpec: "$,.0f" })
+		expect(find(anchors, "A|north")?.label).toBe("$40")
+	})
+
+	it("each grouped sub-band is its own bar", () => {
+		const grouped = [
+			{
+				category: "A",
+				slices: [
+					{ key: "n|p1", groupValues: { hue: "n", pattern: "p1" }, value: 10 },
+					{ key: "n|p2", groupValues: { hue: "n", pattern: "p2" }, value: 30 },
+					{ key: "s|p1", groupValues: { hue: "s", pattern: "p1" }, value: 5 },
+					{ key: "s|p2", groupValues: { hue: "s", pattern: "p2" }, value: 7 },
+				],
+			},
+		]
+		const modes: StackModeEntry[] = [
+			{ channel: "hue", mode: "group" },
+			{ channel: "pattern", mode: "stack" },
+		]
+		const anchors = buildBarAnchors({
+			...base,
+			 
+			aggregation: { ...aggregation, stacks: grouped } as any,
+			modes,
+		})
+		expect(find(anchors, "A|n|p1")?.label).toBe("40")
+		expect(find(anchors, "A|n|p2")?.label).toBe("40")
+		expect(find(anchors, "A|s|p1")?.label).toBe("12")
+	})
+
+	it("a diverging bar totals each sign side on its own", () => {
+		const diverging = [
+			{
+				category: "A",
+				slices: [
+					{ key: "p1", groupValues: { hue: "p1" }, value: 10 },
+					{ key: "n1", groupValues: { hue: "n1" }, value: -4 },
+					{ key: "p2", groupValues: { hue: "p2" }, value: 30 },
+					{ key: "n2", groupValues: { hue: "n2" }, value: -6 },
+				],
+			},
+		]
+		const anchors = buildBarAnchors({
+			...base,
+			 
+			aggregation: { ...aggregation, stacks: diverging, measureMin: -100 } as any,
+			measureScale: divergingScale,
+		})
+		expect(find(anchors, "A|p1")?.label).toBe("40")
+		expect(find(anchors, "A|p2")?.label).toBe("40")
+		expect(find(anchors, "A|n1")?.label).toBe("-10")
+		expect(find(anchors, "A|n2")?.label).toBe("-10")
+	})
+
+	it("a mirrored bar labels each side's magnitude", () => {
+		const mirrored = [
+			{
+				category: "A",
+				slices: [
+					{ key: "up", groupValues: { hue: "up" }, value: 10 },
+					{ key: "down", groupValues: { hue: "down" }, value: -30 },
+				],
+			},
+		]
+		const anchors = buildBarAnchors({
+			...base,
+			aggregation: {
+				...aggregation,
+				stacks: mirrored,
+				measureMin: -100,
+				mirrored: true,
+				 
+			} as any,
+			measureScale: divergingScale,
+		})
+		expect(find(anchors, "A|up")?.label).toBe("10")
+		expect(find(anchors, "A|down")?.label).toBe("30")
+	})
+
+	it("multi-field: the row carries the bar total under its name; a column of that name aggregates as a field", () => {
+		const rows = [
+			{ cat: "A", val: "10", region: "north", "Bar total": "1" },
+			{ cat: "A", val: "30", region: "south", "Bar total": "2" },
+			{ cat: "B", val: "20", region: "north", "Bar total": "3" },
+			{ cat: "B", val: "40", region: "south", "Bar total": "4" },
+		]
+		const encodings = {
+			x: { field: "cat" },
+			length: { field: "val" },
+			hue: { field: "region" },
+		}
+		const args = {
+			...base,
+			valueIsBarTotal: false,
+			labelFields: ["val", "Bar total"],
+			 
+			encodings: encodings as any,
+			rows,
+		}
+		const derived = buildBarAnchors({ ...args, barTotalField: "Bar total" })
+		expect(find(derived, "A|north")?.row).toEqual({
+			cat: "A",
+			region: "north",
+			val: 10,
+			"Bar total": 40,
+		})
+		expect(find(derived, "B|south")?.row?.["Bar total"]).toBe(60)
+		// The data set has a "Bar total" column: it is a column.
+		const column = buildBarAnchors({ ...args, barTotalField: null })
+		expect(find(column, "A|north")?.row?.["Bar total"]).toBe(1)
 	})
 })

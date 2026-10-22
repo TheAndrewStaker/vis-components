@@ -29,6 +29,11 @@
 
 import { stringifyJsonDangerous } from "../../../lib/json"
 import {
+	CONTRAST_ALGORITHMS,
+	DEFAULT_CONTRAST_ALGORITHM,
+	type ContrastAlgorithm,
+} from "./accessibilityCheck"
+import {
 	DEFAULT_ANNOTATIONS_CONFIG,
 	type AnnotationsConfig,
 } from "./annotationsConfig"
@@ -202,6 +207,7 @@ const KEY_THEME = "vis-components:theme"
 const KEY_THEMES = "vis-components:themes"
 const KEY_USER_FONTS = "vis-components:userFonts"
 const KEY_USER_DEFAULT_THEME_ID = "vis-components:userDefaultThemeId"
+const KEY_CONTRAST_ALGORITHM = "vis-components:contrastAlgorithm"
 const KEY_EXAMPLE_SEED_APPLIED = "vis-components:exampleSeedApplied"
 const KEY_DATASET_CLEANUP_DONE = "vis-components:datasetCleanupDone"
 
@@ -1049,11 +1055,31 @@ export const loadDrawerHeight = (): number =>
 export const saveDrawerHeight = (h: number): void =>
 	safeSet(KEY_DRAWER_HEIGHT, h)
 
-/** 344 = the sidebar content floor (Sidebar's `min-w-80`, 320px) + the
- * aside's `px-2` (16px) + 8px of slack, so a fresh editor opens showing every
- * control row in full rather than with a horizontal scrollbar. */
-export const loadSidebarWidth = (): number =>
-	safeGet<number>(KEY_SIDEBAR_WIDTH, 344)
+/** The sidebar's content floor (px): what its widest canonical row needs,
+ * mirrored by the wrapper's `sm:min-w-95` in Sidebar.tsx. A per-value color
+ * row at full width — label column 96 + hex box 96 + swatch 40 + palette
+ * picker 24 + its "reset" link ~33 + four 8px gaps — is 321, and it sits 28px
+ * in from each side of the wrapper (section `px-3`, then the option panel
+ * and the subsection card at 8px each): 377, rounded up to the spacing
+ * scale. */
+export const SIDEBAR_CONTENT_FLOOR = 380
+
+/** Narrowest the editor's sidebar column goes, and the width a fresh editor
+ * opens at: the content floor + the aside's `px-2` (16px) + 8px of slack, so
+ * every control row shows in full rather than behind a horizontal scrollbar.
+ * A classic vertical scrollbar takes its gutter on top of this — EditorLayout
+ * adds `scrollbarGutter()` when laying the column out, so the stored width is
+ * the same number on machines with overlay and classic scrollbars. The
+ * resize handle stops here and collapses the column instead of going
+ * narrower; a width stored before that clamp existed is raised to it on
+ * load, so nobody keeps a menu that cuts its rows off. */
+export const SIDEBAR_MIN_WIDTH = SIDEBAR_CONTENT_FLOOR + 16 + 8
+export const loadSidebarWidth = (): number => {
+	const stored = safeGet<number>(KEY_SIDEBAR_WIDTH, SIDEBAR_MIN_WIDTH)
+	return typeof stored === "number" && stored > SIDEBAR_MIN_WIDTH
+		? stored
+		: SIDEBAR_MIN_WIDTH
+}
 export const saveSidebarWidth = (w: number): void =>
 	safeSet(KEY_SIDEBAR_WIDTH, w)
 
@@ -1123,6 +1149,19 @@ export const loadExportUnit = (): ExportUnit =>
 	safeGet<ExportUnit>(KEY_EXPORT_UNIT, "px")
 export const saveExportUnit = (v: ExportUnit): void =>
 	safeSet(KEY_EXPORT_UNIT, v)
+
+/** The contrast model the editor's accessibility check measures text with
+ * (Settings → Accessibility). Device-local, like the export unit; a stored
+ * value that isn't a known model falls back to the default. */
+export const loadContrastAlgorithm = (): ContrastAlgorithm => {
+	const v = safeGet<unknown>(KEY_CONTRAST_ALGORITHM, DEFAULT_CONTRAST_ALGORITHM)
+	return CONTRAST_ALGORITHMS.includes(v as ContrastAlgorithm)
+		? (v as ContrastAlgorithm)
+		: DEFAULT_CONTRAST_ALGORITHM
+}
+export const saveContrastAlgorithm = (v: ContrastAlgorithm): void =>
+	safeSet(KEY_CONTRAST_ALGORITHM, v)
+export const watchContrastAlgorithm = watchOtherTabs(KEY_CONTRAST_ALGORITHM)
 
 export const loadTheme = (): Theme | null =>
 	safeGet<Theme | null>(KEY_THEME, null)

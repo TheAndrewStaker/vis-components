@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from "@testing-library/react"
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import { buildDataset as buildDatasetFixture } from "../../../../testSupport/fixtures"
 import { installInMemoryLocalStorage } from "../../../../testSupport/localStorageShim"
@@ -22,10 +22,13 @@ import {
 import { ReshapePanel } from "./ReshapePanel"
 
 /** Smoke coverage for the wide→long Reshape panel: it renders only while
- *  its menu is open, lists the RAW (wide) columns even while the reshape is
- *  applied, moves a column out of Combine when it's checked as an ID,
- *  surfaces naming collisions as warnings, and "Save and close" hides the
- *  menu without touching the reshape config. */
+ *  its menu is open, holds a DRAFT the chart doesn't see until "Apply
+ *  reshape" saves the long table as a new data version (a fork of imported
+ *  data, an append to a working copy), lists the wide columns, moves a
+ *  column out of Combine when it's checked as an ID, surfaces naming
+ *  collisions as warnings, and Cancel hides the menu without saving. An
+ *  older visual's live reshape and derived variables seed the draft and are
+ *  folded into the version. */
 
 // Explicit cleanup: this file imports vitest APIs directly (no globals), so
 // testing-library's automatic afterEach unmount never registers.
@@ -53,6 +56,24 @@ const buildDataset = (): Dataset =>
 		rows: ROWS,
 	})
 
+/** A working copy: the import plus a hand-edited version. */
+const workingCopy = (): Dataset =>
+	buildDatasetFixture({
+		id: ID,
+		name: "reshape (edited)",
+		fields: FIELDS,
+		versions: [
+			{ id: "v1", filename: "reshape.csv", rows: ROWS, createdAt: 0 },
+			{
+				id: "v2",
+				filename: "Edited data",
+				rows: [ROWS[0]!, { store: "B", monday: "30", tuesday: "4" }],
+				createdAt: 1,
+				editedFrom: "v1",
+			},
+		],
+	})
+
 /** `total` is computable from the wide columns; `sign` needs the melt's
  * value column, so the panel must not list it. */
 const DERIVED: DerivedVariable[] = [
@@ -76,7 +97,8 @@ const DERIVED: DerivedVariable[] = [
 const mount = (
 	reshape: Partial<ReshapeConfig> = {},
 	open = true,
-	derived: DerivedVariable[] = []
+	derived: DerivedVariable[] = [],
+	dataset: Dataset = buildDataset()
 ) => {
 	// Atom storage effects re-load from localStorage on init and would reset a
 	// snapshot-only seed to defaults, so the fixture goes into BOTH.
@@ -88,7 +110,7 @@ const mount = (
 	const derivedConfig = { ...DEFAULT_DERIVED_VARIABLES_CONFIG, variables: derived }
 	/* eslint-disable @vc/use-wrapped-json-functions */
 	const set = (k: string, v: unknown) => store.set(k, JSON.stringify(v))
-	set("vis-components:datasets", { [ID]: buildDataset() })
+	set("vis-components:datasets", { [ID]: dataset })
 	set("vis-components:currentDatasetId", ID)
 	set("vis-components:previewVersionId", null)
 	set("vis-components:currentReshapeConfig", { _v: 1, data: reshapeConfig })
@@ -97,7 +119,7 @@ const mount = (
 	let snapshot: TestStore | undefined
 	const init = (snap: TestStore) => {
 		snapshot = snap
-		snap.set(loadedDatasetsAtom, { [ID]: buildDataset() })
+		snap.set(loadedDatasetsAtom, { [ID]: dataset })
 		snap.set(currentDatasetIdAtom, ID)
 		snap.set(previewVersionIdAtom, null)
 		snap.set(currentReshapeConfigAtom, reshapeConfig)
@@ -110,7 +132,7 @@ const mount = (
 			<ReshapePanel />
 		</TestProvider>
 	)
-	return { ...utils, store: () => snapshot }
+	return { ...utils, store: () => snapshot! }
 }
 
 describe("ReshapePanel", () => {
@@ -119,29 +141,46 @@ describe("ReshapePanel", () => {
 		expect(utils.container.innerHTML).toBe("")
 	})
 
-	it("Save and close hides the menu without touching the reshape", () => {
+	it("Cancel hides the menu without saving anything", () => {
 		const utils = mount({
 			idFields: ["store"],
 			meltFields: ["monday", "tuesday"],
 		})
-		fireEvent.click(utils.getByRole("button", { name: "Save and close" }))
+		fireEvent.click(utils.getByRole("button", { name: "Cancel" }))
 		expect(utils.container.innerHTML).toBe("")
+		expect(utils.store().get(loadedDatasetsAtom)[ID]).toEqual(buildDataset())
+		expect(utils.store().get(currentDatasetIdAtom)).toBe(ID)
 	})
 
-	it("lists the raw wide columns even while the reshape is applied", () => {
+	it("lists the wide columns and reads out what Apply would save", () => {
 		const utils = mount({
 			idFields: ["store"],
 			meltFields: ["monday", "tuesday"],
 			variableName: "day",
 			valueName: "sales",
 		})
-		// ID list carries all 3 wide columns; the melted view's "day"/"sales"
-		// never appear as checkboxes.
+		// ID list carries all 3 wide columns; the melted "day"/"sales" never
+		// appear as checkboxes — the draft is not applied to anything yet.
 		for (const name of ["store", "monday", "tuesday"])
 			expect(utils.getAllByText(name).length).toBeGreaterThan(0)
 		expect(
 			utils.getByText("2 rows × 3 columns → 4 rows × 3 columns.")
 		).toBeTruthy()
+		expect(utils.store().get(loadedDatasetsAtom)[ID]!.versions).toHaveLength(1)
+	})
+
+	it("disables Apply until a Combine column is checked", () => {
+		const utils = mount()
+		const apply = utils.getByRole("button", { name: "Apply reshape" }) as HTMLButtonElement
+		expect(apply.disabled).toBe(true)
+		const [mondayCombine] = utils
+			.getAllByRole("checkbox")
+			.filter((el) => el.parentElement?.textContent === "monday")
+			.slice(-1)
+		fireEvent.click(mondayCombine!)
+		expect(
+			(utils.getByRole("button", { name: "Apply reshape" }) as HTMLButtonElement).disabled
+		).toBe(false)
 	})
 
 	it("checking a Combine column as an ID withdraws it from Combine", () => {
@@ -153,7 +192,7 @@ describe("ReshapePanel", () => {
 		const [idCheckbox] = utils
 			.getAllByRole("checkbox")
 			.filter((el) => el.parentElement?.textContent === "monday")
-		fireEvent.click(idCheckbox)
+		fireEvent.click(idCheckbox!)
 		// Now it's an ID column: it leaves the Combine list entirely.
 		const mondayBoxes = utils
 			.getAllByRole("checkbox")
@@ -172,6 +211,9 @@ describe("ReshapePanel", () => {
 		expect(
 			utils.getByText('"store" is already the name of an ID column.')
 		).toBeTruthy()
+		expect(
+			(utils.getByRole("button", { name: "Apply reshape" }) as HTMLButtonElement).disabled
+		).toBe(true)
 	})
 
 	it("edits the pair names through the labeled inputs", () => {
@@ -190,7 +232,82 @@ describe("ReshapePanel", () => {
 		).toBe("day")
 	})
 
-	it("lists wide-computable derived variables with an ƒ edit button, not long-only ones", () => {
+	it("applies as a NEW data set: the long table as v2, the wide table kept as v1 with its own columns", async () => {
+		const utils = mount({
+			idFields: ["store"],
+			meltFields: ["monday", "tuesday"],
+			variableName: "day",
+			valueName: "sales",
+		})
+		expect(utils.container.textContent).toContain("creates a new data set altogether")
+		const name = utils.getByLabelText("Data set name") as HTMLInputElement
+		expect(name.value).toBe("reshape (reshaped)")
+		fireEvent.click(utils.getByRole("button", { name: "Apply reshape" }))
+
+		const store = utils.store()
+		await waitFor(() => expect(store.get(currentDatasetIdAtom)).not.toBe(ID))
+		const forked = store.get(loadedDatasetsAtom)[store.get(currentDatasetIdAtom)!]!
+		expect(forked.name).toBe("reshape (reshaped)")
+		expect(forked.fields.map((f) => f.name)).toEqual(["store", "day", "sales"])
+		expect(forked.versions.map((v) => v.filename)).toEqual([
+			"reshape.csv",
+			"Reshaped data",
+		])
+		const [wide, long] = forked.versions
+		// The copy of the wide table keeps the wide columns as its own list.
+		expect(wide!.fields?.map((f) => f.name)).toEqual(["store", "monday", "tuesday"])
+		expect(wide!.rows).toBe(ROWS)
+		expect(long!.editedFrom).toBe(wide!.id)
+		expect(long!.transform).toEqual({
+			reshape: {
+				idFields: ["store"],
+				meltFields: ["monday", "tuesday"],
+				variableName: "day",
+				valueName: "sales",
+			},
+		})
+		expect(long!.rows).toEqual([
+			{ store: "A", day: "monday", sales: "1" },
+			{ store: "A", day: "tuesday", sales: "2" },
+			{ store: "B", day: "monday", sales: "3" },
+			{ store: "B", day: "tuesday", sales: "4" },
+		])
+		// The imported data set is untouched, the live config is cleared, and
+		// the menu closed.
+		expect(store.get(loadedDatasetsAtom)[ID]).toEqual(buildDataset())
+		expect(store.get(currentReshapeConfigAtom)).toEqual(DEFAULT_RESHAPE_CONFIG)
+		expect(store.get(reshapePanelOpenAtom)).toBe(false)
+	})
+
+	it("appends a version to a working copy, with no name box", async () => {
+		const utils = mount(
+			{ idFields: ["store"], meltFields: ["monday", "tuesday"] },
+			true,
+			[],
+			workingCopy()
+		)
+		expect(utils.container.textContent).toContain("adds a new version to this data set")
+		expect(utils.queryByLabelText("Data set name")).toBeNull()
+		fireEvent.click(utils.getByRole("button", { name: "Apply reshape" }))
+
+		const store = utils.store()
+		await waitFor(() =>
+			expect(store.get(loadedDatasetsAtom)[ID]!.versions).toHaveLength(3)
+		)
+		expect(store.get(currentDatasetIdAtom)).toBe(ID)
+		const ds = store.get(loadedDatasetsAtom)[ID]!
+		const [v1, v2, v3] = ds.versions
+		expect(ds.fields.map((f) => f.name)).toEqual(["store", "category", "value"])
+		expect(ds.latestVersionId).toBe(v3!.id)
+		expect(v3!.editedFrom).toBe("v2")
+		expect(v3!.rows).toHaveLength(4)
+		expect(v3!.rows[2]).toEqual({ store: "B", category: "monday", value: "30" })
+		// The versions before the reshape keep the wide columns.
+		for (const v of [v1!, v2!])
+			expect(v.fields?.map((f) => f.name)).toEqual(["store", "monday", "tuesday"])
+	})
+
+	it("lists wide-computable live derived variables with an ƒ edit button, not long-only ones", () => {
 		const utils = mount({}, true, DERIVED)
 		// `total` sits after the data columns in both lists; `sign` ({value}
 		// only exists after the melt) is in neither.
@@ -204,8 +321,8 @@ describe("ReshapePanel", () => {
 		const [marker] = utils.getAllByRole("button", {
 			name: "Edit derived variable total",
 		})
-		fireEvent.click(marker)
-		expect(utils.store()?.get(derivedVariableEditorAtom)).toEqual({
+		fireEvent.click(marker!)
+		expect(utils.store().get(derivedVariableEditorAtom)).toEqual({
 			mode: "edit",
 			id: "dv-total",
 		})
@@ -216,7 +333,7 @@ describe("ReshapePanel", () => {
 		expect((idCheckbox as HTMLInputElement).checked).toBe(false)
 	})
 
-	it("a checked derived variable is computed wide and survives the melt", () => {
+	it("folds a checked live derived variable in wide and the rest after the melt", async () => {
 		const utils = mount(
 			{ idFields: ["store", "total"], meltFields: ["monday", "tuesday"] },
 			true,
@@ -227,5 +344,29 @@ describe("ReshapePanel", () => {
 		expect(
 			utils.getByText("2 rows × 4 columns → 4 rows × 5 columns.")
 		).toBeTruthy()
+		fireEvent.click(utils.getByRole("button", { name: "Apply reshape" }))
+		const store = utils.store()
+		await waitFor(() => expect(store.get(currentDatasetIdAtom)).not.toBe(ID))
+		const forked = store.get(loadedDatasetsAtom)[store.get(currentDatasetIdAtom)!]!
+		expect(forked.fields.map((f) => f.name)).toEqual([
+			"store",
+			"total",
+			"category",
+			"value",
+			"sign",
+		])
+		const long = forked.versions[1]!
+		expect(long.transform?.added?.map((v) => v.name)).toEqual(["total", "sign"])
+		expect(long.rows[0]).toEqual({
+			store: "A",
+			total: "3",
+			category: "monday",
+			value: "1",
+			sign: "positive",
+		})
+		// Both live variables now live in the data: the config is emptied.
+		expect(store.get(currentDerivedVariablesAtom)).toEqual(
+			DEFAULT_DERIVED_VARIABLES_CONFIG
+		)
 	})
 })

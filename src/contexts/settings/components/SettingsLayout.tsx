@@ -32,6 +32,7 @@ const NarrowSettingsNav = () => {
 			<nav className="flex flex-wrap items-center gap-1">
 				<NavLink to="/settings/themes">Themes</NavLink>
 				<NavLink to="/settings/fonts">Fonts</NavLink>
+				<NavLink to="/settings/accessibility">Accessibility</NavLink>
 				<NavLink to="/settings/sharing">Sharing</NavLink>
 				<button
 					type="button"
@@ -104,6 +105,7 @@ export const SettingsLayout = () => {
 					<NavLink to="/settings/themes">Themes</NavLink>
 					<ThemesSubNav />
 					<NavLink to="/settings/fonts">Fonts</NavLink>
+					<NavLink to="/settings/accessibility">Accessibility</NavLink>
 					<NavLink to="/settings/sharing">Sharing</NavLink>
 					{/* Future settings pages go here */}
 				</nav>

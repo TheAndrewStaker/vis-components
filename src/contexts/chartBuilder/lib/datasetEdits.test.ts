@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	alignEditedRows,
 	editBaseVersionId,
-	isHandEditedDataset,
+	isWorkingCopy,
 	planEditedFields,
 } from "./datasetEdits"
 import type { Field } from "./types"
@@ -250,8 +250,44 @@ describe("editBaseVersionId", () => {
 		expect(editBaseVersionId({ versions: trimmed }, "v2")).toBeNull()
 	})
 
-	it("flags a data set that holds any hand-edited version", () => {
-		expect(isHandEditedDataset({ versions })).toBe(true)
-		expect(isHandEditedDataset({ versions: [versions[0]!] })).toBe(false)
+	it("stops at a version a reshape or derived variable made, and answers null for one", () => {
+		const chain = [
+			{ id: "v1", filename: "a.csv", createdAt: 0 },
+			{
+				id: "v2",
+				filename: "Reshaped data",
+				createdAt: 1,
+				editedFrom: "v1",
+				transform: {
+					reshape: { idFields: [], meltFields: ["x"], variableName: "c", valueName: "v" },
+				},
+			},
+			{ id: "v3", filename: "Edited data", createdAt: 2, editedFrom: "v2" },
+			{ id: "v4", filename: "Edited data", createdAt: 3, editedFrom: "v3" },
+		]
+		// Hand edits after the reshape outline against the reshaped table.
+		expect(editBaseVersionId({ versions: chain }, "v4")).toBe("v2")
+		expect(editBaseVersionId({ versions: chain }, "v3")).toBe("v2")
+		// The reshaped version itself has nothing to outline.
+		expect(editBaseVersionId({ versions: chain }, "v2")).toBeNull()
+	})
+
+	it("flags a working copy — a data set holding any version made from another", () => {
+		expect(isWorkingCopy({ versions })).toBe(true)
+		expect(isWorkingCopy({ versions: [versions[0]!] })).toBe(false)
+		expect(
+			isWorkingCopy({
+				versions: [
+					versions[0]!,
+					{
+						id: "r",
+						filename: "Reshaped data",
+						createdAt: 1,
+						editedFrom: "v1",
+						transform: { removed: ["x"] },
+					},
+				],
+			})
+		).toBe(true)
 	})
 })

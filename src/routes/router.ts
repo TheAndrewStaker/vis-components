@@ -11,6 +11,7 @@ import {
 import { embedRoute } from "../contexts/embed/routes"
 import { libraryRoute } from "../contexts/library/routes"
 import {
+	settingsAccessibilityRoute,
 	settingsFontsRoute,
 	settingsIndexRoute,
 	settingsRoute,
@@ -37,6 +38,7 @@ const routeTree = rootRoute.addChildren([
 		settingsThemesRoute,
 		settingsThemeEditorRoute,
 		settingsFontsRoute,
+		settingsAccessibilityRoute,
 		settingsSharingRoute,
 	]),
 ])

@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest"
-import { datasetCsvFilename, datasetViewToCsv } from "./downloadDataset"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import {
+	DATASET_FILE_TYPE,
+	datasetCsvFilename,
+	datasetViewToCsv,
+	downloadDatasetCsv,
+} from "./downloadDataset"
 import { parseCsvText } from "./parseCsv"
 import type { DatasetView } from "./types"
 
@@ -24,11 +29,16 @@ const view = (over: Partial<DatasetView> = {}): DatasetView => ({
 	...over,
 })
 
+const CSV = 'region,revenue\nEast,"$1,200"\n"West, North",800'
+
+afterEach(() => {
+	vi.unstubAllGlobals()
+	vi.restoreAllMocks()
+})
+
 describe("datasetViewToCsv", () => {
 	it("writes a header row from the fields and one line per row", () => {
-		expect(datasetViewToCsv(view())).toBe(
-			'region,revenue\nEast,"$1,200"\n"West, North",800'
-		)
+		expect(datasetViewToCsv(view())).toBe(CSV)
 	})
 
 	it("keeps field order and emits blanks for missing cells", () => {
@@ -67,5 +77,78 @@ describe("datasetCsvFilename", () => {
 
 	it("falls back to a dataset-flavored name", () => {
 		expect(datasetCsvFilename({ name: "📊" })).toBe("dataset.csv")
+	})
+})
+
+describe("downloadDatasetCsv", () => {
+	it("offers the Save-as dialog under the dataset's name and writes the CSV there", async () => {
+		const written: Blob[] = []
+		const writable = {
+			write: vi.fn((blob: Blob) => {
+				written.push(blob)
+				return Promise.resolve()
+			}),
+			close: vi.fn().mockResolvedValue(undefined),
+		}
+		const picker = vi.fn().mockResolvedValue({
+			createWritable: vi.fn().mockResolvedValue(writable),
+		})
+		vi.stubGlobal("showSaveFilePicker", picker)
+		const click = vi
+			.spyOn(HTMLAnchorElement.prototype, "click")
+			.mockImplementation(() => {})
+
+		await expect(downloadDatasetCsv(view())).resolves.toBe(true)
+
+		expect(picker).toHaveBeenCalledWith({
+			suggestedName: "q3-sales.csv",
+			id: "vis-export-dataset",
+			types: [
+				{
+					description: DATASET_FILE_TYPE.description,
+					accept: { "text/csv": [".csv"] },
+				},
+			],
+		})
+		expect(written).toHaveLength(1)
+		await expect(written[0]!.text()).resolves.toBe(CSV)
+		expect(writable.close).toHaveBeenCalled()
+		// Nothing also went out the anchor-download door.
+		expect(click).not.toHaveBeenCalled()
+	})
+
+	it("saves nothing when the user closes the dialog", async () => {
+		vi.stubGlobal(
+			"showSaveFilePicker",
+			vi.fn().mockRejectedValue(new DOMException("cancelled", "AbortError"))
+		)
+		const click = vi
+			.spyOn(HTMLAnchorElement.prototype, "click")
+			.mockImplementation(() => {})
+
+		await expect(downloadDatasetCsv(view())).resolves.toBe(false)
+
+		expect(click).not.toHaveBeenCalled()
+	})
+
+	it("falls back to an anchor download named after the dataset", async () => {
+		const blobs: Blob[] = []
+		vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => {
+			blobs.push(blob as Blob)
+			return "blob:fake"
+		})
+		vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {})
+		const downloads: string[] = []
+		vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+			function (this: HTMLAnchorElement) {
+				downloads.push(this.download)
+			}
+		)
+
+		await expect(downloadDatasetCsv(view())).resolves.toBe(true)
+
+		expect(downloads).toEqual(["q3-sales.csv"])
+		expect(blobs).toHaveLength(1)
+		await expect(blobs[0]!.text()).resolves.toBe(CSV)
 	})
 })

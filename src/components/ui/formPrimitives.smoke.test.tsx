@@ -573,6 +573,26 @@ describe("RadioGroup", () => {
 		expect(names.size).toBe(1)
 	})
 
+	it("puts the button on the first line of a wrapped label with align=\"start\"", () => {
+		const { container } = render(
+			<RadioGroup
+				legend="Background"
+				align="start"
+				value="a"
+				options={[
+					{ value: "a", label: "A long label that wraps onto a second line" },
+					{ value: "b", label: "B" },
+				]}
+				onChange={() => {}}
+			/>
+		)
+		const row = container.querySelector('input[type="radio"]')?.closest("div")
+		expect(row?.className).toContain("items-start")
+		// The button is boxed to the text-sm line height so it centers on
+		// line one rather than on the whole label.
+		expect(row?.querySelector("span.h-5 > input[type=\"radio\"]")).not.toBeNull()
+	})
+
 	it("marks only the option matching `value` as checked", () => {
 		const { container } = render(
 			<RadioGroup

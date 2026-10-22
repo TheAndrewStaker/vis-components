@@ -18,7 +18,10 @@ import {
 	derivedVariableEditorAtom,
 } from "../../store/atoms"
 import { originalFieldName } from "../../lib/renameField"
-import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
+import {
+	materializedDerivedAtom,
+	useCurrentDatasetView,
+} from "../../store/useCurrentDatasetView"
 import {
 	useRenameDerivedVariable,
 	useRenameField,
@@ -61,6 +64,7 @@ export const FieldList = () => {
 	)
 	const [orderSpecs, setOrderSpecs] = useAtom(currentFieldLevelOrderSpecsAtom)
 	const derivedConfig = useAtomValue(currentDerivedVariablesAtom)
+	const materialized = useAtomValue(materializedDerivedAtom)
 	const setDerivedEditor = useSetAtom(derivedVariableEditorAtom)
 	const dataset = useCurrentDatasetView()
 	// Rename targets are DATASET fields only. With a reshape applied the view
@@ -97,11 +101,12 @@ export const FieldList = () => {
 				const reorderable =
 					effective === "categorical" || effective === "ordinal"
 				// The variable minting this column, so the ƒ pill can reopen it
-				// in the editor popup.
+				// in the editor popup: an older visual's live definition, else
+				// the one a data version recorded.
 				const derivedVariable = field.derived
-					? derivedConfig.variables.find(
+					? (derivedConfig.variables.find(
 							(v, i) => effectiveDerivedName(v, i) === field.name
-						)
+						) ?? materialized.get(field.name))
 					: undefined
 				return (
 					<li

@@ -113,9 +113,12 @@ then "N rows · N fields · vX of Y") ends with a purple, underlined
 (`lib/downloadDataset.ts`), so a dataset that only survives inside a
 visual can be edited and re-uploaded. It exports the RAW rows of the
 version currently shown (the preview version when one is pinned):
-cells exactly as imported — "$1,234.56" stays "$1,234.56", a wide
-table stays wide — with no reshape, cell conversion or derived
-columns, since those are per-visual and wouldn't survive a re-upload.
+cells exactly as imported — "$1,234.56" stays "$1,234.56" — with no
+cell conversion. A version a reshape or a derived variable made
+(§2.1b, §2.1c) exports its stored rows, long or computed: those ARE
+the data now; only an older visual's live reshape and derived columns
+are left out, since they are per-visual and wouldn't survive a
+re-upload.
 Headers are the fields' CURRENT names; a renamed variable re-imports
 through its `sourceNames` alias. The file is named after the dataset
 (slugified, `.csv`).
@@ -153,24 +156,31 @@ typed and a plain-number or text column enforces nothing. The
 dialog refuses to save with a blank or duplicate column name, no
 columns, or no non-blank row. Cells that differ from the data as the
 dialog opened are outlined in the grid as in the table. Rows render
-through a window, so a large data set opens instantly. Editing a
-value by hand never touches imported data: the first edit of an imported data set **creates a new
-data set** (the dialog says so; the name box is prefilled `<name>
-(edited)`, and a colliding name warns as everywhere else) whose v1 is
-a copy of the version shown (same file name, note and upload time)
-and whose v2 is the edited rows, filename "Edited data", marked
-`editedFrom` v1 (`DatasetVersion.editedFrom`, optional and additive
-like `keyAliases`). The editor rebinds to the new data set and every
-draft atom is left alone, so the visualization simply continues on
-the edited data — encodings, reshape, field overrides and derived
-variables included — and the version badge reads `v2 of 2 · latest`.
-The imported data set is untouched; other visuals keep it, and the
-orphan sweep (§2.4) collects it if none does. An edit of a data set
-that is ALREADY a hand-edited copy **appends** a version to it
-(`editedFrom` the version shown) rather than forking again — the
-dialog says so and its button reads "Save new version"; the name box
-renames the data set when changed, and sibling visuals bound to it
-get any column rename.
+through a window, so a large data set opens instantly. Changing the
+data never touches imported data, and a hand edit is one of three
+changes that land the same way — a reshape (§2.1b) and a derived
+variable (§2.1c) are the others; all three go through
+`store/commitDatasetVersion.ts`: the first change to an imported data
+set **creates a new data set** (the dialog says so; the name box is
+prefilled `<name> (edited)`, and a colliding name warns as everywhere
+else) whose v1 is a copy of the version shown (same file name, note
+and upload time — and its own column list, `DatasetVersion.fields`,
+when the change dropped or added columns, see §2.4) and whose v2 is
+the edited rows, filename "Edited data", marked `editedFrom` v1
+(`DatasetVersion.editedFrom`, optional and additive like
+`keyAliases`; a hand-edited version records nothing else, where a
+reshaped or derived one records its `transform`). The editor rebinds
+to the new data set and every draft atom is left alone, so the
+visualization simply continues on the edited data — encodings and
+field overrides included — and the version badge reads `v2 of 2 ·
+latest`. The imported data set is untouched; other visuals keep it,
+and the orphan sweep (§2.4) collects it if none does. A change to a
+data set that is ALREADY a **working copy** — one holding any version
+made from another, hand-edited, reshaped or derived (`isWorkingCopy`,
+`lib/datasetEdits.ts`) — **appends** a version to it (`editedFrom` the
+version shown) rather than forking again — the dialog says so and its
+button reads "Save new version"; the name box renames the data set
+when changed, and sibling visuals bound to it get any column rename.
 
 Columns are matched to fields by `planEditedFields`
 (`lib/datasetEdits.ts`): a header equal to a field's current name is
@@ -197,11 +207,13 @@ disabled until the text parses, differs from the seed, and a name is
 present; the size gate applies as for a paste.
 
 In the data table, every cell that differs from the chain's **base**
-— follow `editedFrom` until a version without it, i.e. the most
-recent IMPORTED version — is outlined with a dotted purple line
-(`.vc-edited-cell`, inset so it clears the cell borders; `title`
-"Changed by hand"). Highlights therefore accumulate across repeated
-edits of the copy and reset when a new version is uploaded.
+— follow `editedFrom` through hand-edited versions until one that
+isn't: the most recent import, or the nearest version a reshape or a
+derived variable made (it has a `transform`) — is outlined with a
+dotted purple line (`.vc-edited-cell`, inset so it clears the cell
+borders; `title` "Changed by hand"). Highlights therefore accumulate
+across repeated edits of the copy and reset when a new version is
+uploaded, reshaped or given a derived variable.
 `alignEditedRows` (`lib/datasetEdits.ts`) pairs edited rows with base
 rows: rows exactly equal to a base row (over the columns the base
 has) anchor to it monotonically; the rows between two anchors pair by
@@ -213,10 +225,11 @@ compares under its current name (base rows go through
 `resolveDatasetView`'s remap); an added column differs everywhere.
 The base rows load lazily through `ensureVersionRowsLoadedAtom`
 (`useEditedCells`); nothing is outlined until they arrive, and
-nothing is outlined while a reshape is applied (melted rows are new
-rows — the table outlines by RAW row index, sorting row indices
-rather than row copies so the mapping survives a sort). The version
-popover tags hand-edited versions "· edited by hand".
+nothing is outlined while an older visual's live reshape is applied
+(melted rows are new rows — the table outlines by RAW row index,
+sorting row indices rather than row copies so the mapping survives a
+sort). The version popover tags hand-edited versions "· edited by
+hand" (and reshaped / derived ones with what made them, §2.4).
 
 **Data set names.** The id is a data set's identity; the name is a
 label, and two data sets MAY share one. Every path that names a new
@@ -245,72 +258,79 @@ arrive with wide tables (one column per category — Monday, Tuesday,
 …). A **"Reshape"** button in the data-table tray header (visible
 whenever a dataset is loaded) shows/hides the reshape options panel
 under Data in the left menu (expanding the Data section if
-collapsed). The button toggles only the MENU: an applied reshape
-stays applied with the menu closed (the button reads "Reshape ✓" in
-the accent color while one is applied), and the panel ends with a
-**"Save and close"** button that does the same close. There is no
-on/off switch — the reshape applies exactly while Combine columns
-are checked, so unchecking them all restores the wide table. The
-panel is a purple option box whose
+collapsed). The panel is a purple option box whose
 "Reshape (wide → long)" subheader is a standard collapsible
 subsection (chevron; open by default since the tray click should
-reveal the options). It lists the RAW wide columns, followed by the
-derived variables (§2.1c) that can be computed from them — each
-marked with the tray's italic **ƒ**, which reopens that variable's
-edit popup (a variable under Combine has no column of its own after
-the melt, so this is where it stays reachable):
+reveal the options). What it holds is a **draft**: nothing changes
+until **"Apply reshape"**, which melts the version shown and saves
+the long table as a **new data version** (§2.4) — the same way a hand
+edit (§2.1) or a derived variable (§2.1c) lands — then closes the
+menu. **Cancel** (or the tray button again) closes it and drops the
+draft; reopening starts a fresh draft from the stored state. The
+lists hold the columns of the version shown:
 
 - **ID columns** — checkboxes over every column; checked columns are
   kept as-is on every output row. Checking a column here withdraws it
   from Combine.
 - **Combine** — checkboxes over the remaining (non-ID) columns; each
   checked column melts into one output row per input row. Columns
-  checked in neither list are dropped from the reshaped view.
+  checked in neither list are left out of the reshaped table.
 - **Combined variable name** (default `category`) — the new
   categorical column holding the melted columns' names — and **Value
   variable name** (default `value`) holding their cell values. The
   boxes come prefilled with the defaults, and a blanked box falls
   back to its default (shown as the placeholder) rather than
-  blocking the reshape. The
-  value column's type is re-inferred from the melted cells; melt
-  order follows dataset column order, and empty cells melt to empty
-  strings rather than being skipped.
+  blocking the reshape. The value column's type is re-inferred from
+  the melted cells; melt order follows column order, and empty cells
+  melt to empty strings rather than being skipped.
 
-The reshape is **non-destructive config, not a data rewrite**
-(`lib/reshape.ts`, `Visual.reshapeConfig`): stored rows stay wide
-(versions are additive, so a melt could never be a dataset version),
-and the melt is applied where the dataset view is resolved
-(`currentDatasetViewAtom`), so the tray table, field list, encoding
-shelves, renderers, and embeds all see the long shape at once. A
-half-configured reshape (nothing to combine, or a name colliding
-with a kept ID column or the other name — surfaced as amber
-warnings) passes the wide data through instead of blanking the
-chart. A new
-version of the wide file flows through the same reshape, and its
-net-new columns simply appear unchecked. Uploading a different
-dataset resets the reshape.
+A line under the boxes reads out what Apply would save (`2 rows × 3
+columns → 4 rows × 3 columns.`); a half-configured draft (nothing to
+combine, or a name colliding with a kept ID column or the other name
+— surfaced as amber warnings) just leaves Apply disabled.
 
-**Derived variables and the reshape compose** in the natural order,
-derive → reshape → derive, with no extra switch. A derived variable
-the reshape USES — checked as an ID or Combine column — is computed
-on the wide table before the melt and then behaves like any other
-wide column (kept on every row, or combined into the pair); every
-other variable is computed after the melt as before. So "trend" from
-`{start}` and `{end}` can be checked as an ID column while start/end
-are combined, and once the table is long the tray's **+** makes a
-new variable over `{value}` / `{category}`. The panel only lists
-variables that can run on the wide table: one that mentions a column
-the melt creates (the category/value pair, or a variable that itself
-depends on them) is left out. If a checked variable references an
-earlier derived variable, that one is computed wide too so the
-checked one can be, but it only survives the melt if it's checked
-itself (and still runs after the melt as usual). A variable the
-reshape uses is evaluated against the wide table with the
-percent/dollar conversions applied, so Math over `$1,234` cells
-still reads numbers; its edit popup offers the wide columns and
-refuses (amber issue, Save disabled) a reference to a column that
-only exists after the reshape — uncheck it in Reshape first.
-Renaming it renames it in the Reshape lists too.
+Where the version lands follows the one rule every change to the
+data obeys (`store/commitDatasetVersion.ts`): the first change to an
+imported data set **forks a working copy** — the panel says so, with
+a name box prefilled `<name> (reshaped)` (a colliding name warns as
+everywhere else) — whose v1 is the wide table and v2 the long one,
+filename "Reshaped data", marked `editedFrom` v1 with the reshape
+recorded in `DatasetVersion.transform.reshape`; the editor rebinds
+and every draft atom is left alone. A change to a data set that is
+already a working copy **appends** the long version to it (no name
+box; the panel says "adds a new version"). Either way the stored
+wide rows are never rewritten: the versions before the reshape keep
+the wide columns as their own list (`DatasetVersion.fields`, §2.4),
+so they still preview as the wide table, and the version list is how
+a reshape is undone — pick the wide version, or delete the reshaped
+one. The melt itself is `lib/reshape.ts` (`meltDataset`), run
+through `lib/materializeTransforms.ts` (`bakeTransforms`), which
+keeps every original cell exactly as imported ("$1,234" stays
+"$1,234") and writes only the new columns. A reshaped version is
+plain rows: a new version uploaded to the working copy must match
+the long shape (§2.4) and is not reshaped on its own — a fresh wide
+file is a new data set, reshaped from its own panel.
+
+**Older visuals.** Visuals saved before reshapes became data versions
+carry the reshape as per-visual config (`Visual.reshapeConfig`),
+applied where the dataset view is resolved (`currentDatasetViewAtom`)
+so the tray, field list, shelves, renderers and embeds all see the
+long shape. That path is kept as it was — such a visual keeps
+rendering, and the tray button reads "Reshape ✓" in the accent color
+while its live reshape applies — and the live config seeds the
+panel's draft, so Apply saves it as a version and clears it. A live
+reshape composes with live derived variables (§2.1c) in the natural
+order, derive → reshape → derive: a variable the reshape USES
+(checked as an ID or Combine column) is computed on the wide table
+before the melt and then behaves like any other wide column, every
+other one after the melt; the panel lists the variables that can run
+wide, ƒ-marked after the data columns (each ƒ reopens that variable's
+edit popup — `derivedReshapeStages.ts` decides who runs where, and a
+checked variable's earlier dependencies run wide with it). Apply
+folds them all into the version — the reshape under
+`transform.reshape`, the variables under `transform.added` — and
+clears what applied from the config; a variable that couldn't apply
+(a broken reference) stays live, with its editor's warning.
 
 ### 2.1c Derived variables
 Users can mint new columns computed from existing ones — no new
@@ -393,33 +413,66 @@ Math formula — shown as amber text). The numeric check reads the
 whole column, not the previewed rows. The popup is one fixed width
 and height regardless of function.
 
-Derived variables are **per-visual config, not a data rewrite**
-(`lib/derivedVariables.ts`, `Visual.derivedVariablesConfig`),
-applied as the LAST stage of the view chain — after the reshape and
-the percent/dollar cell conversions, so Math sees plain numeric
-strings and expressions may reference reshape-minted columns — except
-for a variable the reshape itself uses, which runs on the wide table
-before the melt (§2.1b). Variables evaluate in list order, so a later one can reference an
-earlier one (chaining); a forward reference is just a missing
-column. The computed columns are ordinary view columns everywhere
-downstream — the tray (headers marked with an italic **ƒ**), the
-Fields panel (an **ƒ** pill; clicking the name opens the edit popup
-instead of the inline rename, and renaming there rewrites this
-visual's references like a field rename), type overrides, encoding
-dropdowns, tooltips, and data labels. A new dataset version flows
-through the same definitions and the columns recompute. A variable
-that CAN'T apply — its name collides with a real column (data always
-wins; e.g. a new version adds a same-named column), or a referenced
-column disappeared (reshape turned off) — is skipped with a warning
-in its editor, never an error: the chart keeps rendering without the
-column. The Math numeric check is editor-only for the same reason —
-a saved formula whose data later grows a stray text cell (a new
-version) keeps computing and blanks only that row, rather than
-dropping the whole column out from under the chart. Deleting the
-variable (in the edit popup, confirmed) is the
-off switch; anything mapped to it falls back to the normal
-missing-field behavior. Uploading a different dataset resets the
-definitions.
+Saving computes the column and stores it as a **new data version**
+(§2.4) — the one rule every change to the data obeys
+(`store/commitDatasetVersion.ts`, driven here by
+`store/useMaterializeVersion.ts`): the first change to imported data
+forks a working copy — the popup says so and takes the copy's name,
+prefilled `<name> (edited)` (a colliding name warns) — and a change
+to a working copy appends a version (the popup says "adds a new
+version"). The version's filename is "Derived data" and
+`DatasetVersion.transform` records the definition (`added`,
+`recomputed` or `removed`), so the version list can say what
+happened (§2.4) and the column keeps its ƒ: `lib/versionTransforms.ts`
+(`derivedVariablesOfVersion`) walks the version's ancestry
+nearest-first for the variable that made each column, a recompute
+shadowing an earlier definition and a removal ending the search;
+`resolveDatasetView` marks those fields `derived` at view time
+(`materializedDerivedAtom` is the editor's lookup), and the tray's
+italic **ƒ** / the Fields panel's **ƒ** pill reopen that definition.
+The computation runs through `lib/materializeTransforms.ts`
+(`bakeTransforms`): Math sees the percent / dollar cell conversions
+(§2.2) on a copy, and only the new column is written onto the stored
+rows, every original cell kept as imported. The computed column is an
+ordinary dataset column everywhere downstream — type overrides,
+encoding dropdowns, tooltips, data labels, and the Fields panel's
+inline rename (a rename reaches the stored definition and every older
+version's own column list too, `renameFieldInVersions`, so the ƒ
+survives it). Save is also refused when the definition computes
+nothing (a reference the data doesn't have).
+
+Editing a stored column (its ƒ) prefills the popup from the version
+that made it, evaluates against the table minus that column (a
+variable never reads its own), and saves a new version with the
+column **recomputed in place** (`transform.recomputed`, same
+position); a changed name is a variable rename the encodings and
+sibling visuals follow, the old name kept in `sourceNames`. Columns
+are frozen values — the trade for every version being plain,
+inspectable rows: recomputing one does NOT recompute a later variable
+that read it (it is just a column now), and a new version uploaded
+to the working copy carries no derived columns until they are made
+again. Deleting the variable (in the edit popup, confirmed) drops the
+column in a new version (`transform.removed`); anything mapped to it
+falls back to the normal missing-field behavior.
+
+**Older visuals.** Visuals saved before derived variables became
+data versions carry them as per-visual config
+(`Visual.derivedVariablesConfig`, `lib/derivedVariables.ts`), applied
+as the LAST stage of the view chain — after the live reshape and the
+cell conversions, so Math sees plain numeric strings and expressions
+may reference reshape-minted columns — except for a variable the
+live reshape uses, which runs on the wide table before the melt
+(§2.1b). That path is kept as it was: such a visual keeps rendering,
+its variables evaluate in list order (a later one may reference an
+earlier one), the Fields panel renames them live, and a variable that
+CAN'T apply — a name collision with a real column, a referenced
+column that disappeared — is skipped with a warning in its editor,
+never an error. Saving ANY variable from such a visual — new or
+edited — bakes the whole live set, live reshape included, into the
+version it saves and clears what applied from the config (a variable
+that couldn't apply stays live, with its warning); deleting a live
+variable only edits the config, since the stored data never had its
+column.
 
 ### 2.2 Field types
 Every field is tagged with one of: `quantitative` (numbers),
@@ -568,8 +621,28 @@ lists every version newest-first with its upload timestamp and filename:
   hand-edit chain (§2.1, "Edit data") leaves the edited versions'
   `editedFrom` dangling: the table then outlines against the nearest
   surviving ancestor, or nothing when none is left.
-- **Hand-edited versions** (the tray's Edit dialog, §2.1) list with
-  "· edited by hand" after their "Edited data" filename.
+- **Versions made from another** list with what made them after
+  their filename (`describeVersionOrigin`, `lib/versionTransforms.ts`):
+  a hand edit (§2.1) "Edited data · edited by hand", a reshape
+  (§2.1b) "Reshaped data · reshaped (wide → long)", a derived
+  variable (§2.1c) "Derived data · added “Trend”" / "· recomputed
+  “Trend”" / "· removed “Trend”" — and a reshape that folded an older
+  visual's live variables in says both.
+
+**Per-version columns.** `Dataset.fields` describes the LATEST
+version, and every version without a list of its own shares it — the
+invariant new uploads are checked against. A change that alters the
+table's shape (a reshape, a derived variable added or removed, a hand
+edit that drops or adds a column) gives every version before it the
+list as it stood, in `DatasetVersion.fields` (`lib/versionFields.ts`,
+`withNextFields`), so an older version still previews as its own
+table; `resolveDatasetView` reads a version's own list first, and
+the hand-edit outlines compare under it. A rename reaches those lists
+(and the stored transforms) too, so an older version keeps answering
+to the current name; deleting the latest version promotes its
+predecessor's list to the data set's (`normalizeVersionFields`), and
+a version carrying its own list is never counted when orphan fields
+are pruned (below).
 
 New-version uploads check column compatibility via **`diffFields`**
 (`datasetCompat.ts`): every existing column must be present with the
@@ -582,14 +655,15 @@ the current name at view time.
 
 Deleting a version calls **`pruneOrphanFields`** (`datasetCompat.ts`):
 because additive uploads merge net-new columns into the dataset's
-invariant field list, removing the version that introduced a column
+shared field list, removing the version that introduced a column
 would otherwise leave that field orphaned in the Fields panel and the
 encoding dropdowns. Column presence is judged by the union of row keys
-across every remaining version (a single row isn't authoritative — the
-CSV parser omits trailing keys on short rows), a renamed field is
+across every remaining version that SHARES the list (one carrying its
+own `fields` says nothing about it; a single row isn't authoritative —
+the CSV parser omits trailing keys on short rows), a renamed field is
 represented by its former names too (its rows still carry the old
-keys), and pruning is skipped entirely when any version has zero rows
-rather than risk dropping a live field.
+keys), and pruning is skipped entirely when any counted version has
+zero rows rather than risk dropping a live field.
 
 Datasets have no library UI of their own, so unreferenced ones are
 swept rather than managed: `sweepOrphanDatasets` (`lib/datasetSweep.ts`)
@@ -2529,6 +2603,29 @@ panel edge. No clear window — or text longer than ~a
 half-circumference — means no label, same convention as the rim fit
 check (`arcWrapLevels` in `DataLabelsConfig`).
 
+- **Bar total** (bars only) — a bar chart layered by a stack- or
+  overlay-mode channel offers one derived value under Value, ahead of
+  the data set's variables and in the "Multiple variables…" checklist
+  (exactly where the **Stack** scope below is offered): the sum of the
+  layers in each physical bar — one sub-band of the category band, on
+  one sign side, so a diverging bar's two sides total separately and a
+  mirrored bar shows each side's magnitude. It is the bars' counterpart
+  of the flows' Node total (`lib/barTotalLabel.ts`): the same string is
+  the dropdown entry, the `{Bar total}` token and the key in the
+  per-variable format / style maps, and a data set column named "Bar
+  total" wins (the derived value isn't offered). Every layer carries its
+  bar's total, so `{value} of {Bar total}` composes on each slice.
+  Picking it starts the label where a total reads as the bar's — once
+  per bar, past its end: a single Value seeds Which labels **Last** of
+  each **Stack** and Placement **Outside the end of the bar**
+  (layer-wide); checking it in the checklist seeds the same on its own
+  `{Bar total}` label's entries. Either is movable like any label. The
+  value stays listed while mapped, so a Stack → Group toggle doesn't
+  empty the Value row (each sub-band is then a bar of one layer). A
+  LONE composed label's Placement selects read and write that label's
+  own entry (which the renderer honors first), as its Label selection
+  already does; the solver's reserve extends each row with its bar's
+  total so a total beside a horizontal bar reserves its width.
 - **Label format** — every mapped Value takes a per-field format (the
   same preset dropdown + custom d3 spec the axes use), stored in
   `DataLabelsConfig.fieldFormats` keyed by field name. A single mapped
@@ -3669,10 +3766,13 @@ badge (`aria-hidden`; the same count is in the card's heading).
   Collapsed is UI-only and resets each time the check is turned on.
 - **Narrow layouts:** while the menu sheet is open the card and its
   highlights are hidden (not discarded) and come back when it closes.
-- **AA / AAA** radio (`accessibilityCheckLevelAtom`, starts at AA each
-  session): which WCAG level text contrast is measured against.
-- **Findings**, grouped **Fails** → **Fails at AAA only** (AAA level only)
-  → **Advisories**. Each is a button: the message says what, where and
+- **Level** radio (`accessibilityCheckLevelAtom`, starts at the lower
+  level each session): which of the contrast model's two levels text
+  contrast is measured against — **AA / AAA** under WCAG 2, **Lc 60 /
+  Lc 75** under APCA. The model's name sits beside the radio; the model
+  itself is the Settings → Accessibility preference (below).
+- **Findings**, grouped **Fails** → **Fails at AAA only** / **Fails at
+  Lc 75 only** (stricter level only) → **Advisories**. Each is a button: the message says what, where and
   how far off; the line under it says how to fix it. Hovering or focusing
   a row outlines its targets on the chart (brand dashed boxes drawn in a
   layer beside the chart, `aria-hidden`); clicking also scrolls the first
@@ -3685,7 +3785,19 @@ badge (`aria-hidden`; the same count is in the card's heading).
   mid-pass would read a half-laid-out frame), as do editor-state changes,
   window resizes and webfont loads. Until the chart has laid out it says
   "Waiting for the chart to finish drawing…".
-- **Empty state:** "No accessibility issues found at AA." (or AAA).
+- **Empty state:** "No accessibility issues found at AA." (or AAA,
+  Lc 60, Lc 75).
+
+**Settings → Accessibility** (`/settings/accessibility`,
+`AccessibilityPage`, between Fonts and Sharing in the rail): the check's
+preferences, for this browser only — never saved with a visual, never
+in exports or embeds. One so far: **Text contrast**, a radio for the
+contrast model, **APCA (recommended)** — the default — or **WCAG 2**,
+with a line under it spelling out the two levels the chosen model uses.
+Stored device-locally as `vis-components:contrastAlgorithm`
+(`contrastAlgorithmAtom`; an unknown stored value falls back to APCA)
+and synced across open tabs, so an editor picks up a change made on the
+settings page in another tab.
 
 **Rules** (`lib/accessibilityCheck.ts`; the DOM is read by
 `components/accessibility/collectAccessibilityDom.ts`, editor state by
@@ -3700,11 +3812,27 @@ badge (`aria-hidden`; the same count is in the card's heading).
    (`isPointInFill`, so `pointer-events: none` layers such as label
    backgrounds and annotation boxes count) and composited down to the
    first opaque layer or the chart / page background. A text stroke of
-   1.5px or more is a halo and counts as the background. WCAG 2.x ratio;
-   AA needs 4.5:1 (3:1 for large text: ≥ 18pt, or ≥ 14pt bold), AAA 7:1
-   (4.5:1 large). At AAA, text that passes AA but not AAA is listed as
-   "Fails at AAA only". Ratios are shown floored to one decimal, so a
-   near miss never reads as a pass. Skipped: text over a gradient or
+   1.5px or more is a halo and counts as the background. Measured with
+   the contrast model chosen under Settings → Accessibility
+   (`contrastAlgorithmAtom`); the two models are one table,
+   `CONTRAST_MODELS`, so the rule is written once:
+   - **APCA** (the default) — the 0.0.98G-4g base algorithm with the W3
+     constants apca-w3 0.1.9 ships, implemented in `apcaContrast` from
+     the published math (no dependency, no copied code; the tests pin
+     the published reference values). Polarity-aware lightness contrast
+     Lc, judged by magnitude. The lower level needs Lc 60 (Lc 45 for
+     large text: ≥ 36px, or ≥ 24px bold — APCA's own "larger, heavier
+     text" sizes), the guideline's minimum for content text; the
+     stricter level adds the Lc 15 it suggests where readability
+     matters: Lc 75 (Lc 60 large). APCA's font-size lookup table is NOT
+     applied beyond that large-text cutoff — rule 5 covers size. Shown
+     floored to a whole Lc.
+   - **WCAG 2** — the 2.x luminance ratio; AA needs 4.5:1 (3:1 for
+     large text: ≥ 18pt, or ≥ 14pt bold), AAA 7:1 (4.5:1 large). Shown
+     floored to one decimal.
+   Either way a near miss never reads as a pass, and at the stricter
+   level text that passes the lower one is listed as "Fails at AAA
+   only" / "Fails at Lc 75 only". Skipped: text over a gradient or
    pattern fill (background unknown), emoji-only text (glyphs ignore
    their fill), invisible text.
 2. **Palette distinguishability — Advisory.** The categorical / ordinal
@@ -3726,7 +3854,8 @@ badge (`aria-hidden`; the same count is in the card's heading).
    field, not X / Y / a facet on the same field — and the level colors
    do not all differ by at least 3:1 in luminance (WCAG's accepted
    non-hue cue; such levels still separate in the black-and-white
-   preview).
+   preview). Always the WCAG 2 ratio, whichever model rule 1 measures
+   with: this is two fills side by side, not text on a background.
 4. **Red–green ordered palette — Advisory.** An ordinal palette or a
    color gradient whose two ends are a red and a green (e.g. the
    Stoplight presets, RdYlGn), which red-green color-blind readers see

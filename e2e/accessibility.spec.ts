@@ -98,6 +98,14 @@ const ROUTES: Array<{ label: string; open: (page: Page) => Promise<void> }> = [
 		},
 	},
 	{
+		label: "settings-accessibility",
+		open: async (page) => {
+			await seed(page)
+			await page.goto("/settings/accessibility", { waitUntil: "networkidle" })
+			await expect(page.getByRole("main")).toBeVisible()
+		},
+	},
+	{
 		label: "embed",
 		open: async (page) => {
 			await seed(page)

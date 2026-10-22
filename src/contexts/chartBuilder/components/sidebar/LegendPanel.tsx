@@ -1217,12 +1217,6 @@ export const LegendPanel = () => {
 						title="Legend text"
 						changed={groupChanged("text")}
 					>
-					{/* The legend section TITLES live in Titles → Legend titles;
-					 *  jump there rather than explain it in prose. */}
-					<SidebarJumpLink
-						label="Edit legend titles →"
-						target={{ section: "Titles", subsection: "legend-titles" }}
-					/>
 					{/* Align leads, matching the Labels panel's title rows
 					 *  (Align, then Family / Color / Size / Weight / Style). */}
 					<div className="flex items-center gap-2 text-sm">
@@ -1267,6 +1261,12 @@ export const LegendPanel = () => {
 						baseColor={inheritedTextFont.color}
 						baseSize={inheritedTextFont.size}
 						baseWeight={inheritedTextFont.weight}
+					/>
+					{/* The legend section TITLES live in Titles → Legend titles;
+					 *  jump there rather than explain it in prose. */}
+					<SidebarJumpLink
+						label="Edit legend titles →"
+						target={{ section: "Titles", subsection: "legend-titles" }}
 					/>
 				</CollapsibleSubsection>
 			)}

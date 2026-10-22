@@ -58,6 +58,11 @@ import {
 	resolveStackModes,
 	type StackModeEntry,
 } from "../../lib/stackMode"
+import {
+	barLedgerKey,
+	barTotalFieldName,
+	barTotalsByLedger,
+} from "../../lib/barTotalLabel"
 import { BAR_LABEL_EDGE_PAD_PX } from "../../lib/dataLabelsLayout"
 import { formatSingleLabel } from "../../lib/dataLabelsStyle"
 import { formatTextValue } from "../../lib/textEncoding"
@@ -172,6 +177,15 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 			? (dataLabels.value.fields ?? [])
 			: undefined
 	const dataset = useCurrentDatasetView()
+	// Bars layered by a channel offer the derived BAR TOTAL under Value
+	// (`lib/barTotalLabel.ts`): there is no column to aggregate —
+	// `buildBarAnchors` sums each bar's layers. A data set column of that
+	// name is just a column.
+	const barTotalField = barTotalFieldName(
+		(dataset?.fields ?? []).map((f) => f.name)
+	)
+	const valueIsBarTotal =
+		barTotalField !== null && dataLabels?.value?.field === barTotalField
 	const aestheticScales = useAestheticScales()
 	const legendHighlight = useLegendHighlight()
 	const markHover = useMarkHoverHighlight(aestheticScales.hue?.field.name ?? null)
@@ -291,8 +305,9 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 		// Prefer the new DataLabels.value field for per-slice text aggregation.
 		// Fall back to the legacy `encodings.text.field` so older saved visuals
 		// keep showing labels through the same pipeline.
-		const textField =
-			dataLabels?.value?.field ?? encodings.text?.field ?? undefined
+		const textField = valueIsBarTotal
+			? undefined
+			: (dataLabels?.value?.field ?? encodings.text?.field ?? undefined)
 		const textType = textField
 			? effectiveType(dataset, textField, overrides)
 			: undefined
@@ -461,6 +476,7 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 		props.measureMaxOverride,
 		props.measureMinOverride,
 		dataLabels?.value?.field,
+		valueIsBarTotal,
 	])
 
 	// Pattern defs depend only on aesthetic categories + slice group values +
@@ -845,6 +861,8 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 							encodings,
 							rows: rowsForChart,
 							valueFieldMapped,
+							barTotalField,
+							valueIsBarTotal,
 							sliceOpacity: (groupValues) =>
 								groupHighlight(legendHighlight, groupValues, aestheticScales)
 									.opacityMul,
@@ -1467,7 +1485,10 @@ const buildSliceLabels = ({
  * pattern / … under their field names), the measure under the length
  * field, and every label field aggregated over the slice's rows (numeric
  * → sum, else first non-empty — the `textValue` rule). The label layer
- * arranges that row with the user's templates. */
+ * arranges that row with the user's templates. The derived Bar total
+ * (`lib/barTotalLabel.ts`) is summed here — the layers of the slice's
+ * physical bar — and rides on every row under `barTotalField`; as the
+ * single-field Value (`valueIsBarTotal`) it is the label itself. */
 export const buildBarAnchors = ({
 	aggregation,
 	categoryScale,
@@ -1486,6 +1507,8 @@ export const buildBarAnchors = ({
 	valueFieldMapped,
 	sliceOpacity,
 	labelPointsScope,
+	barTotalField,
+	valueIsBarTotal,
 }: {
 	aggregation: Extract<Aggregation, { kind: "ok" }>
 	categoryScale: ReturnType<typeof scaleBand<string>>
@@ -1539,6 +1562,16 @@ export const buildBarAnchors = ({
 	/** What "first" / "last" run over (`DataLabelsConfig.labelPointsScope`).
 	 *  Drives each anchor's `series` + `rank`; defaults to "series". */
 	labelPointsScope?: LabelPointsScope
+	/** The name the derived Bar total is exposed under (`BAR_TOTAL_FIELD`)
+	 *  when the data set has no column of that name; null otherwise. A
+	 *  multi-field row carries the slice's bar total under it when it's
+	 *  among `labelFields` — a column of that name aggregates like any
+	 *  field. */
+	barTotalField?: string | null
+	/** The single-field Value IS the derived Bar total: every slice labels
+	 *  its bar's total — the sum of the layers in its physical bar (its leaf
+	 *  sub-band, on its sign side) — in place of its `textValue`. */
+	valueIsBarTotal?: boolean
 }): DataLabelAnchor[] => {
 	const anchors: DataLabelAnchor[] = []
 	const maxLeaves = countMaxLeaves(aggregation.stacks, modes)
@@ -1650,6 +1683,14 @@ export const buildBarAnchors = ({
 		const catSize = categoryScale.bandwidth()
 		const geo = layoutSlices(stack, modes, catPos, catSize, maxLeaves)
 		const geoByKey = new Map(geo.map((g) => [g.key, g]))
+		// Each physical bar's total — one ledger per leaf sub-band and sign
+		// side, the unit the "stack" scope ranks layers in.
+		const totals = barTotalsByLedger(
+			stack.slices.map((s) => ({
+				leafIndex: geoByKey.get(s.key)?.leafIndex ?? 0,
+				value: s.value,
+			}))
+		)
 		stack.slices.forEach((slice) => {
 			const g = geoByKey.get(slice.key)
 			if (!g) return
@@ -1703,9 +1744,16 @@ export const buildBarAnchors = ({
 			const measureValue = aggregation.mirrored
 				? Math.abs(slice.value)
 				: slice.value
-			const labelValue = valueFieldMapped
-				? slice.textValue
-				: (slice.textValue ?? measureValue)
+			// The slice's bar total (`lib/barTotalLabel.ts`) — the magnitude on
+			// a mirrored bar, like the measure.
+			const rawTotal =
+				totals.get(barLedgerKey(g.leafIndex, slice.value)) ?? slice.value
+			const barTotal = aggregation.mirrored ? Math.abs(rawTotal) : rawTotal
+			const labelValue = valueIsBarTotal
+				? barTotal
+				: valueFieldMapped
+					? slice.textValue
+					: (slice.textValue ?? measureValue)
 			const formatted = formatSingleLabel(labelValue, formatSpec, decimals)
 			// `groupValues` carries the slice's hue (when hue is mapped) so
 			// stacked / grouped bars colored by hue get matching label fills.
@@ -1729,7 +1777,9 @@ export const buildBarAnchors = ({
 			let row: Record<string, unknown> | undefined
 			if (labelFields && labelFields.length > 0 && encodings) {
 				row = {}
-				for (const f of labelFields) row[f] = aggregateField(sliceRows, f)
+				for (const f of labelFields)
+					row[f] =
+						f === barTotalField ? barTotal : aggregateField(sliceRows, f)
 				row[aggregation.categoryField] = stack.category
 				for (const [channel, value] of Object.entries(slice.groupValues)) {
 					const fieldName = encodings[channel as keyof typeof encodings]?.field

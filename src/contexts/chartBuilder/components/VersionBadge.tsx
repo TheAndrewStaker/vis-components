@@ -4,6 +4,8 @@ import { pruneOrphanFields } from "../lib/datasetCompat"
 import { withFreshContentHash } from "../lib/datasetDedupe"
 import type { DatasetLike } from "../lib/datasetMeta"
 import type { Dataset } from "../lib/types"
+import { normalizeVersionFields } from "../lib/versionFields"
+import { describeVersionOrigin } from "../lib/versionTransforms"
 import {
 	datasetIndexAtom,
 	mutateDatasetBodyAtom,
@@ -94,14 +96,18 @@ export const VersionBadge = ({ compact = false }: { compact?: boolean }) => {
 				d.latestVersionId === versionId ? fallbackLatest : d.latestVersionId
 			// The deleted version may have been the only one carrying an
 			// additively-merged column; drop fields no remaining version has.
-			// Deleting a version changes the content, so the cached content
-			// hash must follow (see withFreshContentHash).
+			// Deleting the latest version promotes its predecessor's own column
+			// list (a reshape leaves the wide table with one) to the data
+			// set's first. Deleting a version changes the content, so the
+			// cached content hash must follow (see withFreshContentHash).
 			return withFreshContentHash(
-				pruneOrphanFields({
-					...d,
-					versions: remaining,
-					latestVersionId,
-				})
+				pruneOrphanFields(
+					normalizeVersionFields({
+						...d,
+						versions: remaining,
+						latestVersionId,
+					})
+				)
 			)
 		})
 		// If the deleted version was being previewed, fall back to latest.
@@ -229,6 +235,9 @@ const VersionList = ({
 					const isLatest = v.id === dataset.latestVersionId
 					const isActive =
 						(previewVersionId === null && isLatest) || previewVersionId === v.id
+					// How the version came to be: a hand edit, a reshape, a derived
+					// variable — nothing for an import.
+					const origin = describeVersionOrigin(v)
 					return (
 						<li
 							key={v.id}
@@ -256,7 +265,7 @@ const VersionList = ({
 									</div>
 									<div className="text-sm vc-muted">
 										{formatTime(v.createdAt)} · {v.filename}
-										{v.editedFrom !== undefined && " · edited by hand"}
+										{origin !== null && ` · ${origin}`}
 									</div>
 								</button>
 								{canDelete && !isActive && (

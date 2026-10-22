@@ -1,6 +1,8 @@
 import { axisFieldsFor } from "../../../lib/axisFields"
+import { barTotalFieldName, withBarTotals } from "../../../lib/barTotalLabel"
 import type { ChannelConfigs, DataLabelsConfig } from "../../../lib/channelConfig"
 import { getChartModeDef } from "../../../lib/chartMode"
+import { isBarModeId } from "../../../lib/chartModes/families"
 import {
 	labelKeysFor,
 	normalizeComposedLabels,
@@ -16,6 +18,7 @@ import { effectiveType } from "../../../lib/fieldType"
 import { ptToPx } from "../../../lib/fontUnit"
 import type { MapConfig } from "../../../lib/mapConfig"
 import { BASE_MARGIN } from "../../../lib/plotLayout"
+import { resolveStackModes } from "../../../lib/stackMode"
 import type {
 	DataLabelsEncodings,
 	DatasetView,
@@ -293,6 +296,34 @@ export const computeDataLabelOverflow = ({
 	// (longest-by-length first) so a huge dataset doesn't pay a measureText
 	// per row; anything beyond the cap is shorter than every kept string by
 	// enough characters that it can't out-measure them in practice.
+	// Bars: the derived Bar total (`lib/barTotalLabel.ts`) is no column, so
+	// each row is extended with its bar's total — summed per panel, category
+	// and group sub-band, as the renderer does — and a `{Bar total}` label
+	// measures what it draws. Other charts (where it isn't offered) and a
+	// data set column of that name read the rows as they are.
+	const barTotalField = isBarModeId(memoMode.id)
+		? barTotalFieldName(dataset.fields.map((f) => f.name))
+		: null
+	const usesBarTotal =
+		barTotalField !== null &&
+		(isMulti
+			? (value.fields ?? []).includes(barTotalField)
+			: value.field === barTotalField)
+	const candidateRows =
+		barTotalField !== null && usesBarTotal
+			? withBarTotals(dataset.rows, barTotalField, {
+					keyFields: [
+						memoMode.canvas.measureAxis === "y" ? xField : yField,
+						encodings.facet?.field,
+						encodings.facetRow?.field,
+						encodings.facetCol?.field,
+						...resolveStackModes(channelConfigs, encodings)
+							.filter((m) => m.mode === "group")
+							.map((m) => encodings[m.channel]?.field),
+					].filter((f): f is string => !!f),
+					lengthField: encodings.length?.field ?? null,
+				})
+			: dataset.rows
 	const candidatesByTemplate = new Map<string | undefined, string[]>()
 	for (const p of profiles) {
 		if (candidatesByTemplate.has(p.template)) continue
@@ -302,7 +333,7 @@ export const computeDataLabelOverflow = ({
 			fieldFormats: dataLabels.fieldFormats,
 		}
 		const distinct = new Set<string>()
-		for (const row of dataset.rows) {
+		for (const row of candidateRows) {
 			const text = buildLabelText(row, value, labelCfg, fallbackField)
 			if (text) distinct.add(text)
 		}

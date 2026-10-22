@@ -251,6 +251,60 @@ const patched = <T extends object>(base: T, patch: Partial<T>): T => {
 	return base
 }
 
+/** Swap `{Old}` tokens inside one derived variable — its Math formula,
+ * Combine-text template, and If/else conditions, outputs and fallback. The
+ * variable's own NAME is left alone (renaming the variable is the caller's
+ * decision). Same reference when nothing mentions the old name. */
+export const renameDerivedVariableTokens = (
+	v: DerivedVariable,
+	oldName: string,
+	newName: string
+): DerivedVariable =>
+	patched(v, {
+		math: v.math
+			? patched(v.math, {
+					formula:
+						renameLabelTokens(v.math.formula, oldName, newName) ??
+						v.math.formula,
+				})
+			: v.math,
+		concat: v.concat
+			? patched(v.concat, {
+					template:
+						renameLabelTokens(v.concat.template, oldName, newName) ??
+						v.concat.template,
+				})
+			: v.concat,
+		rules: v.rules
+			? patched(v.rules, {
+					rules: mapItems(v.rules.rules, (r) =>
+						patched(r, {
+							condition:
+								renameLabelTokens(r.condition, oldName, newName) ??
+								r.condition,
+							output:
+								renameLabelTokens(r.output, oldName, newName) ?? r.output,
+						})
+					),
+					fallback:
+						renameLabelTokens(v.rules.fallback, oldName, newName) ??
+						v.rules.fallback,
+				})
+			: v.rules,
+	})
+
+/** Swap a column in a reshape's ID / Combine membership lists. Same
+ * reference when neither lists the old name. */
+export const renameReshapeFields = (
+	rc: ReshapeConfig,
+	oldName: string,
+	newName: string
+): ReshapeConfig =>
+	patched(rc, {
+		idFields: renameInList(rc.idFields, oldName, newName) ?? rc.idFields,
+		meltFields: renameInList(rc.meltFields, oldName, newName) ?? rc.meltFields,
+	})
+
 // ---------------------------------------------------------------------------
 // The per-visual rewrite
 // ---------------------------------------------------------------------------
@@ -491,42 +545,13 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 	// mode this is deliberately NOT run — like every other view-field surface;
 	// a melt column's name only appears in expressions as a string literal,
 	// and literals are never rewritten anywhere.)
-	const swapDerivedTokens = (v: DerivedVariable): DerivedVariable =>
-		patched(v, {
-			math: v.math
-				? patched(v.math, {
-						formula:
-							renameLabelTokens(v.math.formula, oldName, newName) ??
-							v.math.formula,
-					})
-				: v.math,
-			concat: v.concat
-				? patched(v.concat, {
-						template:
-							renameLabelTokens(v.concat.template, oldName, newName) ??
-							v.concat.template,
-					})
-				: v.concat,
-			rules: v.rules
-				? patched(v.rules, {
-						rules: mapItems(v.rules.rules, (r) =>
-							patched(r, {
-								condition:
-									renameLabelTokens(r.condition, oldName, newName) ??
-									r.condition,
-								output:
-									renameLabelTokens(r.output, oldName, newName) ?? r.output,
-							})
-						),
-						fallback:
-							renameLabelTokens(v.rules.fallback, oldName, newName) ??
-							v.rules.fallback,
-					})
-				: v.rules,
-		})
 	const dv = state.derivedVariablesConfig
 	const derivedVariablesConfig = dv
-		? patched(dv, { variables: mapItems(dv.variables, swapDerivedTokens) })
+		? patched(dv, {
+				variables: mapItems(dv.variables, (v) =>
+					renameDerivedVariableTokens(v, oldName, newName)
+				),
+			})
 		: dv
 
 	const tc = state.tooltipConfig
@@ -880,13 +905,7 @@ export const renameFieldInConfigs = <T extends FieldNameConfigs>(
 		reshapeApplies(datasetFields, rc) &&
 		presentMeltFields(datasetFields, rc).some((f) => f.name === oldName)
 
-	const reshapeConfig = rc
-		? patched(rc, {
-				idFields: renameInList(rc.idFields, oldName, newName) ?? rc.idFields,
-				meltFields:
-					renameInList(rc.meltFields, oldName, newName) ?? rc.meltFields,
-			})
-		: rc
+	const reshapeConfig = rc ? renameReshapeFields(rc, oldName, newName) : rc
 
 	const base = patched(state, { reshapeConfig } as Partial<T>)
 	return melted

@@ -22,22 +22,27 @@ export const Sidebar = () => {
 		// stack rhythm plus a min-width floor, so the aside scrolls past it
 		// instead of the rows squeezing.
 		//
-		// `min-w-80` (320px) is that floor: control rows are a fixed label
+		// `min-w-95` (380px — SIDEBAR_CONTENT_FLOOR in lib/storage.ts, which
+		// shows the arithmetic) is that floor: control rows are a fixed label
 		// column (LABEL_COL's `w-24`) plus fixed-width controls, and the
-		// widest canonical row — a color row of hex box + swatch + palette
-		// picker, ~280px — needs 320px once the section's `px-3` and the
-		// panel's `p-2` are paid. Below it the flexible dropdowns used to
-		// collapse to ~40% of their width and trailing controls slid out of
-		// reach. The default sidebar width (lib/storage.ts) sits just above
-		// 320 + this aside's `px-2`, so the default view opens with no
-		// horizontal scrollbar.
+		// widest canonical row — a per-value color row of hex box + swatch +
+		// palette picker + its "reset" link, ~321px — needs 377px once the
+		// section's `px-3`, the option panel's and the subsection card's 8px
+		// are paid on both sides. Below it the trailing control slid out of
+		// reach, which reads as the option not existing. The wide layout's
+		// column can't go narrower than the floor + this aside's `px-2` +
+		// slack (SIDEBAR_MIN_WIDTH; the resize handle collapses the column
+		// instead) + the vertical scrollbar's gutter, which
+		// `scrollbar-gutter: stable` reserves whether or not the menu
+		// overflows, so it never scrolls sideways there. The tablet sheet is
+		// SIDEBAR_MIN_WIDTH wide for the same reason.
 		//
 		// Below `sm` the floor is dropped: the narrow-layout sheet is
 		// `100% - 1.5rem` wide, so on a 320px phone it is 296px and the floor
-		// would make the whole menu scroll sideways. The rows give up at most
-		// ~24px there, which the color row's hex box absorbs (ColorInput).
-		<aside className="bg-vc-sidebar h-full overflow-auto px-2 py-3 lg:py-5">
-			<div className="flex min-w-0 flex-col gap-1 sm:min-w-80 lg:gap-3">
+		// would make the whole menu scroll sideways. The rows shrink there,
+		// starting with the color row's hex box (ColorInput).
+		<aside className="bg-vc-sidebar h-full overflow-auto px-2 py-3 [scrollbar-gutter:stable] lg:py-5">
+			<div className="flex min-w-0 flex-col gap-1 sm:min-w-95 lg:gap-3">
 				<AsideSection title="Data">
 					<DataUpload />
 					<ReshapePanel />

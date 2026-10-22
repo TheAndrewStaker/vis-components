@@ -222,6 +222,27 @@ describe("pruneOrphanFields", () => {
 		expect(pruneOrphanFields(d)).toBe(d)
 	})
 
+	it("judges only the versions that share the data set's list", () => {
+		// v1 is the wide table before a reshape, with its own columns; its
+		// rows must not keep `x` alive in the shared (long) list, nor can
+		// the shared list's `cat` be judged missing by them.
+		const d = dataset(
+			[c("cat"), q("x")],
+			[
+				{ ...version("v1", [{ x: "1", y: "2" }]), fields: [q("x"), q("y")] },
+				version("v2", [{ cat: "x" }]),
+			]
+		)
+		expect(pruneOrphanFields(d).fields).toEqual([c("cat")])
+		// Every version carrying its own list: nothing to judge the shared
+		// list by, so nothing is pruned.
+		const allOwn = dataset(
+			[q("x")],
+			[{ ...version("v1", [{ y: "1" }]), fields: [q("y")] }]
+		)
+		expect(pruneOrphanFields(allOwn)).toBe(allOwn)
+	})
+
 	it("drops blank-named fields left by a deleted upload with empty headers", () => {
 		const d = dataset(
 			[q("x"), c(""), c("_1")],

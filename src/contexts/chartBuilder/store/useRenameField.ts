@@ -11,6 +11,7 @@ import {
 	type FieldNameConfigs,
 } from "../lib/renameField"
 import type { Field } from "../lib/types"
+import { renameFieldInVersions } from "../lib/versionFields"
 
 import {
 	currentDatasetViewAtom,
@@ -170,8 +171,9 @@ export const useRenameDerivedVariable = () => {
  *  1. The dataset: the field takes the new name and remembers the old one in
  *     `sourceNames` (stored rows are never rewritten — `resolveDatasetView`
  *     remaps old row keys at view time, and `diffFields` matches later
- *     uploads on either name). Content hash refreshed, like every fields
- *     mutation.
+ *     uploads on either name), in the data set's list and in every
+ *     version's own list and stored transform (`renameFieldInVersions`).
+ *     Content hash refreshed, like every fields mutation.
  *  2. The open editor's atoms, through `renameFieldInConfigs` — encodings,
  *     per-field maps, templates, reshape membership, melted value keys.
  *  3. Every SAVED visual bound to this dataset, through the same rewrite —
@@ -198,6 +200,7 @@ export const useRenameField = () => {
 					withFreshContentHash({
 						...d,
 						fields: renameDatasetField(d.fields, oldName, newName),
+						versions: renameFieldInVersions(d.versions, oldName, newName),
 					})
 				)
 				if (!applied)

@@ -26,10 +26,7 @@ import {
 	useCreateNewDataset,
 	useHandleCsvUpload,
 } from "../../store/useCreateNewDataset"
-import {
-	currentRawDatasetViewAtom,
-	useCurrentDatasetView,
-} from "../../store/useCurrentDatasetView"
+import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
 
 import { Button } from "../../../../components/ui/Button"
 import { Input } from "../../../../components/ui/Input"
@@ -42,10 +39,11 @@ type Mode = "addVersion" | "newVisualization"
 
 export const DataUpload = () => {
 	const inputRef = useRef<HTMLInputElement>(null)
+	// Also what "download data" hands back: the table the chart draws from
+	// and the data drawer shows — hand edits (saved as versions), the
+	// reshape, numeric conversions and derived columns included — so the
+	// file matches the row and field counts beside the link.
 	const currentDataset = useCurrentDatasetView()
-	// The download hands back the RAW version — cells as imported, no
-	// reshape / conversions / derived columns — so it re-uploads cleanly.
-	const rawDataset = useAtomValue(currentRawDatasetViewAtom)
 	const [error, setError] = useState<string | null>(null)
 	// The cost note goes to a root-level modal, not to local state: the
 	// new-visualization path navigates and would remount this away.
@@ -88,19 +86,15 @@ export const DataUpload = () => {
 						{currentDataset.totalVersions === 1
 							? "v1"
 							: `v${currentDataset.versionIndex} of ${currentDataset.totalVersions}`}
-						{rawDataset && (
-							<>
-								{" "}
-								·{" "}
-								<button
-									type="button"
-									onClick={() => downloadDatasetCsv(rawDataset)}
-									className="py-0.5 text-brand-500 underline hover:text-brand-600 dark:text-indigo-400"
-								>
-									download data
-								</button>
-							</>
-						)}
+						{" "}
+						·{" "}
+						<button
+							type="button"
+							onClick={() => void downloadDatasetCsv(currentDataset)}
+							className="py-0.5 text-brand-500 underline hover:text-brand-600 dark:text-indigo-400"
+						>
+							download data
+						</button>
 					</div>
 				</div>
 			)}

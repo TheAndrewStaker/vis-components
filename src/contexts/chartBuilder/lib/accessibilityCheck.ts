@@ -2,9 +2,10 @@ import { hcl, lab, rgb } from "d3-color"
 
 /* Accessibility check — the pure half of the editor's "Accessibility check"
  * toggle (APPLICATION.md, "Accessibility preview and check"). Color math
- * (WCAG contrast, color-vision-deficiency simulation, CIE ΔE) plus the rule
- * evaluation over a mode-agnostic input the overlay collects from the
- * rendered chart and the editor state. Nothing here touches the DOM. */
+ * (WCAG 2 / APCA text contrast, color-vision-deficiency simulation, CIE ΔE)
+ * plus the rule evaluation over a mode-agnostic input the overlay collects
+ * from the rendered chart and the editor state. Nothing here touches the
+ * DOM. */
 
 // ---------------------------------------------------------------------------
 // Color math
@@ -61,6 +62,59 @@ export const contrastRatio = (fgHex: string, bgHex: string): number => {
 	return (hi + 0.05) / (lo + 0.05)
 }
 
+/* APCA — Accessible Perceptual Contrast Algorithm (Myndex): the sRGB path
+ * of the 0.0.98G-4g base algorithm with the W3 constants apca-w3 0.1.9
+ * ships, written here from the published math (no code taken from it).
+ * `apcaContrast` reproduces the published reference values to three
+ * decimals (see the tests). */
+const APCA = {
+	trc: 2.4,
+	rco: 0.212_672_9,
+	gco: 0.715_152_2,
+	bco: 0.072_175,
+	normBg: 0.56,
+	normTxt: 0.57,
+	revTxt: 0.62,
+	revBg: 0.65,
+	blkThrs: 0.022,
+	blkClmp: 1.414,
+	scale: 1.14,
+	offset: 0.027,
+	loClip: 0.1,
+	deltaYmin: 0.000_5,
+} as const
+
+/** APCA's estimated screen luminance Y of an sRGB color — a plain 2.4
+ *  power curve by design, not WCAG's piecewise transfer. */
+const apcaY = ({ r, g, b }: Rgb): number =>
+	APCA.rco * (r / 255) ** APCA.trc +
+	APCA.gco * (g / 255) ** APCA.trc +
+	APCA.bco * (b / 255) ** APCA.trc
+
+/** Soft clamp near black, standing in for screen flare and the eye's
+ *  response there. */
+const apcaClampBlack = (y: number): number =>
+	y > APCA.blkThrs ? y : y + (APCA.blkThrs - y) ** APCA.blkClmp
+
+/** APCA lightness contrast Lc of text on an opaque background. Signed:
+ *  positive for dark text on light (about 0–106), negative for light text
+ *  on dark (about 0 to −108); 0 when the pair is too close to matter. The
+ *  check judges the magnitude. */
+export const apcaContrast = (textHex: string, bgHex: string): number => {
+	const t = parseColor(textHex)
+	const b = parseColor(bgHex)
+	if (!t || !b) return 0
+	const yTxt = apcaClampBlack(apcaY(t))
+	const yBg = apcaClampBlack(apcaY(b))
+	if (Math.abs(yBg - yTxt) < APCA.deltaYmin) return 0
+	if (yBg > yTxt) {
+		const sapc = (yBg ** APCA.normBg - yTxt ** APCA.normTxt) * APCA.scale
+		return sapc < APCA.loClip ? 0 : (sapc - APCA.offset) * 100
+	}
+	const sapc = (yBg ** APCA.revBg - yTxt ** APCA.revTxt) * APCA.scale
+	return sapc > -APCA.loClip ? 0 : (sapc + APCA.offset) * 100
+}
+
 /** Source-over composite of `fg` at `alpha` onto an opaque `bg` (sRGB
  *  space, as browsers blend). Returns a hex color. */
 export const compositeOver = (fg: string, alpha: number, bg: string): string => {
@@ -76,6 +130,8 @@ export const compositeOver = (fg: string, alpha: number, bg: string): string => 
 	})
 }
 
+/** The check's two strictness levels, named by the contrast model: AA / AAA
+ *  under WCAG 2, Lc 60 / Lc 75 under APCA. */
 export type ContrastLevel = "AA" | "AAA"
 
 /** WCAG "large text": at least 18pt, or at least 14pt bold. */
@@ -85,6 +141,22 @@ export const isLargeText = (sizePt: number, bold: boolean): boolean =>
 /** Minimum contrast ratio WCAG 1.4.3 (AA) / 1.4.6 (AAA) asks of text. */
 export const requiredContrast = (level: ContrastLevel, large: boolean): number =>
 	level === "AA" ? (large ? 3 : 4.5) : large ? 4.5 : 7
+
+/** APCA's "larger, heavier text such as headlines": at least 36px, or at
+ *  least 24px bold — the sizes its Lc 45 level is written for. */
+export const isLargeTextApca = (sizePx: number, bold: boolean): boolean =>
+	sizePx >= 36 || (bold && sizePx >= 24)
+
+/** Minimum APCA Lc the check's two levels ask of text. The lower level is
+ *  the guideline's minimum for content text — Lc 60, Lc 45 for large text
+ *  — "what you might think of as AA"; the stricter one adds the Lc 15 it
+ *  suggests where readability matters (Lc 75 / 60). APCA's font-size
+ *  lookup table is not applied beyond the large-text cutoff: text size has
+ *  its own rule. */
+export const requiredContrastApca = (
+	level: ContrastLevel,
+	large: boolean
+): number => (level === "AA" ? (large ? 45 : 60) : large ? 60 : 75)
 
 export type VisionType = "protanopia" | "deuteranopia" | "tritanopia"
 
@@ -413,6 +485,64 @@ const quote = (s: string): string => {
 	return `“${t.length > 40 ? `${t.slice(0, 39)}…` : t}”`
 }
 
+// ---------------------------------------------------------------------------
+// Contrast models
+// ---------------------------------------------------------------------------
+
+/** Which contrast model text is measured with — the Settings →
+ *  Accessibility preference. */
+export type ContrastAlgorithm = "apca" | "wcag2"
+
+export const CONTRAST_ALGORITHMS: readonly ContrastAlgorithm[] = ["apca", "wcag2"]
+
+export const DEFAULT_CONTRAST_ALGORITHM: ContrastAlgorithm = "apca"
+
+/** Everything rule 1 needs from a contrast model, so the two models share
+ *  one rule and differ only in this table. */
+export type ContrastModel = {
+	/** Short name for the UI ("APCA", "WCAG 2"). */
+	name: string
+	/** Contrast of text on an opaque background, as a magnitude: a WCAG
+	 *  ratio (1–21) or an APCA |Lc| (0–108). */
+	measure: (textHex: string, bgHex: string) => number
+	/** Text big enough for the model's lower bar. */
+	isLarge: (fontSizePx: number, bold: boolean) => boolean
+	/** The least contrast a level asks of (large) text. */
+	required: (level: ContrastLevel, large: boolean) => number
+	/** A measured value for display, floored so a near miss never reads as
+	 *  a pass. */
+	format: (value: number) => string
+	/** A level as the card names it ("AA", "Lc 60"). */
+	levelLabel: (level: ContrastLevel) => string
+	/** The clause after the measured value in a finding. */
+	requirement: (level: ContrastLevel, need: number, large: boolean) => string
+}
+
+const fmtLc = (lc: number): string => `Lc ${Math.floor(lc)}`
+
+export const CONTRAST_MODELS: Record<ContrastAlgorithm, ContrastModel> = {
+	apca: {
+		name: "APCA",
+		measure: (text, bg) => Math.abs(apcaContrast(text, bg)),
+		isLarge: isLargeTextApca,
+		required: requiredContrastApca,
+		format: fmtLc,
+		levelLabel: (level) => fmtLc(requiredContrastApca(level, false)),
+		requirement: (_level, need, large) =>
+			`at least Lc ${need} is needed${large ? " for large text" : ""}`,
+	},
+	wcag2: {
+		name: "WCAG 2",
+		measure: contrastRatio,
+		isLarge: (fontSizePx, bold) => isLargeText(fontSizePx * PX_TO_PT, bold),
+		required: requiredContrast,
+		format: fmtRatio,
+		levelLabel: (level) => level,
+		requirement: (level, need, large) =>
+			`${level} needs ${need}:1${large ? " for large text" : ""}`,
+	},
+}
+
 const VISION_NAME: Record<"normal" | VisionType, string> = {
 	normal: "anyone",
 	protanopia: "people with protanopia (red-blind)",
@@ -474,17 +604,19 @@ const roleNoun = (role: TextRole, n: number): string =>
  *  meaningless. Needs at least one letter or digit to be measured. */
 const hasMeasurableGlyphs = (s: string): boolean => /[\p{L}\p{N}]/u.test(s)
 
-/** Rule 1 — text contrast, grouped by role, background and requirement so
- *  twelve failing tick labels make one finding (quoting the worst ratio)
- *  with twelve targets. */
+/** Rule 1 — text contrast, measured with `model`, grouped by role,
+ *  background and requirement so twelve failing tick labels make one
+ *  finding (quoting the worst value) with twelve targets. */
 const textContrastFindings = (
 	texts: TextSample[],
-	level: ContrastLevel
+	level: ContrastLevel,
+	model: ContrastModel
 ): AccessibilityFinding[] => {
 	type Group = {
 		role: TextRole
 		bgLabel: string
-		ratio: number
+		/** The group's lowest contrast, in the model's unit. */
+		value: number
 		need: number
 		aaaOnly: boolean
 		large: boolean
@@ -496,29 +628,29 @@ const textContrastFindings = (
 		const bg = effectiveBackground(t.background)
 		if (!bg) continue
 		const fg = compositeOver(t.color, t.alpha, bg)
-		const ratio = contrastRatio(fg, bg)
-		const large = isLargeText(t.fontSizePx * PX_TO_PT, t.bold)
-		const needAA = requiredContrast("AA", large)
-		const needAAA = requiredContrast("AAA", large)
+		const value = model.measure(fg, bg)
+		const large = model.isLarge(t.fontSizePx, t.bold)
+		const needAA = model.required("AA", large)
+		const needAAA = model.required("AAA", large)
 		let need: number
 		let aaaOnly: boolean
-		if (ratio < needAA) {
+		if (value < needAA) {
 			need = level === "AA" ? needAA : needAAA
 			aaaOnly = false
-		} else if (level === "AAA" && ratio < needAAA) {
+		} else if (level === "AAA" && value < needAAA) {
 			need = needAAA
 			aaaOnly = true
 		} else continue
 		const bgLabel = t.background[0]?.label ?? "its background"
-		const key = [t.role, bgLabel, need, aaaOnly].join("\u0000")
+		const key = [t.role, bgLabel, need, aaaOnly, large].join("\u0000")
 		const g = groups.get(key)
 		if (!g) {
-			groups.set(key, { role: t.role, bgLabel, ratio, need, aaaOnly, large, items: [t] })
+			groups.set(key, { role: t.role, bgLabel, value, need, aaaOnly, large, items: [t] })
 		} else {
 			g.items.push(t)
 			// Lead with the worst offender.
-			if (ratio < g.ratio) {
-				g.ratio = ratio
+			if (value < g.value) {
+				g.value = value
 				g.items.unshift(g.items.pop() as TextSample)
 			}
 		}
@@ -526,19 +658,18 @@ const textContrastFindings = (
 	return [...groups.values()].map((g, n) => {
 		const count = g.items.length
 		const worst = quote(g.items[0]?.text ?? "")
+		const shown = model.format(g.value)
 		const who =
 			count === 1
-				? `The ${g.role} ${worst} is ${fmtRatio(g.ratio)}`
-				: `${count} ${roleNoun(g.role, count)} are as low as ${fmtRatio(g.ratio)} (${worst})`
+				? `The ${g.role} ${worst} is ${shown}`
+				: `${count} ${roleNoun(g.role, count)} are as low as ${shown} (${worst})`
 		// "the mark behind it" → "… behind them" for a group.
 		const against = count === 1 ? g.bgLabel : g.bgLabel.replace(/\bit$/, "them").replace(/^its /, "their ")
-		const levelName = g.aaaOnly || level === "AAA" ? "AAA" : "AA"
-		const sizeNote = g.large ? " for large text" : ""
 		return {
 			id: `text-contrast-${n}`,
 			rule: "text-contrast",
 			level: g.aaaOnly ? "fail-aaa" : "fail",
-			message: `${who} against ${against}; ${levelName} needs ${g.need}:1${sizeNote}.`,
+			message: `${who} against ${against}; ${model.requirement(level, g.need, g.large)}.`,
 			suggestion: ROLE_FIX[g.role],
 			targets: g.items.map(textTarget),
 		}
@@ -849,14 +980,16 @@ const LEVEL_ORDER: Record<FindingLevel, number> = {
 	advisory: 2,
 }
 
-/** Every finding for the collected input at the chosen conformance level,
- *  ordered Fails → AAA-only fails → Advisories. */
+/** Every finding for the collected input, text contrast measured with the
+ *  chosen model at the chosen level, ordered Fails → stricter-level-only
+ *  fails → Advisories. */
 export const evaluateAccessibility = (
 	input: AccessibilityInput,
-	level: ContrastLevel
+	level: ContrastLevel,
+	algorithm: ContrastAlgorithm
 ): AccessibilityFinding[] => {
 	const findings = [
-		...textContrastFindings(input.texts, level),
+		...textContrastFindings(input.texts, level, CONTRAST_MODELS[algorithm]),
 		...smallTextFindings(input.texts),
 		...(input.hue ? paletteFindings(input.hue) : []),
 		...colorOnlyFindings(input),

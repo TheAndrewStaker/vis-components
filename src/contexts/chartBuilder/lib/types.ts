@@ -66,9 +66,25 @@ export type ParsedUpload = {
 	rows: Array<Record<string, string>>
 }
 
-/** A single uploaded snapshot of a data set. The columns + types are
- * invariant across all versions of a Dataset (enforced at upload time), so
- * `fields` lives on Dataset, not on each version. */
+/** How a version was computed from the one it was made from (`editedFrom`)
+ * when it wasn't edited by hand: the wide→long reshape it applied and / or
+ * the derived variables it added, recomputed or removed. Absent on imported
+ * and hand-edited versions. Recorded so the version list can say what
+ * happened and the tray's ƒ marker can reopen a derived variable's
+ * definition (see `lib/versionTransforms.ts`). */
+export type VersionTransform = {
+	reshape?: ReshapeConfig
+	added?: DerivedVariable[]
+	recomputed?: DerivedVariable[]
+	removed?: string[]
+}
+
+/** A single snapshot of a data set: an upload or a paste, or a version made
+ * from an earlier one — a hand edit, a reshape, a derived variable. The
+ * columns + types are shared by every version that has no `fields` of its
+ * own (uploads are checked against them), so `fields` lives on Dataset, not
+ * on each version; only a version whose shape a later change left behind
+ * carries its own list. */
 export type DatasetVersion = {
 	id: string // "dv-<ts>-<rand>"
 	filename: string // original filename for this upload
@@ -83,13 +99,26 @@ export type DatasetVersion = {
 	 * shadow the matched column at view time. Absent on almost every version;
 	 * `resolveDatasetView` prefers it over the generic former-name scan. */
 	keyAliases?: Record<string, string>
-	/** The id of the version IN THIS DATASET this one was hand-edited from
-	 * (the data tray's Edit dialog). Absent on every imported version — an
-	 * upload or a paste. The data table outlines the cells that differ from
-	 * the chain's base (follow this until a version without it: the most
-	 * recent import), see `lib/datasetEdits.ts`. Optional and additive, like
-	 * `keyAliases`: no storage version bump. */
+	/** The id of the version IN THIS DATASET this one was made from: by a hand
+	 * edit (the data tray's Edit dialog), a reshape or a derived variable —
+	 * `transform` says which; absent there means a hand edit. Absent on every
+	 * imported version — an upload or a paste. The data table outlines the
+	 * cells a hand edit changed against the nearest version that wasn't one
+	 * (follow this through hand-edited versions only), see
+	 * `lib/datasetEdits.ts`. Optional and additive, like `keyAliases`: no
+	 * storage version bump. */
 	editedFrom?: string
+	/** What computed this version from `editedFrom` (a reshape, derived
+	 * variables). Absent on imported and hand-edited versions. */
+	transform?: VersionTransform
+	/** This version's columns, when they differ from the data set's.
+	 * `Dataset.fields` describes the latest version and every version without
+	 * a list of its own; a change that alters the table's shape — a reshape,
+	 * a derived variable added or removed, a hand edit that drops a column —
+	 * leaves the versions before it with the list they had here, so an older
+	 * version still previews as its own table (`lib/versionFields.ts`).
+	 * Optional and additive: no storage version bump. */
+	fields?: Field[]
 }
 
 /** A data set is a named, versioned collection of CSV uploads sharing the same
@@ -98,7 +127,9 @@ export type DatasetVersion = {
 export type Dataset = {
 	id: string // stable across versions
 	name: string // user-editable, defaults to first filename
-	fields: Field[] // shared across all versions (invariant)
+	/** The latest version's columns, shared by every version that carries no
+	 * `fields` of its own (uploads are checked against this list). */
+	fields: Field[]
 	versions: DatasetVersion[] // ordered oldest → newest
 	latestVersionId: string // pointer to the most recent version
 	createdAt: number // first-version timestamp
@@ -137,7 +168,7 @@ export type DatasetView = {
 	id: string // dataset id
 	name: string // dataset name
 	filename: string // current version's filename (for display)
-	fields: Field[] // dataset fields (invariant)
+	fields: Field[] // the resolved version's columns (its own, else the dataset's)
 	rows: Array<Record<string, string>> // current version's rows
 	createdAt: number // dataset's first-version timestamp
 	versionId: string // current version id
@@ -297,7 +328,10 @@ import type {
 	LineDashPattern,
 } from "./channelConfig"
 import type { LabelsConfig, LegendConfig, TooltipConfig } from "./labelsConfig"
-import type { DerivedVariablesConfig } from "./derivedVariables"
+import type {
+	DerivedVariable,
+	DerivedVariablesConfig,
+} from "./derivedVariables"
 import type { MapConfig } from "./mapConfig"
 import type { ReshapeConfig } from "./reshape"
 

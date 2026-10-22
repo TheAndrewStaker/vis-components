@@ -280,7 +280,7 @@ describe("Edit data in the tray", () => {
 		const store = mount(handEdited())
 		await waitFor(() => expect(editedCells()).toEqual(["25"]))
 		const dialog = openDialog()
-		expect(dialog.textContent).toContain("already a hand-edited copy")
+		expect(dialog.textContent).toContain("already a working copy")
 		typeInto(0, 1, "11")
 		fireEvent.click(screen.getByText("+ Add row"))
 		expect(gridRows()).toHaveLength(4)

@@ -27,11 +27,22 @@ import { ChartCanvas } from "./viz/ChartCanvas"
 import { DataTableBlock } from "./viz/DataTableBlock"
 import { AccessibilityCheckOverlay } from "./accessibility/AccessibilityCheckPanel"
 import { useEnsureCurrentDatasetLoaded } from "../store/useCurrentDatasetView"
+import { SIDEBAR_MIN_WIDTH } from "../lib/storage"
+import { scrollbarGutter } from "../../../lib/scrollbarGutter"
 
-// Narrowing past the sidebar's content floor (Sidebar's `min-w-80`) is safe:
-// the aside scrolls horizontally rather than squeezing its control rows.
-const MIN_WIDTH = 240
+// The column never goes narrower than the width that shows every control
+// row in full (lib/storage.ts): below it the aside scrolls horizontally and
+// the trailing control of each row slips out of view, which reads as the
+// option not existing. Dragging the handle past the floor collapses the
+// column away instead — once the pointer is COLLAPSE_PAST_MIN beyond it, so
+// overshooting the floor by a few pixels doesn't snap the menu shut.
+// Both bounds are on the STORED width, which leaves out the gutter the
+// aside reserves for a classic vertical scrollbar (`scrollbar-gutter:
+// stable`, Sidebar.tsx); the column adds that at layout time (0 where
+// scrollbars overlay the content), so one stored number fits every machine.
+const MIN_WIDTH = SIDEBAR_MIN_WIDTH
 const MAX_WIDTH = 560
+const COLLAPSE_PAST_MIN = 80
 
 /** Purple frame around the chart viewport while the open visual is
  *  published: the standing reminder that edits here reach embedded content
@@ -93,6 +104,8 @@ export const EditorLayout = () => {
 	// autosave, because both watch the same draft.
 	useEditorHistory()
 	const [sidebarWidth, setSidebarWidth] = useAtom(sidebarWidthAtom)
+	const [gutter] = useState(scrollbarGutter)
+	const columnWidth = Math.max(MIN_WIDTH, sidebarWidth) + gutter
 	// Two layouts for the left menu. WIDE (≥1024px): a resizable column the
 	// pull tab collapses away, persisted. NARROW (phones, tablets in
 	// portrait): the chart takes the whole width and the menu is an overlay
@@ -170,24 +183,30 @@ export const EditorLayout = () => {
 			startWidthRef.current = sidebarWidth
 			;(e.target as HTMLElement).setPointerCapture(e.pointerId)
 
-			const onMove = (ev: PointerEvent) => {
-				if (!draggingRef.current) return
-				const delta = ev.clientX - startXRef.current
-				const next = Math.min(
-					MAX_WIDTH,
-					Math.max(MIN_WIDTH, startWidthRef.current + delta)
-				)
-				setSidebarWidth(next)
-			}
 			const onUp = () => {
 				draggingRef.current = false
 				window.removeEventListener("pointermove", onMove)
 				window.removeEventListener("pointerup", onUp)
 			}
+			const onMove = (ev: PointerEvent) => {
+				if (!draggingRef.current) return
+				const raw = startWidthRef.current + ev.clientX - startXRef.current
+				if (raw < MIN_WIDTH - COLLAPSE_PAST_MIN) {
+					// Dragged well past the floor: collapse the column. Its
+					// handle unmounts with it, so the drag ends here. The stored
+					// width stays at the floor, so the pull tab reopens the menu
+					// with every row in full.
+					onUp()
+					setSidebarWidth(MIN_WIDTH)
+					setSidebarHidden(true)
+					return
+				}
+				setSidebarWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, raw)))
+			}
 			window.addEventListener("pointermove", onMove)
 			window.addEventListener("pointerup", onUp)
 		},
-		[sidebarWidth, setSidebarWidth]
+		[sidebarWidth, setSidebarWidth, setSidebarHidden]
 	)
 
 	const sidebar = (
@@ -207,7 +226,7 @@ export const EditorLayout = () => {
 				className="relative grid min-h-0 flex-1"
 				style={{
 					gridTemplateColumns: showSidebarColumn
-						? `${sidebarWidth}px auto minmax(0,1fr)`
+						? `${columnWidth}px auto minmax(0,1fr)`
 						: "minmax(0,1fr)",
 				}}
 			>
@@ -259,8 +278,14 @@ export const EditorLayout = () => {
 						/>
 						{/* The sheet leaves a 1.5rem strip of the chart showing on
 						 *  phones so the tab has somewhere to sit; on tablets it's
-						 *  a fixed-width panel like the desktop column. */}
-						<div className="absolute inset-y-0 left-0 z-20 w-[calc(100%-1.5rem)] border-r border-stone-200 shadow-xl sm:w-[360px] dark:border-stone-700">
+						 *  a panel at the desktop column's floor width, so its rows
+						 *  show in full there too. */}
+						<div
+							className="absolute inset-y-0 left-0 z-20 w-[calc(100%-1.5rem)] border-r border-stone-200 shadow-xl sm:w-(--vc-sheet-width) dark:border-stone-700"
+							style={
+								{ "--vc-sheet-width": `${columnWidth}px` } as React.CSSProperties
+							}
+						>
 							{sidebar}
 							<RailTab collapsed={false} onClick={() => setSheetOpen(false)} />
 						</div>

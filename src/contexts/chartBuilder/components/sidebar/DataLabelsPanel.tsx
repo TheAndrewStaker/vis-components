@@ -25,6 +25,7 @@ import {
 	flowRedundantLabelFields,
 	type FlowLabelNodes,
 } from "../../lib/flowNodeLabels"
+import { barTotalFieldName } from "../../lib/barTotalLabel"
 import {
 	POPULATION_LABEL,
 	composedLabelForField,
@@ -322,7 +323,6 @@ export const DataLabelsPanel = () => {
 		"center"
 	const sideLocksAlignmentFor = (field: string | null) =>
 		isBarMode && isVerticalBars && sideFor(field) !== "center"
-	const sideLocksAlignment = sideLocksAlignmentFor(null)
 	// Area charts get the same placements along each layer's measure extent
 	// ("Layer position"), plus the layer's top edge as the default.
 	const isAreaMode = isAreaModeId(chartMode)
@@ -383,6 +383,23 @@ export const DataLabelsPanel = () => {
 	// spells the unit out beneath them, so the two read as one sentence.
 	const whichLabelsOptionsFor = (key: string | null) =>
 		labelPointsOptions(showScopeFor(key))
+	// Bars layered by a channel (stack / overlay) carry a BAR TOTAL — the sum
+	// of a bar's layers — offered under Value as a derived variable
+	// (`lib/barTotalLabel.ts`; the bars' Node total), exactly where the Stack
+	// scope is. It stays listed while mapped, so a Stack → Group toggle
+	// doesn't empty the Value row; a data set column of that name wins.
+	const barTotalName = barTotalFieldName(
+		(dataset?.fields ?? []).map((f) => f.name)
+	)
+	const barTotalPicked =
+		barTotalName !== null &&
+		(encodings.value.field === barTotalName ||
+			(encodings.value.fields ?? []).includes(barTotalName))
+	const barTotalOptions =
+		barTotalName !== null &&
+		((scopeFamily === "bars" && scopeLayered) || barTotalPicked)
+			? [{ value: barTotalName, label: barTotalName }]
+			: []
 	const chartXField = chartEncodings.x?.field ?? null
 	const chartYField = chartEncodings.y?.field ?? null
 
@@ -554,6 +571,35 @@ export const DataLabelsPanel = () => {
 	const multiFields = labelKeys.keys
 	const labelTitles = labelKeys.titles
 	const perVariable = multiFields.length > 1
+	// A LONE composed label's bar Placement is its own entry — read over the
+	// layer-wide pair, written in place of it — as its Label selection
+	// already is: the renderer honors a label's entry first, and a checked
+	// Bar total arrives with one. The single-field label (`null`) keeps the
+	// layer-wide pair.
+	const loneLabelKey =
+		encodings.value.multiField === true && multiFields.length === 1
+			? (multiFields[0] ?? null)
+			: null
+	const primaryPlacement: FieldBarPlacement =
+		loneLabelKey === null
+			? {}
+			: (merged.fieldBarPlacements?.[loneLabelKey] ?? {})
+	const primaryPosition =
+		primaryPlacement.position ?? merged.barLabelPosition ?? "center"
+	const primarySide = primaryPlacement.side ?? merged.barLabelSide ?? "center"
+	const setPrimaryPlacement = (p: FieldBarPlacement) =>
+		loneLabelKey === null
+			? updateCfg({
+					...(p.position ? { barLabelPosition: p.position } : {}),
+					...(p.side ? { barLabelSide: p.side } : {}),
+				})
+			: updateCfg({
+					fieldBarPlacements: {
+						...(merged.fieldBarPlacements ?? {}),
+						[loneLabelKey]: { ...primaryPlacement, ...p },
+					},
+				})
+	const sideLocksAlignment = sideLocksAlignmentFor(loneLabelKey)
 	// "Split into individual variables": a label naming two or more
 	// variables can style each one separately under Color / Size / Text
 	// properties — a bold series name beside an unbolded value, a value
@@ -626,8 +672,8 @@ export const DataLabelsPanel = () => {
 				merged.avoidOverlaps === true ||
 				merged.xOffset !== 0 ||
 				merged.yOffset !== 0 ||
-				(isBarMode && (merged.barLabelPosition ?? "center") !== "center") ||
-				(isBarMode && (merged.barLabelSide ?? "center") !== "center"))) ||
+				(isBarMode && primaryPosition !== "center") ||
+				(isBarMode && primarySide !== "center"))) ||
 		ownLabelKeys.some(
 			(k) => (merged.fieldPositionRules?.[k]?.length ?? 0) > 0
 		) ||
@@ -768,6 +814,16 @@ export const DataLabelsPanel = () => {
 				...(isFlowMode && v === "" ? { none: true } : {}),
 			},
 		}))
+		// A total reads as the bar's once per bar, past its end: a fresh Bar
+		// total starts on the last layer of each stack, outside its end —
+		// movable like any label.
+		if (barTotalName !== null && v === barTotalName) {
+			updateCfg({
+				labelPoints: "last",
+				labelPointsScope: "stack",
+				barLabelPosition: "outside-end",
+			})
+		}
 	}
 	const setValueFields = (fields: string[]) => {
 		const prev = encodings.value.fields ?? []
@@ -783,6 +839,13 @@ export const DataLabelsPanel = () => {
 		const current = merged.composedLabels ?? []
 		const added = fields.filter((f) => !prev.includes(f))
 		const removed = prev.filter((f) => !fields.includes(f))
+		// A newly checked Bar total seeds ITS label where a total reads as the
+		// bar's: the last layer of each stack, outside its end — the same
+		// start the single-field pick gets, on the label's own entries.
+		const totalKey =
+			barTotalName !== null && added.includes(barTotalName)
+				? barTotalName
+				: null
 		updateCfg({
 			composedLabels: [
 				...current.filter(
@@ -792,6 +855,25 @@ export const DataLabelsPanel = () => {
 					.filter((f) => !current.some((l) => l.id === f))
 					.map(composedLabelForField),
 			],
+			...(totalKey !== null
+				? {
+						fieldLabelPoints: {
+							...(merged.fieldLabelPoints ?? {}),
+							[totalKey]: "last" as const,
+						},
+						fieldLabelPointsScope: {
+							...(merged.fieldLabelPointsScope ?? {}),
+							[totalKey]: "stack" as const,
+						},
+						fieldBarPlacements: {
+							...(merged.fieldBarPlacements ?? {}),
+							[totalKey]: {
+								...(merged.fieldBarPlacements?.[totalKey] ?? {}),
+								position: "outside-end" as const,
+							},
+						},
+					}
+				: {}),
 		})
 	}
 
@@ -1010,7 +1092,7 @@ export const DataLabelsPanel = () => {
 				}
 				onChange={setValueField}
 				eligible={labelTextEligible}
-				derivedOptions={flowFieldOptions}
+				derivedOptions={[...flowFieldOptions, ...barTotalOptions]}
 				extraOptions={[
 					{ value: DATA_LABELS_MULTI_VALUE, label: "Multiple variables…" },
 				]}
@@ -1028,6 +1110,7 @@ export const DataLabelsPanel = () => {
 						allFields={[
 							...labelTextEligible.map((f) => f.name),
 							...flowFieldOptions.map((o) => o.value),
+							...barTotalOptions.map((o) => o.value),
 						]}
 						onFieldsChange={setValueFields}
 						countryNames={countryNameFormats}
@@ -1554,13 +1637,9 @@ export const DataLabelsPanel = () => {
 						<SelectInput
 							label={isVerticalBars ? "Vertical" : "Horizontal"}
 							labelClassName={LABEL_COL}
-							value={
-								(merged.barLabelPosition ?? "center") as NonNullable<
-									DataLabelsConfig["barLabelPosition"]
-								>
-							}
+							value={primaryPosition}
 							options={BAR_POSITION_OPTIONS}
-							onChange={(barLabelPosition) => updateCfg({ barLabelPosition })}
+							onChange={(position) => setPrimaryPlacement({ position })}
 						/>
 						<p className="vc-help">
 							Where labels sit along the bar&apos;s measure axis.
@@ -1568,13 +1647,9 @@ export const DataLabelsPanel = () => {
 						<SelectInput
 							label={isVerticalBars ? "Horizontal" : "Vertical"}
 							labelClassName={LABEL_COL}
-							value={
-								(merged.barLabelSide ?? "center") as NonNullable<
-									DataLabelsConfig["barLabelSide"]
-								>
-							}
+							value={primarySide}
 							options={barSideOptions(isVerticalBars)}
-							onChange={(barLabelSide) => updateCfg({ barLabelSide })}
+							onChange={(side) => setPrimaryPlacement({ side })}
 						/>
 						<p className="vc-help">
 							Which side of the bar labels sit on, across its width. Beside

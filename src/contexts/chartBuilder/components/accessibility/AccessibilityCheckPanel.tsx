@@ -9,22 +9,26 @@ import {
 } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { Button } from "../../../../components/ui/Button"
-import { RadioGroup } from "../../../../components/ui/RadioGroup"
+import { RadioGroup, type RadioGroupOption } from "../../../../components/ui/RadioGroup"
 import { useNarrowLayout } from "../../../../lib/useMediaQuery"
 import { chartLayoutReady } from "../../lib/captureThumbnail"
 import {
+	CONTRAST_MODELS,
 	emptyAccessibilityInput,
 	evaluateAccessibility,
 	type AccessibilityFinding,
 	type AccessibilityInput,
 	type AccessibilityTarget,
+	type ContrastAlgorithm,
 	type ContrastLevel,
+	type ContrastModel,
 	type FindingLevel,
 } from "../../lib/accessibilityCheck"
 import {
 	accessibilityCheckAtom,
 	accessibilityCheckLevelAtom,
 	accessibilityFindingCountAtom,
+	contrastAlgorithmAtom,
 	currentChannelConfigsAtom,
 	editorSheetOpenAtom,
 } from "../../store/atoms"
@@ -51,14 +55,20 @@ import {
  *  margin. */
 export const RECHECK_DEBOUNCE_MS = 400
 
-const LEVEL_OPTIONS = [
-	{ value: "AA", label: "AA" },
-	{ value: "AAA", label: "AAA" },
-] as const
+/** The two strictness levels, named as the contrast model names them (AA /
+ *  AAA, Lc 60 / Lc 75). */
+const levelOptions = (
+	model: ContrastModel
+): ReadonlyArray<RadioGroupOption<ContrastLevel>> => [
+	{ value: "AA", label: model.levelLabel("AA") },
+	{ value: "AAA", label: model.levelLabel("AAA") },
+]
 
-const GROUPS: Array<{ level: FindingLevel; title: string }> = [
+const groups = (
+	model: ContrastModel
+): Array<{ level: FindingLevel; title: string }> => [
 	{ level: "fail", title: "Fails" },
-	{ level: "fail-aaa", title: "Fails at AAA only" },
+	{ level: "fail-aaa", title: `Fails at ${model.levelLabel("AAA")} only` },
 	{ level: "advisory", title: "Advisories" },
 ]
 
@@ -115,6 +125,7 @@ const LEVEL_DOT: Record<FindingLevel, string> = {
 export const AccessibilityCheckCard = ({
 	findings,
 	level,
+	algorithm,
 	onLevelChange,
 	onRecheck,
 	onHighlight,
@@ -127,6 +138,9 @@ export const AccessibilityCheckCard = ({
 }: {
 	findings: AccessibilityFinding[]
 	level: ContrastLevel
+	/** The contrast model the findings were measured with (Settings →
+	 *  Accessibility); names the levels. */
+	algorithm: ContrastAlgorithm
 	onLevelChange: (next: ContrastLevel) => void
 	onRecheck: () => void
 	/** A row was hovered / focused (id) or left (null). */
@@ -145,6 +159,7 @@ export const AccessibilityCheckCard = ({
 }) => {
 	const headingId = useId()
 	const bodyId = useId()
+	const model = CONTRAST_MODELS[algorithm]
 	return (
 		<section
 			aria-labelledby={headingId}
@@ -200,14 +215,24 @@ export const AccessibilityCheckCard = ({
 			{!collapsed && (
 			<>
 			<div className="flex items-center justify-between gap-2">
-				<RadioGroup
-					legend={<span className="sr-only">Conformance level</span>}
-					legendClassName="mb-0"
-					orientation="horizontal"
-					value={level}
-					options={LEVEL_OPTIONS}
-					onChange={onLevelChange}
-				/>
+				<div className="flex items-center gap-2">
+					{/* Reads as the radio group's visible legend — the size and
+					 *  muting a RadioGroup legend gets — so the baselines line up. */}
+					<span
+						className="text-sm vc-muted"
+						title="Contrast model — change it under Settings → Accessibility"
+					>
+						{model.name}
+					</span>
+					<RadioGroup
+						legend={<span className="sr-only">Contrast level ({model.name})</span>}
+						legendClassName="mb-0"
+						orientation="horizontal"
+						value={level}
+						options={levelOptions(model)}
+						onChange={onLevelChange}
+					/>
+				</div>
 				<Button compact onClick={onRecheck}>
 					Re-check
 				</Button>
@@ -216,10 +241,10 @@ export const AccessibilityCheckCard = ({
 				<p className="text-sm vc-muted">Waiting for the chart to finish drawing…</p>
 			) : findings.length === 0 ? (
 				<p className="text-sm vc-text">
-					No accessibility issues found at {level}.
+					No accessibility issues found at {model.levelLabel(level)}.
 				</p>
 			) : (
-				GROUPS.map(({ level: groupLevel, title }) => {
+				groups(model).map(({ level: groupLevel, title }) => {
 					const items = findings.filter((f) => f.level === groupLevel)
 					if (items.length === 0) return null
 					return (
@@ -319,6 +344,7 @@ const scrollHostOf = (viewport: Element | null): Element | null => {
 
 const AccessibilityCheckRunner = ({ hidden }: { hidden: boolean }) => {
 	const [level, setLevel] = useAtom(accessibilityCheckLevelAtom)
+	const algorithm = useAtomValue(contrastAlgorithmAtom)
 	const setOn = useSetAtom(accessibilityCheckAtom)
 	const setCount = useSetAtom(accessibilityFindingCountAtom)
 	const fixedCanvas = !!useAtomValue(currentChannelConfigsAtom).canvasSize?.enabled
@@ -405,8 +431,11 @@ const AccessibilityCheckRunner = ({ hidden }: { hidden: boolean }) => {
 	useEffect(() => schedule(), [state, schedule])
 
 	const findings = useMemo(
-		() => (dom ? evaluateAccessibility(buildAccessibilityInput(state, dom), level) : []),
-		[state, dom, level]
+		() =>
+			dom
+				? evaluateAccessibility(buildAccessibilityInput(state, dom), level, algorithm)
+				: [],
+		[state, dom, level, algorithm]
 	)
 	useEffect(() => setCount(findings.length), [findings.length, setCount])
 	useEffect(() => () => setCount(0), [setCount])
@@ -465,6 +494,7 @@ const AccessibilityCheckRunner = ({ hidden }: { hidden: boolean }) => {
 				}`}
 				findings={findings}
 				level={level}
+				algorithm={algorithm}
 				onLevelChange={setLevel}
 				onRecheck={collect}
 				onHighlight={setHighlightId}
