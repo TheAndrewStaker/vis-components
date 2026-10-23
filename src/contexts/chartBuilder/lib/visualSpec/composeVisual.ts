@@ -825,6 +825,23 @@ const compose = (
 			axisStem: at === undefined ? (axis === "x" ? "y-axis" : "x-axis") : axis === "x" ? "custom-x" : "custom-y",
 			...(at !== undefined ? (axis === "x" ? { axisStemCustomX: at } : { axisStemCustomY: at }) : {}),
 		}
+		// The renderer clamps a stem end outside the domain to the plot edge,
+		// so an axis with no bounds stretches to take `at`.
+		const field = fields[axis]
+		const current = channelConfigs[axis] ?? DEFAULT_AXIS_CONFIG
+		const given = spec.axes?.[axis]?.min !== undefined || spec.axes?.[axis]?.max !== undefined
+		if (at !== undefined && field && !given && current.min == null && current.max == null) {
+			let lo = Infinity
+			let hi = -Infinity
+			for (const row of view.rows) {
+				const n = parseNumericCell(row[field])
+				if (n === null) continue
+				lo = Math.min(lo, n)
+				hi = Math.max(hi, n)
+			}
+			if (lo <= hi && at < lo) channelConfigs[axis] = { ...current, min: at }
+			else if (lo <= hi && at > hi) channelConfigs[axis] = { ...current, max: at }
+		}
 	}
 
 	const labelsConfig = { ...start.labelsConfig }
