@@ -21,7 +21,7 @@ import { themeOf } from "../systemThemes"
 import { ALL_ENCODING_CHANNELS, type Visual } from "../types"
 import { hydrateVisual } from "../visualDefaults"
 import { buildDataset } from "../../../../testSupport/fixtures"
-import { composeChartSpec, composeVisual } from "./composeVisual"
+import { composeChartEdit, composeChartSpec, composeVisual } from "./composeVisual"
 
 const compose = (input: unknown) => {
 	const spec = input as { datasetId?: unknown; datasetVersionId?: unknown }
@@ -248,6 +248,60 @@ describe("composeVisual — the Trends charts", () => {
 		expect(result.ok).toBe(true)
 		if (!result.ok) return
 		expect(result.warnings.map((w) => w.path)).toEqual(["fill"])
+	})
+})
+
+describe("composeVisual — stems at a value", () => {
+	const scores = buildDataset({
+		id: "ds-scores",
+		fields: [
+			{ name: "team", inferredType: "categorical" },
+			{ name: "score", inferredType: "quantitative" },
+		],
+		rows: [
+			{ team: "a", score: "10" },
+			{ team: "b", score: "15" },
+			{ team: "c", score: "20" },
+		],
+	})
+	const lollipop = (extra: Record<string, unknown> = {}): Visual => {
+		const result = composeChartSpec(
+			{ datasetId: scores.id, folderId: null, encodings: { x: "score", y: "team" }, ...extra },
+			contextFor([scores], scores.id)
+		)
+		if (!result.ok) throw new Error(result.errors.map((e) => `${e.path}: ${e.message}`).join("; "))
+		return result.visual
+	}
+
+	it("stretches an unbounded axis down to a value below the data", () => {
+		const v = lollipop({ stems: { axis: "x", at: 0 } })
+		expect(v.channelConfigs.x?.min).toBe(0)
+		expect(v.channelConfigs.x?.max).toBeUndefined()
+	})
+
+	it("stretches an unbounded axis up to a value above the data", () => {
+		const v = lollipop({ stems: { axis: "x", at: 30 } })
+		expect(v.channelConfigs.x?.max).toBe(30)
+		expect(v.channelConfigs.x?.min).toBeUndefined()
+	})
+
+	it("leaves the axis alone when the value is inside the data", () => {
+		const v = lollipop({ stems: { axis: "x", at: 12 } })
+		expect(v.channelConfigs.x?.min).toBeUndefined()
+		expect(v.channelConfigs.x?.max).toBeUndefined()
+	})
+
+	it("keeps a bound the spec gives", () => {
+		const v = lollipop({ stems: { axis: "x", at: 0 }, axes: { x: { min: 5 } } })
+		expect(v.channelConfigs.x?.min).toBe(5)
+	})
+
+	it("keeps a bound the chart already has on an edit", () => {
+		const v = lollipop({ axes: { x: { min: 5 } } })
+		const result = composeChartEdit(v, { stems: { axis: "x", at: 0 } }, contextFor([scores], scores.id))
+		if (!result.ok) throw new Error(result.errors.map((e) => `${e.path}: ${e.message}`).join("; "))
+		expect(result.visual.channelConfigs.x?.min).toBe(5)
+		expect(result.visual.channelConfigs.connection?.axisStemCustomX).toBe(0)
 	})
 })
 
