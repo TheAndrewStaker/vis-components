@@ -26,6 +26,26 @@ const formatTime = (ts: number): string => {
 	})
 }
 
+/** The 1-based numbers (as the popover labels them) of the versions made
+ *  from version `id` — the ones that lose their source if it's deleted. */
+export const dependentVersionNumbers = (
+	versions: DatasetLike["versions"],
+	id: string
+): number[] =>
+	versions.flatMap((v, i) => (v.editedFrom === id ? [i + 1] : []))
+
+/** The delete-version confirm text; warns when other versions were made
+ *  from this one (deletion stays allowed). */
+export const deleteVersionMessage = (
+	versionNumber: number,
+	dependents: number[]
+): string => {
+	const base = `Delete v${versionNumber}? Iframes pinned to this version will show a "version not found" error.`
+	if (dependents.length === 0) return base
+	const list = dependents.map((n) => `v${n}`).join(", ")
+	return `${base} Versions made from it (${list}) lose their source, and this data can't be recovered.`
+}
+
 /** `compact` (narrow layouts): drop the data set name so the chip fits on
  *  a phone row beside the action buttons; the version label stays. */
 export const VersionBadge = ({ compact = false }: { compact?: boolean }) => {
@@ -273,7 +293,10 @@ const VersionList = ({
 										type="button"
 										onClick={() => {
 											const ok = globalThis.confirm(
-												`Delete v${versionNumber}? Iframes pinned to this version will show a "version not found" error.`
+												deleteVersionMessage(
+													versionNumber,
+													dependentVersionNumbers(dataset.versions, v.id)
+												)
 											)
 											if (ok) onDelete(v.id)
 										}}

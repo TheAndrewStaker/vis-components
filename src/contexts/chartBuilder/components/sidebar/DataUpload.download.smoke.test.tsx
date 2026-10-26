@@ -33,10 +33,12 @@ afterEach(() => {
 })
 
 /** The "download data" link hands the bound dataset back as a CSV. It sits
- *  after the version in the summary line and exports the table the chart
- *  draws from: the per-visual derived columns included, formatted cells
- *  converted to the numbers the chart uses, and hand edits (which are saved
- *  as dataset versions) in place. The save goes through saveFile.ts; jsdom
+ *  after the version in the summary line and exports the RAW rows of the
+ *  version shown: cells exactly as imported ("$1,200" stays "$1,200"), the
+ *  visual's per-visual derived columns left out, and hand edits (which are
+ *  saved as dataset versions) in place. An imported version downloads under
+ *  its own file name; an edited one under the dataset's slug. The save goes
+ *  through saveFile.ts; jsdom
  *  has no Save-as dialog, so these tests see its anchor-download fallback
  *  (the dialog path is covered in lib/downloadDataset.test.ts). */
 
@@ -77,7 +79,7 @@ const editedDataset = () =>
 			},
 			{
 				id: "v2",
-				filename: "edited",
+				filename: "Edited data",
 				rows: [
 					{ region: "East", revenue: "$1,250" },
 					{ region: "West", revenue: "$800" },
@@ -97,7 +99,7 @@ const mount = (ds: Dataset = dataset()) => {
 	set("vis-components:previewVersionId", null)
 	/* eslint-enable @vc/use-wrapped-json-functions */
 	// A derived variable keeps the RENDERED view different from the raw one,
-	// so the test can tell that the download serialized the rendered one.
+	// so the test can tell that the download serialized the raw one.
 	const derived: DerivedVariablesConfig = {
 		variables: [
 			{ id: "dv-1", name: "doubled", kind: "math", math: { formula: "{revenue} * 2" } },
@@ -156,14 +158,13 @@ describe("DataUpload download link", () => {
 		)
 	})
 
-	it("downloads the chart's table as a CSV named after the dataset", async () => {
+	it("downloads the raw rows as imported, without per-visual derived columns", async () => {
 		const capture = captureDownload()
 		mount()
 		const text = await clickDownload(capture)
-		expect(capture.downloads).toEqual(["q3-sales.csv"])
-		// The "doubled" derived column rides along, and the dollar cells
-		// went out as the numbers it was computed from.
-		expect(text).toBe("region,revenue,doubled\nEast,1200,2400\nWest,800,1600")
+		// The dollar cells go out as imported, and the visual's "doubled"
+		// derived column stays behind.
+		expect(text).toBe('region,revenue\nEast,"$1,200"\nWest,$800')
 		// The object URL is revoked after a short deferral (saveFile.ts).
 		await waitFor(
 			() => expect(capture.revokeObjectURL).toHaveBeenCalledWith("blob:test"),
@@ -179,6 +180,34 @@ describe("DataUpload download link", () => {
 				?.textContent
 		).toMatch(/v2 of 2/)
 		const text = await clickDownload(capture)
-		expect(text).toBe("region,revenue,doubled\nEast,1250,2500\nWest,800,1600")
+		expect(text).toBe('region,revenue\nEast,"$1,250"\nWest,$800')
+	})
+
+	it("names an imported version after its own file", async () => {
+		const capture = captureDownload()
+		mount(
+			buildDataset({
+				id: ID,
+				name: "Q3 Sales",
+				fields,
+				versions: [
+					{
+						id: "v1",
+						filename: "2024.csv",
+						rows: [{ region: "East", revenue: "$1,200" }],
+						createdAt: 0,
+					},
+				],
+			})
+		)
+		await clickDownload(capture)
+		expect(capture.downloads).toEqual(["2024.csv"])
+	})
+
+	it("names an edited version after the dataset", async () => {
+		const capture = captureDownload()
+		mount(editedDataset())
+		await clickDownload(capture)
+		expect(capture.downloads).toEqual(["q3-sales.csv"])
 	})
 })

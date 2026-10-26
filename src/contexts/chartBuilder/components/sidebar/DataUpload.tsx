@@ -1,49 +1,54 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import {
-	describeAddedColumns,
-	describeDiff,
-	diffFields,
-	isCompatible,
-	versionKeyAliases,
-} from "../../lib/datasetCompat"
+import { describeAddedColumns, describeDiff } from "../../lib/datasetCompat"
 import { findDuplicateByHash, withFreshContentHash } from "../../lib/datasetDedupe"
 import { downloadDatasetCsv } from "../../lib/downloadDataset"
 import { nameCollides } from "../../lib/nameUniqueness"
-import type { DatasetVersion } from "../../lib/types"
+import {
+	describeReplayApplied,
+	describeReplaySkipped,
+	previewImport,
+} from "../../lib/versionReplay"
 import {
 	currentDatasetIdAtom,
 	currentVisualNameAtom,
 	datasetIndexAtom,
 	mutateDatasetBodyAtom,
 	pendingUploadAtom,
-	previewVersionIdAtom,
 	uploadNoticeAtom,
 } from "../../store/atoms"
+import { useAppendImportVersion } from "../../store/appendImportVersion"
 import { useResetVisual, useSaveVisual } from "../../store/saveVisual"
 import {
 	useCreateNewDataset,
 	useHandleCsvUpload,
 } from "../../store/useCreateNewDataset"
-import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
+import {
+	currentRawDatasetViewAtom,
+	useCurrentDatasetView,
+} from "../../store/useCurrentDatasetView"
 
 import { Button } from "../../../../components/ui/Button"
 import { Input } from "../../../../components/ui/Input"
 import { Modal } from "../../../../components/ui/Modal"
 
-const newDatasetVersionId = () =>
-	`dv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-
 type Mode = "addVersion" | "newVisualization"
 
 export const DataUpload = () => {
 	const inputRef = useRef<HTMLInputElement>(null)
-	// Also what "download data" hands back: the table the chart draws from
-	// and the data drawer shows — hand edits (saved as versions), the
-	// reshape, numeric conversions and derived columns included — so the
-	// file matches the row and field counts beside the link.
 	const currentDataset = useCurrentDatasetView()
+	// The download hands back the RAW version — cells as imported, no
+	// conversions and no per-visual reshape / derived columns — so it
+	// re-uploads cleanly. An imported version (no `editedFrom`) may keep
+	// its own file name; an edited or computed one is named after the set.
+	const rawDataset = useAtomValue(currentRawDatasetViewAtom)
+	const datasetIndex = useAtomValue(datasetIndexAtom)
+	const rawImported =
+		rawDataset !== undefined &&
+		datasetIndex[rawDataset.id]?.versions.find(
+			(v) => v.id === rawDataset.versionId
+		)?.editedFrom === undefined
 	const [error, setError] = useState<string | null>(null)
 	// The cost note goes to a root-level modal, not to local state: the
 	// new-visualization path navigates and would remount this away.
@@ -86,15 +91,23 @@ export const DataUpload = () => {
 						{currentDataset.totalVersions === 1
 							? "v1"
 							: `v${currentDataset.versionIndex} of ${currentDataset.totalVersions}`}
-						{" "}
-						·{" "}
-						<button
-							type="button"
-							onClick={() => void downloadDatasetCsv(currentDataset)}
-							className="py-0.5 text-brand-500 underline hover:text-brand-600 dark:text-indigo-400"
-						>
-							download data
-						</button>
+						{rawDataset && (
+							<>
+								{" "}
+								·{" "}
+								<button
+									type="button"
+									onClick={() =>
+										void downloadDatasetCsv(rawDataset, {
+											imported: rawImported,
+										})
+									}
+									className="py-0.5 text-brand-500 underline hover:text-brand-600 dark:text-indigo-400"
+								>
+									download data
+								</button>
+							</>
+						)}
 					</div>
 				</div>
 			)}
@@ -233,12 +246,10 @@ const DatasetNameEditor = ({ id, name }: { id: string; name: string }) => {
  * visualization that saves the current one to the library. */
 const UploadPromptModal = () => {
 	const [pending, setPending] = useAtom(pendingUploadAtom)
-	const mutateDatasetBody = useSetAtom(mutateDatasetBodyAtom)
 	const datasetIndex = useAtomValue(datasetIndexAtom)
 	const currentDatasetId = useAtomValue(currentDatasetIdAtom)
 	const currentVisualName = useAtomValue(currentVisualNameAtom)
-	const setDatasetId = useSetAtom(currentDatasetIdAtom)
-	const setPreviewVersionId = useSetAtom(previewVersionIdAtom)
+	const appendImport = useAppendImportVersion()
 	const createNewDataset = useCreateNewDataset()
 	const saveVisual = useSaveVisual()
 	const resetVisual = useResetVisual()
@@ -272,11 +283,21 @@ const UploadPromptModal = () => {
 	const currentDatasetMeta = currentDatasetId
 		? datasetIndex[currentDatasetId]
 		: undefined
-	const diff =
-		mode === "addVersion" && pending && currentDatasetMeta
-			? diffFields(currentDatasetMeta.fields, pending.fields)
-			: null
-	const compatible = diff ? isCompatible(diff) : true
+	// Compatibility is judged against the IMPORT the data set's current
+	// chain descends from, and the chain's reshape / derived variables are
+	// dry-run over the upload's columns, so the dialog can say what the new
+	// version will inherit (`lib/versionReplay.ts`).
+	const preview = useMemo(
+		() =>
+			mode === "addVersion" && pending && currentDatasetMeta
+				? previewImport(currentDatasetMeta, pending)
+				: null,
+		[mode, pending, currentDatasetMeta]
+	)
+	const diff = preview?.diff ?? null
+	const compatible = preview ? preview.compatible : true
+	const willReapply = preview ? describeReplayApplied(preview.plan) : []
+	const cantReapply = preview ? describeReplaySkipped(preview.plan) : []
 	// An upload identical to an existing dataset (same exact name AND content)
 	// is reused rather than stored as a second copy. Display-level hint via the
 	// cached content hash; the actual reuse decision inside
@@ -309,59 +330,18 @@ const UploadPromptModal = () => {
 		reusableDatasetId === null &&
 		nameCollides(newName, datasetList)
 
+	// Appends the upload as an imported version and re-applies the working
+	// copy's reshape and derived variables over it (`appendImportVersion`);
+	// the editor follows the data set to its new latest.
 	const appendVersion = async (
 		parsed: NonNullable<typeof pending>
 	): Promise<boolean> => {
 		if (!currentDatasetMeta) return false
-		const versionId = newDatasetVersionId()
-		// Ambiguous former-name matches (a renamed field bound to its old-name
-		// column while a same-named column is also present — the type tiebreak)
-		// are pinned on the version so the view reads the matched column.
-		const keyAliases = versionKeyAliases(
-			currentDatasetMeta.fields,
-			parsed.fields
-		)
-		const version: DatasetVersion = {
-			id: versionId,
-			filename: parsed.filename,
-			rows: parsed.rows,
-			createdAt: Date.now(),
-			...(Object.keys(keyAliases).length > 0 ? { keyAliases } : {}),
+		const result = await appendImport(currentDatasetMeta.id, parsed)
+		if (!result.ok) {
+			setConfirmError(result.error)
+			return false
 		}
-		// Appending needs the FULL body — the new version joins the existing
-		// ones, so their rows must be in the record we write back. The shared
-		// `mutateDatasetBodyAtom` loads it lazily and applies the append to the
-		// freshest body (a concurrent edit landing during the load wins), so
-		// nothing that happened during the await is clobbered.
-		const applied = await mutateDatasetBody(currentDatasetMeta.id, (d) => {
-			// Net-new columns are additive: merge them into the dataset's
-			// invariant field list (appended after the existing fields) so the new
-			// variable is selectable/encodable. Existing versions' rows simply lack
-			// the column and read as empty for it. `missing`/`typeChanged` are
-			// already blocked above, so the shared schema stays valid for every
-			// prior version.
-			const addedFields =
-				diff && diff.added.length > 0
-					? parsed.fields.filter(
-							(f) =>
-								diff.added.includes(f.name) &&
-								!d.fields.some((existing) => existing.name === f.name)
-						)
-					: []
-			// The append changed the dataset's content, so the cached content hash
-			// must follow — a stale one makes the next upload of the ORIGINAL file
-			// hint a reuse it can't verify.
-			return withFreshContentHash({
-				...d,
-				fields:
-					addedFields.length > 0 ? [...d.fields, ...addedFields] : d.fields,
-				versions: [...d.versions, version],
-				latestVersionId: versionId,
-			})
-		})
-		if (!applied) return false
-		setDatasetId(currentDatasetMeta.id)
-		setPreviewVersionId(null)
 		return true
 	}
 
@@ -461,6 +441,19 @@ const UploadPromptModal = () => {
 										{diff.added.length === 1 ? "this column" : "these columns"}.
 									</div>
 								)}
+							{mode === "addVersion" && compatible && willReapply.length > 0 && (
+								<div className="mt-2 rounded-sm border border-emerald-300 bg-emerald-50 px-2 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200">
+									Will re-apply: {willReapply.join(", ")}.
+								</div>
+							)}
+							{mode === "addVersion" && compatible && cantReapply.length > 0 && (
+								<div className="mt-2 rounded-sm border border-amber-300 bg-amber-50 px-2 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+									Can&rsquo;t re-apply: {cantReapply.join("; ")}. Make{" "}
+									{cantReapply.length === 1 ? "it" : "them"} again on the new
+									version if you still need{" "}
+									{cantReapply.length === 1 ? "it" : "them"}.
+								</div>
+							)}
 						</div>
 					</label>
 

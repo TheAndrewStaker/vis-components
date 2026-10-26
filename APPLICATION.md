@@ -85,6 +85,32 @@ is still rejected, and the upload dialog names the offending columns;
 the net-new columns are reported separately as an informational note,
 not as a blocker.
 
+**A fresh file into a working copy.** A reshape and a derived variable
+are functions of the data; a hand edit is a patch on cells (§2.1,
+§2.1b, §2.1c). A working copy's versions are judged and replayed
+accordingly (`lib/versionReplay.ts`, `store/appendImportVersion.ts`):
+the upload is checked against the columns of the IMPORT the data
+set's latest chain descends from (follow `editedFrom` to a version
+without one), not the latest version's — so the original wide file is
+never "incompatible" with its own reshaped or derived copy — and, once
+appended as an imported version, every version of that chain a reshape
+or a derived variable made is re-done over it in chain order, one new
+version per step with the same stand-in file name and `transform`,
+hand-edited versions skipped. The last replayed version becomes
+latest, so the chart snaps onto the fresh data with its columns
+intact, and the raw upload sits one step below it, downloadable as
+imported. The dialog previews it ("Will re-apply: reshape (wide →
+long), “Growth”."). A step the fresh data can't feed — a variable
+reading a column a hand edit had added, a reshape over columns the
+file lacks — is left out, named in the dialog ("Can't re-apply:
+“Margin” (needs “Notes”).") and on the last version the replay made
+(`transform.skipped`, tagged "couldn't re-apply" in the version list);
+anything mapped to it follows the missing-field path, and the rest
+still replay. A net-new column rides through the replay like any other
+column (a melt drops it from the long table as it does any column in
+neither list). A data set holding only imports has no steps: the
+upload simply becomes latest, as it always did.
+
 Uploads are also checked for cost, in `lib/datasetLimits.ts`. A file
 over 100 MB is REJECTED outright (the self-host server enforces the
 same limit independently); one over 25 MB imports with a note that
@@ -120,7 +146,9 @@ the data now; only an older visual's live reshape and derived columns
 are left out, since they are per-visual and wouldn't survive a
 re-upload.
 Headers are the fields' CURRENT names; a renamed variable re-imports
-through its `sourceNames` alias. The file is named after the dataset
+through its `sourceNames` alias. An imported version downloads under
+its own file name (`2024.csv`); a pasted one, and a version a hand
+edit, a reshape or a derived variable made, under the dataset name
 (slugified, `.csv`).
 
 **Edit data (the tray's Edit dialog).** The tray header carries
@@ -307,9 +335,10 @@ one. The melt itself is `lib/reshape.ts` (`meltDataset`), run
 through `lib/materializeTransforms.ts` (`bakeTransforms`), which
 keeps every original cell exactly as imported ("$1,234" stays
 "$1,234") and writes only the new columns. A reshaped version is
-plain rows: a new version uploaded to the working copy must match
-the long shape (§2.4) and is not reshaped on its own — a fresh wide
-file is a new data set, reshaped from its own panel.
+plain rows, but the reshape is recorded: a fresh wide file uploaded as
+a new version of the working copy is checked against the wide import
+and reshaped again onto a version of its own (§2.1, "A fresh file
+into a working copy").
 
 **Older visuals.** Visuals saved before reshapes became data versions
 carry the reshape as per-visual config (`Visual.reshapeConfig`),
@@ -449,9 +478,9 @@ position); a changed name is a variable rename the encodings and
 sibling visuals follow, the old name kept in `sourceNames`. Columns
 are frozen values — the trade for every version being plain,
 inspectable rows: recomputing one does NOT recompute a later variable
-that read it (it is just a column now), and a new version uploaded
-to the working copy carries no derived columns until they are made
-again. Deleting the variable (in the edit popup, confirmed) drops the
+that read it (it is just a column now). A new version uploaded to the
+working copy gets the columns made again from their recorded
+definitions (§2.1, "A fresh file into a working copy"). Deleting the variable (in the edit popup, confirmed) drops the
 column in a new version (`transform.removed`); anything mapped to it
 falls back to the normal missing-field behavior.
 
@@ -617,7 +646,11 @@ lists every version newest-first with its upload timestamp and filename:
   prompt warns that iframes pinned to that version will show a
   "version not found" error; deleting the latest promotes the
   previous one to latest. There is no version rename (variables CAN be
-  renamed — in the Fields panel, see §2.2). Deleting the base of a
+  renamed — in the Fields panel, see §2.2). When other versions were
+  made from the one being deleted (their `editedFrom`), the prompt
+  adds that they lose their source and the data can't be recovered —
+  the import under a working copy is deletable, not silently.
+  Deleting the base of a
   hand-edit chain (§2.1, "Edit data") leaves the edited versions'
   `editedFrom` dangling: the table then outlines against the nearest
   surviving ancestor, or nothing when none is left.
@@ -626,8 +659,10 @@ lists every version newest-first with its upload timestamp and filename:
   a hand edit (§2.1) "Edited data · edited by hand", a reshape
   (§2.1b) "Reshaped data · reshaped (wide → long)", a derived
   variable (§2.1c) "Derived data · added “Trend”" / "· recomputed
-  “Trend”" / "· removed “Trend”" — and a reshape that folded an older
-  visual's live variables in says both.
+  “Trend”" / "· removed “Trend”" — a reshape that folded an older
+  visual's live variables in says both, and a version a replay made
+  (§2.1) adds what it couldn't re-apply: "· couldn't re-apply
+  “Margin”".
 
 **Per-version columns.** `Dataset.fields` describes the LATEST
 version, and every version without a list of its own shares it — the

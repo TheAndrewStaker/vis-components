@@ -50,6 +50,8 @@ export const describeVersionOrigin = (
 	if (t.added?.length) parts.push(`added ${quotedNames(t.added)}`)
 	if (t.recomputed?.length) parts.push(`recomputed ${quotedNames(t.recomputed)}`)
 	if (t.removed?.length) parts.push(`removed ${t.removed.map(quoted).join(", ")}`)
+	if (t.skipped?.length)
+		parts.push(`couldn't re-apply ${t.skipped.map(quoted).join(", ")}`)
 	return parts.length > 0 ? parts.join(" · ") : "edited by hand"
 }
 
@@ -124,10 +126,10 @@ export const renameFieldInTransform = (
 		list && mapSame(list, (v) => renameVariable(v, oldName, newName))
 	const added = vars(t.added)
 	const recomputed = vars(t.recomputed)
-	const removed =
-		t.removed?.includes(oldName)
-			? t.removed.map((n) => (n === oldName ? newName : n))
-			: t.removed
+	const renamedList = (list: string[] | undefined) =>
+		list?.includes(oldName) ? list.map((n) => (n === oldName ? newName : n)) : list
+	const removed = renamedList(t.removed)
+	const skipped = renamedList(t.skipped)
 	let reshape = t.reshape
 	if (reshape) {
 		reshape = renameReshapeFields(reshape, oldName, newName)
@@ -140,6 +142,7 @@ export const renameFieldInTransform = (
 		added === t.added &&
 		recomputed === t.recomputed &&
 		removed === t.removed &&
+		skipped === t.skipped &&
 		reshape === t.reshape
 	)
 		return t
@@ -149,5 +152,6 @@ export const renameFieldInTransform = (
 		...(added !== undefined ? { added } : {}),
 		...(recomputed !== undefined ? { recomputed } : {}),
 		...(removed !== undefined ? { removed } : {}),
+		...(skipped !== undefined ? { skipped } : {}),
 	}
 }

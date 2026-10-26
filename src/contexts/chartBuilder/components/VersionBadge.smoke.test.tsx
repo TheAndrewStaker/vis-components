@@ -1,17 +1,24 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { buildDataset } from "../../../testSupport/fixtures"
 import { installInMemoryLocalStorage } from "../../../testSupport/localStorageShim"
 import { TestProvider } from "../../../testSupport/TestProvider"
 import type { Dataset } from "../lib/types"
-import { currentDatasetIdAtom, loadedDatasetsAtom } from "../store/atoms"
+import {
+	currentDatasetIdAtom,
+	loadedDatasetsAtom,
+	previewVersionIdAtom,
+} from "../store/atoms"
 
 import { VersionBadge } from "./VersionBadge"
 
 /** The version badge after a hand edit: it reads the edited copy's version
  *  count, and the popover tags hand-edited versions. */
 
-afterEach(cleanup)
+afterEach(() => {
+	cleanup()
+	vi.unstubAllGlobals()
+})
 
 const ID = "ds-badge-edited"
 
@@ -77,7 +84,10 @@ const computed = (): Dataset =>
 		],
 	})
 
-const mount = (build: () => Dataset = dataset) => {
+const mount = (
+	build: () => Dataset = dataset,
+	previewVersionId: string | null = null
+) => {
 	const storage = installInMemoryLocalStorage()
 	/* eslint-disable @vc/use-wrapped-json-functions */
 	storage.set("vis-components:datasets", JSON.stringify({ [ID]: build() }))
@@ -88,6 +98,7 @@ const mount = (build: () => Dataset = dataset) => {
 			initializeState={(s) => {
 				s.set(loadedDatasetsAtom, { [ID]: build() })
 				s.set(currentDatasetIdAtom, ID)
+				s.set(previewVersionIdAtom, previewVersionId)
 			}}
 		>
 			<VersionBadge />
@@ -122,5 +133,30 @@ describe("VersionBadge with a hand-edited version", () => {
 		expect(items[1]).toContain("Reshaped data · reshaped (wide → long)")
 		expect(items[2]).toContain("sales.csv")
 		expect(items[2]).not.toContain("·  ")
+	})
+
+	it("warns that versions made from a deleted version lose their source", () => {
+		const confirm = vi.fn(() => false)
+		vi.stubGlobal("confirm", confirm)
+		const deleteIn = (li: Element | undefined) => {
+			const btn = li?.querySelector('button[title="Delete version"]')
+			if (!btn) throw new Error("no Delete button")
+			fireEvent.click(btn)
+		}
+		// v3 (latest) is active, so v1 offers Delete; v2 was made from v1.
+		mount(computed)
+		fireEvent.click(screen.getByTitle("Data set versions"))
+		deleteIn([...document.querySelectorAll("li")][2])
+		expect(confirm).toHaveBeenLastCalledWith(
+			'Delete v1? Iframes pinned to this version will show a "version not found" error. Versions made from it (v2) lose their source, and this data can\'t be recovered.'
+		)
+		// Nothing was made from v3; preview v1 so the latest offers Delete.
+		cleanup()
+		mount(computed, "v1")
+		fireEvent.click(screen.getByTitle("Data set versions"))
+		deleteIn([...document.querySelectorAll("li")][0])
+		expect(confirm).toHaveBeenLastCalledWith(
+			'Delete v3? Iframes pinned to this version will show a "version not found" error.'
+		)
 	})
 })

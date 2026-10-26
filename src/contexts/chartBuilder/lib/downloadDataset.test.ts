@@ -78,6 +78,46 @@ describe("datasetCsvFilename", () => {
 	it("falls back to a dataset-flavored name", () => {
 		expect(datasetCsvFilename({ name: "📊" })).toBe("dataset.csv")
 	})
+
+	it("keeps an imported version's own CSV file name", () => {
+		expect(
+			datasetCsvFilename(view({ filename: "2024.csv" }), { imported: true })
+		).toBe("2024.csv")
+		expect(
+			datasetCsvFilename(view({ filename: "Sales.CSV" }), { imported: true })
+		).toBe("Sales.CSV")
+	})
+
+	it("names a pasted import after the dataset", () => {
+		expect(
+			datasetCsvFilename(view({ filename: "Pasted data" }), { imported: true })
+		).toBe("q3-sales.csv")
+	})
+
+	it("names an edited or computed version after the dataset", () => {
+		expect(
+			datasetCsvFilename(view({ filename: "Edited data" }), { imported: false })
+		).toBe("q3-sales.csv")
+		// Even one that happens to carry a CSV-looking name.
+		expect(datasetCsvFilename(view({ filename: "2024.csv" }))).toBe(
+			"q3-sales.csv"
+		)
+	})
+
+	it("drops any directory part of an imported file name", () => {
+		expect(
+			datasetCsvFilename(view({ filename: "../x.csv" }), { imported: true })
+		).toBe("x.csv")
+		expect(
+			datasetCsvFilename(view({ filename: "C:\\data\\y.csv" }), {
+				imported: true,
+			})
+		).toBe("y.csv")
+		// Nothing left before the extension → the dataset name.
+		expect(
+			datasetCsvFilename(view({ filename: "dir/.csv" }), { imported: true })
+		).toBe("q3-sales.csv")
+	})
 })
 
 describe("downloadDatasetCsv", () => {
@@ -150,5 +190,22 @@ describe("downloadDatasetCsv", () => {
 		expect(downloads).toEqual(["q3-sales.csv"])
 		expect(blobs).toHaveLength(1)
 		await expect(blobs[0]!.text()).resolves.toBe(CSV)
+	})
+
+	it("offers an imported version under its own file name", async () => {
+		vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:fake")
+		vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {})
+		const downloads: string[] = []
+		vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+			function (this: HTMLAnchorElement) {
+				downloads.push(this.download)
+			}
+		)
+
+		await expect(
+			downloadDatasetCsv(view(), { imported: true })
+		).resolves.toBe(true)
+
+		expect(downloads).toEqual(["sales.csv"])
 	})
 })

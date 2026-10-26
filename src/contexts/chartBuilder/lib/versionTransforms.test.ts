@@ -117,3 +117,20 @@ describe("renameFieldInTransform", () => {
 		expect(renameFieldInTransform(t, "nothing", "x")).toBe(t)
 	})
 })
+
+describe("a replay's skipped parts", () => {
+	it("are tagged in the trail after what was re-applied", () => {
+		expect(
+			describeVersionOrigin({
+				editedFrom: "v1",
+				transform: { added: [math("d", "Double", "{sales} * 2")], skipped: ["Tagged"] },
+			})
+		).toBe("added “Double” · couldn't re-apply “Tagged”")
+	})
+
+	it("follow a rename of the variable they name", () => {
+		const t = { added: [math("d", "Double", "{sales} * 2")], skipped: ["Tagged"] }
+		expect(renameFieldInTransform(t, "Tagged", "Tag").skipped).toEqual(["Tag"])
+		expect(renameFieldInTransform(t, "Other", "X")).toBe(t)
+	})
+})

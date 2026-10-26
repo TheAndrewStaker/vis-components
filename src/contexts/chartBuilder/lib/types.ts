@@ -77,6 +77,12 @@ export type VersionTransform = {
 	added?: DerivedVariable[]
 	recomputed?: DerivedVariable[]
 	removed?: string[]
+	/** Names of the derived variables (or the reshape, as
+	 * `REPLAY_RESHAPE_LABEL`) a fresh import could NOT re-apply when this
+	 * chain was replayed onto it (`lib/versionReplay.ts`) — the inputs were
+	 * missing, typically a column a hand edit had added. Recorded on the
+	 * last version the replay made, so the trail says what was left out. */
+	skipped?: string[]
 }
 
 /** A single snapshot of a data set: an upload or a paste, or a version made
