@@ -135,9 +135,18 @@ export const useSaveVisual = () => {
 			// Stamp `createdAtVersionId` once at first save with whatever version
 			// is currently latest on the bound dataset. Preserved across subsequent
 			// saves so it always reflects the data shape the visual was authored
-			// against, even after the dataset advances to newer versions.
+			// against, even after the dataset advances to newer versions — but
+			// only while the visual stays on that data set. A fork (the first
+			// hand edit or reshape of a shared data set, `commitDatasetVersion`)
+			// rebinds the editor to a NEW data set with fresh version ids;
+			// carrying the old pin across left it naming a version the new data
+			// set never had, and an export of such a visual was refused on
+			// import. On a rebind, stamp afresh against the new data set.
+			const boundDatasetId = datasetId ?? null
 			const createdAtVersionId =
-			existing?.createdAtVersionId ??
+			(existing && existing.datasetId === boundDatasetId
+				? existing.createdAtVersionId
+				: null) ??
 			(datasetId ? (datasets[datasetId]?.latestVersionId ?? null) : null)
 
 			const visual: Visual = {

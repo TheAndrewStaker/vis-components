@@ -220,11 +220,19 @@ describe("parseLibraryBundle", () => {
 		expect(problem).toMatch(/points at data set "ds-elsewhere", which isn't in the file/)
 	})
 
-	it("rejects a version pin the visual's data set doesn't have", () => {
+	it("tolerates a version pin the visual's data set doesn't have (audit-only; the merge drops it)", () => {
+		// Builds before 2026-10-26 kept the pin across a fork onto a new data
+		// set, so real exports carry a pin from the data set the visual LEFT.
 		const b = minimal()
 		b.visuals[0]!.createdAtVersionId = "dv-nope"
+		expect(problemsOf(b)).toEqual([])
+	})
+
+	it("still rejects a malformed version pin", () => {
+		const b = minimal()
+		;(b.visuals[0] as { createdAtVersionId: unknown }).createdAtVersionId = 42
 		const [problem] = problemsOf(b)
-		expect(problem).toMatch(/version "dv-nope", which data set "ds-data-1" doesn't have/)
+		expect(problem).toMatch(/malformed createdAtVersionId/)
 	})
 
 	it("rejects a folder reference and a parent that aren't in the file", () => {
@@ -413,6 +421,30 @@ describe("mergeBundleIntoLibrary — visuals", () => {
 		)
 		expect(result.visuals[0]?.datasetId).toBeNull()
 		expect(result.visuals[0]?.createdAtVersionId).toBeNull()
+	})
+
+	it("drops a version pin the visual's data set doesn't carry, keeping the data set", () => {
+		const result = merge(
+			bundle({
+				datasets: { "ds-2": ds({ id: "ds-2", name: "cars" }) },
+				visuals: [vis({ id: "v1", datasetId: "ds-2", createdAtVersionId: "dv-stale" })],
+			}),
+			library()
+		)
+		expect(result.visuals[0]?.datasetId).toBe("ds-2")
+		expect(result.visuals[0]?.createdAtVersionId).toBeNull()
+		expect(result.added.visuals).toBe(1)
+	})
+
+	it("keeps a version pin the data set does carry", () => {
+		const result = merge(
+			bundle({
+				datasets: { "ds-2": ds({ id: "ds-2", name: "cars" }) },
+				visuals: [vis({ id: "v1", datasetId: "ds-2", createdAtVersionId: "dv-1" })],
+			}),
+			library()
+		)
+		expect(result.visuals[0]?.createdAtVersionId).toBe("dv-1")
 	})
 })
 

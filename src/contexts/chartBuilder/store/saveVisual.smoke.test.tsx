@@ -237,6 +237,54 @@ describe("useSaveVisual → useLoadVisual round-trip", () => {
 		expect(visuals[0]!.createdAt).toBe(createdAt)
 	})
 
+	it("re-stamps the version pin when the visual moves to another data set", async () => {
+		// A fork (first hand edit / reshape of a shared data set) rebinds the
+		// editor to a NEW data set with fresh version ids. The pin followed the
+		// visual, not the data set, so it named a version the new data set
+		// never had — and the export was refused on import.
+		const fields = [{ name: "a", inferredType: "quantitative" as const }]
+		const dsA = buildDatasetFixture({
+			id: "ds-a",
+			name: "a",
+			fields,
+			versions: [{ id: "dv-a1", filename: "a.csv", rows: [], createdAt: 1 }],
+		})
+		const dsB = buildDatasetFixture({
+			id: "ds-b",
+			name: "b",
+			fields,
+			versions: [
+				{ id: "dv-b1", filename: "b.csv", rows: [], createdAt: 2 },
+				{ id: "dv-b2", filename: "b.csv", rows: [], createdAt: 3 },
+			],
+		})
+		const saving = renderInStore(() => useSaveVisual(), (s) => {
+			seedEditor(s)
+			s.set(loadedDatasetsAtom, { "ds-a": dsA, "ds-b": dsB })
+			s.set(currentDatasetIdAtom, "ds-a")
+		})
+		await act(async () => {
+			await saving.result.current()
+		})
+		expect(saving.store.get(visualsAtom)[0]!.createdAtVersionId).toBe("dv-a1")
+
+		// Same data set, more saves: the pin holds.
+		saving.store.set(currentVisualNameAtom, "Renamed")
+		await act(async () => {
+			await saving.result.current()
+		})
+		expect(saving.store.get(visualsAtom)[0]!.createdAtVersionId).toBe("dv-a1")
+
+		// Rebound to another data set: stamped afresh against ITS latest.
+		saving.store.set(currentDatasetIdAtom, "ds-b")
+		await act(async () => {
+			await saving.result.current()
+		})
+		const saved = saving.store.get(visualsAtom)[0]!
+		expect(saved.datasetId).toBe("ds-b")
+		expect(saved.createdAtVersionId).toBe("dv-b2")
+	})
+
 	it("a blank name saves as 'Untitled' and comes back that way", async () => {
 		const saving = renderInStore(() => useSaveVisual(), (s) => {
 			seedEditor(s)

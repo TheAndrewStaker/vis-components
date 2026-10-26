@@ -341,17 +341,14 @@ export const parseLibraryBundle = (text: string): ParseBundleResult => {
 				}
 			}
 		}
-		// The pin only means something with a data set to pin against; the
-		// merge nulls it otherwise.
+		// The pin is audit-only (the editor always renders the latest
+		// version), so only its SHAPE is checked here. A pin naming a version
+		// the data set doesn't carry is dropped by the merge, not grounds to
+		// refuse the file: builds before 2026-10-26 kept the pin across a fork
+		// onto a new data set, so exports in the wild carry exactly that.
 		if (versionIds && v.createdAtVersionId !== null && v.createdAtVersionId !== undefined) {
 			if (!isString(v.createdAtVersionId)) {
 				problems.push(`${what} has a malformed createdAtVersionId`)
-			} else if (versionIds.size > 0 && !versionIds.has(v.createdAtVersionId)) {
-				problems.push(
-					`${what} points at version ${quote(
-						v.createdAtVersionId
-					)}, which data set ${quote(v.datasetId)} doesn't have`
-				)
 			}
 		}
 		if (v.folderId !== null && v.folderId !== undefined) {
@@ -659,10 +656,19 @@ export const mergeBundleIntoLibrary = (
 		// defence in depth; the seed path reaches the merge unparsed.
 		const datasetId =
 			v.datasetId != null ? datasetIdMap.get(v.datasetId) ?? null : null
-		const createdAtVersionId =
+		// Audit-only, so a pin the (possibly deduped-onto) data set doesn't
+		// carry is dropped rather than imported dangling or refused — see the
+		// parser's note on pre-2026-10-26 exports.
+		const pinnedVersionId =
 			datasetId === null || v.createdAtVersionId == null
 				? null
 				: versionIdMap.get(v.createdAtVersionId) ?? v.createdAtVersionId
+		const createdAtVersionId =
+			pinnedVersionId !== null &&
+			datasetId !== null &&
+			datasets[datasetId]?.versions.some((ver) => ver.id === pinnedVersionId)
+				? pinnedVersionId
+				: null
 		const folderId =
 			v.folderId != null ? folderIdMap.get(v.folderId) ?? null : null
 		// `themeId` only tells the editor which dropdown entry to highlight —
