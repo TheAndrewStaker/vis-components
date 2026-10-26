@@ -302,15 +302,38 @@ lists hold the columns of the version shown:
   from Combine.
 - **Combine** — checkboxes over the remaining (non-ID) columns; each
   checked column melts into one output row per input row. Columns
-  checked in neither list are left out of the reshaped table.
+  checked in no list are left out of the reshaped table.
 - **Combined variable name** (default `category`) — the new
   categorical column holding the melted columns' names — and **Value
-  variable name** (default `value`) holding their cell values. The
-  boxes come prefilled with the defaults, and a blanked box falls
-  back to its default (shown as the placeholder) rather than
-  blocking the reshape. The value column's type is re-inferred from
-  the melted cells; melt order follows column order, and empty cells
-  melt to empty strings rather than being skipped.
+  variable name** (default `value`) holding their cell values, both
+  inside the Combine box. The boxes come prefilled with the defaults,
+  and a blanked box falls back to its default (shown as the
+  placeholder) rather than blocking the reshape. The value column's
+  type is re-inferred from the melted cells; melt order follows
+  column order, and empty cells melt to empty strings rather than
+  being skipped.
+
+**More than one pair — paired groups.** A right-aligned **"+ Add
+another group"** link under the Combine box adds a second Combine
+box ("Combine (group 2)") with its own checklist and its own pair of
+name boxes (defaults `category 2` / `value 2`; the suffix counts up).
+A column lives in one list only: checking it in any group withdraws
+it from the other groups' lists, as an ID check withdraws it from
+Combine. The groups melt **by position**: the first column of every
+group lands on the same output row, the second on the next, and so
+on — `sales_2023, cost_2023, sales_2024, cost_2024` with sales in
+one group and cost in the other gives one row per year carrying both
+values. A group shorter than the longest gets **blank cells** on the
+rows past its last column, and the panel says so ("The groups differ
+in size…"). The minted names of every group must differ from each
+other and from the kept ID columns (`"year" is used by two groups.`).
+A group with nothing checked mints nothing and is ignored; × on its
+header removes it. Two unrelated groups of different sizes (people
+and pets) are NOT what this is for — melt them all into one pair and
+derive a "kind" column instead; pairing is for columns that belong
+together. In the config the first group is the reshape's own
+`meltFields` / `variableName` / `valueName` and the rest sit in
+`extraGroups` (optional, additive, no storage bump).
 
 A line under the boxes reads out what Apply would save (`2 rows × 3
 columns → 4 rows × 3 columns.`); a half-configured draft (nothing to
@@ -774,7 +797,7 @@ The chart mode is computed from which channels are mapped:
 |---|---|
 | `x + y` | Scatter (or violin / box plot if toggled) |
 | `x + y + connection` | Line chart (toggle to area swaps y → length) |
-| `x + y + length` | Line-segment scatterplot |
+| `x + y + length` | Line-segment scatterplot (default) — or, with Length → **Draw as: Bars**, a bar + marks **combo** (see below) |
 | `x + y + length + angle` | Vector field |
 | `x + y + area` | Bubble chart |
 | categorical/ordinal `x + y + hue` (no glyph channels) | Tile heatmap |
@@ -785,6 +808,7 @@ The chart mode is computed from which channels are mapped:
 | quantitative `x + y`, hue = "Point count" | Hexbin (points binned to hex cells, colored by count) |
 | `x + length + connection` | Area chart (areas-x) |
 | `y + length + connection` | Area chart (areas-y) |
+| `x + y + length`, Length "Draw as" = Bars | Combo (combo-x / combo-y): bars of `length` plus the other position variable as marks on the same measure axis — a line when `connection` is mapped |
 | `angle` | Pie (single centered) |
 | `x + angle` | Pies-x (grid along x) |
 | `y + angle` | Pies-y (grid along y) |
@@ -798,6 +822,38 @@ The chart mode is computed from which channels are mapped:
 The three geo modes reuse existing channels (no new geographic
 channels); geographic rendering is gated by the chart-wide MapConfig
 (`coordSystem: "geographic"`), set via the "Maps" sidebar section.
+
+**Bar + marks combo.** `x + y + length` has two readings, and the
+Length panel's **Draw as** toggle (`LengthConfig.render`) picks one.
+The default, *Segments*, is the line-segment scatter above. *Bars*
+makes Length draw bars exactly as `x + length` would, and the OTHER
+position variable draws as scatter marks on the bars' measure axis —
+joined into a polyline per Connection value when `connection` is
+mapped (the classic bar + line chart, on ONE axis; there is no dual
+axis). The measure axis auto-fits to cover both the bars and the marks
+(faceted shared axes and the layout solver fold the marks in the same
+way). Which way the bars run follows the position variables' types:
+vertical bars (`combo-x`, x = category, y as marks) unless y reads as a
+category and x is the lone quantitative position, which gives the
+horizontal twin (`combo-y`). Both quantitative falls to vertical. The
+combo modes are members of the bar family (bar gap, stack / group
+modes, bar data-label placements, the Length legend hidden) and declare
+scatter's line / glyph / mark roles for the marks layer, so the
+Connection panel's line styling, the Line color / opacity slots, the
+Default shape and the Area panel's default point size all apply to it.
+The marks' points take their LINE's color, not the bars' Color
+mapping: the Color panel's **Point fill** slot (`comboPointFill`,
+§4.1) leads with *Auto* = the Line color (its mapping, else its single
+color), and can vary by a variable or take a single color of its own.
+Shape and Area cannot be MAPPED alongside Length (the shelf conflict
+stands). Data labels annotate EITHER layer per label: under Position
+and alignment every label gets a **Show on** choice — *Bars* or
+*Line* (*Points* without a Connection) — defaulting by the variables
+the label shows (the position variable drawn as marks, the Connection
+field, the Line / Point fill slot fields → the line; anything else →
+the bars) and stored in `DataLabelsConfig.fieldLayers` (§9). The
+option appears only for that signature — plain bars and lone segments
+never show it.
 When no MapConfig is active the geo modes never fire.
 
 Geography levels: US States, US Counties, US ZIP/ZCTA, and World
@@ -1197,8 +1253,8 @@ brightness, or pattern.
 
 ### 3.4 Quickstart bar
 The icon bar above the encoding shelves gives one-click scaffolds for
-each chart family (bar, scatter, hexbin, dumbbell, line, area, pie,
-radar, violin, density curve, tile, map, packed circles, treemap,
+each chart family (bar, combo, scatter, hexbin, dumbbell, line, area,
+pie, radar, violin, density curve, tile, map, packed circles, treemap,
 sunburst, sankey, chord) — every registered chart mode has a button.
 Each icon cycles through random *variations* (e.g., bars → vertical →
 grouped → patterned stacked → horizontal). The scaffold assigns
@@ -1217,6 +1273,16 @@ the category-axis field so each category's endpoints (rows split by
 the hue field) connect to each other — a freshly-picked connection
 field would link points across categories and render a line chart
 instead.
+
+The **Combo** icon scaffolds the bar + marks combo (§3.3): a
+categorical x, a quantitative Length (the bars) and a quantitative y
+(the marks), with a categorical connection for the line in the "Bars
+and line" and "Horizontal bars and line" variations and none in "Bars
+and points". Its `lengthAsBars` knob writes the Length panel's Draw as
+= Bars; every other variation that maps Length clears a leftover
+opt-in, so a bar / area / segment scaffold after a combo renders as its
+own family. Like bars, its showcase fill layers only pattern and a
+color modulation (shape and area conflict with Length).
 
 The **Density curve** icon scaffolds a single quantitative field on x
 with nothing on the opposite axis (the density axis is implied), and
@@ -1383,7 +1449,9 @@ Outline come first (they keep their own storage as the `hue` /
 `outlineHue` channels and are rendered via adapters); the remaining
 slots — Line, Rug, Violin fill/outline, Density-curve fill/stroke,
 Regression line / Confidence interval, Stem, radar Spine, geo-point
-fill/outline — each store an optional
+fill/outline, the combo's Point fill (§3.3; *Auto* = the line color,
+so points sit on their line in its color instead of the bars' Color
+mapping) — each store an optional
 field mapping (palette + per-level overrides) or, when no field is
 mapped, a single color seeded from the theme. Slots only appear when
 their chart mode and feature gate apply (e.g. Rug requires the
@@ -1667,6 +1735,13 @@ variable is mapped, the single default length when not),
 axis scale), or `"none"` (pies, tile, hexbin, maps, the structure
 layouts — the panel says the chart type doesn't draw length, instead
 of showing scatter's inert default-length control).
+
+With BOTH positions and Length mapped (no angle / r) the panel leads
+with **Draw as** — a *Segments* / *Bars* toggle (`LengthConfig.render`,
+absent = segments): Segments is the line-segment scatter, Bars the bar +
+marks combo of §3.3. It shows on the segment scatter and on the combo
+it turns into, never on plain bars (one position) or lone segments.
+In the combo the panel then continues as a bar mode (Bar gap).
 
 Whenever scatter draws line segments (a Length variable is mapped, or a
 default length is set), the Length panel adds a collapsible **Segment
@@ -2308,6 +2383,32 @@ padding so the inner rects stay aligned.
   before aggregation, so the bars split around 0 with nothing negative
   in the data; the `Aggregation.mirrored` flag turns every displayed
   value back into a magnitude.
+  **Combo marks layer** (`combo-x` / `combo-y`, §3.3): BarPlot also
+  renders the other position variable as scatter marks over the bars —
+  ScatterPlot's own `buildMarks` / `renderConnectionLines` /
+  `renderAxisStems` / `renderMarkPaths` run over the bars' scales (a
+  point scale over the band centers for the category axis, the measure
+  scale for the values), with Length and Angle stripped from the
+  aesthetics the marks resolve so Length means the bars, not a segment
+  on each point. Marks are per ROW, not aggregated; lines sort along
+  the category axis like a line chart. The layer has its own hover
+  state (full-row tooltip, "Show tooltips only at points", point
+  sampling, draw order) and its pattern defs merge with the bars' by
+  svgId. The measure bounds include the marks' extent
+  (`lib/comboOverlay.ts`, shared with the shared-axis fold and the
+  solver's tick estimate). The marks' fills are rewritten after
+  `buildMarks` through `comboPointFillResolver` (same module): the
+  Point fill slot when configured, else the row's line color via the
+  shared `resolveConnectionStroke` chain keyed by its Connection
+  value — the per-shape fill / stroke follow when they were derived
+  from the hue fill; pattern fills and explicit per-category shape
+  overrides stay. Data labels draw in two `DataLabelsLayer` instances
+  split by `labelFilter`: the bars' from slice anchors, the marks'
+  from the row path over the marks' scales (ranked per Connection
+  series like a line chart's), each label routed by `dataLabelLayerFor`
+  (`fieldLayers`, else the variables it shows against
+  `comboMarksFields`). The layout reserve routes the same way, so a
+  label on the marks takes no bar-side shift.
 - **ScatterPlot** — points at (x, y), sized by area, colored by hue,
   shaped by shape. When `connection` is mapped, renders polyline
   overlays (line chart). The Connection panel's "Show points" control
@@ -2827,6 +2928,22 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   Size / Text / Box / Color apply per label. The
   solver reserve then measures each population's widest single variable
   at that variable's alignment and offset.
+  On a bar + marks combo (§3.3) each label — every separate label's
+  subsection, or the primary label's Position and alignment block —
+  leads with **Show on**: *Bars* or *Line* (*Points* when no
+  Connection is mapped). A label with no stored choice follows the
+  variables it shows: one naming a marks variable (the position
+  variable drawn as marks, the Connection field, the Line / Point fill
+  slot fields) sits on the line, one label per row AT ITS POINT (the
+  chart's x and the position variable drawn as marks — never the Data
+  Labels X / Y mapping, which the bars don't read either) and ranked
+  per Connection series for First / Last (no "Of each": the bar scopes
+  don't apply to it); anything else sits on the bars with the bar
+  placements. A pick is stored per label key in
+  `DataLabelsConfig.fieldLayers` (the single-field label keys by its
+  value field) and lights the subsection dot. A label on the line has
+  no bar Placement group, and a stored bar side neither locks its
+  alignment nor counts as a change.
   Two or more populations present = a **split** selection, and only
   then do the controls split, one block per present population, living
   where those controls normally live rather than in this subsection:
@@ -4635,6 +4752,11 @@ grid cards drag onto sidebar folders (or "All visualizations" for the
 root), cmd/ctrl-click and shift-click build a sidebar multi-selection
 that drags as a set, and folders drag onto other folders to re-nest
 (cycles and no-op moves are rejected — no highlight, drop ignored).
+A visual is renamed from the sidebar without opening it: hovering its
+row reveals a pencil (always shown on touch), and clicking it swaps the
+name for an inline box — Enter / blur commits, Escape cancels, a blank
+name is ignored. The rename is catalogue metadata like a move, so it
+doesn't bump the visual's updated time or mark its preview stale.
 
 Folders are listed alphabetically until the user says otherwise. A
 folder dragged onto the *middle* of another folder's row nests inside

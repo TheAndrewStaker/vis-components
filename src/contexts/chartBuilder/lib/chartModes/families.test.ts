@@ -28,7 +28,14 @@ const selectedIds = (pred: (id: string) => boolean): ChartMode[] =>
 
 describe("mode families", () => {
 	it("covers every registered mode exactly once in the expected family", () => {
-		expect(selectedIds(isBarModeId)).toEqual(["bars-x", "bars-y"])
+		// Added 2026-10-26: the bar + marks combos are bar charts with a
+		// scatter marks layer on top (same aggregation, gap, stack modes).
+		expect(selectedIds(isBarModeId)).toEqual([
+			"bars-x",
+			"bars-y",
+			"combo-x",
+			"combo-y",
+		])
 		expect(selectedIds(isAreaModeId)).toEqual(["areas-x", "areas-y"])
 		expect(selectedIds(isPieModeId)).toEqual(["pies", "pies-x", "pies-y"])
 		expect(selectedIds(isHierarchyModeId)).toEqual([
@@ -87,7 +94,8 @@ const CONVERTED_GATES: {
 	},
 	{
 		gate: 'Tooltip panel: line chart "Only at points"; Connection panel: scatter-only sections',
-		was: ["scatter"],
+		// Added 2026-10-26: the combos' marks layer joins into lines like scatter.
+		was: ["combo-x", "combo-y", "scatter"],
 		now: (m) => m.canvas.connectionRole === "line",
 	},
 	{
@@ -97,7 +105,7 @@ const CONVERTED_GATES: {
 	},
 	{
 		gate: "Connection panel: draws connection lines (scatter | areas | radar)",
-		was: ["areas-x", "areas-y", "radar", "scatter"],
+		was: ["areas-x", "areas-y", "radar", "combo-x", "combo-y", "scatter"],
 		now: (m) =>
 			m.canvas.connectionRole === "line" ||
 			m.canvas.connectionRole === "layer" ||
@@ -105,7 +113,7 @@ const CONVERTED_GATES: {
 	},
 	{
 		gate: "Connection panel: line-or-area (scatter | areas)",
-		was: ["areas-x", "areas-y", "scatter"],
+		was: ["areas-x", "areas-y", "combo-x", "combo-y", "scatter"],
 		now: (m) =>
 			m.canvas.connectionRole === "line" || isAreaModeId(m.id),
 	},
@@ -184,7 +192,7 @@ const CONVERTED_GATES: {
 	},
 	{
 		gate: "Data labels: vertical bars (Placement wording, side locks alignment)",
-		was: ["bars-x"],
+		was: ["bars-x", "combo-x"],
 		now: (m) => isBarModeId(m.id) && m.canvas.measureAxis === "y",
 	},
 	{

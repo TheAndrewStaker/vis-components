@@ -137,6 +137,19 @@ export const renameFieldInTransform = (
 			reshape = { ...reshape, variableName: newName }
 		if (reshape.valueName === oldName)
 			reshape = { ...reshape, valueName: newName }
+		if (reshape.extraGroups) {
+			const extraGroups = mapSame(reshape.extraGroups, (g) =>
+				g.variableName === oldName || g.valueName === oldName
+					? {
+							...g,
+							variableName: g.variableName === oldName ? newName : g.variableName,
+							valueName: g.valueName === oldName ? newName : g.valueName,
+						}
+					: g
+			)
+			if (extraGroups !== reshape.extraGroups)
+				reshape = { ...reshape, extraGroups }
+		}
 	}
 	if (
 		added === t.added &&

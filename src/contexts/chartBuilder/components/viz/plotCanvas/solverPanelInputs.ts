@@ -9,7 +9,9 @@ import {
 	type FacetConfig,
 	gridPanelAxisOverride,
 } from "../../../lib/channelConfig"
+import { comboOverlayChannel } from "../../../lib/chartModes/families"
 import type { ChartModeDef } from "../../../lib/chartModes/types"
+import { overlayMeasureExtent } from "../../../lib/comboOverlay"
 import { evenlySpacedTicks, evenlySpacedTimeTicks } from "../../../lib/evenTicks"
 import type { SolverPanelInput } from "../../../lib/facetLayoutSolver"
 import { effectiveType } from "../../../lib/fieldType"
@@ -213,7 +215,7 @@ export const buildSolverPanelInputs = ({
 		}
 		if (!measureField) return null
 		if (!categoryField) return fieldExtent(measureField, panelRows)
-		return {
+		const bars = {
 			min: mode?.canvas.supportsNegativeMeasure
 				? computePanelMeasureMin(
 						panelRows,
@@ -230,6 +232,21 @@ export const buildSolverPanelInputs = ({
 				stackModes,
 				groupModeFields,
 			),
+		}
+		// Combo: the marks layer rides the same axis, so the ticks the solver
+		// samples must cover its values as well (BarPlot bounds the axis the
+		// same way).
+		const overlayChannel = mode ? comboOverlayChannel(mode.id) : null
+		const overlayField = overlayChannel
+			? (encodings[overlayChannel]?.field ?? null)
+			: null
+		const overlay = overlayField
+			? overlayMeasureExtent(panelRows, overlayField)
+			: null
+		if (!overlay) return bars
+		return {
+			min: Math.min(bars.min, overlay.min),
+			max: Math.max(bars.max, overlay.max),
 		}
 	}
 	/** A DATE axis's tick labels, as Axes.tsx draws them: a `scaleTime` over

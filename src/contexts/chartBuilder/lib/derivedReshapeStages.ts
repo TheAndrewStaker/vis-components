@@ -6,11 +6,7 @@ import {
 	referencedFields,
 	type DerivedVariablesConfig,
 } from "./derivedVariables"
-import {
-	effectiveValueName,
-	effectiveVariableName,
-	type ReshapeConfig,
-} from "./reshape"
+import { allMeltFields, mintedNames, type ReshapeConfig } from "./reshape"
 import type { DatasetView, Field } from "./types"
 
 /** Where each derived variable runs relative to the wide→long reshape.
@@ -50,17 +46,14 @@ const EMPTY_STAGES: DerivedReshapeStages = {
 }
 
 /** The names a variable may NOT mention and still run wide: the melt's own
- * pair (unless a wide column already carries the name — then it's just a
- * column). Earlier non-candidate derived names are added as the walk goes. */
+ * pairs — every group's (unless a wide column already carries the name —
+ * then it's just a column). Earlier non-candidate derived names are added
+ * as the walk goes. */
 export const postMeltOnlyNames = (
 	wideNames: ReadonlySet<string>,
 	reshape: ReshapeConfig
 ): Set<string> =>
-	new Set(
-		[effectiveVariableName(reshape), effectiveValueName(reshape)].filter(
-			(n) => !wideNames.has(n)
-		)
-	)
+	new Set(mintedNames(reshape).filter((n) => !wideNames.has(n)))
 
 export const splitDerivedVariablesAroundReshape = (
 	wideFields: ReadonlyArray<Field>,
@@ -91,7 +84,7 @@ export const splitDerivedVariablesAroundReshape = (
 		available.add(name)
 	})
 
-	const used = new Set([...reshape.idFields, ...reshape.meltFields])
+	const used = new Set([...reshape.idFields, ...allMeltFields(reshape)])
 	const usedIds = new Set(
 		candidates.filter((c) => used.has(c.name)).map((c) => c.id)
 	)

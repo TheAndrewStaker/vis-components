@@ -4,6 +4,7 @@ import {
 	DEFAULT_CONNECTION_CONFIG,
 	DEFAULT_DISTRIBUTION_OVERLAY_CONFIG,
 	DEFAULT_HISTOGRAM_CONFIG,
+	DEFAULT_LENGTH_CONFIG,
 	type AxisConfig,
 	type ChannelConfigs,
 } from "./channelConfig"
@@ -80,6 +81,14 @@ const AESTHETIC_FILL: Record<
 	}
 > = {
 	bar: {
+		alwaysQuant: [],
+		decorativeCat: ["pattern"],
+		colorModQuant: ["brightness", "saturation", "opacity"],
+	},
+	// Combo: bars plus a marks layer. Shape and area conflict with Length on
+	// the shelves, so like bars the fill only layers pattern + a color
+	// modulation on top.
+	combo: {
 		alwaysQuant: [],
 		decorativeCat: ["pattern"],
 		colorModQuant: ["brightness", "saturation", "opacity"],
@@ -642,6 +651,15 @@ export const applyVariation = (
 	// segments after switching to (e.g.) plain scatter.
 	if (variation.channels.length === undefined) {
 		configs.defaultLength = null
+	}
+
+	// Length panel "Draw as": combo scaffolds opt Length into bars; every
+	// other variation that maps Length (segment scatters, bars, areas) clears
+	// a leftover opt-in so it renders as its own family rather than as a
+	// combo the user didn't ask for.
+	if (variation.channels.length !== undefined) {
+		const { render: _render, ...rest } = configs.length ?? DEFAULT_LENGTH_CONFIG
+		configs.length = variation.lengthAsBars ? { ...rest, render: "bars" } : rest
 	}
 
 	return { encodings, configs, dataLabels }

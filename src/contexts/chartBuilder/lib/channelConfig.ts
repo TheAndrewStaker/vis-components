@@ -727,6 +727,7 @@ export type ColorSlotKey =
 	| "geoPointStroke" // bubble / symbol map point OUTLINE
 	| "regressionStroke" // scatter regression line
 	| "regressionCiFill" // scatter regression confidence band
+	| "comboPointFill" // bar + marks combo: the marks-layer point FILL (unconfigured = the line color)
 
 /** One color target's full state. Mirrors how `hue`/`outlineHue` work: an
  * optional field mapping with a palette + per-level overrides, or — when
@@ -985,6 +986,15 @@ export type LengthConfig = {
 	/** Segment end caps. "square" ends flush at the endpoints (SVG butt),
 	 * matching Connection's Line cap. Absent = "round". */
 	segmentLineCap?: "round" | "square"
+	/** What a mapped Length draws when BOTH position channels are mapped
+	 * too (`x + y + length`). `"segments"` (absent / default) keeps the
+	 * line-segment scatter — each point is a segment whose length is the
+	 * variable. `"bars"` turns the chart into a bar + marks COMBO: Length
+	 * draws bars on the measure axis exactly as `x + length` would, and the
+	 * other position variable draws scatter marks (joined into a line when
+	 * Connection is mapped) on that same measure axis. Only consulted with
+	 * both positions mapped — plain bars / segments never read it. */
+	render?: "segments" | "bars"
 }
 /** Built-in segment stroke width — the width segments always drew at. */
 export const DEFAULT_SEGMENT_THICKNESS = 3
@@ -1855,6 +1865,12 @@ export type FieldBarPlacement = {
 	side?: NonNullable<DataLabelsConfig["barLabelSide"]>
 }
 
+/** Which layer of a bar + marks combo (§3.3) a label annotates
+ *  (`DataLabelsConfig.fieldLayers`): the bars (anchored per slice, with the
+ *  bar placements) or the marks (one label per row at the point, ranked
+ *  per connection series like a line chart's). */
+export type DataLabelLayer = "bars" | "marks"
+
 export type DataLabelsConfig = {
 	/** Fallback color used when no `hue` field is mapped (or no palette
 	 * resolves). */
@@ -2061,6 +2077,15 @@ export type DataLabelsConfig = {
 	 * avoidance is per variable in that mode: the labels of variables with
 	 * it on avoid EACH OTHER; a variable with it off never moves. */
 	fieldLayouts?: Record<string, FieldLabelLayout>
+	/** Bar + marks combos only: which layer each label annotates, keyed by
+	 * label key (a composed label's id; the single-field label keys by its
+	 * value field). Sparse — a label with no entry follows the variables it
+	 * shows: one naming the marks' own variables (the position variable
+	 * drawn as marks, the Connection field, the Line / Point-fill slot
+	 * fields) goes on the marks, anything else on the bars
+	 * (`dataLabelLayerFor`, `lib/comboOverlay.ts`). A label on the marks
+	 * ignores the bar placements. */
+	fieldLayers?: Record<string, DataLabelLayer>
 	/** Where labels sit along an area layer's measure axis, when the chart is
 	 * an area chart. The layer runs from its base (the zero baseline, or the
 	 * cumulative bottom of a stacked layer) to its top edge (the line).
@@ -2414,6 +2439,7 @@ export const DEFAULT_DATA_LABELS_CONFIG: DataLabelsConfig = {
 	barLabelSide: "center",
 	fieldBarPlacements: {},
 	fieldLayouts: {},
+	fieldLayers: {},
 	areaLabelPosition: "edge",
 	onlyLastLabel: false,
 	// labelPoints deliberately ABSENT from the defaults: merged configs are

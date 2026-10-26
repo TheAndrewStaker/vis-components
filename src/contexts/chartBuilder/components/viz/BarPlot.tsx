@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { scaleBand, scaleLinear } from "d3-scale"
+import { scaleBand, scaleLinear, scalePoint } from "d3-scale"
 import { useAtomValue } from "jotai"
 import {
 	aggregateBars,
@@ -10,6 +10,7 @@ import {
 } from "../../lib/aggregators/stacks"
 import {
 	buildPatternDefs,
+	buildPatternDefsFromItems,
 	stacksToGroupValues,
 	type PatternDefOptions,
 } from "../../lib/buildPatternDefs"
@@ -26,6 +27,16 @@ import {
 } from "../../lib/channelConfig"
 import { ptToPx } from "../../lib/fontUnit"
 import { getChartMode } from "../../lib/chartMode"
+import { comboOverlayChannel, isBarModeId } from "../../lib/chartModes/families"
+import {
+	comboMarksFields,
+	comboPointFillResolver,
+	dataLabelLayerFor,
+	overlayMeasureExtent,
+} from "../../lib/comboOverlay"
+import { sampleMarkersByConnection } from "../../lib/connectionSampling"
+import { sortByDrawOrder } from "../../lib/drawOrder"
+import { resolveMarkAesthetics } from "../../lib/resolveMarkAesthetics"
 import type { MeasureAxisRendererProps } from "../../lib/chartRendererProps"
 import { densityCurveGroupField } from "../../lib/colorSlots"
 import { densityCurveMeasures } from "../../lib/densityCurve"
@@ -39,6 +50,7 @@ import {
 	layerFillProp,
 	resolveLayerColor,
 	resolveSlotColor,
+	slotModulationResolver,
 	slotOpacityResolver,
 } from "../../lib/resolveLayerColor"
 import {
@@ -71,6 +83,7 @@ import {
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
+	currentTooltipConfigAtom,
 	renderedLabelsAtom,
 } from "../../store/atoms"
 import {
@@ -95,6 +108,13 @@ import {
 import { DataLabelsLayer, type DataLabelAnchor } from "./DataLabelsLayer"
 import { HoverTooltip, type TooltipState } from "./HoverTooltip"
 import { Plot, type CoordFactory, type PlotContext } from "./Plot"
+import { renderAxisStems, renderConnectionLines } from "./scatter/connections"
+import {
+	buildMarks,
+	drawOrderSizeTieBreak,
+	renderMarkPaths,
+} from "./scatter/marks"
+import type { HoverState } from "./scatter/types"
 
 const FALLBACK_FILL = "#6b7280"
 
@@ -104,15 +124,22 @@ export { toDensityStacks } from "../../lib/aggregators/stacks"
 
 type BarPlotProps = MeasureAxisRendererProps
 
+type BarMode = "bars-x" | "bars-y" | "combo-x" | "combo-y"
+
 type Aggregation =
 	| {
 			kind: "ok"
-			mode: "bars-x" | "bars-y"
+			mode: BarMode
 			isVertical: boolean
 			categoryField: string
 			lengthField: string
 			categoryType: FieldType
 			lengthType: FieldType
+			/** Combo modes only: the position variable drawn as scatter MARKS
+			 * on the measure axis (y on combo-x, x on combo-y) — a line when
+			 * Connection is mapped. Null on plain bars. The measure bounds
+			 * below already cover its values. */
+			overlayField: string | null
 			stacks: Stack[]
 			scaleCategories: string[]
 			measureMin: number
@@ -189,6 +216,17 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 	const aestheticScales = useAestheticScales()
 	const legendHighlight = useLegendHighlight()
 	const markHover = useMarkHoverHighlight(aestheticScales.hue?.field.name ?? null)
+	// Combo marks layer: the same hover plumbing ScatterPlot gives its points
+	// and lines. "Show tooltips only at points" and the Draw-order ranking
+	// apply to the layer exactly as on a scatter.
+	const tooltipPointsOnly = !!useAtomValue(currentTooltipConfigAtom).pointsOnly
+	const drawOrderLevels = channelConfigs.drawOrder?.field
+		? levelOrders[channelConfigs.drawOrder.field]
+		: undefined
+	const [overlayHovered, setOverlayHovered] = useState<HoverState | null>(null)
+	const hueFieldName = aestheticScales.hue?.field.name ?? null
+	const publishOverlayHover = (row: Record<string, unknown>) =>
+		markHover.enter(hueFieldName ? row[hueFieldName] : undefined)
 
 	const showX = props.showXAxis !== false
 	const showY = props.showYAxis !== false
@@ -217,25 +255,37 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 	const aggregation = useMemo<Aggregation | null>(() => {
 		if (!dataset) return null
 		const getType = (name: string) => effectiveType(dataset, name, overrides)
-		const mode = getChartMode(encodings, getType, channelConfigs)
-		if (mode !== "bars-x" && mode !== "bars-y") return null
-		const categoryField =
-			mode === "bars-x" ? encodings.x.field : encodings.y.field
+		const detected = getChartMode(encodings, getType, channelConfigs)
+		if (!isBarModeId(detected)) return null
+		const mode = detected as BarMode
+		// Vertical bars: categories along x, measure up y. The combo modes
+		// follow the same orientation rule as their bar twins.
+		const isVertical = mode === "bars-x" || mode === "combo-x"
+		const categoryField = isVertical ? encodings.x.field : encodings.y.field
 		if (!categoryField) return null
 		const categoryType = effectiveType(dataset, categoryField, overrides)
+		// Combo: the OTHER position variable rides the measure axis as marks.
+		const overlayChannel = comboOverlayChannel(mode)
+		const overlayField = overlayChannel
+			? (encodings[overlayChannel]?.field ?? null)
+			: null
 		// Histogram: the category axis is a binned quantitative field and bar
 		// height is the COUNT of rows per bin — no measure field. Otherwise
 		// it's a normal bar chart, which requires a `length` measure.
-		const categoryChannel = mode === "bars-x" ? "x" : "y"
+		const categoryChannel = isVertical ? "x" : "y"
 		const histogramCfg = channelConfigs[categoryChannel]?.histogram
+		// A combo always has a Length measure; a leftover histogram toggle on
+		// its category axis must not swap the bars for row counts.
 		const isHistogram =
-			histogramCfg?.enabled === true && categoryType === "quantitative"
+			overlayField === null &&
+			histogramCfg?.enabled === true &&
+			categoryType === "quantitative"
 		const lengthField = encodings.length?.field ?? ""
 		if (!isHistogram && !lengthField) return null
 		// "Use a mirrored axis" lives on the MEASURE axis's config (the
 		// field-less position axis the length feeds). Levels are discovered
 		// over the whole dataset so faceted panels agree on sides.
-		const measureChannel = mode === "bars-x" ? "y" : "x"
+		const measureChannel = isVertical ? "y" : "x"
 		const mirrorDirection =
 			!isHistogram && lengthField
 				? resolveMirrorDirection(
@@ -317,7 +367,6 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 		// Reversed for bars-y. (Resolved here so histogram bin edges can be
 		// derived from the CATEGORY-axis source — keeping faceted panels that
 		// share the category axis on the same bins.)
-		const isVertical = mode === "bars-x"
 		const categoryRows = isVertical ? rowsForXScale : rowsForYScale
 		const measureRows = isVertical ? rowsForYScale : rowsForXScale
 
@@ -428,21 +477,35 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 		// so a pooled/shared measure axis still bounds the largest bin. Faceted
 		// shared axes pass an explicit `measureMaxOverride` that wins over both.
 		const modes = resolveStackModes(channelConfigs, encodings)
+		// Combo: the marks ride the same measure axis, so its bounds cover
+		// their values too (the shared-axis path does the same per panel in
+		// shareScales.ts). Auto-fit only — a faceted override or a pinned
+		// range wins as it does for the bars.
+		const overlayExtent = overlayField
+			? overlayMeasureExtent(measureRows, overlayField)
+			: null
 		const measureMax =
 			props.measureMaxOverride ??
-			computeBarMeasureMax(isDensity ? renderStacks : measureStacks, modes)
+			Math.max(
+				computeBarMeasureMax(isDensity ? renderStacks : measureStacks, modes),
+				overlayExtent?.max ?? -Infinity
+			)
 		const measureMin =
 			props.measureMinOverride ??
-			computeBarMeasureMin(isDensity ? renderStacks : measureStacks, modes)
+			Math.min(
+				computeBarMeasureMin(isDensity ? renderStacks : measureStacks, modes),
+				overlayExtent?.min ?? Infinity
+			)
 
 		return {
 			kind: "ok",
 			mode,
-			isVertical: mode === "bars-x",
+			isVertical,
 			categoryField,
 			lengthField,
 			categoryType,
 			lengthType,
+			overlayField,
 			stacks: renderStacks,
 			scaleCategories,
 			measureMin,
@@ -462,6 +525,7 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 		rowsForYScale,
 		aestheticScales,
 		channelConfigs.hue,
+		channelConfigs.length?.render,
 		channelConfigs.x?.histogram,
 		channelConfigs.y?.histogram,
 		channelConfigs.x?.customFormat,
@@ -487,15 +551,49 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 	const connectionMapped = !!encodings.connection?.field
 	const patternDefs = useMemo<PatternDefSpec[]>(() => {
 		if (!aggregation || aggregation.kind === "error") return []
-		return buildPatternDefs(
+		const patternOptions = {
+			defaultToNone: connectionMapped,
+			includeDefaultPattern: true,
+		}
+		const barDefs = buildPatternDefs(
 			stacksToGroupValues(aggregation.stacks),
 			aestheticScales,
 			channelConfigs,
 			channelConfigs.defaultFill ?? FALLBACK_FILL,
 			channelConfigs.pattern?.backgroundColor ?? "#e2e8f0",
-			{ defaultToNone: connectionMapped, includeDefaultPattern: true }
+			patternOptions
 		)
-	}, [aggregation, aestheticScales, channelConfigs, connectionMapped])
+		if (!aggregation.overlayField) return barDefs
+		// Combo marks resolve their fills per ROW (ScatterPlot's pipeline), so
+		// their pattern ids come from the per-item builder; both key on the
+		// same svgId, so a def the bars already emitted is skipped.
+		const patternField = aestheticScales.pattern?.field.name ?? null
+		if (!patternField && channelConfigs.defaultPattern == null) return barDefs
+		const seen = new Set(barDefs.map((d) => d.svgId))
+		const markDefs = buildPatternDefsFromItems(
+			rowsForChart.map((row) => {
+				const aes = resolveMarkAesthetics(row, aestheticScales, channelConfigs)
+				return {
+					patternValue: patternField ? row[patternField] : undefined,
+					fill: aes.fill,
+					preModulationHue: aes.preModulationHue,
+					satUnit: aes.satUnit,
+					briUnit: aes.briUnit,
+				}
+			}),
+			aestheticScales,
+			channelConfigs,
+			channelConfigs.pattern?.backgroundColor ?? "#e2e8f0",
+			patternOptions
+		).filter((d) => !seen.has(d.svgId))
+		return markDefs.length ? [...barDefs, ...markDefs] : barDefs
+	}, [
+		aggregation,
+		aestheticScales,
+		channelConfigs,
+		connectionMapped,
+		rowsForChart,
+	])
 
 	const tickFont = resolveTextFont(labels.baseFont)
 	const xAxisTitleFont = resolveTitleFont(
@@ -619,7 +717,26 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 	}
 
 	const [hovered, setHovered] = useState<TooltipState | null>(null)
-	const tooltip = hovered ? <HoverTooltip state={hovered} /> : null
+	// Bar slices compose their own aggregate fields; a hovered combo MARK
+	// shows its full row (or, on a line hover, the fields the line supplies),
+	// exactly as ScatterPlot's points do.
+	const tooltip = hovered ? (
+		<HoverTooltip state={hovered} />
+	) : overlayHovered && dataset ? (
+		<HoverTooltip
+			state={{
+				clientX: overlayHovered.clientX,
+				clientY: overlayHovered.clientY,
+				fields:
+					overlayHovered.fields ??
+					dataset.fields.map((f) => ({
+						name: f.name,
+						value: overlayHovered.row[f.name],
+					})),
+				seriesOnly: overlayHovered.seriesOnly,
+			}}
+		/>
+	) : null
 
 	const marksBody = (ctx: PlotContext) => {
 		if (!aggregation || aggregation.kind !== "ok") return null
@@ -749,10 +866,166 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 					channelConfigs.opacity
 				)
 			: null
+		// Combo marks layer: the overlay position variable as scatter marks on
+		// the measure axis, joined into lines by Connection — ScatterPlot's own
+		// mark / line / stem builders over the bars' scales. The category
+		// scale is a BAND; the marks need the band CENTERS, which a point
+		// scale over the same categories spanning first-center → last-center
+		// reproduces exactly (uniform padding spaces both evenly). Length and
+		// angle are stripped from the aesthetics the marks resolve: here
+		// Length IS the bars, not a segment on every point.
+		const labelLayerCfg = { fieldLayers: dataLabelsCfg?.fieldLayers }
+		const marksFields = comboMarksFields(aggregation.mode, encodings, channelConfigs)
+		const overlayNode = (() => {
+			if (!aggregation.overlayField) return null
+			const categories = categoryScale.domain()
+			if (categories.length === 0) return null
+			const half = categoryScale.bandwidth() / 2
+			const first = (categoryScale(categories[0]) ?? 0) + half
+			const last = (categoryScale(categories[categories.length - 1]) ?? 0) + half
+			const centerScale = scalePoint<string>()
+				.domain(categories)
+				.range([first, last])
+			const oxScale: PositionScale = aggregation.isVertical
+				? centerScale
+				: measureScale
+			const oyScale: PositionScale = aggregation.isVertical
+				? measureScale
+				: centerScale
+			const oxType: FieldType = aggregation.isVertical
+				? "categorical"
+				: "quantitative"
+			const oyType: FieldType = aggregation.isVertical
+				? "quantitative"
+				: "categorical"
+			const connectionColor = liveTheme.connectionColor
+			// Point fill: a point belongs to the LINE it sits on, so it takes
+			// the line's color (or the Point fill slot's), not the bars' Color
+			// mapping the shared mark pipeline resolved. The per-shape fill /
+			// stroke follow when they were derived from that fill; explicit
+			// per-category shape overrides and pattern fills stay.
+			const pointFill = comboPointFillResolver({
+				rows: rowsForChart,
+				encodings,
+				channelConfigs,
+				aestheticScales,
+				connectionColor,
+			})
+			const marks = buildMarks({
+				rowsForChart,
+				encodings,
+				channelConfigs: { ...channelConfigs, defaultLength: null },
+				aestheticScales: { ...aestheticScales, length: null, angle: null },
+				xScale: oxScale,
+				yScale: oyScale,
+				xType: oxType,
+				yType: oyType,
+			}).map((m) => {
+				if (m.patternId !== null) return m
+				const fill = pointFill(m.row)
+				return {
+					...m,
+					fill,
+					shapeFill: m.shapeFill === m.fill ? fill : m.shapeFill,
+					shapeStroke: m.shapeStroke === m.fill ? fill : m.shapeStroke,
+				}
+			})
+			if (marks.length === 0) return null
+			const connectionField = encodings.connection?.field ?? null
+			const markedIndices = connectionField
+				? sampleMarkersByConnection(
+						marks,
+						connectionField,
+						channelConfigs,
+						(m) => m.cx
+					)
+				: null
+			return (
+				<g data-combo-marks>
+					{renderAxisStems(
+						marks,
+						channelConfigs,
+						oxScale,
+						oyScale,
+						aestheticScales.colorSlots.stem,
+						channelConfigs.colorSlots?.stem,
+						slotOpacityResolver("stem", channelConfigs, aestheticScales),
+						connectionColor,
+						legendHighlight
+					)}
+					{renderConnectionLines(
+						marks,
+						encodings,
+						channelConfigs,
+						slotOpacityResolver("line", channelConfigs, aestheticScales)({}),
+						aestheticScales.colorSlots.line,
+						connectionColor,
+						oxScale,
+						oxType,
+						dataset,
+						drawOrderLevels,
+						aestheticScales.hue?.field.type,
+						aestheticScales.themeInkFallback,
+						setOverlayHovered,
+						legendHighlight,
+						publishOverlayHover,
+						markedIndices,
+						tooltipPointsOnly,
+						slotModulationResolver("line", channelConfigs, aestheticScales),
+						(row) =>
+							resolveMarkAesthetics(row, aestheticScales, channelConfigs)
+								.preModulationHue
+					)}
+					{renderMarkPaths({
+						marks: sortByDrawOrder(
+							marks,
+							(m) => m.row,
+							channelConfigs.drawOrder,
+							dataset,
+							drawOrderLevels,
+							drawOrderSizeTieBreak
+						),
+						markedIndices,
+						channelConfigs,
+						hoveredIdx: overlayHovered?.i ?? null,
+						borderOpacity: slotOpacityResolver(
+							"border",
+							channelConfigs,
+							aestheticScales
+						),
+						setHovered: setOverlayHovered,
+						highlight: legendHighlight,
+						publishHover: publishOverlayHover,
+					})}
+					{/* Labels on the marks: one per row at the point, ranked per
+					 *  Connection series like a line chart's (the row path over
+					 *  the marks' scales) — the labels `dataLabelLayerFor` puts on
+					 *  this layer; the bars' layer below draws the rest. */}
+					{anyDataLabelsMapped && (
+						<DataLabelsLayer
+							rows={rowsForChart}
+							xScale={oxScale}
+							yScale={oyScale}
+							xType={oxType}
+							yType={oyType}
+							positionFields={{
+								x: encodings.x?.field ?? null,
+								y: encodings.y?.field ?? null,
+							}}
+							labelFilter={(key, fields) =>
+								dataLabelLayerFor(labelLayerCfg, key, fields, marksFields) ===
+								"marks"
+							}
+						/>
+					)}
+				</g>
+			)
+		})()
 		return (
 			<g
 				onMouseLeave={() => {
 					setHovered(null)
+					setOverlayHovered(null)
 					markHover.leave()
 				}}
 			>
@@ -825,6 +1098,7 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 						categoryScale,
 						measureScale,
 					})}
+				{overlayNode}
 				{encodings.text?.field &&
 					buildSliceLabels({
 						aggregation,
@@ -844,6 +1118,14 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 						yScale={yScale}
 						xType={aggregation.isVertical ? "categorical" : "quantitative"}
 						yType={aggregation.isVertical ? "quantitative" : "categorical"}
+						// Combo: the labels on the marks draw in the marks layer.
+						labelFilter={
+							aggregation.overlayField
+								? (key, fields) =>
+										dataLabelLayerFor(labelLayerCfg, key, fields, marksFields) ===
+										"bars"
+								: undefined
+						}
 						anchors={buildBarAnchors({
 							aggregation,
 							categoryScale,

@@ -14,7 +14,16 @@ import type { ChartMode } from "../chartMode"
  * behavior that genuinely belongs to a renderer lineage — the bar band
  * gap, the area layer stacking toggle, the pie wedge scope. */
 
-const BAR_MODE_IDS: readonly ChartMode[] = ["bars-x", "bars-y"]
+/** The bar renderer's lineage. The combo modes ARE bar charts (same
+ * aggregation, band gap, stack / group modes, bar label placements) with a
+ * marks layer on top — see `comboOverlayChannel` for the extra layer. */
+const BAR_MODE_IDS: readonly ChartMode[] = [
+	"bars-x",
+	"bars-y",
+	"combo-x",
+	"combo-y",
+]
+const COMBO_MODE_IDS: readonly ChartMode[] = ["combo-x", "combo-y"]
 const AREA_MODE_IDS: readonly ChartMode[] = ["areas-x", "areas-y"]
 const PIE_MODE_IDS: readonly ChartMode[] = ["pies", "pies-x", "pies-y"]
 /** The tree readings of the shared no-positions signature (see
@@ -35,6 +44,14 @@ const has = (ids: readonly ChartMode[], id: string): boolean =>
 	(ids as readonly string[]).includes(id)
 
 export const isBarModeId = (id: string): boolean => has(BAR_MODE_IDS, id)
+/** The bar + marks combos (a subset of the bar family). */
+export const isComboModeId = (id: string): boolean => has(COMBO_MODE_IDS, id)
+/** The position channel a combo draws as scatter MARKS on the bars'
+ * measure axis: `y` on combo-x (vertical bars), `x` on combo-y. `null` on
+ * every other mode — the one question BarPlot, the shared measure-axis
+ * bounds and the solver ask that the traits alone can't answer. */
+export const comboOverlayChannel = (id: string): "x" | "y" | null =>
+	id === "combo-x" ? "y" : id === "combo-y" ? "x" : null
 export const isAreaModeId = (id: string): boolean => has(AREA_MODE_IDS, id)
 export const isPieModeId = (id: string): boolean => has(PIE_MODE_IDS, id)
 export const isHierarchyModeId = (id: string): boolean =>

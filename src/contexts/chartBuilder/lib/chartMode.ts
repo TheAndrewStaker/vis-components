@@ -9,6 +9,8 @@ export type ChartMode =
 	| "scatter"
 	| "bars-x"
 	| "bars-y"
+	| "combo-x"
+	| "combo-y"
 	| "pies"
 	| "pies-x"
 	| "pies-y"

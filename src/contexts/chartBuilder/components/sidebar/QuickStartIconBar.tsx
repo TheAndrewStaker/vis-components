@@ -52,6 +52,26 @@ const BarIcon = ({ className }: IconProps) => (
 	</svg>
 )
 
+const ComboIcon = ({ className }: IconProps) => (
+	<svg viewBox="0 0 16 16" className={className} aria-hidden="true">
+		{/* Bars with a line (and its points) over them on the same axis. */}
+		<rect x="2" y="9" width="3" height="5" fillOpacity={0.5} />
+		<rect x="6.5" y="6" width="3" height="8" fillOpacity={0.5} />
+		<rect x="11" y="10" width="3" height="4" fillOpacity={0.5} />
+		<polyline
+			points="3.5,7 8,3 12.5,6"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth={1.5}
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		/>
+		<circle cx="3.5" cy="7" r="1.25" />
+		<circle cx="8" cy="3" r="1.25" />
+		<circle cx="12.5" cy="6" r="1.25" />
+	</svg>
+)
+
 const ScatterIcon = ({ className }: IconProps) => (
 	<svg viewBox="0 0 16 16" className={className} aria-hidden="true">
 		<circle cx="3" cy="11" r="1.5" />
@@ -322,6 +342,7 @@ const SankeyIcon = ({ className }: IconProps) => (
 
 const ICONS: Record<QuickStartChartType, (p: IconProps) => JSX.Element> = {
 	bar: BarIcon,
+	combo: ComboIcon,
 	scatter: ScatterIcon,
 	hexbin: HexbinIcon,
 	dumbbell: DumbbellIcon,
@@ -342,6 +363,7 @@ const ICONS: Record<QuickStartChartType, (p: IconProps) => JSX.Element> = {
 
 const LABELS: Record<QuickStartChartType, string> = {
 	bar: "Bar chart",
+	combo: "Combo chart",
 	scatter: "Scatter plot",
 	hexbin: "Hexbin",
 	dumbbell: "Dumbbell chart",
@@ -365,6 +387,7 @@ const LABELS: Record<QuickStartChartType, string> = {
 // informational, not prescriptive.
 const MISSING_TYPE_HINT: Record<QuickStartChartType, string> = {
 	bar: "Needs at least one categorical field.",
+	combo: "Needs a categorical field and a quantitative field for the bars and the line.",
 	scatter: "Needs at least two quantitative fields.",
 	hexbin: "Needs quantitative x and y fields.",
 	dumbbell: "Needs a categorical field and a quantitative field.",

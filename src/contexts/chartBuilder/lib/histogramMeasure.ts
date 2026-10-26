@@ -1,6 +1,6 @@
 import type { ChannelConfigs } from "./channelConfig"
 import { getChartModeDef } from "./chartMode"
-import { isBarModeId } from "./chartModes/families"
+import { isBarModeId, isComboModeId } from "./chartModes/families"
 import type { Encodings, FieldType } from "./types"
 
 /** The active-histogram facts the Fill color / opacity panels (and the legend)
@@ -41,7 +41,8 @@ export const resolveHistogramMeasure = (
 	channelConfigs: ChannelConfigs
 ): HistogramMeasure | null => {
 	const mode = getChartModeDef(encodings, getType, channelConfigs)
-	if (!isBarModeId(mode.id)) return null
+	// Combos always measure Length (BarPlot ignores the histogram toggle there).
+	if (!isBarModeId(mode.id) || isComboModeId(mode.id)) return null
 	// The category axis is the one that ISN'T the measure.
 	const categoryChannel = mode.canvas.measureAxis === "y" ? "x" : "y"
 	const categoryField = encodings[categoryChannel].field

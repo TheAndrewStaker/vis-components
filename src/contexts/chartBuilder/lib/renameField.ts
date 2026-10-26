@@ -14,10 +14,10 @@ import type {
 } from "./derivedVariables"
 import type { LabelsConfig, TooltipConfig } from "./labelsConfig"
 import {
-	effectiveVariableName,
-	presentMeltFields,
+	meltVariableNameOf,
 	reshapeApplies,
 	type ReshapeConfig,
+	type ReshapeGroup,
 } from "./reshape"
 import type {
 	DataLabelsEncodings,
@@ -293,17 +293,31 @@ export const renameDerivedVariableTokens = (
 			: v.rules,
 	})
 
-/** Swap a column in a reshape's ID / Combine membership lists. Same
- * reference when neither lists the old name. */
+/** Swap a column in a reshape's ID / Combine membership lists — every
+ * group's. Same reference when none lists the old name. */
 export const renameReshapeFields = (
 	rc: ReshapeConfig,
 	oldName: string,
 	newName: string
-): ReshapeConfig =>
-	patched(rc, {
+): ReshapeConfig => {
+	let extraGroups = rc.extraGroups
+	if (extraGroups) {
+		let changed = false
+		const next = extraGroups.map((g): ReshapeGroup => {
+			const out = patched(g, {
+				meltFields: renameInList(g.meltFields, oldName, newName) ?? g.meltFields,
+			})
+			if (out !== g) changed = true
+			return out
+		})
+		if (changed) extraGroups = next
+	}
+	return patched(rc, {
 		idFields: renameInList(rc.idFields, oldName, newName) ?? rc.idFields,
 		meltFields: renameInList(rc.meltFields, oldName, newName) ?? rc.meltFields,
+		...(extraGroups !== rc.extraGroups ? { extraGroups } : {}),
 	})
+}
 
 // ---------------------------------------------------------------------------
 // The per-visual rewrite
@@ -506,6 +520,7 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 				fieldOffsets: renameKey(dlc.fieldOffsets, oldName, newName),
 				fieldBarPlacements: renameKey(dlc.fieldBarPlacements, oldName, newName),
 				fieldLayouts: renameKey(dlc.fieldLayouts, oldName, newName),
+				fieldLayers: renameKey(dlc.fieldLayers, oldName, newName),
 				// A default label's id IS the variable's name, so the key moves
 				// with the field; every template swaps its tokens.
 				composedLabels: dlc.composedLabels?.map((l) => ({
@@ -899,21 +914,18 @@ export const renameFieldInConfigs = <T extends FieldNameConfigs>(
 	newName: string
 ): T => {
 	const rc = state.reshapeConfig
-	const melted =
-		rc !== undefined &&
-		reshapeApplies(datasetFields, rc) &&
-		presentMeltFields(datasetFields, rc).some((f) => f.name === oldName)
+	// The variable column the renamed field's NAME lands in, when the field
+	// is a melted column of an applying reshape (its combining group's).
+	const meltedInto =
+		rc !== undefined && reshapeApplies(datasetFields, rc)
+			? meltVariableNameOf(datasetFields, rc, oldName)
+			: undefined
 
 	const reshapeConfig = rc ? renameReshapeFields(rc, oldName, newName) : rc
 
 	const base = patched(state, { reshapeConfig } as Partial<T>)
-	return melted
-		? renameMeltedValueRefs(
-				base,
-				effectiveVariableName(rc),
-				oldName,
-				newName
-			)
+	return meltedInto !== undefined
+		? renameMeltedValueRefs(base, meltedInto, oldName, newName)
 		: renameViewFieldRefs(base, oldName, newName)
 }
 

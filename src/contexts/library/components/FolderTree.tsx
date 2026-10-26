@@ -170,12 +170,21 @@ const setMultiDragImage = (dt: DataTransfer, count: number) => {
  *  that folder", or an expanded folder's rows would be dead space between
  *  the only live target (its title row) and the next one. The highlight is
  *  the container's — these rows never light up on their own, because
- *  dropping "onto a visual" isn't a thing. */
+ *  dropping "onto a visual" isn't a thing.
+ *
+ *  The row is a div so the pencil can sit beside the link rather than
+ *  inside it (a button nested in an anchor is one control to a screen
+ *  reader); the link is the name, and the row's select/drag/drop handlers
+ *  are on the div. Clicking the pencil swaps the name for the same inline
+ *  rename box a folder row uses — Enter / blur commit, Escape cancels, a
+ *  blank name is ignored. A rename stamps nothing: like a move to another
+ *  folder it's catalogue metadata, so the preview isn't marked stale. */
 const VisualTreeItem = ({
 	visual,
 	depth,
 	isSelected,
 	onClick,
+	onRename,
 	onDragStart,
 	dropHandlers,
 }: {
@@ -183,6 +192,7 @@ const VisualTreeItem = ({
 	depth: number
 	isSelected: boolean
 	onClick: (visualId: string, e: React.MouseEvent) => void
+	onRename: (visualId: string, name: string) => void
 	onDragStart: (e: React.DragEvent) => void
 	dropHandlers: {
 		onDragEnter: (e: React.DragEvent) => void
@@ -190,34 +200,107 @@ const VisualTreeItem = ({
 		onDragLeave: () => void
 		onDrop: (e: React.DragEvent) => void
 	}
-}) => (
-	<Link
-		to="/editor/$visualId"
-		params={{ visualId: visual.id }}
-		className={`${TREE_ROW} ${
-			isSelected
-				? "vc-nav-active"
-				: "hover:bg-stone-100 dark:hover:bg-stone-800 vc-text"
-		}`}
-		style={{ paddingLeft: `${depth * 16 + 4}px` }}
-		title={visual.name}
-		data-selected={isSelected || undefined}
-		// TanStack Router types the Link event as MouseEvent<"a">, which is
-		// incompatible with React.MouseEvent<Element> in both directions;
-		// the runtime object is an ordinary synthetic mouse event.
-		onClick={(e) => onClick(visual.id, e as unknown as React.MouseEvent)}
-		draggable
-		onDragStart={(e) => onDragStart(e as unknown as React.DragEvent)}
-		onDragEnd={() => setCurrentDrag(null)}
-		onDragEnter={(e) => dropHandlers.onDragEnter(e as unknown as React.DragEvent)}
-		onDragOver={(e) => dropHandlers.onDragOver(e as unknown as React.DragEvent)}
-		onDragLeave={() => dropHandlers.onDragLeave()}
-		onDrop={(e) => dropHandlers.onDrop(e as unknown as React.DragEvent)}
-	>
-		<span className={ROW_CHEVRON_BOX} />
-		<span className="min-w-0 flex-1 truncate">{visual.name}</span>
-	</Link>
-)
+}) => {
+	const [editing, setEditing] = useState(false)
+	const [editName, setEditName] = useState(visual.name)
+
+	const commitRename = () => {
+		const trimmed = editName.trim()
+		if (trimmed && trimmed !== visual.name) onRename(visual.id, trimmed)
+		setEditing(false)
+	}
+
+	return (
+		// The row is a pointer/drag target (a click anywhere selects or, via
+		// the link's own handler, opens); the link inside is the keyboard
+		// path, so the row itself is not a control. The selection handler
+		// sits on the row so a modified click on the gutter counts too; it
+		// preventDefaults the same event the link saw, which is what stops
+		// a cmd/shift-click from also opening the editor in a new tab.
+		// eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer convenience; the link inside is the keyboard path
+		<div
+			className={`group/visualrow ${TREE_ROW} ${
+				isSelected
+					? "vc-nav-active"
+					: "hover:bg-stone-100 dark:hover:bg-stone-800 vc-text"
+			}`}
+			style={{ paddingLeft: `${depth * 16 + 4}px` }}
+			title={visual.name}
+			data-selected={isSelected || undefined}
+			onClick={(e) => {
+				if (!editing) onClick(visual.id, e)
+			}}
+			draggable={!editing}
+			onDragStart={(e) => {
+				if (editing) {
+					e.preventDefault()
+					return
+				}
+				onDragStart(e)
+			}}
+			onDragEnd={() => setCurrentDrag(null)}
+			{...dropHandlers}
+		>
+			{editing ? (
+				<>
+					<span className={ROW_CHEVRON_BOX} />
+					<input
+						type="text"
+						value={editName}
+						onChange={(e) => setEditName(e.target.value)}
+						onBlur={commitRename}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") commitRename()
+							if (e.key === "Escape") {
+								setEditName(visual.name)
+								setEditing(false)
+							}
+						}}
+						onClick={(e) => e.stopPropagation()}
+						// eslint-disable-next-line jsx-a11y/no-autofocus -- initial focus for the inline rename editor the user just opened
+						autoFocus
+						aria-label={`New name for ${visual.name}`}
+						className="vc-focus-ring min-w-0 flex-1 rounded border border-blue-400 bg-white px-1 py-0 text-sm dark:bg-stone-900"
+					/>
+				</>
+			) : (
+				<>
+					{/* The link spans the chevron gutter too, so the whole
+					 *  row short of the pencil still opens the editor. */}
+					<Link
+						to="/editor/$visualId"
+						params={{ visualId: visual.id }}
+						className="flex min-w-0 flex-1 items-center gap-1"
+					>
+						<span className={ROW_CHEVRON_BOX} />
+						<span className="min-w-0 flex-1 truncate">{visual.name}</span>
+					</Link>
+					{/* Same pencil and reveal rule as the folder row's buttons:
+					 *  on hover, always on touch, and for a keyboard user who
+					 *  tabs onto it. */}
+					<button
+						type="button"
+						onClick={(e) => {
+							e.stopPropagation()
+							setEditName(visual.name)
+							setEditing(true)
+						}}
+						className="flex-shrink-0 rounded p-1 opacity-0 group-hover/visualrow:opacity-100 hover:text-stone-900 kbd:group-has-focus-visible/visualrow:opacity-100 pointer-coarse:opacity-100 dark:hover:text-white vc-muted"
+						title="Rename"
+						aria-label={`Rename ${visual.name}`}
+					>
+						<svg viewBox="0 0 16 16" width={11} height={11} aria-hidden="true">
+							<path
+								d="M11.7 1.6l2.7 2.7-9.2 9.2-3.4.7.7-3.4 9.2-9.2z"
+								fill="currentColor"
+							/>
+						</svg>
+					</button>
+				</>
+			)}
+		</div>
+	)
+}
 
 const menuItem =
 	"block w-full px-3 py-1.5 text-left text-sm hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:py-2 dark:hover:bg-stone-700 vc-text"
@@ -417,6 +500,7 @@ type FolderTreeItemProps = {
 	onToggleExpanded: (id: string) => void
 	selectedVisualIds: ReadonlySet<string>
 	onVisualClick: (visualId: string, e: React.MouseEvent) => void
+	onRenameVisual: (visualId: string, name: string) => void
 	resolveDropOn: (folder: Folder) => (e: React.DragEvent) => FolderDropZone | null
 	resolveDropInto: (folder: Folder) => () => FolderDropZone | null
 	onDropOn: (
@@ -441,6 +525,7 @@ const FolderTreeItem = ({
 	onToggleExpanded,
 	selectedVisualIds,
 	onVisualClick,
+	onRenameVisual,
 	resolveDropOn,
 	resolveDropInto,
 	onDropOn,
@@ -649,6 +734,7 @@ const FolderTreeItem = ({
 							onToggleExpanded={onToggleExpanded}
 							selectedVisualIds={selectedVisualIds}
 							onVisualClick={onVisualClick}
+							onRenameVisual={onRenameVisual}
 							resolveDropOn={resolveDropOn}
 							resolveDropInto={resolveDropInto}
 							onDropOn={onDropOn}
@@ -665,6 +751,7 @@ const FolderTreeItem = ({
 								depth={depth + 1}
 								isSelected={selectedVisualIds.has(v.id)}
 								onClick={onVisualClick}
+								onRename={onRenameVisual}
 								onDragStart={onVisualDragStart(v.id)}
 								dropHandlers={contents.dropHandlers}
 							/>
@@ -924,6 +1011,11 @@ export const FolderTree = ({
 		})
 	}
 
+	// Functional update over the FULL list (trash included) — see CLAUDE.md.
+	const renameVisual = (id: string, name: string) => {
+		setVisuals((prev) => prev.map((v) => (v.id === id ? { ...v, name } : v)))
+	}
+
 	const renameFolder = (id: string, name: string) => {
 		setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, name } : f)))
 	}
@@ -1030,6 +1122,7 @@ export const FolderTree = ({
 						onToggleExpanded={toggleFolderExpanded}
 						selectedVisualIds={selectedVisualIds}
 						onVisualClick={onVisualClick}
+						onRenameVisual={renameVisual}
 						resolveDropOn={resolveDropOn}
 						resolveDropInto={resolveDropInto}
 						onDropOn={handleDropOn}
@@ -1051,6 +1144,7 @@ export const FolderTree = ({
 							depth={0}
 							isSelected={selectedVisualIds.has(v.id)}
 							onClick={onVisualClick}
+							onRename={renameVisual}
 							onDragStart={onVisualDragStart(v.id)}
 							dropHandlers={rootContents.dropHandlers}
 						/>

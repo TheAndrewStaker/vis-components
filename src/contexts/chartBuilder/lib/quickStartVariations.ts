@@ -5,6 +5,7 @@ import type { EncodingChannel, FieldType } from "./types"
  * ordered list of `QuickStartVariation` entries that the cycle steps through. */
 export type QuickStartChartType =
 	| "bar"
+	| "combo"
 	| "scatter"
 	| "hexbin"
 	| "dumbbell"
@@ -24,6 +25,7 @@ export type QuickStartChartType =
 
 export const QUICK_START_CHART_TYPES: readonly QuickStartChartType[] = [
 	"bar",
+	"combo",
 	"scatter",
 	"hexbin",
 	"dumbbell",
@@ -135,6 +137,12 @@ export type QuickStartVariation = {
 	 * source column itself). When true, the variation is unsatisfiable unless
 	 * a spare categorical remains after the source + value assignments. */
 	requiresFlowTarget?: boolean
+	/** Combo variations: write the Length panel's "Draw as" = bars
+	 * (`length.render`), which is what turns `x + y + length` from the
+	 * line-segment scatter into a bar + marks combo. Every other variation
+	 * that maps Length clears a leftover opt-in so it renders as its own
+	 * family. */
+	lengthAsBars?: boolean
 }
 
 const CATEGORICAL_LIKE = ["categorical", "ordinal"] as const
@@ -216,6 +224,46 @@ export const QUICK_START_VARIATIONS: Record<
 				hue: CATEGORICAL_LIKE,
 			},
 			stackMode: "stack",
+		},
+	],
+	combo: [
+		{
+			// Bars by category with a second measure drawn as a line over them
+			// on the same axis — the classic combo chart. The line is the
+			// connection field's series through the y points, as on a line
+			// chart; `lengthAsBars` is what makes Length draw bars instead of
+			// a segment on every point.
+			name: "Bars and line",
+			channels: {
+				x: CATEGORICAL_LIKE,
+				length: QUANTITATIVE_LIKE,
+				y: QUANTITATIVE_LIKE,
+				connection: CATEGORICAL_LIKE,
+			},
+			lengthAsBars: true,
+			connectionFill: "line",
+		},
+		{
+			// No connection: the second measure is a point per row over the bars.
+			name: "Bars and points",
+			channels: {
+				x: CATEGORICAL_LIKE,
+				length: QUANTITATIVE_LIKE,
+				y: QUANTITATIVE_LIKE,
+			},
+			lengthAsBars: true,
+		},
+		{
+			// Horizontal twin: categories down y, the bars and the line along x.
+			name: "Horizontal bars and line",
+			channels: {
+				y: CATEGORICAL_LIKE,
+				length: QUANTITATIVE_LIKE,
+				x: QUANTITATIVE_LIKE,
+				connection: CATEGORICAL_LIKE,
+			},
+			lengthAsBars: true,
+			connectionFill: "line",
 		},
 	],
 	scatter: [

@@ -834,6 +834,8 @@ const CHANNEL_DOT_CONTROLS: Record<string, (ctx: DotCtx) => DotControl[]> = {
 			),
 		},
 		{ label: "bar gap", changed: (configs.length?.barGapPx ?? null) !== null },
+		// "Draw as" (x + y + length): bars is the opt-in; segments the default.
+		{ label: "draw as", changed: configs.length?.render === "bars" },
 		{ label: "default length", changed: differs(configs.defaultLength, null) },
 		{
 			label: "segment thickness",

@@ -3,6 +3,8 @@ import { AreasYMode } from "./areasY"
 import { BarsXMode } from "./barsX"
 import { BarsYMode } from "./barsY"
 import { ChordMode } from "./chord"
+import { ComboXMode } from "./comboX"
+import { ComboYMode } from "./comboY"
 import { GeoChoroplethMode } from "./geoChoropleth"
 import { GeoPointsMode } from "./geoPoints"
 import { GeoSymbolsMode } from "./geoSymbols"
@@ -52,6 +54,13 @@ export const MODE_REGISTRY: readonly ChartModeDef[] = [
 	ChordMode,
 	SankeyMode,
 	PackedCirclesMode,
+	// Bar + marks combos: `x + y + length` with the Length panel's "Draw as"
+	// set to bars. No earlier cartesian mode claims that signature (bars and
+	// pies want one position, areas no y, tile and radar no length), and
+	// they sit AFTER the geo modes so a geographic x + y stays a dot map.
+	// Mutually exclusive by the orientation rule in combo.ts.
+	ComboXMode,
+	ComboYMode,
 	// Gated on the reserved `hue.measureSource === "hexCount"`, so it can't
 	// shadow any earlier mode; before scatter only because scatter is the
 	// always-true fallback.

@@ -93,6 +93,37 @@ describe("Length panel — length variable mapped", () => {
 	})
 })
 
+/** `x + y + length` is the one signature with two readings, so only there
+ *  does the panel offer "Draw as" (Segments, the default, or Bars = a bar +
+ *  marks combo). Plain bars never show it. */
+describe("Length panel — Draw as (segments vs bars)", () => {
+	it("offers Draw as on the segment scatter, defaulting to Segments", async () => {
+		seed(SEGMENTS)
+		const q = await mount()
+		const group = q.getByRole("radiogroup", { name: "Draw length as" })
+		expect(within(group).getByRole("radio", { name: "Segments" }).getAttribute("aria-checked")).toBe("true")
+		expect(within(group).getByRole("radio", { name: "Bars" }).getAttribute("aria-checked")).toBe("false")
+	})
+
+	it("hides Draw as on plain bars (one position only)", async () => {
+		seed(BARS)
+		const q = await mount()
+		expect(q.queryByRole("radiogroup", { name: "Draw length as" })).toBeNull()
+	})
+
+	it("with Bars chosen the chart is a combo: Draw as stays, the px range goes, the bar gap appears", async () => {
+		seed(
+			{ ...SEGMENTS, x: { field: "region" } },
+			{ length: { minLength: 4, maxLength: 40, render: "bars" } }
+		)
+		const q = await mount()
+		const group = q.getByRole("radiogroup", { name: "Draw length as" })
+		expect(within(group).getByRole("radio", { name: "Bars" }).getAttribute("aria-checked")).toBe("true")
+		expect(q.queryByLabelText("Min")).toBeNull()
+		expect(q.queryByLabelText("Bar gap")).not.toBeNull()
+	})
+})
+
 /** Quantitative `x` alone with the histogram toggle → bars-x with NO length
  *  field: bar length is the per-bin count. */
 const HISTOGRAM: Encodings = {

@@ -307,6 +307,98 @@ describe("ReshapePanel", () => {
 			expect(v.fields?.map((f) => f.name)).toEqual(["store", "monday", "tuesday"])
 	})
 
+	it("+ Add another group: a second Combine list whose columns pair with the first by position", async () => {
+		const utils = mount({
+			idFields: ["store"],
+			meltFields: ["monday"],
+			variableName: "day",
+			valueName: "sales",
+		})
+		fireEvent.click(utils.getByRole("button", { name: "+ Add another group" }))
+		// The second group's names default to numbered placeholders…
+		const variable2 = utils.getByLabelText(
+			"Combined variable name (group 2)"
+		) as HTMLInputElement
+		expect(variable2.value).toBe("category 2")
+		fireEvent.change(variable2, { target: { value: "other day" } })
+		fireEvent.change(utils.getByLabelText("Value variable name (group 2)"), {
+			target: { value: "other" },
+		})
+		// …and its list offers only the columns no other list combines:
+		// "monday" sits in group 1, so group 2 shows "tuesday" alone.
+		const group2Boxes = utils
+			.getAllByRole("checkbox")
+			.filter((el) => el.parentElement?.textContent === "tuesday")
+		// ID list + group 1 + group 2
+		expect(group2Boxes).toHaveLength(3)
+		fireEvent.click(group2Boxes[2]!)
+		// Checking it in group 2 withdraws it from group 1's list.
+		expect(
+			utils
+				.getAllByRole("checkbox")
+				.filter((el) => el.parentElement?.textContent === "tuesday")
+		).toHaveLength(2)
+		expect(
+			utils.getByText("2 rows × 3 columns → 2 rows × 5 columns.")
+		).toBeTruthy()
+		fireEvent.click(utils.getByRole("button", { name: "Apply reshape" }))
+
+		const store = utils.store()
+		await waitFor(() => expect(store.get(currentDatasetIdAtom)).not.toBe(ID))
+		const forked = store.get(loadedDatasetsAtom)[store.get(currentDatasetIdAtom)!]!
+		expect(forked.fields.map((f) => f.name)).toEqual([
+			"store",
+			"day",
+			"sales",
+			"other day",
+			"other",
+		])
+		const long = forked.versions[1]!
+		expect(long.transform?.reshape).toEqual({
+			idFields: ["store"],
+			meltFields: ["monday"],
+			variableName: "day",
+			valueName: "sales",
+			extraGroups: [
+				{ meltFields: ["tuesday"], variableName: "other day", valueName: "other" },
+			],
+		})
+		expect(long.rows).toEqual([
+			{ store: "A", day: "monday", sales: "1", "other day": "tuesday", other: "2" },
+			{ store: "B", day: "monday", sales: "3", "other day": "tuesday", other: "4" },
+		])
+	})
+
+	it("says when a shorter group will pad with blanks, and × removes a group", () => {
+		const utils = mount({
+			meltFields: ["store", "monday"],
+			extraGroups: [{ meltFields: ["tuesday"], variableName: "k", valueName: "v" }],
+		})
+		expect(utils.container.textContent).toContain("The groups differ in size")
+		expect(
+			utils.getByText("2 rows × 3 columns → 4 rows × 4 columns.")
+		).toBeTruthy()
+		fireEvent.click(utils.getByRole("button", { name: "Remove group 2" }))
+		expect(utils.queryByLabelText("Combined variable name (group 2)")).toBeNull()
+		expect(utils.container.textContent).not.toContain("The groups differ in size")
+		expect(
+			utils.getByText("2 rows × 3 columns → 4 rows × 2 columns.")
+		).toBeTruthy()
+	})
+
+	it("warns when two groups mint the same name", () => {
+		const utils = mount({
+			meltFields: ["monday"],
+			extraGroups: [
+				{ meltFields: ["tuesday"], variableName: "category", valueName: "v" },
+			],
+		})
+		expect(utils.getByText('"category" is used by two groups.')).toBeTruthy()
+		expect(
+			(utils.getByRole("button", { name: "Apply reshape" }) as HTMLButtonElement).disabled
+		).toBe(true)
+	})
+
 	it("lists wide-computable live derived variables with an ƒ edit button, not long-only ones", () => {
 		const utils = mount({}, true, DERIVED)
 		// `total` sits after the data columns in both lists; `sign` ({value}

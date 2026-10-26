@@ -3,6 +3,9 @@ import {
 	applyReshapeToView,
 	DEFAULT_RESHAPE_CONFIG,
 	meltDataset,
+	meltVariableNameOf,
+	presentGroups,
+	presentMeltFields,
 	reshapeApplies,
 	reshapeIssues,
 	type ReshapeConfig,
@@ -172,6 +175,170 @@ describe("reshapeIssues / reshapeApplies", () => {
 		expect(reshapeApplies(FIELDS, c)).toBe(false)
 		// Colliding with a MELTED column is fine — it's gone from the output.
 		expect(reshapeIssues(FIELDS, config({ valueName: "monday" }))).toEqual([])
+	})
+})
+
+describe("paired groups (extraGroups)", () => {
+	// sales_2023, cost_2023, sales_2024, cost_2024 → year + sales + cost,
+	// the classic multi-measure wide layout: the i-th column of every group
+	// shares a row.
+	const PAIRED_FIELDS: Field[] = [
+		{ name: "store", inferredType: "categorical" },
+		{ name: "sales_2023", inferredType: "quantitative" },
+		{ name: "cost_2023", inferredType: "quantitative" },
+		{ name: "sales_2024", inferredType: "quantitative" },
+		{ name: "cost_2024", inferredType: "quantitative" },
+	]
+	const PAIRED_ROWS = [
+		{ store: "A", sales_2023: "10", cost_2023: "6", sales_2024: "12", cost_2024: "7" },
+	]
+	const paired = (over: Partial<ReshapeConfig> = {}): ReshapeConfig => ({
+		idFields: ["store"],
+		meltFields: ["sales_2023", "sales_2024"],
+		variableName: "year",
+		valueName: "sales",
+		extraGroups: [
+			{ meltFields: ["cost_2023", "cost_2024"], variableName: "cost of", valueName: "cost" },
+		],
+		...over,
+	})
+
+	it("pairs the groups' columns by position, one row per position", () => {
+		const { fields, rows } = meltDataset(PAIRED_FIELDS, PAIRED_ROWS, paired())
+		expect(fields.map((f) => [f.name, f.inferredType])).toEqual([
+			["store", "categorical"],
+			["year", "categorical"],
+			["sales", "quantitative"],
+			["cost of", "categorical"],
+			["cost", "quantitative"],
+		])
+		expect(rows).toEqual([
+			{ store: "A", year: "sales_2023", sales: "10", "cost of": "cost_2023", cost: "6" },
+			{ store: "A", year: "sales_2024", sales: "12", "cost of": "cost_2024", cost: "7" },
+		])
+	})
+
+	it("pads a shorter group with blank cells past its last column", () => {
+		const { rows } = meltDataset(
+			PAIRED_FIELDS,
+			PAIRED_ROWS,
+			paired({
+				extraGroups: [
+					{ meltFields: ["cost_2023"], variableName: "cost of", valueName: "cost" },
+				],
+			})
+		)
+		expect(rows).toEqual([
+			{ store: "A", year: "sales_2023", sales: "10", "cost of": "cost_2023", cost: "6" },
+			{ store: "A", year: "sales_2024", sales: "12", "cost of": "", cost: "" },
+		])
+	})
+
+	it("a longer extra group sets the depth; the first group pads", () => {
+		const { rows } = meltDataset(
+			PAIRED_FIELDS,
+			PAIRED_ROWS,
+			paired({ meltFields: ["sales_2023"] })
+		)
+		expect(rows.map((r) => [r.year, r.sales, r["cost of"], r.cost])).toEqual([
+			["sales_2023", "10", "cost_2023", "6"],
+			["", "", "cost_2024", "7"],
+		])
+	})
+
+	it("blank extra-group names fall back to numbered defaults", () => {
+		const { fields } = meltDataset(
+			PAIRED_FIELDS,
+			PAIRED_ROWS,
+			paired({
+				variableName: "",
+				valueName: "",
+				extraGroups: [
+					{ meltFields: ["cost_2023", "cost_2024"], variableName: " ", valueName: "" },
+				],
+			})
+		)
+		expect(fields.map((f) => f.name)).toEqual([
+			"store",
+			"category",
+			"value",
+			"category 2",
+			"value 2",
+		])
+	})
+
+	it("a group with no present column mints nothing; an empty first group still melts the rest", () => {
+		const c = paired({ meltFields: ["gone"] })
+		expect(reshapeApplies(PAIRED_FIELDS, c)).toBe(true)
+		const { fields } = meltDataset(PAIRED_FIELDS, PAIRED_ROWS, c)
+		expect(fields.map((f) => f.name)).toEqual(["store", "cost of", "cost"])
+		// And an extra group pointing at nothing is simply ignored.
+		expect(
+			meltDataset(
+				PAIRED_FIELDS,
+				PAIRED_ROWS,
+				paired({ extraGroups: [{ meltFields: [], variableName: "x", valueName: "y" }] })
+			).fields.map((f) => f.name)
+		).toEqual(["store", "year", "sales"])
+	})
+
+	it("ID wins over any group, and an earlier group wins over a later one", () => {
+		const c = paired({
+			idFields: ["store", "cost_2023"],
+			extraGroups: [
+				{ meltFields: ["sales_2023", "cost_2023", "cost_2024"], variableName: "k", valueName: "v" },
+			],
+		})
+		expect(presentGroups(PAIRED_FIELDS, c).map((g) => g.fields.map((f) => f.name))).toEqual([
+			["sales_2023", "sales_2024"],
+			["cost_2024"],
+		])
+		expect(presentMeltFields(PAIRED_FIELDS, c).map((f) => f.name)).toEqual([
+			"sales_2023",
+			"sales_2024",
+			"cost_2024",
+		])
+	})
+
+	it("flags names shared between groups, and a group's own pair sharing a name", () => {
+		expect(
+			reshapeIssues(
+				PAIRED_FIELDS,
+				paired({
+					extraGroups: [
+						{ meltFields: ["cost_2023"], variableName: "year", valueName: "sales" },
+					],
+				})
+			)
+		).toEqual(['"year" is used by two groups.', '"sales" is used by two groups.'])
+		expect(
+			reshapeIssues(
+				PAIRED_FIELDS,
+				paired({
+					extraGroups: [{ meltFields: ["cost_2023"], variableName: "c", valueName: "c" }],
+				})
+			)
+		).toEqual(["Group 2's combined and value variables need different names."])
+		expect(
+			reshapeIssues(
+				PAIRED_FIELDS,
+				paired({
+					extraGroups: [{ meltFields: ["cost_2023"], variableName: "store", valueName: "c" }],
+				})
+			)
+		).toEqual(['"store" is already the name of an ID column.'])
+	})
+
+	it("names the variable column a melted column lands in, per group", () => {
+		expect(meltVariableNameOf(PAIRED_FIELDS, paired(), "sales_2024")).toBe("year")
+		expect(meltVariableNameOf(PAIRED_FIELDS, paired(), "cost_2023")).toBe("cost of")
+		expect(meltVariableNameOf(PAIRED_FIELDS, paired(), "store")).toBeUndefined()
+	})
+
+	it("a config without extraGroups behaves exactly as the single-group shape", () => {
+		expect(meltDataset(FIELDS, ROWS, config())).toEqual(
+			meltDataset(FIELDS, ROWS, { ...config(), extraGroups: [] })
+		)
 	})
 })
 

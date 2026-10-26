@@ -171,6 +171,14 @@ export const useSaveVisual = () => {
 				...reshapeConfig,
 				idFields: [...reshapeConfig.idFields],
 				meltFields: [...reshapeConfig.meltFields],
+				...(reshapeConfig.extraGroups
+					? {
+							extraGroups: reshapeConfig.extraGroups.map((g) => ({
+								...g,
+								meltFields: [...g.meltFields],
+							})),
+						}
+					: {}),
 			},
 			derivedVariablesConfig: {
 				variables: derivedVariablesConfig.variables.map((v) => ({ ...v })),

@@ -466,6 +466,32 @@ describe("FolderTree row menu (touch/keyboard fallback for drag)", () => {
 		)
 	})
 
+	it("a visual row's pencil opens an inline editor and Enter renames it", () => {
+		seedStorage([], [mkVisual("v-a", null, "Loose")])
+		const { getByLabelText, container } = renderTree()
+		fireEvent.click(getByLabelText("Rename Loose"))
+		const input = container.querySelector('input[type="text"]') as HTMLInputElement
+		expect(input).not.toBeNull()
+		expect(input.value).toBe("Loose")
+		fireEvent.change(input, { target: { value: "Loose renamed" } })
+		fireEvent.keyDown(input, { key: "Enter" })
+		expect(readStoredVisuals().find((v) => v.id === "v-a")?.name).toBe(
+			"Loose renamed"
+		)
+	})
+
+	it("Escape in a visual's rename box keeps the old name", () => {
+		seedStorage([], [mkVisual("v-a", null, "Loose")])
+		const { getByLabelText, container, getByTitle } = renderTree()
+		fireEvent.click(getByLabelText("Rename Loose"))
+		const input = container.querySelector('input[type="text"]') as HTMLInputElement
+		fireEvent.change(input, { target: { value: "Nope" } })
+		fireEvent.keyDown(input, { key: "Escape" })
+		expect(container.querySelector('input[type="text"]')).toBeNull()
+		expect(getByTitle("Loose")).not.toBeNull()
+		expect(readStoredVisuals().find((v) => v.id === "v-a")?.name).toBe("Loose")
+	})
+
 	it("Rename opens the inline editor", () => {
 		seedStorage([mkFolder("fl-a", null, "Alpha")], [])
 		const { getByLabelText, getByText, container } = renderTree()

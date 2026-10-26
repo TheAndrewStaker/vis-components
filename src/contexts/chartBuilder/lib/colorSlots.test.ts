@@ -165,6 +165,19 @@ describe("applicableColorSlots", () => {
 		expect(keys).toContain("geoPointStroke")
 	})
 
+	it("offers the combo Point fill slot only in the bar + marks combo modes", () => {
+		for (const mode of ["combo-x", "combo-y"] as const) {
+			const keys = applicableColorSlots(mode, {} as never, {}).map((s) => s.key)
+			expect(keys).toContain("comboPointFill")
+		}
+		for (const mode of ["bars-x", "scatter", "geo-symbols"] as const) {
+			const keys = applicableColorSlots(mode, {} as never, {}).map((s) => s.key)
+			expect(keys).not.toContain("comboPointFill")
+		}
+		// Unconfigured it follows the line color, so the panel leads with Auto.
+		expect(COLOR_SLOT_DEFS.comboPointFill.inherit?.label).toBe("Auto")
+	})
+
 	it("does not offer the geo point slots in scatter or geo-choropleth modes", () => {
 		const scatter = applicableColorSlots("scatter", {} as never, {}).map((s) => s.key)
 		expect(scatter).not.toContain("geoPointFill")

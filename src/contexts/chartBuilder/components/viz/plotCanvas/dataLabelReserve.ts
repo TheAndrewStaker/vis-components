@@ -1,8 +1,13 @@
 import { axisFieldsFor } from "../../../lib/axisFields"
 import { barTotalFieldName, withBarTotals } from "../../../lib/barTotalLabel"
-import type { ChannelConfigs, DataLabelsConfig } from "../../../lib/channelConfig"
+import {
+	DEFAULT_DATA_LABELS_CONFIG,
+	type ChannelConfigs,
+	type DataLabelsConfig,
+} from "../../../lib/channelConfig"
 import { getChartModeDef } from "../../../lib/chartMode"
 import { isBarModeId } from "../../../lib/chartModes/families"
+import { comboMarksFields, dataLabelLayerFor } from "../../../lib/comboOverlay"
 import {
 	labelKeysFor,
 	normalizeComposedLabels,
@@ -17,6 +22,7 @@ import { buildLabelText } from "../../../lib/dataLabelsStyle"
 import { effectiveType } from "../../../lib/fieldType"
 import { ptToPx } from "../../../lib/fontUnit"
 import type { MapConfig } from "../../../lib/mapConfig"
+import { wrapByCharCount } from "../../../lib/multilineText"
 import { BASE_MARGIN } from "../../../lib/plotLayout"
 import { resolveStackModes } from "../../../lib/stackMode"
 import type {
@@ -151,12 +157,29 @@ export const computeDataLabelOverflow = ({
 		/** A separate variable's own bar side (`fieldBarPlacements`), when
 		 *  it has one; the layer-wide side otherwise. */
 		side?: DataLabelsConfig["barLabelSide"]
+		/** "Wrap text" target (characters per line) when the label wraps,
+		 *  null when it renders on one line. Mirrors the layer's
+		 *  `resolveFieldLayout`: a separate variable's own `fieldLayouts`
+		 *  entry over the layer-wide setting. */
+		wrapMaxChars: number | null
+	}
+	const wrapFor = (own: string | null): number | null => {
+		const o = own === null ? undefined : dataLabels.fieldLayouts?.[own]
+		const wraps = o?.wrapText ?? dataLabels.wrapText === true
+		if (!wraps) return null
+		return (
+			o?.wrapMaxChars ??
+			dataLabels.wrapMaxChars ??
+			DEFAULT_DATA_LABELS_CONFIG.wrapMaxChars ??
+			20
+		)
 	}
 	const baseProfile: ReserveProfile = {
 		template: dataLabels.labelTemplate,
 		xOffset: dataLabels.xOffset ?? 0,
 		alignment: dataLabels.alignment ?? "center",
 		edges: "both",
+		wrapMaxChars: wrapFor(null),
 	}
 	// Series-end populations only touch ONE horizontal edge when the series
 	// run along x: "first" anchors are the leftmost points, "last" the
@@ -216,12 +239,24 @@ export const computeDataLabelOverflow = ({
 	const labelTemplates = new Map(
 		labelKeys.labels.map((l) => [l.id, l.template] as const)
 	)
+	// Bar + marks combo: a label on the MARKS layer takes no bar side (it
+	// sits at its point like a line chart's), so the side shift below must
+	// not move its reserve.
+	const marksFields = comboMarksFields(memoMode.id, encodings, channelConfigs)
+	const onMarks = (key: string | null, fields: ReadonlyArray<string>) =>
+		dataLabelLayerFor(dataLabels, key, fields, marksFields) === "marks"
+	const singleLabelFields = [
+		value.field ?? dataLabelsEncodings.x?.field ?? dataLabelsEncodings.y?.field,
+	].filter((f): f is string => !!f)
 	const ownProfile = (key: string, pop: "all" | "first" | "last"): ReserveProfile => ({
 		edges: edgesFor(pop),
 		xOffset: dataLabels.fieldOffsets?.[key]?.xOffset ?? baseProfile.xOffset,
 		alignment: dataLabels.fieldAlignments?.[key] ?? baseProfile.alignment,
-		side: dataLabels.fieldBarPlacements?.[key]?.side,
+		side: onMarks(key, labelKeys.pieces[key] ?? [])
+			? "center"
+			: dataLabels.fieldBarPlacements?.[key]?.side,
 		template: labelTemplates.get(key) ?? "",
+		wrapMaxChars: wrapFor(key),
 	})
 	const profiles: ReserveProfile[] = presentPopulations(selection).flatMap(
 		(pop) => {
@@ -237,6 +272,8 @@ export const computeDataLabelOverflow = ({
 					alignment: ov.alignment ?? baseProfile.alignment,
 					edges: edgesFor(pop),
 					template: baseProfile.template,
+					wrapMaxChars: baseProfile.wrapMaxChars,
+					...(onMarks(null, singleLabelFields) ? { side: "center" as const } : {}),
 				},
 			]
 		}
@@ -270,7 +307,7 @@ export const computeDataLabelOverflow = ({
 	// plot edge, so only the pad moves. Horizontal bars shift labels
 	// vertically, which this (left / right) reserve never models.
 	const barSide = dataLabels.barLabelSide ?? "center"
-	if (memoMode.id === "bars-x") {
+	if (isBarModeId(memoMode.id) && memoMode.canvas.measureAxis === "y") {
 		for (let i = 0; i < profiles.length; i++) {
 			const p = profiles[i]
 			const side = p.side ?? barSide
@@ -324,9 +361,22 @@ export const computeDataLabelOverflow = ({
 					lengthField: encodings.length?.field ?? null,
 				})
 			: dataset.rows
-	const candidatesByTemplate = new Map<string | undefined, string[]>()
+	// A label that WRAPS ("Wrap text") draws its lines stacked, so only its
+	// widest LINE can reach the edge: each candidate is split exactly as the
+	// layer splits it (`wrapByCharCount`) and the lines are the candidates.
+	// Measuring the unwrapped string reserved a gutter the wrapped label
+	// never used — a wrapped end-of-line label left a blank strip down the
+	// right of the figure. Candidates are cached per (template, wrap) pair
+	// since the same template can wrap differently per variable.
+	type CandidateKey = { template: string | undefined; wrap: number | null }
+	const candidatesFor = new Map<string | undefined, Map<number | null, string[]>>()
+	const lookupCandidates = ({ template, wrap }: CandidateKey): string[] =>
+		candidatesFor.get(template)?.get(wrap) ?? []
 	for (const p of profiles) {
-		if (candidatesByTemplate.has(p.template)) continue
+		const byWrap =
+			candidatesFor.get(p.template) ?? new Map<number | null, string[]>()
+		candidatesFor.set(p.template, byWrap)
+		if (byWrap.has(p.wrapMaxChars)) continue
 		const labelCfg = {
 			decimals: dataLabels.decimals,
 			labelTemplate: p.template,
@@ -335,12 +385,14 @@ export const computeDataLabelOverflow = ({
 		const distinct = new Set<string>()
 		for (const row of candidateRows) {
 			const text = buildLabelText(row, value, labelCfg, fallbackField)
-			if (text) distinct.add(text)
+			if (!text) continue
+			if (p.wrapMaxChars === null) distinct.add(text)
+			else for (const line of wrapByCharCount(text, p.wrapMaxChars)) distinct.add(line)
 		}
 		const candidates = [...distinct]
 			.sort((a, b) => b.length - a.length)
 			.slice(0, MAX_MEASURED_CANDIDATES)
-		candidatesByTemplate.set(p.template, candidates)
+		byWrap.set(p.wrapMaxChars, candidates)
 	}
 	// When the user maps the `size` channel on data labels, each
 	// label's rendered font size lerps into `[sizeMin, sizeMax]`.
@@ -374,7 +426,10 @@ export const computeDataLabelOverflow = ({
 	let right = 0
 	let left = 0
 	for (const p of profiles) {
-		const candidates = candidatesByTemplate.get(p.template) ?? []
+		const candidates = lookupCandidates({
+			template: p.template,
+			wrap: p.wrapMaxChars,
+		})
 		if (candidates.length === 0) continue
 		// Measure the actual rendered width of every candidate with the
 		// data-label font (family + weight + style) via canvas measureText

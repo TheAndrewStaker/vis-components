@@ -1,5 +1,5 @@
 import { useAtomValue, useSetAtom } from "jotai"
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { Button } from "../../../../components/ui/Button"
 import { Checkbox } from "../../../../components/ui/Checkbox"
 import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
@@ -8,9 +8,14 @@ import { splitDerivedVariablesAroundReshape } from "../../lib/derivedReshapeStag
 import { bakeTransforms } from "../../lib/materializeTransforms"
 import { nameCollides } from "../../lib/nameUniqueness"
 import {
+	defaultGroupValueName,
+	defaultGroupVariableName,
+	presentGroupFields,
 	reshapeApplies,
+	reshapeGroups,
 	reshapeIssues,
 	type ReshapeConfig,
+	type ReshapeGroup,
 } from "../../lib/reshape"
 import type { DatasetView, Field } from "../../lib/types"
 import {
@@ -39,7 +44,13 @@ import { useApplyReshape } from "../../store/useMaterializeVersion"
  * the draft, and applying folds it all into the version).
  * Half-configured drafts (no Combine column yet, name collisions) just
  * disable Apply, with the reason shown; blanked name boxes fall back to the
- * "category" / "value" defaults shown as placeholders. */
+ * "category" / "value" defaults shown as placeholders.
+ *
+ * "+ Add another group" adds a second Combine list with its own pair of
+ * names: its columns pair with the first group's by position (the i-th
+ * column of every group lands on the same row), and a shorter group gets
+ * blank cells past its last column — the panel says so. A column lives in
+ * one list only: checking it anywhere withdraws it from the others. */
 export const ReshapePanel = () => {
 	const open = useAtomValue(reshapePanelOpenAtom)
 	const raw = useAtomValue(currentRawDatasetViewAtom)
@@ -61,6 +72,12 @@ const ReshapeForm = ({ raw }: { raw: DatasetView }) => {
 	// The draft: seeded from the live config an older visual still carries
 	// (so its reshape can be saved as it stands), the defaults otherwise.
 	const [config, setConfig] = useState<ReshapeConfig>(legacy)
+	// Render keys for the extra groups (they have no identity of their own in
+	// the config), so removing one from the middle keeps the others' boxes.
+	const nextGroupKey = useRef((legacy.extraGroups ?? []).length)
+	const [extraKeys, setExtraKeys] = useState<number[]>(() =>
+		(legacy.extraGroups ?? []).map((_, i) => i)
+	)
 	const meta = datasetId ? datasetIndex[datasetId] : undefined
 	const mode = meta ? saveModeFor(meta) : "fork"
 	const [name, setName] = useState(() =>
@@ -97,7 +114,23 @@ const ReshapeForm = ({ raw }: { raw: DatasetView }) => {
 	}, [raw, stages, config, overrides, legacyDerived])
 	const derivedIdByName = new Map(stages.candidates.map((c) => [c.name, c.id]))
 	const idSet = new Set(config.idFields)
-	const combineCandidates = fields.filter((f) => !idSet.has(f.name))
+	const groups = reshapeGroups(config)
+	// Each group's Combine list offers the columns no other list claims —
+	// not an ID column, not combined by another group.
+	const claimedBy = new Map<string, number>()
+	groups.forEach((g, i) => {
+		for (const n of g.meltFields) if (!claimedBy.has(n)) claimedBy.set(n, i)
+	})
+	const combineCandidates = (index: number) =>
+		fields.filter(
+			(f) => !idSet.has(f.name) && (claimedBy.get(f.name) ?? index) === index
+		)
+	// Groups that melt something, with how many columns each — a shorter
+	// group pads with blanks, which the panel points out.
+	const groupSizes = presentGroupFields(fields, config)
+		.map((own) => own.length)
+		.filter((n) => n > 0)
+	const padded = groupSizes.length > 1 && new Set(groupSizes).size > 1
 	// Same-named data sets are allowed (the id is the identity); a collision
 	// only warns. Appending keeps the data set, so its own name doesn't count.
 	const collides = nameCollides(
@@ -107,25 +140,82 @@ const ReshapeForm = ({ raw }: { raw: DatasetView }) => {
 	)
 	const canApply = applies && !busy && name.trim() !== ""
 
+	/** The draft with every group's Combine list passed through `fn`
+	 * (index 0 is the config's own list). */
+	const withGroups = (
+		prev: ReshapeConfig,
+		fn: (group: ReshapeGroup, index: number) => ReshapeGroup
+	): ReshapeConfig => {
+		const [first, ...rest] = reshapeGroups(prev).map(fn)
+		return {
+			...prev,
+			...first,
+			...(prev.extraGroups ? { extraGroups: rest } : {}),
+		}
+	}
+	const without = (g: ReshapeGroup, fieldName: string): ReshapeGroup =>
+		g.meltFields.includes(fieldName)
+			? { ...g, meltFields: g.meltFields.filter((n) => n !== fieldName) }
+			: g
 	const toggleId = (fieldName: string, on: boolean) =>
-		setConfig((prev: ReshapeConfig) => ({
-			...prev,
-			idFields: on
-				? [...prev.idFields, fieldName]
-				: prev.idFields.filter((n) => n !== fieldName),
+		setConfig((prev: ReshapeConfig) =>
 			// A column can't be both kept and combined — checking it as an ID
-			// column withdraws it from the Combine list.
-			meltFields: on
-				? prev.meltFields.filter((n) => n !== fieldName)
-				: prev.meltFields,
-		}))
-	const toggleMelt = (fieldName: string, on: boolean) =>
-		setConfig((prev: ReshapeConfig) => ({
-			...prev,
-			meltFields: on
-				? [...prev.meltFields, fieldName]
-				: prev.meltFields.filter((n) => n !== fieldName),
-		}))
+			// column withdraws it from every Combine list.
+			withGroups(
+				{
+					...prev,
+					idFields: on
+						? [...prev.idFields, fieldName]
+						: prev.idFields.filter((n) => n !== fieldName),
+				},
+				(g) => (on ? without(g, fieldName) : g)
+			)
+		)
+	const toggleMelt = (index: number, fieldName: string, on: boolean) =>
+		setConfig((prev: ReshapeConfig) =>
+			// Checking a column in one group withdraws it from the others.
+			withGroups(prev, (g, i) => {
+				const cleared = without(g, fieldName)
+				return i === index && on
+					? { ...cleared, meltFields: [...cleared.meltFields, fieldName] }
+					: cleared
+			})
+		)
+	const setGroupName = (
+		index: number,
+		key: "variableName" | "valueName",
+		value: string
+	) =>
+		setConfig((prev: ReshapeConfig) =>
+			withGroups(prev, (g, i) => (i === index ? { ...g, [key]: value } : g))
+		)
+	const addGroup = () => {
+		setExtraKeys((keys) => [...keys, nextGroupKey.current++])
+		setConfig((prev: ReshapeConfig) => {
+			const index = (prev.extraGroups?.length ?? 0) + 1
+			return {
+				...prev,
+				extraGroups: [
+					...(prev.extraGroups ?? []),
+					{
+						meltFields: [],
+						variableName: defaultGroupVariableName(index),
+						valueName: defaultGroupValueName(index),
+					},
+				],
+			}
+		})
+	}
+	const removeGroup = (index: number) => {
+		setExtraKeys((keys) => keys.filter((_, i) => i !== index - 1))
+		setConfig((prev: ReshapeConfig) => {
+			const extraGroups = (prev.extraGroups ?? []).filter(
+				(_, i) => i !== index - 1
+			)
+			const { extraGroups: _dropped, ...rest } = prev
+			return extraGroups.length > 0 ? { ...rest, extraGroups } : rest
+		})
+	}
 
 	const onApply = async () => {
 		if (!canApply) return
@@ -198,59 +288,89 @@ const ReshapeForm = ({ raw }: { raw: DatasetView }) => {
 						/>
 					))}
 				</div>
-				<div className="vc-divider-group">
-					<span className="vc-group-header">Combine</span>
+				{groups.map((g, index) => {
+					const candidates = combineCandidates(index)
+					const suffix = index === 0 ? "" : ` (group ${index + 1})`
+					return (
+						<div
+							key={index === 0 ? "first" : `extra-${extraKeys[index - 1] ?? index}`}
+							className="vc-divider-group"
+						>
+							<div className="flex items-center justify-between gap-2">
+								<span className="vc-group-header">Combine{suffix}</span>
+								{index > 0 && (
+									<button
+										type="button"
+										onClick={() => removeGroup(index)}
+										className="rounded px-1 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
+										aria-label={`Remove group ${index + 1}`}
+									>
+										×
+									</button>
+								)}
+							</div>
+							<p className="vc-help">
+								{index === 0
+									? "Each checked column becomes rows of the new pair. Columns checked in no list are left out."
+									: "Pairs with the first group by position: the first column here shares a row with the first column there, and so on."}
+							</p>
+							{candidates.length === 0 ? (
+								<p className="vc-help">
+									{index === 0
+										? "Every column is an ID column — uncheck some above to combine them."
+										: "Every column is already in a list — uncheck some above to combine them here."}
+								</p>
+							) : (
+								candidates.map((f) => (
+									<Checkbox
+										key={f.name}
+										className="min-w-0 [&>label]:flex [&>label]:min-w-0 [&>label]:items-center [&>label]:gap-2"
+										label={columnLabel(f)}
+										checked={g.meltFields.includes(f.name)}
+										onChange={(on) => toggleMelt(index, f.name, on)}
+									/>
+								))
+							)}
+							<label className="flex flex-col gap-1 text-sm">
+								<span className="vc-muted">Combined variable name{suffix}</span>
+								<Input
+									type="text"
+									className="w-full"
+									placeholder={defaultGroupVariableName(index)}
+									value={g.variableName}
+									onChange={(e) =>
+										setGroupName(index, "variableName", e.target.value)
+									}
+								/>
+							</label>
+							<label className="flex flex-col gap-1 text-sm">
+								<span className="vc-muted">Value variable name{suffix}</span>
+								<Input
+									type="text"
+									className="w-full"
+									placeholder={defaultGroupValueName(index)}
+									value={g.valueName}
+									onChange={(e) =>
+										setGroupName(index, "valueName", e.target.value)
+									}
+								/>
+							</label>
+						</div>
+					)
+				})}
+				<button
+					type="button"
+					onClick={addGroup}
+					className="self-end text-xs text-blue-600 hover:underline dark:text-blue-400"
+				>
+					+ Add another group
+				</button>
+				{padded && (
 					<p className="vc-help">
-						Each checked column becomes rows of the new pair. Columns
-						checked in neither list are left out.
+						The groups differ in size: a shorter group gets blank cells on
+						the rows past its last column.
 					</p>
-					{combineCandidates.length === 0 ? (
-						<p className="vc-help">
-							Every column is an ID column — uncheck some above to combine
-							them.
-						</p>
-					) : (
-						combineCandidates.map((f) => (
-							<Checkbox
-								key={f.name}
-								className="min-w-0 [&>label]:flex [&>label]:min-w-0 [&>label]:items-center [&>label]:gap-2"
-								label={columnLabel(f)}
-								checked={config.meltFields.includes(f.name)}
-								onChange={(on) => toggleMelt(f.name, on)}
-							/>
-						))
-					)}
-				</div>
-				<label className="flex flex-col gap-1 text-sm">
-					<span className="vc-muted">Combined variable name</span>
-					<Input
-						type="text"
-						className="w-full"
-						placeholder="category"
-						value={config.variableName}
-						onChange={(e) =>
-							setConfig((prev: ReshapeConfig) => ({
-								...prev,
-								variableName: e.target.value,
-							}))
-						}
-					/>
-				</label>
-				<label className="flex flex-col gap-1 text-sm">
-					<span className="vc-muted">Value variable name</span>
-					<Input
-						type="text"
-						className="w-full"
-						placeholder="value"
-						value={config.valueName}
-						onChange={(e) =>
-							setConfig((prev: ReshapeConfig) => ({
-								...prev,
-								valueName: e.target.value,
-							}))
-						}
-					/>
-				</label>
+				)}
 				{issues.map((issue) => (
 					<p
 						key={issue}

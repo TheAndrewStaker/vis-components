@@ -36,6 +36,8 @@ export const MODE_RENDERERS: Record<
 	scatter: ScatterPlot,
 	"bars-x": BarPlot,
 	"bars-y": BarPlot,
+	"combo-x": BarPlot,
+	"combo-y": BarPlot,
 	pies: PiePlot,
 	"pies-x": PiePlot,
 	"pies-y": PiePlot,

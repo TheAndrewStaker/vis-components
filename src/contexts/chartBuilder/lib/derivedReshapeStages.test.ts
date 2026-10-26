@@ -82,6 +82,37 @@ describe("splitDerivedVariablesAroundReshape", () => {
 		expect([...stages.afterIds]).toEqual(["sign"])
 	})
 
+	it("a variable combined by a SECOND group runs before the melt too", () => {
+		const stages = splitDerivedVariablesAroundReshape(
+			WIDE,
+			{ variables: [trend, sign] },
+			reshape({
+				idFields: ["store"],
+				meltFields: ["start"],
+				extraGroups: [{ meltFields: ["trend"], variableName: "k", valueName: "v" }],
+			})
+		)
+		expect([...stages.beforeIds]).toEqual(["trend"])
+		expect([...stages.afterIds]).toEqual(["sign"])
+		// A variable mentioning the second group's minted pair is long-only.
+		const usesV: DerivedVariable = {
+			id: "usesV",
+			name: "usesV",
+			kind: "math",
+			math: { formula: "{v} * 2" },
+		}
+		expect(
+			splitDerivedVariablesAroundReshape(
+				WIDE,
+				{ variables: [usesV] },
+				reshape({
+					meltFields: ["start"],
+					extraGroups: [{ meltFields: ["end"], variableName: "k", valueName: "v" }],
+				})
+			).candidates
+		).toEqual([])
+	})
+
 	it("pulls a referenced earlier variable into the wide pass without removing it from the after pass", () => {
 		const b: DerivedVariable = {
 			id: "b",

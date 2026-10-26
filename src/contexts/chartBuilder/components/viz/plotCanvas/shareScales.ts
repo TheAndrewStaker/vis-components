@@ -3,7 +3,9 @@ import {
 	type ChannelConfigs,
 	type FacetConfig,
 } from "../../../lib/channelConfig"
+import { comboOverlayChannel } from "../../../lib/chartModes/families"
 import type { ChartModeDef } from "../../../lib/chartModes/types"
+import { overlayMeasureExtent } from "../../../lib/comboOverlay"
 import { binnedCounts, computeHistogramBins } from "../../../lib/histogramBins"
 import {
 	panelFacetValues,
@@ -31,6 +33,16 @@ export type MirrorRows = (
 	rows: ReadonlyArray<Record<string, unknown>>
 ) => ReadonlyArray<Record<string, unknown>>
 export const identityRows: MirrorRows = (rows) => rows
+
+/** The combo modes' marks-layer field (null elsewhere) — see
+ *  `comboOverlayChannel`. */
+const comboOverlayField = (
+	mode: ChartModeDef,
+	encodings: Encodings
+): string | null => {
+	const channel = comboOverlayChannel(mode.id)
+	return channel ? (encodings[channel]?.field ?? null) : null
+}
 
 export const computeGroupMeasureMax = ({
 	mode,
@@ -122,18 +134,22 @@ if (isBarOrArea) {
 				.filter((m) => m.mode === "group")
 				.map((m) => encodings[m.channel]?.field)
 				.filter((f): f is string => !!f)
+			// Combo: the marks layer rides the same axis, so each panel's
+			// bound covers its marks too (mirrors BarPlot's own bounds).
+			const overlayField = comboOverlayField(mode, encodings)
 			panelData.values.forEach((key) => {
 				const panelRows = mirrorRows(panelData.rowsByValue.get(key) ?? [])
-				panelMeasureMax.set(
-					key,
-					computePanelMeasureMax(
-						panelRows,
-						categoryField,
-						measureField,
-						modes,
-						groupModeFields,
-					)
+				const barMax = computePanelMeasureMax(
+					panelRows,
+					categoryField,
+					measureField,
+					modes,
+					groupModeFields,
 				)
+				const overlayMax = overlayField
+					? overlayMeasureExtent(panelRows, overlayField)?.max
+					: undefined
+				panelMeasureMax.set(key, Math.max(barMax, overlayMax ?? -Infinity))
 			})
 		}
 		if (measureShareMode === "all") {
@@ -234,19 +250,21 @@ export const computeGroupMeasureMin = ({
 		.filter((m) => m.mode === "group")
 		.map((m) => encodings[m.channel]?.field)
 		.filter((f): f is string => !!f)
+	const overlayField = comboOverlayField(mode, encodings)
 	const panelMeasureMin = new Map<string, number>()
 	panelData.values.forEach((key) => {
 		const panelRows = mirrorRows(panelData.rowsByValue.get(key) ?? [])
-		panelMeasureMin.set(
-			key,
-			computePanelMeasureMin(
-				panelRows,
-				categoryField,
-				measureField,
-				modes,
-				groupModeFields,
-			)
+		const barMin = computePanelMeasureMin(
+			panelRows,
+			categoryField,
+			measureField,
+			modes,
+			groupModeFields,
 		)
+		const overlayMin = overlayField
+			? overlayMeasureExtent(panelRows, overlayField)?.min
+			: undefined
+		panelMeasureMin.set(key, Math.min(barMin, overlayMin ?? Infinity))
 	})
 
 	if (measureShareMode === "all") {

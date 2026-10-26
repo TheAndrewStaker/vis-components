@@ -209,6 +209,19 @@ type Props = {
 	 * position rules, alignment, wrap, rotation, text background, and a 2-D
 	 * overlap spread (no series → `labelPoints` stands down here too). */
 	positionGate?: "xy" | "polar" | "geo" | "layout"
+	/** Which labels THIS layer instance draws, when a chart splits its
+	 * labels over several layers (a bar + marks combo draws the bars' labels
+	 * from slice anchors and the marks' from rows). Called per label key
+	 * (`labelKeysFor`; `null` = the single-field label) with the variables
+	 * the label shows; a label it rejects is left to another instance.
+	 * Omitted = every label. */
+	labelFilter?: (key: string | null, fields: ReadonlyArray<string>) => boolean
+	/** Row path: the fields the labels position by, in place of the Data
+	 * Labels X / Y mapping. A combo's marks layer passes the CHART's x / y
+	 * (the category and the position variable drawn as marks) so its labels
+	 * sit at the points whatever the mapping says — the bars' layer never
+	 * read the mapping either. Omitted = the mapping. */
+	positionFields?: { x: string | null; y: string | null }
 	/** Geo only: "is this pixel open map space?" (ocean / no-data regions).
 	 * Handed to the 2-D overlap spread so displaced labels prefer landing
 	 * there over covering data-carrying regions. Unset → no preference. */
@@ -715,6 +728,8 @@ export const DataLabelsLayer = ({
 	rowFilter,
 	anchors,
 	positionGate = "xy",
+	labelFilter,
+	positionFields,
 	preferOpenSpace,
 }: Props) => {
 	const encodings: DataLabelsEncodings = {
@@ -780,8 +795,8 @@ export const DataLabelsLayer = ({
 	const vizBackground = chartChannelConfigs.backgroundColor ?? "#ffffff"
 	const layerBg = resolveLayerBackground(cfg, vizBackground)
 
-	const xField = encodings.x.field
-	const yField = encodings.y.field
+	const xField = positionFields ? positionFields.x : encodings.x.field
+	const yField = positionFields ? positionFields.y : encodings.y.field
 	const angleField = encodings.angle.field
 	const valueField = encodings.value.field
 	const hueField = encodings.hue.field
@@ -1039,9 +1054,20 @@ export const DataLabelsLayer = ({
 	// facets" names (`fieldFacetKeys`, falling back to the layer's
 	// `facetKeys`), so one label can run across every panel while another is
 	// kept to a few. Nothing left to draw here → the layer stands down.
-	const ownKeys: (string | null)[] = multi
-		? labelKeys.keys.filter((k) => composedLabelOnPanel(cfg, k, facetPanelKey))
-		: [null]
+	const ownKeys: (string | null)[] = (
+		multi
+			? labelKeys.keys.filter((k) => composedLabelOnPanel(cfg, k, facetPanelKey))
+			: [null]
+	).filter((k) =>
+		labelFilter
+			? labelFilter(
+					k,
+					k === null
+						? [valueField ?? xField ?? yField].filter((f): f is string => !!f)
+						: (labelKeys.pieces[k] ?? [])
+				)
+			: true
+	)
 	if (ownKeys.length === 0) return null
 	const labelTemplates = new Map(
 		labelKeys.labels.map((l) => [l.id, l.template] as const)

@@ -41,8 +41,8 @@ import {
 } from "./materializeTransforms"
 import {
 	DEFAULT_RESHAPE_CONFIG,
-	effectiveValueName,
-	effectiveVariableName,
+	allMeltFields,
+	presentGroups,
 	presentMeltFields,
 	reshapeIssues,
 	type ReshapeConfig,
@@ -257,8 +257,12 @@ const unfedVariables = (
 	const availableLong = baked.reshaped
 		? new Set([
 				...wideFields.filter((f) => reshape.idFields.includes(f.name)).map((f) => f.name),
-				effectiveVariableName(reshape),
-				effectiveValueName(reshape),
+				// The pairs the melt minted — every group that had a column in
+				// the wide table the reshape saw (before-melt variables included).
+				...presentGroups(baked.wide.fields, reshape).flatMap((g) => [
+					g.variableName,
+					g.valueName,
+				]),
 			])
 		: new Set(availableWide)
 	variables.forEach((variable, index) => {
@@ -282,7 +286,7 @@ const unfedVariables = (
 
 const reshapeReason = (fields: Field[], config: ReshapeConfig): string => {
 	if (presentMeltFields(fields, config).length === 0)
-		return `none of its columns (${quotedList(config.meltFields)}) are in the data`
+		return `none of its columns (${quotedList(allMeltFields(config))}) are in the data`
 	return reshapeIssues(fields, config)[0] ?? "can't be applied to this data"
 }
 

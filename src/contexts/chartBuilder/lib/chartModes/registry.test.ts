@@ -4,11 +4,14 @@ import { describe, expect, it } from "vitest"
 // avoids a circular-init between types.ts, channels.ts, and atoms.ts. The
 // sibling chartMode.test.ts relies on the same ordering.
 import "../chartMode"
+import { getChartMode } from "../chartMode"
 import { emptyEncodings } from "../types"
 import { AreasXMode } from "./areasX"
 import { AreasYMode } from "./areasY"
 import { BarsXMode } from "./barsX"
 import { BarsYMode } from "./barsY"
+import { ComboXMode } from "./comboX"
+import { ComboYMode } from "./comboY"
 import { FAMILY_MODE_IDS, isFlowModeId, isStructureModeId } from "./families"
 import { MODE_REGISTRY } from "./index"
 import { PiesMode } from "./pies"
@@ -98,6 +101,68 @@ describe("pies detect predicates", () => {
 
 	it("PiesMode ignores facet (orthogonal) — facet + angle still detects as pies", () => {
 		expect(PiesMode.detect(enc({ angle: "a", facet: "b" }))).toBe(true)
+	})
+})
+
+describe("bar + marks combo detect predicates", () => {
+	const types: Record<string, "quantitative" | "categorical"> = {
+		month: "categorical",
+		region: "categorical",
+		units: "quantitative",
+		revenue: "quantitative",
+	}
+	const getType = (f: string) => types[f]
+	const asBars = { length: { minLength: 4, maxLength: 40, render: "bars" as const } }
+	const xyl = enc({ x: "month", y: "revenue", length: "units" })
+
+	it("x + y + length WITHOUT the Draw-as opt-in stays the segment scatter", () => {
+		expect(getChartMode(xyl, getType)).toBe("scatter")
+		expect(getChartMode(xyl, getType, { length: { minLength: 4, maxLength: 40 } })).toBe("scatter")
+		expect(ComboXMode.detect(xyl, getType, {})).toBe(false)
+		expect(ComboYMode.detect(xyl, getType, {})).toBe(false)
+	})
+
+	it("categorical x + quantitative y + length, drawn as bars → combo-x (vertical bars, y as marks)", () => {
+		expect(getChartMode(xyl, getType, asBars)).toBe("combo-x")
+		expect(ComboYMode.detect(xyl, getType, asBars)).toBe(false)
+	})
+
+	it("quantitative x + categorical y → combo-y (horizontal bars, x as marks)", () => {
+		const e = enc({ x: "revenue", y: "region", length: "units" })
+		expect(getChartMode(e, getType, asBars)).toBe("combo-y")
+		expect(ComboXMode.detect(e, getType, asBars)).toBe(false)
+	})
+
+	it("both positions quantitative (or no type lookup) → combo-x, the common vertical combo", () => {
+		const e = enc({ x: "revenue", y: "units", length: "units" })
+		expect(getChartMode(e, getType, asBars)).toBe("combo-x")
+		expect(getChartMode(xyl, undefined, asBars)).toBe("combo-x")
+	})
+
+	it("angle or r alongside the signature blocks the combo (vector field / radar stay theirs)", () => {
+		expect(
+			getChartMode(enc({ x: "month", y: "revenue", length: "units", angle: "units" }), getType, asBars)
+		).toBe("scatter")
+		expect(ComboXMode.detect(enc({ x: "month", y: "revenue", length: "units", r: "units" }), getType, asBars)).toBe(false)
+	})
+
+	it("needs all three of x, y and length — bars and segments never read the opt-in", () => {
+		expect(getChartMode(enc({ x: "month", length: "units" }), getType, asBars)).toBe("bars-x")
+		expect(getChartMode(enc({ y: "month", length: "units" }), getType, asBars)).toBe("bars-y")
+		expect(getChartMode(enc({ x: "month", y: "revenue" }), getType, asBars)).toBe("scatter")
+	})
+
+	it("declares bar-family traits plus scatter's line / glyph / mark roles for the marks layer", () => {
+		for (const mode of [ComboXMode, ComboYMode]) {
+			expect(mode.canvas.lengthRole, mode.id).toBe("measure")
+			expect(mode.canvas.connectionRole, mode.id).toBe("line")
+			expect(mode.canvas.shapeRole, mode.id).toBe("glyph")
+			expect(mode.canvas.areaRole, mode.id).toBe("mark")
+			expect(mode.legend.hideLengthInThisMode, mode.id).toBe(true)
+			expect(mode.canvas.supportsNegativeMeasure, mode.id).toBe(true)
+		}
+		expect(ComboXMode.canvas.measureAxis).toBe("y")
+		expect(ComboYMode.canvas.measureAxis).toBe("x")
 	})
 })
 

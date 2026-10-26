@@ -297,7 +297,9 @@ const stackRows = (
 
 const barsData = (input: PlottedDataInput): PlottedData => {
 	const { encodings, channelConfigs, getType, levelOrders, mode } = input
-	const categoryChannel = mode === "bars-x" ? "x" : "y"
+	// Vertical bars (bars-x and its combo twin) categorize along x.
+	const categoryChannel =
+		mode === "bars-x" || mode === "combo-x" ? "x" : "y"
 	const categoryField = fieldOf(encodings, categoryChannel)
 	if (!categoryField) return { aggregated: false, note: null }
 	const categoryType = getType(categoryField)

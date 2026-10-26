@@ -237,6 +237,7 @@ describe("renameFieldInConfigs — standard (view-field) rewrite", () => {
 			fieldBackgrounds: { sales: { textBackground: true } },
 			fieldAlignments: { sales: "left" },
 			fieldOffsets: { sales: { xOffset: 4 } },
+			fieldLayers: { sales: "marks" },
 			firstLabel: { labelTemplate: "start {sales}" },
 			lastLabel: { labelTemplate: "end {sales}" },
 		}
@@ -259,6 +260,7 @@ describe("renameFieldInConfigs — standard (view-field) rewrite", () => {
 			revenue: { textBackground: true },
 		})
 		expect(next.dataLabelsConfig.fieldAlignments).toEqual({ revenue: "left" })
+		expect(next.dataLabelsConfig.fieldLayers).toEqual({ revenue: "marks" })
 		expect(next.dataLabelsConfig.fieldOffsets).toEqual({
 			revenue: { xOffset: 4 },
 		})
@@ -543,6 +545,59 @@ describe("renameFieldInConfigs — melted (value-key) rewrite", () => {
 		const next = renameFieldInConfigs(state, fields, "region", "area")
 		expect(next.encodings.x.field).toBe("area")
 		expect(next.reshapeConfig.idFields).toEqual(["area"])
+	})
+})
+
+describe("renameFieldInConfigs — a second Combine group", () => {
+	const fields = [c("region"), q("jan"), q("feb"), q("jan_cost"), q("feb_cost")]
+	const groupedState = (): Required<FieldNameConfigs> => {
+		const state = baseState()
+		state.reshapeConfig = {
+			...DEFAULT_RESHAPE_CONFIG,
+			idFields: ["region"],
+			meltFields: ["jan", "feb"],
+			extraGroups: [
+				{ meltFields: ["jan_cost", "feb_cost"], variableName: "cost of", valueName: "cost" },
+			],
+		}
+		return state
+	}
+
+	it("swaps the column in the group that lists it and leaves the other group's reference", () => {
+		const state = groupedState()
+		const next = renameFieldInConfigs(state, fields, "jan_cost", "january_cost")
+		expect(next.reshapeConfig.meltFields).toEqual(["jan", "feb"])
+		expect(next.reshapeConfig.extraGroups).toEqual([
+			{ meltFields: ["january_cost", "feb_cost"], variableName: "cost of", valueName: "cost" },
+		])
+		// A rename the extra group doesn't mention keeps its reference.
+		const untouched = renameFieldInConfigs(state, fields, "jan", "January")
+		expect(untouched.reshapeConfig.extraGroups).toBe(state.reshapeConfig.extraGroups)
+	})
+
+	it("renames value keys under the SECOND group's variable column for its melted columns", () => {
+		const state = groupedState()
+		state.encodings = { ...state.encodings, hue: { field: "cost of" } }
+		state.channelConfigs = {
+			hue: {
+				kind: "categorical",
+				colors: { jan_cost: "#111", feb_cost: "#222" },
+				stackMode: "stack",
+			},
+		}
+		const next = renameFieldInConfigs(state, fields, "jan_cost", "january_cost")
+		expect(next.channelConfigs.hue).toEqual({
+			kind: "categorical",
+			colors: { january_cost: "#111", feb_cost: "#222" },
+			stackMode: "stack",
+		})
+		// A first-group column renamed while hue maps the SECOND group's
+		// variable column is not a value of that column: nothing to rename.
+		expect(renameFieldInConfigs(state, fields, "jan", "January").channelConfigs.hue).toEqual({
+			kind: "categorical",
+			colors: { jan_cost: "#111", feb_cost: "#222" },
+			stackMode: "stack",
+		})
 	})
 })
 

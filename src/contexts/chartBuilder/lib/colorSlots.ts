@@ -114,10 +114,11 @@ export const COLOR_SLOT_REGISTRY: readonly ColorSlotDef[] = [
 	{
 		key: "line",
 		label: "Line",
-		// Scatter connection lines only. Area/radar line + outline color is still
-		// handled by the Fill panel's split-palette editor (it owns
-		// `connection.lineColors`), so the slot would duplicate it there.
-		modes: m("scatter"),
+		// Scatter connection lines, and the combo modes' marks-layer lines
+		// (ScatterPlot's line builder over the bars). Area/radar line + outline
+		// color is still handled by the Fill panel's split-palette editor (it
+		// owns `connection.lineColors`), so the slot would duplicate it there.
+		modes: m("scatter", "combo-x", "combo-y"),
 		isApplicable: (encodings) => !!encodings.connection?.field,
 		themeColor: (t) => t.connectionColor,
 		acceptsFieldMapping: true,
@@ -230,6 +231,23 @@ export const COLOR_SLOT_REGISTRY: readonly ColorSlotDef[] = [
 		acceptsFieldMapping: false,
 	},
 	{
+		key: "comboPointFill",
+		label: "Point fill",
+		// Bar + marks combo (§3.3): the marks-layer points. Unconfigured, a
+		// point takes its LINE's color (the Line slot / legacy connection
+		// chain for its Connection value), never the bars' Color mapping —
+		// the points belong to the line they sit on. "Vary by" / a single
+		// color recolor the points on their own.
+		modes: m("combo-x", "combo-y"),
+		isApplicable: () => true,
+		themeColor: (t) => t.connectionColor,
+		acceptsFieldMapping: true,
+		inherit: {
+			label: "Auto",
+			help: "Matches the line color: the Line color's mapping, else its single color.",
+		},
+	},
+	{
 		key: "geoPointFill",
 		label: "Point fill",
 		// Bubble / symbol maps render points ON TOP of regions; this slot colors
@@ -278,6 +296,7 @@ export const legacySlotColor = (
 		case "densityCurveFill":
 		case "densityCurveStroke":
 		case "stem":
+		case "comboPointFill":
 			// No legacy per-feature color field to seed from; the slot's
 			// theme-seeded singleColor is the source of truth.
 			return undefined

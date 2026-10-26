@@ -214,6 +214,9 @@ export const PlotCanvas = ({
 			// Stored array / map — stable references unless the rules are edited.
 			dataLabels.positionRules,
 			dataLabels.fieldPositionRules,
+			dataLabels.wrapText,
+			dataLabels.wrapMaxChars,
+			dataLabels.fieldLayouts,
 			// The render gate reads the (inherited or picked) position fields.
 			dataLabelsEncodings.x?.field,
 			dataLabelsEncodings.y?.field,
@@ -316,8 +319,9 @@ export const PlotCanvas = ({
 		() => getChartModeDef(encodings, getType, channelConfigs, mapConfig),
 		// dataset/overrides change rarely; recomputing on every render is fine.
 		// Every config-gated detection input must be listed here: the histogram
-		// toggles (bars-x/-y) and the hierarchy Layout picker (packed circles /
-		// treemap / sunburst / chord / sankey) — omitting one means the picker
+		// toggles (bars-x/-y), the hierarchy Layout picker (packed circles /
+		// treemap / sunburst / chord / sankey) and the Length panel's "Draw as"
+		// (segments ⇄ the bar + marks combo) — omitting one means the picker
 		// appears dead until the next remount.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[
@@ -327,6 +331,7 @@ export const PlotCanvas = ({
 			channelConfigs.x?.histogram,
 			channelConfigs.y?.histogram,
 			channelConfigs.connection?.hierarchyLayout,
+			channelConfigs.length?.render,
 			mapConfig,
 		]
 	)

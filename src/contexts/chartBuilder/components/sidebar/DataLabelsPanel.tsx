@@ -61,9 +61,11 @@ import {
 import {
 	isAreaModeId,
 	isBarModeId,
+	isComboModeId,
 	isHierarchyModeId,
 	isPieModeId,
 } from "../../lib/chartModes/families"
+import { comboMarksFields, dataLabelLayerFor } from "../../lib/comboOverlay"
 import {
 	emptyDataLabelsEncodings,
 	type DataLabelsEncodings,
@@ -91,6 +93,7 @@ import {
 import { NumberInput } from "../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../components/ui/SelectInput"
+import { Segmented } from "../../../../components/ui/Segmented"
 import { Checkbox } from "../../../../components/ui/Checkbox"
 import { AlignmentControl } from "./LabelsPanel"
 import { FacetScopeControl } from "./FacetScopeControl"
@@ -324,8 +327,20 @@ export const DataLabelsPanel = () => {
 		(field === null ? undefined : merged.fieldBarPlacements?.[field]?.side) ??
 		merged.barLabelSide ??
 		"center"
+	// Bar + marks combo (§3.3): each label annotates the bars or the marks
+	// (`fieldLayers`, else by the variables it shows). A label on the marks
+	// takes no bar placement — the Placement group hides for it and a stored
+	// side neither locks its alignment nor counts as a change.
+	const isComboMode = isComboModeId(chartMode)
+	const marksFields = comboMarksFields(chartMode, chartEncodings, chartConfigs)
+	const marksLayerName = chartEncodings.connection?.field ? "Line" : "Points"
+	const layerFor = (key: string | null, fields: ReadonlyArray<string>) =>
+		isComboMode ? dataLabelLayerFor(merged, key, fields, marksFields) : "bars"
 	const sideLocksAlignmentFor = (field: string | null) =>
-		isBarMode && isVerticalBars && sideFor(field) !== "center"
+		isBarMode &&
+		isVerticalBars &&
+		sideFor(field) !== "center" &&
+		layerFor(field, field === null ? [] : [field]) !== "marks"
 	// Area charts get the same placements along each layer's measure extent
 	// ("Layer position"), plus the layer's top edge as the default.
 	const isAreaMode = isAreaModeId(chartMode)
@@ -373,8 +388,17 @@ export const DataLabelsPanel = () => {
 		.map((sc) => ({ value: sc, label: scopeWording[sc] }))
 	/** Does this label's "Of each" select show? `null` = the single-field
 	 *  label (and the layer-wide fallback). */
+	// A label on the combo's marks ranks its ends per Connection series like
+	// a line chart's, so the bar scopes don't apply to it.
+	const labelFieldsFor = (key: string | null): ReadonlyArray<string> =>
+		key === null
+			? [encodings.value.field ?? encodings.x.field ?? encodings.y.field].filter(
+					(f): f is string => !!f
+				)
+			: (labelKeysFor(merged, encodings.value).pieces[key] ?? [])
 	const showScopeFor = (key: string | null): boolean =>
 		scopeApplies &&
+		layerFor(key, labelFieldsFor(key)) !== "marks" &&
 		(key === null
 			? effectiveLabelPoints(merged)
 			: fieldLabelPointsMode(merged, key)) !== "all"
@@ -609,6 +633,40 @@ export const DataLabelsPanel = () => {
 					},
 				})
 	const sideLocksAlignment = sideLocksAlignmentFor(loneLabelKey)
+	// The primary label's combo layer: a lone composed label keys by its id,
+	// the single-field label by its value field (the renderer's rule).
+	const primaryLayerKey =
+		loneLabelKey ??
+		encodings.value.field ??
+		encodings.x.field ??
+		encodings.y.field ??
+		null
+	const primaryLayerFields =
+		loneLabelKey !== null
+			? (labelKeys.pieces[loneLabelKey] ?? [])
+			: primaryLayerKey !== null
+				? [primaryLayerKey]
+				: []
+	const primaryOnMarks =
+		isComboMode && layerFor(primaryLayerKey, primaryLayerFields) === "marks"
+	const layerControl = (key: string, fields: ReadonlyArray<string>) => (
+		<div className="flex items-center gap-2 text-sm">
+			<span className={LABEL_COL}>Show on</span>
+			<Segmented
+				ariaLabel="Show labels on"
+				value={layerFor(key, fields)}
+				segments={[
+					{ key: "bars", label: "Bars" },
+					{ key: "marks", label: marksLayerName },
+				]}
+				onChange={(layer) =>
+					updateCfg({
+						fieldLayers: { ...(merged.fieldLayers ?? {}), [key]: layer },
+					})
+				}
+			/>
+		</div>
+	)
 	// "Split into individual variables": a label naming two or more
 	// variables can style each one separately under Color / Size / Text
 	// properties — a bold series name beside an unbolded value, a value
@@ -674,6 +732,11 @@ export const DataLabelsPanel = () => {
 		anyOwn(merged.fieldLayouts) ||
 		anyOwn(merged.fieldOffsets) ||
 		(isBarMode && anyOwn(merged.fieldBarPlacements)) ||
+		(isComboMode &&
+			(anyOwn(merged.fieldLayers) ||
+				(primaryLabel &&
+					primaryLayerKey !== null &&
+					merged.fieldLayers?.[primaryLayerKey] != null))) ||
 		(primaryLabel &&
 			((!sideLocksAlignment && (merged.alignment ?? "center") !== "center") ||
 				(merged.textAngle ?? 0) !== 0 ||
@@ -681,8 +744,8 @@ export const DataLabelsPanel = () => {
 				merged.avoidOverlaps === true ||
 				merged.xOffset !== 0 ||
 				merged.yOffset !== 0 ||
-				(isBarMode && primaryPosition !== "center") ||
-				(isBarMode && primarySide !== "center"))) ||
+				(isBarMode && !primaryOnMarks && primaryPosition !== "center") ||
+				(isBarMode && !primaryOnMarks && primarySide !== "center"))) ||
 		ownLabelKeys.some(
 			(k) => (merged.fieldPositionRules?.[k]?.length ?? 0) > 0
 		) ||
@@ -1382,13 +1445,16 @@ export const DataLabelsPanel = () => {
 							else all[name] = next
 							updateCfg({ fieldPositionRules: all })
 						}
+						const ownOnMarks =
+							isComboMode && layerFor(name, labelKeys.pieces[name] ?? []) === "marks"
 						const changed =
 							ownAlignment != null ||
 							Object.keys(ownLayout).length > 0 ||
 							ownOffsets.xOffset != null ||
 							ownOffsets.yOffset != null ||
 							ownRules.length > 0 ||
-							(isBarMode && Object.keys(ownPlacement).length > 0)
+							(isComboMode && merged.fieldLayers?.[name] != null) ||
+							(isBarMode && !ownOnMarks && Object.keys(ownPlacement).length > 0)
 						const measureSelect = (
 							<SelectInput
 								label={isVerticalBars ? "Vertical" : "Horizontal"}
@@ -1415,6 +1481,7 @@ export const DataLabelsPanel = () => {
 								title={labelTitles[name] ?? name}
 								changed={changed}
 							>
+								{isComboMode && layerControl(name, labelKeys.pieces[name] ?? [])}
 								{/* Beside a vertical bar the side sets the alignment. */}
 								{!sideLocksAlignmentFor(name) && (
 									<div className="flex items-center gap-2 text-sm">
@@ -1478,7 +1545,7 @@ export const DataLabelsPanel = () => {
 									checked={avoid}
 									onChange={(avoidOverlaps) => patchLayout({ avoidOverlaps })}
 								/>
-								{isBarMode && (
+								{isBarMode && !ownOnMarks && (
 									<div className="vc-divider-group">
 										<span className="vc-group-header">Placement</span>
 										{isVerticalBars ? measureSelect : sideSelect}
@@ -1631,7 +1698,15 @@ export const DataLabelsPanel = () => {
 				/>
 				</>
 				)}
-				{isBarMode && primaryLabel && (
+				{isComboMode && primaryLabel && primaryLayerKey !== null && (
+					<div className="vc-divider-group">
+						{layerControl(primaryLayerKey, primaryLayerFields)}
+						<p className="vc-help">
+							Whether the labels sit on the bars or on the {marksLayerName.toLowerCase()}.
+						</p>
+					</div>
+				)}
+				{isBarMode && primaryLabel && !primaryOnMarks && (
 					<div className="vc-divider-group">
 						<span className="vc-group-header">Placement</span>
 						<SelectInput

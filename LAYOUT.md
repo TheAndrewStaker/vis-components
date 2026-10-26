@@ -76,7 +76,9 @@ Canvas
 │  keeps the widest — never "longest by character count", since
 │  "9.0% Medicare Traditional" out-counts but under-measures
 │  "46.8% Employer-Sponsored" — plus a LABEL_RESERVE_PAD_PX (4) breathing
-│  pad on the overflowing side): a long
+│  pad on the overflowing side; a label with "Wrap text" on is split the
+│  way the layer splits it and its widest LINE is the candidate, so a
+│  wrapped label never reserves its unwrapped width): a long
 │  end-of-line label compresses the plot as far as needed, the way a wide
 │  legend does, so it stays in the viewport — down to a zero-width plot,
 │  with NO floor (an oversized legend collapses the chart the same way).

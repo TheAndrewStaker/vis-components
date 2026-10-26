@@ -90,3 +90,54 @@ describe("computeDataLabelOverflow — widest candidate, not longest", () => {
 		)
 	})
 })
+
+describe("computeDataLabelOverflow — Wrap text", () => {
+	// Four 5-glyph words: unwrapped 23 chars = 46px; wrapped at 11 chars the
+	// widest line is "iiiii iiiii" = 22px.
+	const long = "iiiii iiiii iiiii iiiii"
+	const rows = [{ x: "1", y: "1", name: long }]
+
+	it("reserves for the widest WRAPPED line, not the unwrapped string", () => {
+		const off = computeDataLabelOverflow({ ...base, dataset: view(rows) })
+		expect(off.right).toBe(
+			Math.ceil(46 + LABEL_RESERVE_PAD_PX - BASE_MARGIN.right),
+		)
+		const on = computeDataLabelOverflow({
+			...base,
+			dataLabels: { ...base.dataLabels, wrapText: true, wrapMaxChars: 11 },
+			dataset: view(rows),
+		})
+		expect(on.right).toBe(
+			Math.ceil(22 + LABEL_RESERVE_PAD_PX - BASE_MARGIN.right),
+		)
+	})
+
+	it("a separate variable's own fieldLayouts wrap applies to that label only", () => {
+		const multi = {
+			...base,
+			dataset: view(rows),
+			dataLabelsEncodings: {
+				...base.dataLabelsEncodings,
+				value: { field: null, multiField: true, fields: ["name"] },
+			},
+			dataLabels: {
+				...base.dataLabels,
+				composedLabels: [{ id: "name", template: "{name}" }],
+			},
+		}
+		const unwrapped = computeDataLabelOverflow(multi)
+		expect(unwrapped.right).toBe(
+			Math.ceil(46 + LABEL_RESERVE_PAD_PX - BASE_MARGIN.right),
+		)
+		const own = computeDataLabelOverflow({
+			...multi,
+			dataLabels: {
+				...multi.dataLabels,
+				fieldLayouts: { name: { wrapText: true, wrapMaxChars: 11 } },
+			},
+		})
+		expect(own.right).toBe(
+			Math.ceil(22 + LABEL_RESERVE_PAD_PX - BASE_MARGIN.right),
+		)
+	})
+})

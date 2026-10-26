@@ -116,6 +116,22 @@ describe("renameFieldInTransform", () => {
 	it("returns the same reference when nothing mentions the old name", () => {
 		expect(renameFieldInTransform(t, "nothing", "x")).toBe(t)
 	})
+
+	it("reaches a second group's columns and minted names", () => {
+		const grouped: VersionTransform = {
+			reshape: {
+				...t.reshape!,
+				extraGroups: [{ meltFields: ["tuesday"], variableName: "k", valueName: "v" }],
+			},
+		}
+		expect(renameFieldInTransform(grouped, "tuesday", "tue").reshape?.extraGroups).toEqual([
+			{ meltFields: ["tue"], variableName: "k", valueName: "v" },
+		])
+		expect(renameFieldInTransform(grouped, "v", "val").reshape?.extraGroups).toEqual([
+			{ meltFields: ["tuesday"], variableName: "k", valueName: "val" },
+		])
+		expect(renameFieldInTransform(grouped, "nothing", "x")).toBe(grouped)
+	})
 })
 
 describe("a replay's skipped parts", () => {

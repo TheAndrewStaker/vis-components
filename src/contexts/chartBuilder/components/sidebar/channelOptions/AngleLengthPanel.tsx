@@ -13,7 +13,11 @@ import {
 import { MIN_LINE_THICKNESS } from "../../../lib/connectionThickness"
 import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import { orderedLevels } from "../../../lib/smartSort"
-import { isBarModeId, isPieModeId } from "../../../lib/chartModes/families"
+import {
+	isBarModeId,
+	isComboModeId,
+	isPieModeId,
+} from "../../../lib/chartModes/families"
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { angleConfigFromTheme, valueChanged } from "../../../lib/themeConfig"
 import {
@@ -504,6 +508,50 @@ const BarGapControl = ({
 	</>
 )
 
+/** The two readings of `x + y + length` (`LengthConfig.render`). */
+const DRAW_AS_SEGMENTS = [
+	{ key: "segments", label: "Segments" },
+	{ key: "bars", label: "Bars" },
+] as const
+
+/** Length → "Draw as": with BOTH positions and Length mapped the chart can
+ *  be the line-segment scatter (default) or a bar + marks combo — Length as
+ *  bars on the measure axis, the other position variable as marks on that
+ *  same axis (a line when Connection is mapped). Shown only for that
+ *  signature: plain bars and lone segments have one reading. */
+const DrawAsControl = ({
+	value,
+	onChange,
+}: {
+	value: "segments" | "bars"
+	onChange: (next: "segments" | "bars") => void
+}) => (
+	<>
+		<div className="flex items-center gap-2 text-sm">
+			<span
+				className={c(
+					"shrink-0",
+					LABEL_COL,
+					value === "bars" && "font-semibold !text-vc-section-header"
+				)}
+			>
+				Draw as
+			</span>
+			<Segmented
+				ariaLabel="Draw length as"
+				value={value}
+				segments={DRAW_AS_SEGMENTS}
+				onChange={onChange}
+			/>
+		</div>
+		<p className="vc-help">
+			{value === "bars"
+				? "Length draws as bars; the other position variable draws as marks on the same axis — a line when Connection is mapped (a bar + line combo chart)."
+				: "Each point draws as a line segment of that length. Choose Bars for a bar chart with the other position variable as a line or points over it."}
+		</p>
+	</>
+)
+
 // ---------------------------------------------------------------------------
 // Length
 // ---------------------------------------------------------------------------
@@ -514,6 +562,16 @@ export const LengthOptionsPanel = () => {
 
 	const currentLength = configs.defaultLength ?? null
 	const cfg = configs.length ?? DEFAULT_LENGTH_CONFIG
+	const setRender = (render: "segments" | "bars") =>
+		setConfigs((prev) => ({
+			...prev,
+			length: {
+				...(prev.length ?? DEFAULT_LENGTH_CONFIG),
+				// Segments is the default: store it as absent so an untouched
+				// chart stays byte-identical.
+				render: render === "bars" ? "bars" : undefined,
+			},
+		}))
 
 	// What length MEANS here is a declared mode trait (`canvas.lengthRole`),
 	// branched on BEFORE the field check: a histogram is a bar mode with no
@@ -528,6 +586,23 @@ export const LengthOptionsPanel = () => {
 	// length field: a bar mode WITHOUT one is a histogram, whose bins abut
 	// by design (BarPlot forces zero padding), so the knob would be inert.
 	const showBarGap = isBarModeId(modeDef.id) && fieldMapped
+	// "Draw as" applies to the one signature with two readings: both
+	// positions + Length (no angle / r). Offered on the segment scatter that
+	// signature renders by default, and on the combo it turns into.
+	const comboSignature =
+		fieldMapped &&
+		!!encodings.x?.field &&
+		!!encodings.y?.field &&
+		!encodings.angle?.field &&
+		!encodings.r?.field
+	const showDrawAs =
+		isComboModeId(modeDef.id) || (comboSignature && lengthRole === "mark")
+	const drawAs = (
+		<DrawAsControl
+			value={cfg.render === "bars" ? "bars" : "segments"}
+			onChange={setRender}
+		/>
+	)
 
 	if (lengthRole === "none") {
 		return (
@@ -540,6 +615,7 @@ export const LengthOptionsPanel = () => {
 	if (lengthRole === "measure") {
 		return (
 			<div className="vc-option-panel">
+				{showDrawAs && drawAs}
 				{showBarGap && (
 					<BarGapControl
 						barGapPx={configs.length?.barGapPx ?? null}
@@ -566,6 +642,7 @@ export const LengthOptionsPanel = () => {
 	if (fieldMapped) {
 		return (
 			<div className="vc-option-panel">
+				{showDrawAs && drawAs}
 				<div className="flex items-center gap-2">
 					<NumberInput
 						label="Min"

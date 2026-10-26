@@ -68,7 +68,7 @@ export const OPACITY_SLOT_REGISTRY: readonly OpacitySlotDef[] = [
 	{
 		key: "line",
 		label: "Line",
-		modes: m("scatter"),
+		modes: m("scatter", "combo-x", "combo-y"),
 		isApplicable: (encodings) => !!encodings.connection?.field,
 		defaultLevel: 1,
 		acceptsFieldMapping: true,

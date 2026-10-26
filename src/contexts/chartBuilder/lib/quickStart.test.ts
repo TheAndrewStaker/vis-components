@@ -478,6 +478,27 @@ describe("applyVariation", () => {
 		expect(encodings.connection.field).toBeNull()
 	})
 
+	it("combo variations opt Length into bars; other Length variations clear a leftover opt-in", () => {
+		const combo = QUICK_START_VARIATIONS.combo[0]
+		const comboAssignments = [
+			{ channel: "x" as const, field: field("month", "categorical") },
+			{ channel: "length" as const, field: field("units", "quantitative") },
+			{ channel: "y" as const, field: field("revenue", "quantitative") },
+			{ channel: "connection" as const, field: field("series", "categorical") },
+		]
+		const { configs: comboConfigs } = applyVariation(combo, comboAssignments, {
+			length: { minLength: 6, maxLength: 30 },
+		})
+		expect(comboConfigs.length?.render).toBe("bars")
+		// The rest of the Length config (the px range) is kept, not reset.
+		expect(comboConfigs.length?.minLength).toBe(6)
+		// A bar scaffold after a combo: the opt-in must not leak, or the next
+		// x + y + length the user builds would silently be a combo.
+		const { configs: barConfigs } = applyVariation(variation, assignments, comboConfigs)
+		expect(barConfigs.length?.render).toBeUndefined()
+		expect(barConfigs.length?.minLength).toBe(6)
+	})
+
 	it("returns empty data-labels encodings when the variation doesn't opt in", () => {
 		const { dataLabels } = applyVariation(variation, assignments, {})
 		expect(dataLabels.value.field).toBeNull()
