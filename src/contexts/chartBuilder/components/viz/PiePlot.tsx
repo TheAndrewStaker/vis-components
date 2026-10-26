@@ -136,7 +136,6 @@ export const PiePlot = (props: PiePlotProps = {}) => {
 		dataLabels?.x?.field ||
 			dataLabels?.y?.field ||
 			dataLabels?.angle?.field ||
-			dataLabels?.r?.field ||
 			dataLabels?.value?.field ||
 			dataLabels?.hue?.field ||
 			dataLabels?.size?.field,
@@ -611,6 +610,8 @@ export const PiePlot = (props: PiePlotProps = {}) => {
 							encodings,
 							rows: rowsForChart,
 							arc: resolvePieArc(channelConfigs.angle),
+							labelRadiusPct: dataLabelsRadiusPct,
+							labelAngleDeg: dataLabelsCfg?.polarLabelAngle,
 							valueFieldMapped,
 							labelPointsScope: dataLabelsCfg?.labelPointsScope,
 							sliceOpacity: (groupValues) =>
@@ -804,7 +805,10 @@ export const buildPieAnchors = ({
 	/** What "first" / "last" run over (`DataLabelsConfig.labelPointsScope`):
 	 *  "series" = the same wedge across the pies (first / last PIE), "stack"
 	 *  = each pie's first / last wedge from the arc start ("group" has no
-	 *  meaning for pies → series). Defaults to "series". */
+	 *  meaning for pies → series). Defaults to "series". Ignored on a LONE
+	 *  pie (`categoryField` null — single-pie mode, faceted panels
+	 *  included): with no pies to run across, every scope reads as the
+	 *  wedge order, so "First" is the first wedge from the arc start. */
 	labelPointsScope?: LabelPointsScope
 }): DataLabelAnchor[] => {
 	const anchors: DataLabelAnchor[] = []
@@ -818,7 +822,15 @@ export const buildPieAnchors = ({
 		categoryField,
 		encodings
 	)
-	const layerScope = labelPointsScope ?? "series"
+	// A lone pie has one series per wedge under "series" / "group" (every
+	// wedge first AND last → "First" labels everything), so the wedge order
+	// is the only unit that can select anything. Pin every scope to it;
+	// the panel hides the "Of each" select there and words the choices
+	// "First wedge" / "Last wedge".
+	const lonePie = categoryField === null
+	const layerScope: LabelPointsScope = lonePie
+		? "stack"
+		: (labelPointsScope ?? "series")
 	const midRadius = pieRadius * ((labelRadiusPct ?? 100) / 100)
 	const angleOffset = ((labelAngleDeg ?? 0) * Math.PI) / 180
 	const arcStart = arc?.start ?? 0
@@ -889,13 +901,20 @@ export const buildPieAnchors = ({
 				sizeValue = foundNumeric ? sum : firstNonNumeric
 			}
 			void measureField // measureField currently unused — slice.value already carries the aggregated measure
-			const seriesByScope = seriesAllOf({
+			const seriesByAll = seriesAllOf({
 				category: stack.category,
 				groupValues: slice.groupValues,
 				categoryRank: stackIdx,
 				leafIndex: 0,
 				layerIndex: wedgeIndex,
 			})
+			const seriesByScope = lonePie
+				? {
+						series: seriesByAll.stack,
+						group: seriesByAll.stack,
+						stack: seriesByAll.stack,
+					}
+				: seriesByAll
 			const { series, rank } = seriesByScope[layerScope]
 			anchors.push({
 				sourceRows: slice.rows,

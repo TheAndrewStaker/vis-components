@@ -409,7 +409,6 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 				x: swapEnc(dle.x),
 				y: swapEnc(dle.y),
 				angle: swapEnc(dle.angle),
-				r: swapEnc(dle.r),
 				hue: swapEnc(dle.hue),
 				size: swapEnc(dle.size),
 				value: patched(swapEnc(dle.value), {

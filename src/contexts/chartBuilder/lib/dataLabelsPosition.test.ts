@@ -18,14 +18,17 @@ describe("resolveDataLabelPositions", () => {
 		expect(out.y.field).toBe("sales")
 	})
 
-	it("fills Angle / R from the chart on polar charts", () => {
+	it("fills Angle from the chart on polar charts; the retired R slot is never inherited", () => {
 		const c = emptyEncodings()
+		// The chart's r mapping is not even consulted: the label shelf has
+		// no R row, so nothing inherits from it.
 		const out = resolveDataLabelPositions(emptyDataLabelsEncodings(), {
 			...c,
 			angle: { ...c.angle, field: "share" },
-		})
+			r: { ...c.r, field: "radius" },
+		} as Parameters<typeof resolveDataLabelPositions>[1])
 		expect(out.angle.field).toBe("share")
-		expect(out.r.field).toBeNull()
+		expect(out.r).toBeUndefined()
 	})
 
 	it("keeps a field the user picked", () => {

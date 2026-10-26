@@ -214,4 +214,31 @@ describe("buildPieAnchors — label series + rank per scope", () => {
 		expect(find(anchors, "P1|n")?.rank).toBe(0)
 		expect(find(anchors, "P1|s")?.rank).toBe(1)
 	})
+
+	it("a LONE pie (no category field) runs every scope over its wedges, whatever is stored", () => {
+		// Single-pie mode (faceted panels included): `categoryField` is null
+		// and there are no pies to run "First / Last" across, so "series"
+		// would make every wedge its own single-member series and label
+		// them all. The wedge order is pinned instead.
+		const lone = (scope: "series" | "stack" | undefined) =>
+			buildPieAnchors({
+				...baseArgs,
+				categoryField: null,
+				 
+				stacks: [twoPies[0]] as any,
+				 
+				encodings: { angle: { field: "val" }, hue: { field: "wedge" } } as any,
+				labelPointsScope: scope,
+			})
+		for (const scope of [undefined, "series", "stack"] as const) {
+			const anchors = lone(scope)
+			expect(find(anchors, "P1|n")?.series).toBe(find(anchors, "P1|s")?.series)
+			expect(find(anchors, "P1|n")?.rank).toBe(0)
+			expect(find(anchors, "P1|s")?.rank).toBe(1)
+			// Per-label scopes resolve through this map; all three agree.
+			const by = find(anchors, "P1|s")?.seriesByScope
+			expect(by?.series).toEqual(by?.stack)
+			expect(by?.group).toEqual(by?.stack)
+		}
+	})
 })

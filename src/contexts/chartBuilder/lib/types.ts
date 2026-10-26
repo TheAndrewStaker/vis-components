@@ -257,7 +257,11 @@ export type DataLabelsEncodings = {
 	x: { field: string | null; none?: boolean }
 	y: { field: string | null; none?: boolean }
 	angle: { field: string | null; none?: boolean }
-	r: { field: string | null; none?: boolean }
+	/** Retired: the R position row was dropped from the Data Labels shelf
+	 * (pie labels sit at the wedge midpoint; the Distance nudge moves them
+	 * radially, so a mapped field had nothing to drive). Kept optional so
+	 * visuals saved with the slot load unchanged; nothing reads it. */
+	r?: { field: string | null; none?: boolean }
 	/** `measureSource` (tree layouts only — packed circles / treemap /
 	 * sunburst): label color varies by a hierarchy-derived value instead
 	 * of a dataset column — "rootGroup" (the node's outermost ancestor,
@@ -310,7 +314,6 @@ export const emptyDataLabelsEncodings = (): DataLabelsEncodings => ({
 	x: { field: null },
 	y: { field: null },
 	angle: { field: null },
-	r: { field: null },
 	hue: { field: null },
 	size: { field: null },
 	value: { field: null },

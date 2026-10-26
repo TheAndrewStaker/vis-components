@@ -2431,7 +2431,9 @@ point. Rotation is paint-time only: the overlap-avoidance pass and the
 solver's margin reserve still measure the unrotated footprint, and it
 is layer-wide (no first/last split).
 
-The position rows (**X / Y**, or **Angle / R** on a pie) start on the
+The position rows (**X / Y**, or **Angle** alone on a pie — there is no R
+row; pie labels sit at the wedge midpoint and the Adjust-position R%
+nudge moves them radially) start on the
 chart's own encodings: an unset row INHERITS the chart's field for that
 channel, live (re-map the chart's X and the labels follow), and the
 dropdown shows it selected. Picking a field overrides it; picking
@@ -2697,6 +2699,11 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
     bar's two sides are separate stacks.
   On several pies, Series means the same wedge across the pies, so
   "First" labels every wedge of the first pie.
+  On a LONE pie (a pie not along a category band — faceted single pies
+  included) there are no pies to run across, so the select is hidden and
+  the ends always run over each pie's wedges from the arc start; the
+  choices read **First wedge / Last wedge / First and last wedge**. The
+  renderer pins the scope there (`buildPieAnchors`), whatever is stored.
   A stored scope whose channel is no longer mapped reads as Series (the
   select shows Series; the stored value is left alone).
   With a single mapped Value there is one select, writing the layer-wide

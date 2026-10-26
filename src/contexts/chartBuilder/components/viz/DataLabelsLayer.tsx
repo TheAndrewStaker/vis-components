@@ -825,8 +825,9 @@ export const DataLabelsLayer = ({
 	// the position field(s) AND the value field. Without this, labels would
 	// "guess" a value from the position field — appearing the moment one
 	// encoding is set, which is confusing during chart setup. Polar charts
-	// (pies) gate on `angle` alone — `r` is optional (unmapped → labels sit
-	// on the pie's border). Legacy `x` + `y` still satisfy it so saved pie
+	// (pies) gate on `angle` alone — there is no R row; labels sit at the
+	// wedge midpoint and the R% nudge moves them radially (a retired
+	// `r` slot in old saves is ignored). Legacy `x` + `y` still satisfy it so saved pie
 	// visuals from before the polar channels keep rendering.
 	// Layout-placed anchors (`"layout"`) skip both gates: the renderer has
 	// already chosen the labeled nodes and their text (names by default, the

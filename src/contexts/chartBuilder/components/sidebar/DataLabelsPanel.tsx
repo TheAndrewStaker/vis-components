@@ -119,19 +119,23 @@ const DEFAULT_WRAP_CHARS = DEFAULT_DATA_LABELS_CONFIG.wrapMaxChars ?? 20
 /** "Which labels" choices — shared by the single-field select and the
  *  per-variable selects of multi-field mode. With the scope select showing
  *  beneath ("Of each: Series / Group / Stack") the choices drop their
- *  "per series" tail so the two selects read as one sentence; elsewhere
- *  the tail says what the ends run over. */
+ *  tail so the two selects read as one sentence ("scope"); elsewhere the
+ *  tail says what the ends run over — "per series", or "wedge" on a lone
+ *  pie, where the ends always run over each pie's wedges from the arc
+ *  start (the renderer pins the scope there; see `buildPieAnchors`). */
+type LabelPointsTail = "scope" | "series" | "wedge"
 const labelPointsOptions = (
-	withScope: boolean
-): ReadonlyArray<{ value: LabelPointsMode; label: string }> => [
-	{ value: "all", label: "All labels" },
-	{ value: "first", label: withScope ? "First" : "First per series" },
-	{ value: "last", label: withScope ? "Last" : "Last per series" },
-	{
-		value: "first-last",
-		label: withScope ? "First and last" : "First and last per series",
-	},
-]
+	tail: LabelPointsTail
+): ReadonlyArray<{ value: LabelPointsMode; label: string }> => {
+	const suffix =
+		tail === "scope" ? "" : tail === "wedge" ? " wedge" : " per series"
+	return [
+		{ value: "all", label: "All labels" },
+		{ value: "first", label: `First${suffix}` },
+		{ value: "last", label: `Last${suffix}` },
+		{ value: "first-last", label: `First and last${suffix}` },
+	]
+}
 
 /** What the series ends run over (`DataLabelsConfig.labelPointsScope`),
  *  worded per chart family. Only the scopes the chart supports are
@@ -167,7 +171,6 @@ const CHANNEL_LABEL: Record<DataLabelsChannel, string> = {
 	x: "X position",
 	y: "Y position",
 	angle: "Angle",
-	r: "R",
 	geography: "Geography",
 	value: "Value",
 	hue: "Color",
@@ -332,8 +335,10 @@ export const DataLabelsPanel = () => {
 	// some "Which labels" choice is not "All labels". A channel mapped to
 	// the x field colors marks without forming groups or layers, so it
 	// doesn't count. A single pie has no series across pies, so the scope
-	// stands down there (every wedge is its own series, as before) — the
-	// pies that line up along a band are the ones drawing a category axis.
+	// stands down there: the renderer runs the ends over each pie's wedges
+	// (the only unit that can select anything) and "Which labels" reads
+	// "First wedge" / "Last wedge" — the pies that line up along a band are
+	// the ones drawing a category axis.
 	const piesAlongBand =
 		isPolarMode &&
 		(modeDef.canvas.cartesianAxes.x || modeDef.canvas.cartesianAxes.y)
@@ -380,9 +385,13 @@ export const DataLabelsPanel = () => {
 		return scopeOptions.some((o) => o.value === stored) ? stored : "series"
 	}
 	// "First / last" drop their "per series" tail where the scope select
-	// spells the unit out beneath them, so the two read as one sentence.
+	// spells the unit out beneath them, so the two read as one sentence. A
+	// lone pie (not along a band) has no series to run across — the ends
+	// run over its wedges, and the choices say so.
 	const whichLabelsOptionsFor = (key: string | null) =>
-		labelPointsOptions(showScopeFor(key))
+		labelPointsOptions(
+			showScopeFor(key) ? "scope" : isPolarMode && !piesAlongBand ? "wedge" : "series"
+		)
 	// Bars layered by a channel (stack / overlay) carry a BAR TOTAL — the sum
 	// of a bar's layers — offered under Value as a derived variable
 	// (`lib/barTotalLabel.ts`; the bars' Node total), exactly where the Stack
@@ -1033,9 +1042,10 @@ export const DataLabelsPanel = () => {
 			 *  cartesian X/Y rows. Its field joins to map regions at its own
 			 *  auto-detected level, independent of the map's region field, so
 			 *  a county map can carry state-level labels.
-			 *  Pies position labels in polar terms — Angle + R replace the
-			 *  cartesian X/Y rows. These are plain mapping dropdowns; the
-			 *  placement nudges (Angle°, R%) live under "Adjust position". */}
+			 *  Pies position labels in polar terms — one Angle row replaces
+			 *  the cartesian X/Y rows (there is no R row: labels sit at the
+			 *  wedge midpoint and the R% nudge under "Adjust position" moves
+			 *  them radially). */}
 			{isTreeMode ? null : isGeoMode ? (
 				<DataLabelChannelRow
 					channel="geography"
@@ -1045,23 +1055,13 @@ export const DataLabelsPanel = () => {
 					eligible={allEligible}
 				/>
 			) : isPolarMode ? (
-				<>
-					<DataLabelChannelRow
-						channel="angle"
-						label={CHANNEL_LABEL.angle}
-						value={encodings.angle.field}
-						onChange={(v) => setField("angle", v)}
-						eligible={allEligible}
-					/>
-
-					<DataLabelChannelRow
-						channel="r"
-						label={CHANNEL_LABEL.r}
-						value={encodings.r.field}
-						onChange={(v) => setField("r", v)}
-						eligible={allEligible}
-					/>
-				</>
+				<DataLabelChannelRow
+					channel="angle"
+					label={CHANNEL_LABEL.angle}
+					value={encodings.angle.field}
+					onChange={(v) => setField("angle", v)}
+					eligible={allEligible}
+				/>
 			) : (
 				<>
 					<DataLabelChannelRow
