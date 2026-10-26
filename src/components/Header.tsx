@@ -27,7 +27,7 @@ export const Header = () => {
 		select: (st) => st.location.pathname.startsWith("/settings"),
 	})
 	return (
-		<header className="sticky top-0 z-10 flex h-(--vc-header-h) items-center justify-between bg-white px-4 shadow-md shadow-stone-200/60 dark:bg-stone-900 dark:shadow-stone-950/40">
+		<header className="sticky top-0 z-30 flex h-(--vc-header-h) items-center justify-between bg-white px-4 shadow-md shadow-stone-200/60 dark:bg-stone-900 dark:shadow-stone-950/40">
 			<div className="flex items-center gap-6">
 				<Link
 					to="/"
