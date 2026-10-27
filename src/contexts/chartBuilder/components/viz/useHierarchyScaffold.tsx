@@ -646,14 +646,15 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 								outlineAes.field.type
 							)
 						: null,
-				outlineRuleColor:
-					row && outlineAes
-						? resolveRuleColor(
-								channelConfigs.shape?.outlineColorRules,
-								rowOutlineValue,
-								[row]
-							)
-						: null,
+				// A `{Variable}` rule tests the row with or without an Outline
+				// variable; an implicit rule needs the mapped value.
+				outlineRuleColor: row
+					? resolveRuleColor(
+							channelConfigs.shape?.outlineColorRules,
+							rowOutlineValue,
+							[row]
+						)
+					: null,
 			}).stroke
 		}
 
@@ -669,8 +670,12 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 			const defaultFill = channelConfigs.defaultFill ?? DEFAULT_FILL
 
 			let fill: string
+			/** What an implicit fill rule (`> 0`) compares against: the
+			 * derived source's value, else the row's Color value. */
+			let fillRuleValue: unknown
 			if (hueSource && hueDerivedScale) {
 				const value = derivedValueOf(hueSource, node)
+				fillRuleValue = value
 				fill =
 					(value !== null
 						? applyHueScale(hueDerivedScale, value, hueDerivedType)
@@ -679,12 +684,22 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 				fill = defaultFill
 				const hue = aestheticScales.hue
 				if (hue && row) {
+					fillRuleValue = row[hue.field.name]
 					const c = applyHueScale(hue.scale, row[hue.field.name], hue.field.type)
 					if (c) fill = c
 				}
 			} else {
 				return null
 			}
+			// Conditional fill rules, as in `resolveMarkAesthetics`: a match
+			// replaces the palette color before modulation. `{Variable}` rules
+			// test the node's row; an implicit container has none.
+			const fillRuleColor = resolveRuleColor(
+				channelConfigs.fillColorRules,
+				fillRuleValue,
+				row ? [row] : undefined
+			)
+			if (fillRuleColor) fill = fillRuleColor
 			const preModulationFill = fill
 
 			// Modulation + opacity resolve the same way for leaves and

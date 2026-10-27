@@ -46,6 +46,7 @@ import {
 import { resolveCategoricalPalette } from "../../../lib/themeConfig"
 import { rgb as d3Rgb } from "d3-color"
 import { StackModeRow } from "./StackModeRow"
+import { ColorRulesEditor, markRuleHelp } from "../ColorRulesEditor"
 import { preserveStackMode } from "../../../lib/stackMode"
 import {
 	CATEGORICAL_HUE_PALETTE,
@@ -379,25 +380,52 @@ export const ColorOptionsPanel = ({
 		}))
 	}
 
+	const varyByValue = histSource
+		? MEASURE_OPTION_VALUE[histSource]
+		: packedSource
+			? PACKED_MEASURE_OPTION_VALUE[packedSource]
+			: hexSource
+				? HEXBIN_MEASURE_OPTION_VALUE
+				: (hueFieldName ?? "")
 	const varyBy = (
 		<SelectInput
 			label="Vary by"
 			labelClassName={LABEL_COL}
-			value={
-				histSource
-					? MEASURE_OPTION_VALUE[histSource]
-					: packedSource
-						? PACKED_MEASURE_OPTION_VALUE[packedSource]
-						: hexSource
-							? HEXBIN_MEASURE_OPTION_VALUE
-							: (hueFieldName ?? "")
-			}
+			value={varyByValue}
 			options={varyByOptions}
 			onChange={setHueField}
 			disabled={!dataset}
 			selectClassName="flex-1"
 		/>
 	)
+
+	// Conditional fill rules (`fillColorRules`) — the same "+ Add color rule"
+	// editor Outline and Line carry. Offered with or without a variable
+	// mapped: an implicit rule (`> 0`) tests the mapped value (a derived
+	// source's value for Count / Density / Nesting depth), a `{Variable}`
+	// rule tests the mark's rows either way. Hidden where the renderer draws
+	// no rule-aware fill: hexbins (cells carry no rows) and flow diagrams
+	// (nodes are colored by name over the endpoint union).
+	const rulesApply = !hexSource && !isFlowModeId(modeDef.id)
+	const fillRules = (palette: readonly string[] | undefined) =>
+		rulesApply ? (
+			<ColorRulesEditor
+				rules={configs.fillColorRules ?? []}
+				onChange={(fillColorRules) =>
+					setConfigs((prev) => ({ ...prev, fillColorRules }))
+				}
+				defaultColor={configs.defaultFill ?? theme.defaultFill}
+				palette={palette}
+				ruleLabel="fill"
+				help={markRuleHelp(
+					"fill",
+					varyByValue === ""
+						? null
+						: (varyByOptions.find((o) => o.value === varyByValue)?.label ??
+								varyByValue)
+				)}
+			/>
+		) : null
 
 	// --- SINGLE COLOR (no field and no measure source mapped) ---
 	if (!dataset || (!hueFieldName && !measureSource)) {
@@ -437,6 +465,7 @@ export const ColorOptionsPanel = ({
 						/>
 					)}
 				</div>
+				{fillRules(singleColorScheme)}
 			</div>
 		)
 	}
@@ -574,6 +603,16 @@ export const ColorOptionsPanel = ({
 					setConfigs={setConfigs}
 					update={update}
 				/>
+			)}
+			{fillRules(
+				// The categorical palette in use (a picked scheme, else the
+				// theme default); gradients have no swatch list to offer.
+				isQuantitative
+					? undefined
+					: (configs.categoricalPalette ??
+							theme.categoricalPalettes.find(
+								(p) => p.id === theme.defaultCategoricalPaletteId
+							)?.colors)
 			)}
 		</div>
 	)

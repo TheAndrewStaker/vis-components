@@ -347,6 +347,18 @@ const renameSlotField = <S extends ColorSlotConfig | OpacitySlotConfig | Modulat
 	newName: string
 ): S => (slot.field === oldName ? { ...slot, field: newName } : slot)
 
+/** A color slot's `{Variable}` rule tokens follow the rename too (the Line
+ * slot's color rules). Identity-preserving when nothing changes. */
+const renameColorSlot = (
+	slot: ColorSlotConfig,
+	oldName: string,
+	newName: string
+): ColorSlotConfig => {
+	const moved = renameSlotField(slot, oldName, newName)
+	const colorRules = renameRuleTokens(moved.colorRules, oldName, newName)
+	return colorRules === moved.colorRules ? moved : { ...moved, colorRules }
+}
+
 /** Rename the value-key in a slot's per-value map when the slot itself is
  * driven by `drivingField` (melted-rename case). */
 const renameSlotValues = <S extends ColorSlotConfig | OpacitySlotConfig | ModulationSlotConfig>(
@@ -444,6 +456,7 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 		x: swapAxis(cc.x),
 		y: swapAxis(cc.y),
 		r: swapAxis(cc.r),
+		fillColorRules: renameRuleTokens(cc.fillColorRules, oldName, newName),
 		connection: cc.connection
 			? patched(cc.connection, {
 					hierarchyIdField:
@@ -474,7 +487,7 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 				? { ...cc.drawOrder, field: newName }
 				: cc.drawOrder,
 		colorSlots: mapRecordValues(slotsAsRecord(cc.colorSlots), (s) =>
-			renameSlotField(s, oldName, newName)
+			renameColorSlot(s, oldName, newName)
 		) as ChannelConfigs["colorSlots"],
 		opacitySlots: mapRecordValues(slotsAsRecord(cc.opacitySlots), (s) =>
 			renameSlotField(s, oldName, newName)

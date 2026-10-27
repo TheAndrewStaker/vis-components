@@ -21,6 +21,7 @@ import {
 import { applyLevelOrder } from "../../lib/smartSort"
 import { aggregateCells, type CellAggregation } from "../../lib/tileCells"
 import { uniqueFieldValues } from "../../lib/uniqueFieldValues"
+import { resolveRuleColor } from "../../lib/textColorRules"
 import { formatSingleLabel } from "../../lib/dataLabelsStyle"
 import { formatTextValue, resolveTextColor } from "../../lib/textEncoding"
 import {
@@ -55,6 +56,27 @@ const collectOrderedCategories = (
 	pinnedOrder: readonly string[] | undefined
 ): string[] =>
 	applyLevelOrder(collectCategories(rows, field), type, pinnedOrder)
+
+/** Group the chart rows by heatmap cell (`x\u001Fy` key — in-memory only,
+ *  never persisted). The cell fill rules and the data-label rules both test
+ *  these rows. */
+const groupRowsByCell = (
+	rows: ReadonlyArray<Record<string, unknown>>,
+	xField: string,
+	yField: string
+): Map<string, Record<string, unknown>[]> => {
+	const byCell = new Map<string, Record<string, unknown>[]>()
+	for (const row of rows) {
+		const xRaw = row[xField]
+		const yRaw = row[yField]
+		if (xRaw == null || yRaw == null) continue
+		const key = `${String(xRaw)}\u001F${String(yRaw)}`
+		const list = byCell.get(key)
+		if (list) list.push(row)
+		else byCell.set(key, [row])
+	}
+	return byCell
+}
 
 export const TilePlot = (props: TilePlotProps = {}) => {
 	const overrides = useAtomValue(currentFieldOverridesAtom)
@@ -114,6 +136,15 @@ export const TilePlot = (props: TilePlotProps = {}) => {
 			hueIsQuantitative
 		)
 	}, [rowsForChart, xField, yField, hueField, hueIsQuantitative])
+	// Each cell's dataset rows, for the cells' `{Variable}` fill rules (the
+	// data-label anchors build the same map for their own rules).
+	const rowsByCell = useMemo(
+		() =>
+			xField && yField
+				? groupRowsByCell(rowsForChart, xField, yField)
+				: new Map<string, Record<string, unknown>[]>(),
+		[rowsForChart, xField, yField]
+	)
 
 	const xType =
 		xField && dataset ? effectiveType(dataset, xField, overrides) : null
@@ -242,16 +273,7 @@ export const TilePlot = (props: TilePlotProps = {}) => {
 		yField: string
 	}): DataLabelAnchor[] => {
 		// Each cell's dataset rows — what `{Variable}` label rules test.
-		const rowsByCell = new Map<string, Record<string, unknown>[]>()
-		for (const row of rows) {
-			const xRaw = row[xField]
-			const yRaw = row[yField]
-			if (xRaw == null || yRaw == null) continue
-			const key = `${String(xRaw)}\u001F${String(yRaw)}`
-			const list = rowsByCell.get(key)
-			if (list) list.push(row)
-			else rowsByCell.set(key, [row])
-		}
+		const rowsByCell = groupRowsByCell(rows, xField, yField)
 		// When the user has mapped a Data Labels.value field, pre-aggregate it
 		// per cell. Numeric → mean across rows in the cell; non-numeric → mode
 		// (most frequent value).
@@ -355,6 +377,15 @@ export const TilePlot = (props: TilePlotProps = {}) => {
 						)
 						if (c) fill = c
 					}
+					// Conditional fill rules, as on every other mark: an implicit
+					// rule tests the cell's aggregated Color value, a `{Variable}`
+					// rule tests every row the cell combines.
+					const fillRuleColor = resolveRuleColor(
+						channelConfigs.fillColorRules,
+						hueField ? cell.hueValue : undefined,
+						rowsByCell.get(`${cell.xKey}\u001F${cell.yKey}`)
+					)
+					if (fillRuleColor) fill = fillRuleColor
 					const onEnter = (e: React.MouseEvent) => {
 						const fields: TooltipState["fields"] = [
 							{ name: xField, value: cell.xKey },

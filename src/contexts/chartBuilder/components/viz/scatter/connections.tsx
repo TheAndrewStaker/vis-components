@@ -434,6 +434,8 @@ export const renderConnectionLines = (
 				lineSlotCfg: channelConfigs.colorSlots?.line,
 				lineSlot,
 				slotRow,
+				// `{Variable}` line-color rules test every row the line joins.
+				slotRows: sorted.map((m) => m.row),
 			})
 			const stroke = modulateLine(baseStroke, slotRow)
 			// Dash-gap ink key: the color encoding's pre-modulation color for

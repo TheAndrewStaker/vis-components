@@ -11,6 +11,7 @@ import {
 	layerFillProp,
 	resolveLayerColor,
 	resolvePolygonPatternDef,
+	resolveSlotColor,
 } from "./resolveLayerColor"
 
 /** AestheticScales with every channel un-mapped (the "no encoding"
@@ -394,6 +395,156 @@ describe("resolveLayerColor", () => {
 			},
 		})
 		expect(r.outline).toBeNull()
+	})
+
+	it("a {Variable} outline rule fires with NO outline field mapped, testing the rows", () => {
+		const configs = {
+			...EMPTY_CHANNEL_CONFIGS,
+			shape: {
+				...DEFAULT_SHAPE_CONFIG,
+				outlineColorRules: [{ condition: "{profit} < 0", color: "#ff0000" }],
+			},
+		}
+		const loss = resolveLayerColor({
+			groupValues: {},
+			defaultFill: "#fff",
+			patternBgFallback: "#fff",
+			aestheticScales: emptyScales,
+			channelConfigs: configs,
+			rows: [{ profit: -5 }, { profit: -1 }],
+		})
+		expect(loss.outline).toBe("#ff0000")
+		// Every-row semantics: one profitable row keeps the bar off the rule.
+		const mixed = resolveLayerColor({
+			groupValues: {},
+			defaultFill: "#fff",
+			patternBgFallback: "#fff",
+			aestheticScales: emptyScales,
+			channelConfigs: configs,
+			rows: [{ profit: -5 }, { profit: 3 }],
+		})
+		expect(mixed.outline).toBeNull()
+	})
+})
+
+describe("resolveLayerColor — fill color rules", () => {
+	const hueScales: AestheticScales = {
+		...emptyScales,
+		hue: {
+			field: { name: "value", type: "quantitative" },
+			scale: {
+				kind: "categorical",
+				scale: scaleOrdinal<string, string>()
+					.domain(["20", "5"])
+					.range(["#0000ff", "#00ff00"]),
+			},
+		},
+	}
+	const rules = [{ condition: "> 15", color: "#ff0000" }]
+
+	it("a matching implicit rule replaces the hue scale color", () => {
+		const r = resolveLayerColor({
+			groupValues: { hue: "20" },
+			defaultFill: "#fff",
+			patternBgFallback: "#fff",
+			aestheticScales: hueScales,
+			channelConfigs: { ...EMPTY_CHANNEL_CONFIGS, fillColorRules: rules },
+		})
+		expect(r.fill).toBe("#ff0000")
+		// The rule color is the pre-modulation hue too (pattern-ink key).
+		expect(r.preModulationHue).toBe("#ff0000")
+	})
+
+	it("keeps the scale color when no rule matches", () => {
+		const r = resolveLayerColor({
+			groupValues: { hue: "5" },
+			defaultFill: "#fff",
+			patternBgFallback: "#fff",
+			aestheticScales: hueScales,
+			channelConfigs: { ...EMPTY_CHANNEL_CONFIGS, fillColorRules: rules },
+		})
+		expect(r.fill).toBe("#00ff00")
+	})
+
+	it("an implicit rule never fires without a Color variable; a {Variable} rule does", () => {
+		const base = {
+			defaultFill: "#abcdef",
+			patternBgFallback: "#fff",
+			aestheticScales: emptyScales,
+		}
+		const implicit = resolveLayerColor({
+			...base,
+			groupValues: {},
+			channelConfigs: { ...EMPTY_CHANNEL_CONFIGS, fillColorRules: rules },
+			rows: [{ value: 99 }],
+		})
+		expect(implicit.fill).toBe("#abcdef")
+		const byVariable = resolveLayerColor({
+			...base,
+			groupValues: {},
+			channelConfigs: {
+				...EMPTY_CHANNEL_CONFIGS,
+				fillColorRules: [{ condition: "{value} > 15", color: "#ff0000" }],
+			},
+			rows: [{ value: 99 }],
+		})
+		expect(byVariable.fill).toBe("#ff0000")
+	})
+
+	it("the rule color is modulated by a mapped brightness like any fill", () => {
+		const r = resolveLayerColor({
+			groupValues: { hue: "20" },
+			defaultFill: "#fff",
+			patternBgFallback: "#fff",
+			aestheticScales: hueScales,
+			channelConfigs: {
+				...EMPTY_CHANNEL_CONFIGS,
+				fillColorRules: rules,
+				defaultBrightness: 0.9,
+			},
+		})
+		expect(r.preModulationHue).toBe("#ff0000")
+		expect(r.fill).not.toBe("#ff0000")
+	})
+})
+
+describe("resolveSlotColor — slot color rules", () => {
+	const lineSlot = {
+		field: { name: "grp", type: "categorical" as const },
+		scale: {
+			kind: "categorical" as const,
+			scale: scaleOrdinal<string, string>()
+				.domain(["A", "B"])
+				.range(["#0000ff", "#00ff00"]),
+		},
+	}
+
+	it("a matching implicit rule beats the slot's scale color", () => {
+		const cfg = {
+			field: "grp",
+			singleColor: "#111111",
+			colorRules: [{ condition: "== A", color: "#ff0000" }],
+		}
+		expect(resolveSlotColor(lineSlot, cfg, { grp: "A" }, "#999")).toBe("#ff0000")
+		expect(resolveSlotColor(lineSlot, cfg, { grp: "B" }, "#999")).toBe("#00ff00")
+	})
+
+	it("a {Variable} rule beats the single color and tests every row of the mark", () => {
+		const cfg = {
+			field: null,
+			singleColor: "#111111",
+			colorRules: [{ condition: "{profit} < 0", color: "#ff0000" }],
+		}
+		const row = { grp: "A", profit: -1 }
+		expect(resolveSlotColor(null, cfg, row, "#999")).toBe("#ff0000")
+		expect(
+			resolveSlotColor(null, cfg, row, "#999", [row, { grp: "A", profit: 2 }])
+		).toBe("#111111")
+	})
+
+	it("an empty rule list changes nothing", () => {
+		const cfg = { field: null, singleColor: "#111111", colorRules: [] }
+		expect(resolveSlotColor(null, cfg, { grp: "A" }, "#999")).toBe("#111111")
 	})
 })
 

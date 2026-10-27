@@ -1299,3 +1299,20 @@ describe("labelsFromTheme", () => {
 		expect(labelsFromTheme(notBold).baseFont.text.weight).toBeUndefined()
 	})
 })
+
+describe("conditional color rules light their menu's dot", () => {
+	const rule = [{ condition: "> 0", color: "#ff0000" }]
+
+	it("Fill rules dot Color; an emptied list does not", () => {
+		expect(dot("hue", { fillColorRules: rule } as ChannelConfigs)).toBe(true)
+		expect(dot("hue", { fillColorRules: [] } as ChannelConfigs)).toBe(false)
+	})
+
+	it("Outline rules dot the outline channel (with or without a field mapped)", () => {
+		const configs = {
+			shape: { ...DEFAULT_SHAPE_CONFIG, outlineColorRules: rule },
+		} as ChannelConfigs
+		expect(dot("outlineHue", configs, STUB_THEME, false)).toBe(true)
+		expect(dot("outlineHue", configs, STUB_THEME, true)).toBe(true)
+	})
+})

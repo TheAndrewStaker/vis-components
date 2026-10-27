@@ -703,6 +703,12 @@ const CHANNEL_DOT_CONTROLS: Record<string, (ctx: DotCtx) => DotControl[]> = {
 			),
 		},
 		{ label: "fill scale edits", changed: hueScaleEdited(configs.hue) },
+		// Conditional fill rules (Color → Fill → "+ Add color rule"): themes
+		// carry none, so any rule is an edit; an emptied list is not.
+		{
+			label: "fill color rules",
+			changed: (configs.fillColorRules?.length ?? 0) > 0,
+		},
 		// Hexbin bin count (the Color panel's "Bins" input). Themes carry no
 		// hexbin default, so changed = explicitly set to a non-default value;
 		// fresh charts have no `hexbin` config → no dot.
@@ -732,6 +738,11 @@ const CHANNEL_DOT_CONTROLS: Record<string, (ctx: DotCtx) => DotControl[]> = {
 	],
 	outlineHue: ({ configs, theme, fieldMapped }) => [
 		{ label: "outline scale edits", changed: hueScaleEdited(configs.outlineHue) },
+		// Conditional outline rules (Color → Outline → "+ Add color rule").
+		{
+			label: "outline color rules",
+			changed: (configs.shape?.outlineColorRules?.length ?? 0) > 0,
+		},
 		{
 			label: "outline palette pick",
 			changed:

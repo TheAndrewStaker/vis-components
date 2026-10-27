@@ -360,16 +360,15 @@ export const buildMarks = ({
 							outlineHue.type
 						)
 					: null
-			// Conditional outline rules test the mapped outline variable's
-			// value and override the scale color when one matches. Only fire
-			// when an outline field is mapped (nothing to compare otherwise).
-			const outlineRuleColor = outlineHue
-				? resolveRuleColor(
-						channelConfigs.shape?.outlineColorRules,
-						row[outlineHue.name],
-						[row]
-					)
-				: null
+			// Conditional outline rules override the scale color when one
+			// matches. An implicit rule tests the mapped outline variable's
+			// value (nothing to compare while unmapped); a `{Variable}` rule
+			// tests the row and fires with or without an Outline variable.
+			const outlineRuleColor = resolveRuleColor(
+				channelConfigs.shape?.outlineColorRules,
+				outlineHue ? row[outlineHue.name] : undefined,
+				[row]
+			)
 			const { fill: shapeFill, stroke: baseStroke } = resolveShapeColors({
 				hueFill: fill,
 				shapeCategoryValue: shapeKey,

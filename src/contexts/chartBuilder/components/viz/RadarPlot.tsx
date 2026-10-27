@@ -784,6 +784,8 @@ const buildPolygons = <P extends LocalPoint>(
 			lineSlotCfg: channelConfigs.colorSlots?.line,
 			lineSlot,
 			slotRow: sorted[0]?.row ?? { [connectionField]: key },
+			// `{Variable}` line-color rules test every row of the polygon.
+			slotRows: sorted.map((p) => p.row),
 		})
 		const mh = rowHighlight(
 			highlight,

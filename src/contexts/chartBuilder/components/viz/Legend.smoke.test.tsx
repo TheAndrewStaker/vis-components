@@ -968,6 +968,39 @@ describe("CombinedGroupLegend — ordinal area (size) sizing", () => {
 	})
 })
 
+describe("CombinedGroupLegend — fill color rules", () => {
+	// The hue swatch must honor conditional fill rules (`fillColorRules`)
+	// the way the marks do (implicit rules over the category value), or a
+	// rule-recolored category disagrees with its legend entry.
+	const configsWithRule = {
+		...EMPTY_CHANNEL_CONFIGS,
+		fillColorRules: [{ condition: "> 10", color: "#ff0000" }],
+	}
+
+	it("fills the matching hue swatch with the rule color", () => {
+		const { container } = render(
+			<CombinedGroupLegend
+				channels={["hue"]}
+				type="categorical"
+				values={["5", "25"]}
+				configs={configsWithRule}
+				reverseCategorical={false}
+			/>
+		)
+		const fills = [...container.querySelectorAll("[fill], [style*='background']")]
+			.map((el) =>
+				el.getAttribute("fill") ??
+				(el as HTMLElement).style.backgroundColor
+			)
+			.filter(Boolean)
+		const red = fills.filter(
+			(f) => f === "#ff0000" || f === "rgb(255, 0, 0)"
+		)
+		// "25" > 10 → rule fires; "5" keeps its palette color.
+		expect(red).toHaveLength(1)
+	})
+})
+
 describe("CombinedGroupLegend — outline color rules", () => {
 	// Regression: the outline swatch stroke must honor conditional outline
 	// rules (configs.shape.outlineColorRules), the same precedence the marks

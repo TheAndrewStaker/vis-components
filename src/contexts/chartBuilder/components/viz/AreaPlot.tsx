@@ -10,7 +10,7 @@ import {
 } from "../../lib/aggregators/stacks"
 import {
 	buildPatternDefs,
-	stacksToGroupValues,
+	stacksToFillInputs,
 	type PatternDefOptions,
 } from "../../lib/buildPatternDefs"
 import { buildLinePath } from "../../lib/linePath"
@@ -347,7 +347,7 @@ export const AreaPlot = (props: AreaPlotProps = {}) => {
 	const patternDefs = useMemo<PatternDefSpec[]>(() => {
 		if (!aggregation || aggregation.kind === "error") return []
 		return buildPatternDefs(
-			stacksToGroupValues(aggregation.stacks),
+			stacksToFillInputs(aggregation.stacks),
 			aestheticScales,
 			channelConfigs,
 			channelConfigs.defaultFill ?? FALLBACK_FILL,
@@ -1051,6 +1051,11 @@ const buildAreas = ({
 		const meta = layerMeta.get(layerKey)
 		const groupValues = meta?.groupValues ?? {}
 		const mh = layerHighlight(groupValues)
+		// One polygon spans the layer across every stack: `{Variable}` fill,
+		// outline, and line-color rules test all of its rows.
+		const layerRows = aggregation.stacks.flatMap((st) =>
+			st.slices.flatMap((sl) => (sl.key === layerKey ? (sl.rows ?? []) : []))
+		)
 		const layerResolved = resolveLayerColor({
 			groupValues: groupValues as Partial<
 				Record<
@@ -1063,11 +1068,7 @@ const buildAreas = ({
 			aestheticScales,
 			channelConfigs,
 			patternOptions,
-			// One polygon spans the layer across every stack: `{Variable}`
-			// outline rules test all of its rows.
-			rows: aggregation.stacks.flatMap((st) =>
-				st.slices.flatMap((sl) => (sl.key === layerKey ? (sl.rows ?? []) : []))
-			),
+			rows: layerRows,
 		})
 
 		// Compute per-stack tops and the pixel coords for this layer.
@@ -1126,6 +1127,7 @@ const buildAreas = ({
 			lineSlotCfg: channelConfigs.colorSlots?.line,
 			lineSlot: aestheticScales.colorSlots.line,
 			slotRow,
+			slotRows: layerRows,
 		})
 		// Legend-hover highlight: recolor the line to the highlight fill,
 		// outline (and thicken) it when outline is on, and fade non-matched

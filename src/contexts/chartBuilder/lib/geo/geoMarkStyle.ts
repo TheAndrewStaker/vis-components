@@ -92,6 +92,17 @@ export const resolveGeoFill = (
 			} else measureMissing = true
 		}
 	}
+	// Conditional fill rules, the same step the cartesian fill chains take
+	// (`resolveGroupFill` / `resolveMarkAesthetics`): an implicit rule tests
+	// the Color variable's value, a `{Variable}` rule tests the row. A match
+	// replaces the measure color before modulation; a missing measure still
+	// reads as missing (the no-data paint decides separately).
+	const fillRuleColor = resolveRuleColor(
+		channelConfigs.fillColorRules,
+		hueScale ? row[hueScale.field.name] : undefined,
+		[row]
+	)
+	if (fillRuleColor) fill = fillRuleColor
 	const preModulationHue = fill
 	const { satUnit, briUnit } = resolveRowModulation(
 		row,
@@ -242,10 +253,11 @@ export const buildGeoPatternDefs = (
  *
  * Border stroke precedence (mirrors ScatterPlot): a matching conditional
  * outline rule wins, then the `outlineHue` scale color for this region's row,
- * else the caller's `baseOutlineColor`. This assumes a matched `row` (rules /
- * scale can only resolve with one), so callers gate on `row` themselves —
- * the choropleth's no-data regions, which have no row, always use the base
- * color without calling this.
+ * else the caller's `baseOutlineColor`. A `{Variable}` rule fires with no
+ * Outline variable mapped (it tests the row); an implicit rule needs one.
+ * This assumes a matched `row` (rules / scale can only resolve with one), so
+ * callers gate on `row` themselves — the choropleth's no-data regions, which
+ * have no row, always use the base color without calling this.
  */
 export const resolveGeoOutlineColor = (
 	baseOutlineColor: string,
@@ -253,16 +265,13 @@ export const resolveGeoOutlineColor = (
 	outlineHue: AestheticScales["outlineHue"],
 	outlineColorRules: readonly TextColorRule[] | undefined
 ): string => {
-	if (!outlineHue) return baseOutlineColor
-	const rawOutline = row[outlineHue.field.name]
+	const rawOutline = outlineHue ? row[outlineHue.field.name] : undefined
 	const outlineRuleColor = resolveRuleColor(outlineColorRules, rawOutline, [
 		row,
 	])
-	const outlineScaleColor = applyHueScale(
-		outlineHue.scale,
-		rawOutline,
-		outlineHue.field.type
-	)
+	const outlineScaleColor = outlineHue
+		? applyHueScale(outlineHue.scale, rawOutline, outlineHue.field.type)
+		: null
 	return outlineRuleColor ?? outlineScaleColor ?? baseOutlineColor
 }
 

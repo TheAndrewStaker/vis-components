@@ -425,6 +425,9 @@ export const LegendSection = ({
 							hue: fillSlot?.hue,
 							categoricalPalette: fillSlot?.palette ?? configs.categoricalPalette,
 							ordinalPalette: fillSlot?.palette ?? configs.ordinalPalette,
+							// The slot's own conditional rules (not the Fill rules)
+							// recolor its swatches — see `resolveSlotColor`.
+							fillColorRules: fillSlot?.colorRules,
 						}
 						// Per-category outline colors for the swatch border, resolved
 						// from the outline slot's scale (covers palette OR explicit

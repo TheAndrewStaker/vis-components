@@ -2,6 +2,7 @@ import type { AestheticScales } from "../store/useAestheticScales"
 
 import type { ColorSlotConfig } from "./channelConfig"
 import { resolveSlotColor } from "./resolveLayerColor"
+import type { RuleRows } from "./textColorRules"
 
 export type ConnectionStrokeArgs = {
 	/** Key into `lineColors` for this line/layer — the hue value in area
@@ -32,6 +33,10 @@ export type ConnectionStrokeArgs = {
 	/** Representative row for the slot's field lookup (a group's first row,
 	 *  or a synthesized `{ [connectionField]: groupKey }`). */
 	slotRow: Record<string, unknown>
+	/** Every dataset row the line / layer / polygon joins, for the slot's
+	 *  `{Variable}` color rules (a rule passes only when every row does).
+	 *  Omitted → the rules test `slotRow` alone. */
+	slotRows?: RuleRows
 }
 
 /** Single source of truth for a connection line / layer-edge / radar-polygon
@@ -43,6 +48,8 @@ export type ConnectionStrokeArgs = {
  *   4. `strokeColor` — global override.
  *   5. `fallback` — the layer fill (area/radar) or theme line color
  *      (scatter).
+ *  The slot's conditional color rules (`colorRules`) sit inside step 1:
+ *  a match beats the slot's scale color and single color alike.
  *  Previously triplicated across AreaPlot / RadarPlot / ScatterPlot, with
  *  scatter silently missing steps 3–4. */
 export const resolveConnectionStroke = ({
@@ -55,6 +62,7 @@ export const resolveConnectionStroke = ({
 	lineSlotCfg,
 	lineSlot,
 	slotRow,
+	slotRows,
 }: ConnectionStrokeArgs): string => {
 	const perValue = groupKey == null ? undefined : lineColors[groupKey]
 	const paletteColor =
@@ -63,6 +71,12 @@ export const resolveConnectionStroke = ({
 			: null
 	const legacyStroke = perValue ?? paletteColor ?? strokeColor ?? fallback
 	return lineSlotCfg
-		? resolveSlotColor(lineSlot ?? null, lineSlotCfg, slotRow, legacyStroke)
+		? resolveSlotColor(
+				lineSlot ?? null,
+				lineSlotCfg,
+				slotRow,
+				legacyStroke,
+				slotRows
+			)
 		: legacyStroke
 }

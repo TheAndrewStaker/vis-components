@@ -14,6 +14,7 @@ import {
 } from "../../../lib/legendSections"
 import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import { applyHueScale, makeHueScale } from "../../../lib/scales"
+import { resolveRuleColor } from "../../../lib/textColorRules"
 import {
 	DEFAULT_GRADIENT_BAR_STYLE,
 	EntryHoverWrap,
@@ -111,11 +112,19 @@ export const ColorLegend = ({
 			if (globalStroke) return globalStroke === fill ? null : globalStroke
 			return null
 		}
+		// Conditional fill rules recolor a category's swatch the way they
+		// recolor its marks (implicit rules over the category value — a
+		// swatch has no rows for `{Variable}` rules). Slot legends route the
+		// slot's own `colorRules` in here as `fillColorRules`.
+		const colorFor = (v: string): string =>
+			resolveRuleColor(configs.fillColorRules, v) ??
+			applyHueScale(scale, v, type) ??
+			"#888"
 		if (orientation === "horizontal") {
 			return (
 				<div className="flex flex-row flex-nowrap items-center gap-3">
 					{unique.map((v, i) => {
-						const c = applyHueScale(scale, v, type) ?? "#888"
+						const c = colorFor(v)
 						const split = strokeFor(v, i, c)
 						return (
 							<EntryHoverWrap key={v} field={highlightField} value={v}>
@@ -138,7 +147,7 @@ export const ColorLegend = ({
 		}
 		return renderEntryList(
 			unique.map((v, i) => {
-				const c = applyHueScale(scale, v, type) ?? "#888"
+				const c = colorFor(v)
 				const split = strokeFor(v, i, c)
 				return (
 					<EntryHoverWrap key={v} field={highlightField} value={v}>

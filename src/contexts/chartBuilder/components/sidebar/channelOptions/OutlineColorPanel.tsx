@@ -3,7 +3,6 @@ import {
 	DEFAULT_CATEGORICAL_HUE_CONFIG,
 	type HueConfig,
 	type ShapeConfig,
-	type TextColorRule,
 } from "../../../lib/channelConfig"
 import { channelAccepts } from "../../../lib/channels"
 import { effectiveType } from "../../../lib/fieldType"
@@ -28,7 +27,6 @@ import { useColorLink } from "../../../store/useColorLink"
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
 import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 
-import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { ColorInput } from "../../../../../components/ui/ColorInput"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
@@ -38,7 +36,7 @@ import {
 	QuantitativePanel,
 	useQuantFieldExtent,
 } from "./ColorOptionsPanel"
-import { RuleConditionInput, RuleVariableHelp } from "../RuleConditionInput"
+import { ColorRulesEditor, markRuleHelp } from "../ColorRulesEditor"
 
 /** Field-mapping state for the `outlineHue` channel, shared by the
  *  standalone dropdown (registry panel) and the combined `OutlineColorRow`
@@ -124,6 +122,16 @@ export const OutlineColorRow = () => {
 			shape: { ...shapeConfigFromTheme(theme), ...prev.shape, ...next },
 		}))
 
+	// Outline's own picked palette → fill palette → theme default, same
+	// precedence the outline scale uses when a field IS mapped. Offered by
+	// the single-color swatch and each rule's color picker.
+	const outlinePalette =
+		outlinePaletteForHueType("categorical", configs) ??
+		theme.categoricalPalettes.find(
+			(p) => p.id === theme.defaultCategoricalPaletteId
+		)?.colors ??
+		CATEGORICAL_HUE_PALETTE
+
 	// Same shape as the color slots (Line / Rug / …): a "Vary by" selector, then
 	// a single-color swatch (with reset) when unmapped, or the palette / gradient
 	// editor when a field is mapped. "— none —" (no field) = the single color.
@@ -147,15 +155,7 @@ export const OutlineColorRow = () => {
 						value={cfg.outlineColor}
 						onChange={(outlineColor) => updateShape({ outlineColor })}
 						changed={cfg.outlineColor !== defaultColor}
-						palette={
-							// Outline's own picked palette → fill palette → theme default,
-							// same precedence the outline scale uses when a field IS mapped.
-							outlinePaletteForHueType("categorical", configs) ??
-							theme.categoricalPalettes.find(
-								(p) => p.id === theme.defaultCategoricalPaletteId,
-							)?.colors ??
-							CATEGORICAL_HUE_PALETTE
-						}
+						palette={outlinePalette}
 						pickerLabel="Pick palette outline color"
 					/>
 					{cfg.outlineColor !== defaultColor && (
@@ -163,98 +163,21 @@ export const OutlineColorRow = () => {
 					)}
 				</div>
 			) : (
-				<div className="flex flex-col gap-3">
-					<OutlineColorScaleControls />
-					<OutlineColorRulesRow
-						rules={cfg.outlineColorRules ?? []}
-						fallback={cfg.outlineColor}
-						onChange={(outlineColorRules) => updateShape({ outlineColorRules })}
-					/>
-				</div>
+				<OutlineColorScaleControls />
 			)}
+			{/* Conditional outline rules — the same "+ Add color rule" editor
+			 *  Fill and Line use. Offered with or without a variable mapped: an
+			 *  implicit rule (`> 0`) needs the mapped value, a `{Variable}` rule
+			 *  tests the mark's rows either way. */}
+			<ColorRulesEditor
+				rules={cfg.outlineColorRules ?? []}
+				onChange={(outlineColorRules) => updateShape({ outlineColorRules })}
+				defaultColor={cfg.outlineColor}
+				palette={outlinePalette}
+				ruleLabel="outline"
+				help={markRuleHelp("outline", value)}
+			/>
 		</div>
-	)
-}
-
-/** Conditional outline-color rules — mirrors the Data Labels text-color
- *  rules. The user types a comparison (`> 0`, `< 50`) and picks a color;
- *  the first rule whose comparison passes for the mark's outline-variable
- *  value wins, overriding the palette. Always renders one slot so the
- *  feature is discoverable; an empty condition is a no-op. */
-const OutlineColorRulesRow = ({
-	rules,
-	fallback,
-	onChange,
-}: {
-	rules: readonly TextColorRule[]
-	fallback: string
-	onChange: (next: TextColorRule[]) => void
-}) => {
-	const display: TextColorRule[] =
-		rules.length === 0 ? [{ condition: "", color: fallback }] : [...rules]
-	const setRule = (i: number, patch: Partial<TextColorRule>) =>
-		onChange(display.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
-	const removeRule = (i: number) =>
-		onChange(display.filter((_, idx) => idx !== i))
-	const addRule = () =>
-		onChange([...display, { condition: "", color: fallback }])
-	return (
-		<CollapsibleSubsection
-			title="Outline color rules"
-			boxed={false}
-			changed={rules.length > 0}
-		>
-			<div className="flex flex-col gap-1">
-				{display.map((rule, i) => (
-					<div
-						// Index key is stable here: rules are ordered, identity == position
-						// eslint-disable-next-line react/no-array-index-key
-						key={i}
-						className="flex items-start gap-1.5 text-sm"
-					>
-						{/* The condition box takes the row's full width (no label-column
-						 *  spacer) so a `{Variable} == value` rule fits. */}
-						<RuleConditionInput
-							value={rule.condition}
-							onChange={(condition) => setRule(i, { condition })}
-							placeholder="> 0"
-							ariaLabel={`Condition for outline rule ${i + 1}`}
-						/>
-						<ColorInput
-							label={`Outline color for rule ${i + 1}`}
-							labelClassName="sr-only"
-							value={rule.color}
-							onChange={(color) => setRule(i, { color })}
-							showHexInput={false}
-						/>
-						{rules.length > 0 && (
-							<button
-								type="button"
-								onClick={() => removeRule(i)}
-								className="rounded px-1 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
-								aria-label={`Remove rule ${i + 1}`}
-							>
-								×
-							</button>
-						)}
-					</div>
-				))}
-				<button
-					type="button"
-					onClick={addRule}
-					className="self-end text-xs text-blue-600 hover:underline dark:text-blue-400"
-				>
-					+ Add rule
-				</button>
-				<p className="vc-help">
-					Tested against the outline variable&apos;s value; first match wins and
-					overrides the palette. <code>{">"}</code>, <code>{"<"}</code>,{" "}
-					<code>{">="}</code>, and <code>{"<="}</code> compare numbers;{" "}
-					<code>==</code> and <code>!=</code> also match text.{" "}
-					<RuleVariableHelp />
-				</p>
-			</div>
-		</CollapsibleSubsection>
 	)
 }
 

@@ -173,3 +173,27 @@ describe("resolveMarkAesthetics", () => {
 		expect(r.fill).toBe(palette[0])
 	})
 })
+
+describe("resolveMarkAesthetics — fill color rules", () => {
+	it("a matching rule replaces the hue color for the row (before modulation)", () => {
+		const scales = hueScales(["#ff0000", "#00ff00"])
+		const configs = {
+			...EMPTY_CHANNEL_CONFIGS,
+			fillColorRules: [{ condition: "== B", color: "#123456" }],
+		}
+		expect(resolveMarkAesthetics({ grp: "A" }, scales, configs).fill).toBe(
+			"#ff0000"
+		)
+		const b = resolveMarkAesthetics({ grp: "B" }, scales, configs)
+		expect(b.fill).toBe("#123456")
+		expect(b.preModulationHue).toBe("#123456")
+	})
+
+	it("a {Variable} rule tests the row with no Color variable mapped", () => {
+		const r = resolveMarkAesthetics({ profit: -3 }, emptyScales, {
+			...EMPTY_CHANNEL_CONFIGS,
+			fillColorRules: [{ condition: "{profit} < 0", color: "#123456" }],
+		})
+		expect(r.fill).toBe("#123456")
+	})
+})

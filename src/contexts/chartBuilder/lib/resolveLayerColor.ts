@@ -92,7 +92,10 @@ export const resolveGroupFill = (
 	groupValues: GroupValues,
 	defaultFill: string,
 	aestheticScales: AestheticScales,
-	channelConfigs: ChannelConfigs
+	channelConfigs: ChannelConfigs,
+	/** The mark's dataset rows, for `{Variable}` fill rules (see
+	 *  `ResolveLayerColorArgs.rows`). Absent → those rules don't fire. */
+	rows?: RuleRows
 ): {
 	fill: string
 	preModulationHue: string
@@ -117,6 +120,17 @@ export const resolveGroupFill = (
 		const c = applyHueScale(hueScale, groupValues.hue, hueG.type)
 		if (c) color = c
 	}
+	// Conditional fill rules: an implicit rule tests the Color variable's
+	// value (nothing to compare while hue is unmapped — `undefined` never
+	// passes), a `{Variable}` rule tests the mark's rows. A match replaces
+	// the palette color before sat/bri modulation, so a rule-colored mark
+	// still shades by a mapped Saturation / Brightness like its siblings.
+	const fillRuleColor = resolveRuleColor(
+		channelConfigs.fillColorRules,
+		groupValues.hue,
+		rows
+	)
+	if (fillRuleColor) color = fillRuleColor
 	const preModulationHue = color
 
 	// Sat/bri fallback convention (shared with the per-row sibling,
@@ -372,7 +386,13 @@ export const resolveLayerColor = ({
 		preModulationHue: paletteHueColor,
 		satUnit,
 		briUnit,
-	} = resolveGroupFill(groupValues, defaultFill, aestheticScales, channelConfigs)
+	} = resolveGroupFill(
+		groupValues,
+		defaultFill,
+		aestheticScales,
+		channelConfigs,
+		rows
+	)
 
 	// Same per-item resolver the upfront defs passes use, so a mark's svgId
 	// always references an emitted def (pattern ink keyed on the
@@ -405,18 +425,19 @@ export const resolveLayerColor = ({
 	let outline: string | null = null
 	if (outlineScale && outlineG && groupValues.outlineHue !== undefined) {
 		outline = applyHueScale(outlineScale, groupValues.outlineHue, outlineG.type)
-		// Conditional outline rules test the mapped outline variable's value
-		// and override the scale color when one matches (per-category stroke
-		// overrides, handled by callers, still win on top). Gated on the
-		// outline field being mapped — rules have nothing to compare against
-		// otherwise.
-		const ruleColor = resolveRuleColor(
-			channelConfigs.shape?.outlineColorRules,
-			groupValues.outlineHue,
-			rows
-		)
-		if (ruleColor) outline = ruleColor
 	}
+	// Conditional outline rules override the scale color when one matches
+	// (per-category stroke overrides, handled by callers, still win on top).
+	// An implicit rule tests the mapped outline variable's value — nothing
+	// to compare while it's unmapped — but a `{Variable}` rule tests the
+	// mark's rows and fires either way, so "outline red when {Profit} < 0"
+	// works on a chart with no Outline variable.
+	const outlineRuleColor = resolveRuleColor(
+		channelConfigs.shape?.outlineColorRules,
+		groupValues.outlineHue,
+		rows
+	)
+	if (outlineRuleColor) outline = outlineRuleColor
 
 	return {
 		fill: color,
@@ -434,19 +455,31 @@ export const layerFillProp = (resolved: LayerResolved): string =>
 	resolved.patternId === null ? resolved.fill : `url(#${resolved.patternId})`
 
 /** Resolve a single color-slot target (line / rug / violin / stem / spine) for
- *  one row. When the slot maps a field, run the slot's scale over the row's
- *  value (mirrors the outline branch of `resolveLayerColor`); otherwise use the
- *  slot's single color, and finally the supplied legacy fallback when the slot
- *  isn't configured at all (so visuals saved before color slots existed keep
- *  their previous per-feature color). */
+ *  one row. A matching conditional rule (`slotCfg.colorRules`) wins first —
+ *  an implicit rule tests the slot's mapped field value, a `{Variable}` rule
+ *  tests `rows` (every row of a multi-row mark such as a connection line;
+ *  defaults to the one `row`). Then, when the slot maps a field, run the
+ *  slot's scale over the row's value (mirrors the outline branch of
+ *  `resolveLayerColor`); otherwise use the slot's single color, and finally
+ *  the supplied legacy fallback when the slot isn't configured at all (so
+ *  visuals saved before color slots existed keep their previous per-feature
+ *  color). */
 export const resolveSlotColor = (
 	slot: AestheticScales["colorSlots"][ColorSlotKey],
 	slotCfg: ColorSlotConfig | undefined,
 	row: Record<string, unknown>,
-	fallback: string
+	fallback: string,
+	rows?: RuleRows
 ): string => {
-	if (slot && slotCfg?.field) {
-		const c = applyHueScale(slot.scale, row[slot.field.name], slot.field.type)
+	const mapped = slot && slotCfg?.field ? slot : null
+	const ruleColor = resolveRuleColor(
+		slotCfg?.colorRules,
+		mapped ? row[mapped.field.name] : undefined,
+		rows ?? [row]
+	)
+	if (ruleColor) return ruleColor
+	if (mapped) {
+		const c = applyHueScale(mapped.scale, row[mapped.field.name], mapped.field.type)
 		if (c) return c
 	}
 	return slotCfg?.singleColor ?? fallback

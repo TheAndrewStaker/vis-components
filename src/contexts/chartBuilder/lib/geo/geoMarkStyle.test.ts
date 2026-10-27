@@ -209,6 +209,31 @@ describe("resolveGeoFill", () => {
 	})
 })
 
+describe("resolveGeoFill — fill color rules", () => {
+	it("a matching implicit rule replaces the measure color; a miss keeps it", () => {
+		const hue = hueOver(["A", "B", "C"])!
+		const configs = {
+			...EMPTY_CHANNEL_CONFIGS,
+			fillColorRules: [{ condition: '== "B"', color: "#rule" }],
+		}
+		const b = resolveGeoFill("#base", { cat: "B" }, hue.field, scalesOf({ hue }), configs)
+		expect(b.fill).toBe("#rule")
+		expect(b.preModulationHue).toBe("#rule")
+		const a = resolveGeoFill("#base", { cat: "A" }, hue.field, scalesOf({ hue }), configs)
+		expect(a.fill).not.toBe("#rule")
+		expect(a.fill).not.toBe("#base")
+	})
+
+	it("a {Variable} rule tests the row with no measure mapped", () => {
+		const r = resolveGeoFill("#base", { profit: -2 }, null, EMPTY_SCALES, {
+			...EMPTY_CHANNEL_CONFIGS,
+			fillColorRules: [{ condition: "{profit} < 0", color: "#rule" }],
+		})
+		expect(r.fill).toBe("#rule")
+		expect(r.measureMissing).toBe(false)
+	})
+})
+
 describe("resolveNoDataPatternDef", () => {
 	it("returns null when no pattern is configured", () => {
 		expect(
@@ -264,6 +289,19 @@ describe("resolveGeoOutlineColor", () => {
 			{ condition: '=="A"', color: "#rule" },
 		])
 		expect(stroke).toBe("#rule")
+	})
+
+	it("a {Variable} rule fires with no outlineHue mapped; an implicit one does not", () => {
+		expect(
+			resolveGeoOutlineColor("#base", { profit: -1 }, null, [
+				{ condition: "{profit} < 0", color: "#rule" },
+			])
+		).toBe("#rule")
+		expect(
+			resolveGeoOutlineColor("#base", { profit: -1 }, null, [
+				{ condition: "< 0", color: "#rule" },
+			])
+		).toBe("#base")
 	})
 })
 

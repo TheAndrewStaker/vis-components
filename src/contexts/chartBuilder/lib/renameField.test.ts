@@ -328,6 +328,14 @@ describe("renameFieldInConfigs — standard (view-field) rewrite", () => {
 				...DEFAULT_SHAPE_CONFIG,
 				outlineColorRules: [{ condition: "{sales} > 9", color: "#111" }],
 			},
+			fillColorRules: [{ condition: "{sales} < 0", color: "#222" }],
+			colorSlots: {
+				line: {
+					field: null,
+					singleColor: "#333",
+					colorRules: [{ condition: "{sales} == 2", color: "#444" }],
+				},
+			},
 		}
 		const next = renameFieldInConfigs(state, fields, "sales", "revenue")
 		const dlc = next.dataLabelsConfig
@@ -348,6 +356,12 @@ describe("renameFieldInConfigs — standard (view-field) rewrite", () => {
 		expect(next.channelConfigs.shape?.outlineColorRules?.[0].condition).toBe(
 			"{revenue} > 9"
 		)
+		expect(next.channelConfigs.fillColorRules?.[0].condition).toBe(
+			"{revenue} < 0"
+		)
+		expect(
+			next.channelConfigs.colorSlots?.line?.colorRules?.[0].condition
+		).toBe("{revenue} == 2")
 	})
 
 	it("does not rewrite a template token that merely contains the name", () => {

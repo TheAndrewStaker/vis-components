@@ -322,6 +322,14 @@ export const CombinedGroupLegend = ({
 			const c = applyHueScale(hueScale, v, type)
 			if (c) color = c
 		}
+		// Conditional fill rules recolor the swatch the way they recolor the
+		// marks (implicit rules over this category's value — a swatch has no
+		// rows for `{Variable}` rules), so the legend can't disagree with the
+		// canvas.
+		const fillRuleColor = hasHue
+			? resolveRuleColor(configs.fillColorRules, v)
+			: null
+		if (fillRuleColor) color = fillRuleColor
 		const satU = satScale ? satScale(v) : null
 		const briU = briScale ? briScale(v) : null
 		if (satU !== null || briU !== null) {

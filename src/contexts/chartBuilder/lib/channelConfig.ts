@@ -744,6 +744,13 @@ export type ColorSlotConfig = {
 	palette?: string[] | null
 	/** The "None" single color, theme-seeded per slot. */
 	singleColor: string
+	/** Conditional color rules (the Color menu's "+ Add color rule" rows;
+	 * the Line slot is the one that surfaces them). An implicit rule
+	 * (`> 0`) tests the slot's mapped variable's value; a `{Variable}` rule
+	 * tests that variable in the mark's rows. First match wins over the
+	 * slot's scale color / single color. Same shape as `fillColorRules`
+	 * and `ShapeConfig.outlineColorRules`. */
+	colorRules?: TextColorRule[]
 }
 
 export type ColorSlots = Partial<Record<ColorSlotKey, ColorSlotConfig>>
@@ -1757,6 +1764,15 @@ export type ChannelConfigs = Partial<{
 	hexbin: HexbinConfig
 	// Defaults for when no field is mapped
 	defaultFill: string // DEFAULT_FILL
+	/** Conditional FILL color rules (Color → Fill → "+ Add color rule").
+	 * An implicit rule (`> 0`) tests the Color variable's value for the
+	 * mark; a `{Variable}` rule tests that variable in the mark's rows —
+	 * the only form that can fire while no Color variable is mapped. The
+	 * first matching rule's color replaces the palette / gradient color
+	 * (or `defaultFill`) BEFORE saturation / brightness modulation; the
+	 * Shape panel's per-category `fillOverrides` still win on top. Mirrors
+	 * `ShapeConfig.outlineColorRules` and `ColorSlotConfig.colorRules`. */
+	fillColorRules?: TextColorRule[]
 	defaultRadius: number // DEFAULT_RADIUS
 	defaultOpacity: number // DEFAULT_OPACITY (the Fill / overall opacity)
 	defaultShape: number // DEFAULT_SHAPE (palette index)

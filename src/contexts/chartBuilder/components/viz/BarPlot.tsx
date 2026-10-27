@@ -11,7 +11,7 @@ import {
 import {
 	buildPatternDefs,
 	buildPatternDefsFromItems,
-	stacksToGroupValues,
+	stacksToFillInputs,
 	type PatternDefOptions,
 } from "../../lib/buildPatternDefs"
 import {
@@ -556,7 +556,7 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 			includeDefaultPattern: true,
 		}
 		const barDefs = buildPatternDefs(
-			stacksToGroupValues(aggregation.stacks),
+			stacksToFillInputs(aggregation.stacks),
 			aestheticScales,
 			channelConfigs,
 			channelConfigs.defaultFill ?? FALLBACK_FILL,

@@ -8,7 +8,6 @@ import {
 	resolvePatternDefForItem,
 } from "./buildPatternDefs"
 import { EMPTY_CHANNEL_CONFIGS } from "./channelConfig"
-import type { GroupValues } from "./resolveLayerColor"
 
 const emptyScales: AestheticScales = {
 	hue: null,
@@ -28,7 +27,7 @@ const emptyScales: AestheticScales = {
 describe("buildPatternDefs", () => {
 	it("returns [] when no pattern channel is mapped", () => {
 		const defs = buildPatternDefs(
-			[{ pattern: "X" } as GroupValues, { pattern: "Y" } as GroupValues],
+			[{ groupValues: { pattern: "X" } }, { groupValues: { pattern: "Y" } }],
 			emptyScales,
 			EMPTY_CHANNEL_CONFIGS,
 			"#000",
@@ -60,7 +59,7 @@ describe("buildPatternDefs", () => {
 		}
 		// "ZZZ" isn't in the categories list, so no def emitted.
 		const defs = buildPatternDefs(
-			[{ pattern: "ZZZ" } as GroupValues],
+			[{ groupValues: { pattern: "ZZZ" } }],
 			scales,
 			EMPTY_CHANNEL_CONFIGS,
 			"#000",
@@ -79,9 +78,9 @@ describe("buildPatternDefs", () => {
 		}
 		const defs = buildPatternDefs(
 			[
-				{ pattern: "A" } as GroupValues,
-				{ pattern: "A" } as GroupValues,
-				{ pattern: "A" } as GroupValues,
+				{ groupValues: { pattern: "A" } },
+				{ groupValues: { pattern: "A" } },
+				{ groupValues: { pattern: "A" } },
 			],
 			scales,
 			EMPTY_CHANNEL_CONFIGS,
@@ -105,9 +104,9 @@ describe("buildPatternDefs", () => {
 		}
 		const defs = buildPatternDefs(
 			[
-				{ pattern: "A" } as GroupValues,
-				{ pattern: "B" } as GroupValues,
-				{ pattern: "C" } as GroupValues,
+				{ groupValues: { pattern: "A" } },
+				{ groupValues: { pattern: "B" } },
+				{ groupValues: { pattern: "C" } },
 			],
 			scales,
 			EMPTY_CHANNEL_CONFIGS,
@@ -146,8 +145,8 @@ describe("buildPatternDefs", () => {
 		}
 		const defs = buildPatternDefs(
 			[
-				{ hue: "A", pattern: "A" } as GroupValues,
-				{ hue: "B", pattern: "B" } as GroupValues,
+				{ groupValues: { hue: "A", pattern: "A" } },
+				{ groupValues: { hue: "B", pattern: "B" } },
 			],
 			scales,
 			{
@@ -165,6 +164,54 @@ describe("buildPatternDefs", () => {
 		expect(defs.map((d) => d.inkColor)).toEqual(["#ff0000", "#00ff00"])
 		// The background tile still shows the mark's ACTUAL (modulated) color.
 		expect(defs[0]?.bgColor).not.toBe(palette[0])
+	})
+})
+
+describe("buildPatternDefs — fill color rules", () => {
+	it("a {Variable} fill rule recolors the def's background from the slice's rows", () => {
+		// Regression guard for the marks ↔ defs invariant: the mark pipeline
+		// applies fill rules, so the defs pass must see the same rows or a
+		// rule-colored bar references a def that was never emitted.
+		// Hue mapped: the pattern tile's background IS the mark fill (with
+		// no Color variable it is the Pattern panel's background instead,
+		// which no fill rule touches).
+		const scales: AestheticScales = {
+			...emptyScales,
+			hue: {
+				field: { name: "grp", type: "categorical" },
+				scale: {
+					kind: "categorical",
+					scale: scaleOrdinal<string, string>()
+						.domain(["A"])
+						.range(["#abcdef"]),
+				},
+			},
+			pattern: {
+				field: { name: "p", type: "categorical" },
+				categories: ["A"],
+			},
+		}
+		const configs = {
+			...EMPTY_CHANNEL_CONFIGS,
+			fillColorRules: [{ condition: "{profit} < 0", color: "#ff0000" }],
+		}
+		const [loss] = buildPatternDefs(
+			[{ groupValues: { hue: "A", pattern: "A" }, rows: [{ profit: -1 }] }],
+			scales,
+			configs,
+			"#000",
+			"#fff"
+		)
+		const [gain] = buildPatternDefs(
+			[{ groupValues: { hue: "A", pattern: "A" }, rows: [{ profit: 1 }] }],
+			scales,
+			configs,
+			"#000",
+			"#fff"
+		)
+		expect(loss?.bgColor).toBe("#ff0000")
+		expect(gain?.bgColor).toBe("#abcdef")
+		expect(loss?.svgId).not.toBe(gain?.svgId)
 	})
 })
 
@@ -293,7 +340,7 @@ describe("buildPatternDefsFromItems / resolvePatternDefForItem", () => {
 		}
 		const configs = { ...EMPTY_CHANNEL_CONFIGS, defaultPattern: 3 }
 		const defs = buildPatternDefs(
-			[{ hue: "A" } as GroupValues, { hue: "B" } as GroupValues],
+			[{ groupValues: { hue: "A" } }, { groupValues: { hue: "B" } }],
 			scales,
 			configs,
 			"#000",
@@ -305,7 +352,7 @@ describe("buildPatternDefsFromItems / resolvePatternDefForItem", () => {
 		// Without options (geo-style callers), the wrapper stays empty.
 		expect(
 			buildPatternDefs(
-				[{ hue: "A" } as GroupValues],
+				[{ groupValues: { hue: "A" } }],
 				scales,
 				configs,
 				"#000",

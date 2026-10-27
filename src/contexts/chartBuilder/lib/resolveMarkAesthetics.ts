@@ -7,6 +7,7 @@ import {
 	type ChannelConfigs,
 } from "./channelConfig"
 import { applyAreaScale, applyHueScale, modulateColor } from "./scales"
+import { resolveRuleColor } from "./textColorRules"
 
 export type MarkAesthetics = {
 	/** Base fill color, after hue lookup and saturation/brightness
@@ -80,6 +81,15 @@ export const resolveMarkAesthetics = (
 		const c = applyHueScale(hue.scale, row[hue.field.name], hue.field.type)
 		if (c) fill = c
 	}
+	// Conditional fill rules (same step as `resolveGroupFill`): an implicit
+	// rule tests the Color variable's value, a `{Variable}` rule tests the
+	// row itself; a match replaces the palette color before modulation.
+	const fillRuleColor = resolveRuleColor(
+		channelConfigs.fillColorRules,
+		hue ? row[hue.field.name] : undefined,
+		[row]
+	)
+	if (fillRuleColor) fill = fillRuleColor
 	const preModulationHue = fill
 
 	// Mapped-but-unresolvable rows fall back to the channel's DEFAULT level —

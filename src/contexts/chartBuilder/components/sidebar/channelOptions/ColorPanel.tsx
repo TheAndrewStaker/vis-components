@@ -54,6 +54,7 @@ import {
 	useQuantFieldExtent,
 } from "./ColorOptionsPanel"
 import { OutlineColorRow } from "./OutlineColorPanel"
+import { ColorRulesEditor, markRuleHelp } from "../ColorRulesEditor"
 
 /** The unified Color menu. Houses every color target as a subheader, scoped to
  * the current chart type:
@@ -99,6 +100,7 @@ export const ColorPanel = () => {
 	const fillChanged =
 		hueChanged.has("default fill") ||
 		hueChanged.has("fill scale edits") ||
+		hueChanged.has("fill color rules") ||
 		hueChanged.has("palette pick")
 	const outlineAreaChanged = hueChanged.has("outline color")
 	const outlineScatterChanged =
@@ -453,6 +455,19 @@ const ColorSlotSubsection = ({
 				clearSlot={def.inherit ? clearSlot : undefined}
 				updateSlot={updateSlot}
 			/>
+			{/* Conditional line-color rules — the same "+ Add color rule" editor
+			 *  Fill and Outline carry. Stored on the slot (`colorRules`), so the
+			 *  first touch writes a well-formed slot and the slot owns the stroke
+			 *  from then on (see `resolveConnectionStroke`). */}
+			{def.key === "line" && (
+				<ColorRulesEditor
+					rules={slotCfg?.colorRules ?? []}
+					onChange={(colorRules) => updateSlot({ colorRules })}
+					defaultColor={singleColor}
+					ruleLabel="line"
+					help={markRuleHelp("line", slotCfg?.field ?? null)}
+				/>
+			)}
 			{extra}
 		</CollapsibleSubsection>
 	)

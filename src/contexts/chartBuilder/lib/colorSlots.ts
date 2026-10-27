@@ -319,6 +319,9 @@ export const colorSlotEdited = (
 	// picking Automatic deletes it, so presence IS the edit.
 	if (COLOR_SLOT_DEFS[key]?.inherit) return true
 	if (slotCfg.field != null || slotCfg.paletteId != null) return true
+	// A conditional color rule is an edit; an emptied list (every rule
+	// removed) is not.
+	if ((slotCfg.colorRules?.length ?? 0) > 0) return true
 	if (slotCfg.singleColor == null) return false
 	// A stray key with no registry entry renders nowhere (nothing to clear), so
 	// it never dots.

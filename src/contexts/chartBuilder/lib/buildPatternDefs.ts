@@ -3,6 +3,7 @@ import type { AestheticScales } from "../store/useAestheticScales"
 import type { Stack } from "./aggregators/stacks"
 import type { ChannelConfigs } from "./channelConfig"
 import type { PatternDefSpec } from "./patternDefs"
+import type { RuleRows } from "./textColorRules"
 import {
 	resolveGroupFill,
 	resolvePatternDefForItem,
@@ -60,7 +61,7 @@ export const buildPatternDefsFromItems = (
  *     children + background + ink) needed by `<PatternDefs>` to emit
  *     each pattern's `<defs>` block. */
 export const buildPatternDefs = (
-	groupValuesList: readonly GroupValues[],
+	fillInputs: readonly FillInput[],
 	aestheticScales: AestheticScales,
 	channelConfigs: ChannelConfigs,
 	defaultFill: string,
@@ -78,14 +79,17 @@ export const buildPatternDefs = (
 	if (!fieldMapped && !wantsDefaultPattern) return []
 
 	return buildPatternDefsFromItems(
-		groupValuesList
-			.filter((groupValues) => !fieldMapped || groupValues.pattern !== undefined)
-			.map((groupValues) => {
+		fillInputs
+			.filter(
+				({ groupValues }) => !fieldMapped || groupValues.pattern !== undefined
+			)
+			.map(({ groupValues, rows }) => {
 				const { fill, preModulationHue, satUnit, briUnit } = resolveGroupFill(
 					groupValues,
 					defaultFill,
 					aestheticScales,
-					channelConfigs
+					channelConfigs,
+					rows
 				)
 				return {
 					patternValue: groupValues.pattern,
@@ -102,8 +106,16 @@ export const buildPatternDefs = (
 	)
 }
 
-/** Map a stack list to the slice-level `GroupValues` the `buildPatternDefs`
+/** One slice's fill inputs: its `GroupValues` plus the dataset rows behind
+ *  it. The rows feed `{Variable}` fill rules, which can change a slice's
+ *  color — and so its pattern def id — so the defs pass MUST see the same
+ *  rows the mark pipeline (`resolveLayerColor`) does. */
+export type FillInput = { groupValues: GroupValues; rows?: RuleRows }
+
+/** Map a stack list to the slice-level fill inputs the `buildPatternDefs`
  *  wrapper consumes. Centralized so BarPlot / AreaPlot / PiePlot stay in
  *  sync. */
-export const stacksToGroupValues = (stacks: readonly Stack[]): GroupValues[] =>
-	stacks.flatMap((s) => s.slices.map((sl) => sl.groupValues))
+export const stacksToFillInputs = (stacks: readonly Stack[]): FillInput[] =>
+	stacks.flatMap((s) =>
+		s.slices.map((sl) => ({ groupValues: sl.groupValues, rows: sl.rows }))
+	)

@@ -28,7 +28,7 @@ import { ColorSlotControls } from "../channelOptions/ColorPanel"
 import {
 	CategoricalSwatchList,
 } from "../channelOptions/ColorOptionsPanel"
-import { RuleConditionInput, RuleVariableHelp } from "../RuleConditionInput"
+import { ColorRulesEditor } from "../ColorRulesEditor"
 import { Select } from "../../../../../components/ui/Select"
 
 const PALETTE_PRESET_NAMES: PaletteName[] = [
@@ -239,13 +239,6 @@ export const LabelColorPanel = ({
 												defaultColor={ownSlot?.singleColor ?? cfg.color}
 												theme={theme}
 												ruleLabel={titles?.[key] ?? key}
-												help={
-													<>
-														Compared against each label&apos;s{" "}
-														<strong>{titles?.[key] ?? key}</strong> value; the
-														color above applies when no rule matches.
-													</>
-												}
 											/>
 										</>
 									)
@@ -363,12 +356,11 @@ const LabelSwatchList = ({
  *  `PositionRulesEditor`, their positional sibling: the link stays under
  *  the rows, so adding keeps adding. */
 const TextColorRulesRow = ({
-	rules: stored,
-	onChange: update,
+	rules,
+	onChange,
 	defaultColor,
 	theme,
 	ruleLabel,
-	help,
 }: {
 	rules: TextColorRule[]
 	onChange: (rules: TextColorRule[]) => void
@@ -378,76 +370,19 @@ const TextColorRulesRow = ({
 	/** Distinguishes the a11y labels when several rule lists share a panel
 	 *  (one per variable). */
 	ruleLabel?: string
-	/** Extra help prose below the grammar note. */
-	help?: React.ReactNode
-}) => {
-	const ruleName = (i: number) =>
-		ruleLabel ? `${ruleLabel} rule ${i + 1}` : `rule ${i + 1}`
-	const setRule = (i: number, patch: Partial<TextColorRule>) =>
-		update(stored.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
-	const removeRule = (i: number) => update(stored.filter((_, idx) => idx !== i))
-	const addRule = () => update([...stored, { condition: "", color: defaultColor }])
-	// Same palette the base label-color swatch offers — the theme's TEXT
-	// palette, since a rule colors label TEXT; the popover's chevron reaches
-	// the other palettes.
-	const palette = resolveTextPickerPalette(theme)
-	return (
-		<div className="vc-divider-group">
-			{stored.map((rule, i) => (
-				<div
-					// Index key is stable here: rules are ordered, identity == position
-					// eslint-disable-next-line react/no-array-index-key
-					key={i}
-					className="flex items-start gap-2 text-sm"
-				>
-					{/* The condition box takes the row's full width (no label-column
-					 *  spacer) so a `{Variable} == value` rule fits. */}
-					<RuleConditionInput
-						value={rule.condition}
-						onChange={(condition) => setRule(i, { condition })}
-						placeholder="> 0"
-						ariaLabel={`Condition for ${ruleName(i)}`}
-					/>
-					<ColorInput
-						label={`Color for ${ruleName(i)}`}
-						labelClassName="sr-only"
-						value={rule.color}
-						onChange={(color) => setRule(i, { color })}
-						showHexInput={false}
-						palette={palette}
-						pickerLabel={`Pick palette color for ${ruleName(i)}`}
-					/>
-					<button
-						type="button"
-						onClick={() => removeRule(i)}
-						className="rounded px-1 hover:bg-stone-200 hover:text-stone-800 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
-						aria-label={`Remove ${ruleName(i)}`}
-					>
-						×
-					</button>
-				</div>
-			))}
-			<button
-				type="button"
-				onClick={addRule}
-				className="self-end text-xs text-blue-600 hover:underline dark:text-blue-400"
-			>
-				+ Add text color rule
-			</button>
-			{stored.length > 0 && (
-				<>
-					<p className="vc-help">
-						First matching rule wins. <code>{">"}</code>, <code>{"<"}</code>,{" "}
-						<code>{">="}</code>, and <code>{"<="}</code> compare numbers;{" "}
-						<code>==</code> and <code>!=</code> also match text, e.g.{" "}
-						<code>== Melon</code>. <RuleVariableHelp />
-					</p>
-					{help && <p className="vc-help">{help}</p>}
-				</>
-			)}
-		</div>
-	)
-}
+}) => (
+	<ColorRulesEditor
+		rules={rules}
+		onChange={onChange}
+		defaultColor={defaultColor}
+		// Same palette the base label-color swatch offers — the theme's TEXT
+		// palette, since a rule colors label TEXT; the popover's chevron
+		// reaches the other palettes.
+		palette={resolveTextPickerPalette(theme)}
+		addLabel="+ Add text color rule"
+		ruleLabel={ruleLabel}
+	/>
+)
 
 const CategoricalPaletteRow = ({
 	cfg,

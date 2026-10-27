@@ -211,6 +211,21 @@ describe("colorSlotEdited", () => {
 		).toBe(true)
 	})
 
+	it("a conditional color rule is an edit; an emptied rule list is not", () => {
+		const cfg: ColorSlotConfig = { field: null, singleColor: "#888888" }
+		expect(
+			colorSlotEdited(
+				"line",
+				{ ...cfg, colorRules: [{ condition: "> 0", color: "#f00" }] },
+				{},
+				theme
+			)
+		).toBe(true)
+		expect(colorSlotEdited("line", { ...cfg, colorRules: [] }, {}, theme)).toBe(
+			false
+		)
+	})
+
 	it("an inherit-capable slot (violin/box, regression) counts ANY stored config as an edit — its untouched state is Automatic (no config)", () => {
 		// Even at the slot's default color: "Single color" was explicitly chosen
 		// over Automatic, and picking Automatic deletes the config again.

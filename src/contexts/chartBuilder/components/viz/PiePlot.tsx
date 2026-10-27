@@ -21,7 +21,7 @@ import { resolveTextFont, resolveTitleFont } from "../../lib/labelsConfig"
 import type { PatternDefSpec } from "../../lib/patternDefs"
 import {
 	buildPatternDefs,
-	stacksToGroupValues,
+	stacksToFillInputs,
 	type PatternDefOptions,
 } from "../../lib/buildPatternDefs"
 import {
@@ -336,7 +336,7 @@ export const PiePlot = (props: PiePlotProps = {}) => {
 	const patternDefs = useMemo<PatternDefSpec[]>(() => {
 		if (!aggregation || aggregation.kind === "error") return []
 		return buildPatternDefs(
-			stacksToGroupValues(aggregation.stacks),
+			stacksToFillInputs(aggregation.stacks),
 			aestheticScales,
 			channelConfigs,
 			channelConfigs.defaultFill ?? FALLBACK_FILL,

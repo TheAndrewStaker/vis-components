@@ -1459,6 +1459,41 @@ histogram or density display to be on). Resolution is
 **slot-config-if-present, else the legacy per-feature config field**
 (e.g. `connection.strokeColor`, `histogram.rugColor`), so saved
 visuals keep their colors unchanged until the user touches the slot.
+
+**Color rules** — Fill, Outline, and Line each end in a right-aligned
+**"+ Add color rule"** link (no standing subsection: the swatches
+above are the primary control, the rules the exception path). Each
+rule is a condition box plus a color; the first matching rule's color
+replaces whatever the palette, gradient, or single color would have
+drawn for that mark. The grammar is the data-label text-color
+grammar: `>`, `<`, `>=`, `<=` compare numbers; `==` and `!=` also
+match text; a rule may open with a variable in braces (`{Profit} <
+0`, see §6.5's `{Variable}` conditions) to test that variable in the
+mark's rows instead. An implicit rule compares against the
+subsection's own mapped variable — Fill's Color variable (a derived
+source's value for Count / Density / Nesting depth), Outline's
+variable, the Line slot's "Vary by" variable — so it never fires while
+that variable is "— none —"; the `{Variable}` form fires either way,
+which is how a single-color bar chart turns its losses red. The help
+line under the rules says which it is. Storage: Fill rules live at
+`channelConfigs.fillColorRules`, Outline rules on the Shape config
+(`shape.outlineColorRules`), Line rules on the Line slot
+(`colorSlots.line.colorRules`; the first touch writes a well-formed
+slot, which then owns the stroke). Precedence: a fill rule applies
+BEFORE saturation / brightness modulation (a rule-colored mark still
+shades like its siblings) and under the Shape panel's per-category
+fill overrides; an outline rule sits under the per-category stroke
+overrides and over the Outline scale color; a line rule beats the
+slot's scale color and single color. Every mark-drawing renderer
+honors fill rules — bars, areas, pies, scatter / radar points,
+heatmap cells, hierarchy nodes with a row, and the geo family — the
+same set that honors outline rules; hexbins and flow diagrams have no
+rule-aware fill, so Fill hides the link there. Categorical legend
+swatches recolor by the implicit rules (a swatch has no rows for a
+`{Variable}` rule); a slot legend applies that slot's own rules. Any
+rule lights the subsection's and the menu's changed dot; an emptied
+list does not. Renaming a variable rewrites its `{token}` in every
+rule.
 Every single-color swatch shown when "Vary by" is set to "— none —"
 (the Fill panel's default fill, each color slot, and the Shape panel's
 outline color) carries the same palette-icon palette-popover button
@@ -3124,7 +3159,8 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   removed; the condition grammar note appears once a rule does. Same
   shape as the position rules above.
 - **`{Variable}` conditions** (every conditional-rule list: text color,
-  position, and the Shape panel's outline color rules). A condition
+  position, and the Color menu's Fill / Outline / Line color rules —
+  §4.1 "Color rules"). A condition
   may open with a variable in braces — `{Region} == West`,
   `{Profit} < 0` — and then tests THAT variable in the mark's dataset
   rows instead of the implicit value (the label's backing value, or
