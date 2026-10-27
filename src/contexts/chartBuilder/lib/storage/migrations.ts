@@ -28,7 +28,7 @@ import type { Migration } from "./versioning"
  *   v0 = pre-versioning (unwrapped JSON; no `_v` field). Existing user
  *        data lives here, so the v0→v1 migration must be tolerant of
  *        the existing on-disk shape. */
-export const VISUALS_VERSION = 9
+export const VISUALS_VERSION = 10
 export const DATASETS_VERSION = 1
 export const CHANNEL_CONFIGS_VERSION = 5
 export const LABELS_VERSION = 1
@@ -47,7 +47,7 @@ export const CAPTION_VERSION = 1
 export const MAP_CONFIG_VERSION = 8
 export const RESHAPE_CONFIG_VERSION = 1
 export const DERIVED_VARIABLES_VERSION = 1
-export const DATA_TABLE_VERSION = 1
+export const DATA_TABLE_VERSION = 2
 export const ACCESSIBILITY_VERSION = 1
 export const USER_FONTS_VERSION = 1
 
@@ -407,7 +407,63 @@ export const visualsMigrations: Migration[] = [
 		if (!Array.isArray(raw)) return raw
 		return raw.map((visual) => rebaseCustomGlyphRefs(visual))
 	},
+	// v9 -> v10: the data table's Bold header / Striped rows / number
+	// alignment start following the theme, and its old caption becomes the
+	// title — see `migrateDataTableConfigV1ToV2`.
+	(raw) => {
+		if (!Array.isArray(raw)) return raw
+		return raw.map((v) => {
+			if (typeof v !== "object" || !v) return v
+			const vis = v as Record<string, unknown>
+			if (!("dataTableConfig" in vis)) return v
+			return { ...vis, dataTableConfig: migrateDataTableConfigV1ToV2(vis.dataTableConfig) }
+		})
+	},
 ]
+
+/** One data-table config, v1 → v2.
+ *  - Header bold, striped rows and number alignment were plain values
+ *    (true / true / "right") backfilled onto every visual whether or not
+ *    the table was ever touched; they are now nullable, null = follow the
+ *    theme's Data tables defaults. A stored value equal to the old default
+ *    is that backfill, not a choice, so it clears to null — otherwise a
+ *    theme change would never reach an existing visual. A user's off /
+ *    left / center stays (the v3→v4 map step's reasoning). Header bold
+ *    has since become a header font WEIGHT: on clears (the theme's
+ *    semibold), off pins 400 — what it rendered at.
+ *  - The text that sat ABOVE the table was stored as `caption` (with
+ *    `caption*` styling); it is the table's title now, and `caption` is a
+ *    new line BELOW the table. A config with no `title` key is pre-split,
+ *    so its caption fields move to the title ones. Idempotent: the moved
+ *    config has a `title` key. Shared by the visuals chain and the draft
+ *    slice. */
+const CAPTION_TO_TITLE_V2: ReadonlyArray<readonly [string, string]> = [
+	["caption", "title"],
+	["captionFontFamily", "titleFontFamily"],
+	["captionFontSize", "titleFontSize"],
+	["captionColor", "titleColor"],
+	["captionFontWeight", "titleFontWeight"],
+	["captionAlign", "titleAlign"],
+]
+const migrateDataTableConfigV1ToV2 = (raw: unknown): unknown => {
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw
+	const c = { ...(raw as Record<string, unknown>) }
+	// Bold header → a header weight. On was the theme's semibold (follow
+	// it); off rendered at the regular 400, so it pins that.
+	if ("headerBold" in c) {
+		if (c.headerBold === false) c.headerFontWeight = 400
+		delete c.headerBold
+	}
+	if (c.striped === true) c.striped = null
+	if (c.numberAlign === "right") c.numberAlign = null
+	if (!("title" in c)) {
+		for (const [from, to] of CAPTION_TO_TITLE_V2) {
+			c[to] = c[from] ?? null
+			c[from] = null
+		}
+	}
+	return c
+}
 
 /** Where custom-glyph shape references began before the base became a
  *  fixed constant: one past the six built-in symbols of the time. */
@@ -762,7 +818,11 @@ export const tooltipMigrations = identityMigrations
 export const captionMigrations = identityMigrations
 export const reshapeConfigMigrations = identityMigrations
 export const derivedVariablesMigrations = identityMigrations
-export const dataTableMigrations = identityMigrations
+export const dataTableMigrations: Migration[] = [
+	...identityMigrations,
+	// v1 -> v2: the visuals v9→v10 step, for the draft slice.
+	(raw) => migrateDataTableConfigV1ToV2(raw),
+]
 export const accessibilityMigrations = identityMigrations
 export const dataLabelsEncodingsMigrations = identityMigrations
 /** Data Labels config v1 → v2: split-piece entries move under `pieces` and

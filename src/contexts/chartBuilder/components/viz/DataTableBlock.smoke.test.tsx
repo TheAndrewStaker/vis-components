@@ -94,8 +94,20 @@ describe("DataTableBlock", () => {
 		// The y axis's Format reaches the cells, as it reaches the tooltip.
 		expect(utils.getByText("$1,200")).toBeTruthy()
 		// Numbers right-align by default.
-		expect(utils.getByText("$1,200").className).toContain("vc-data-table-num-right")
+		expect(utils.getByText("$1,200").className).toContain("vc-data-table-align-right")
 		expect(utils.getByRole("button", { name: "Download CSV" })).toBeTruthy()
+	})
+
+	it('"Select variables" shows only the checked ones, in the data\'s order', () => {
+		const utils = mount({
+			enabled: true,
+			columns: "select",
+			selectedColumns: ["unused", "region"],
+		})
+		expect(utils.getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+			"region",
+			"unused",
+		])
 	})
 
 	it('"All variables" shows every column', () => {
@@ -103,11 +115,45 @@ describe("DataTableBlock", () => {
 		expect(utils.getAllByRole("columnheader")).toHaveLength(3)
 	})
 
-	it("uses the custom caption", () => {
-		const utils = mount({ enabled: true, caption: "Sales table" })
-		expect(utils.getByRole("table").querySelector("caption")?.textContent).toBe(
-			"Sales table"
-		)
+	it("puts the title above (as the table's caption element) and the caption below", () => {
+		const utils = mount({ enabled: true, title: "Sales table", caption: "Source: survey" })
+		const table = utils.getByRole("table")
+		expect(table.querySelector("caption")?.textContent).toBe("Sales table")
+		const below = utils.getByText("Source: survey")
+		expect(below.tagName).toBe("P")
+		expect(table.getAttribute("aria-describedby")).toContain(below.id)
+	})
+
+	it("renders no caption paragraph when the caption is empty", () => {
+		const utils = mount({ enabled: true })
+		expect(utils.container.querySelector(".vc-data-table-caption")).toBeNull()
+	})
+
+	it("aligns text columns left and number columns right by default, header included", () => {
+		const utils = mount({ enabled: true })
+		const [regionHead, salesHead] = utils.getAllByRole("columnheader")
+		expect(regionHead!.className).toBe("vc-data-table-align-left")
+		expect(salesHead!.className).toBe("vc-data-table-align-right")
+		expect(utils.getByText("$1,200").className).toBe("vc-data-table-align-right")
+	})
+
+	it("styles the first column's body cells on their own only when unchecked", () => {
+		const same = mount({ enabled: true })
+		expect(same.container.querySelector(".vc-data-table-first")).toBeNull()
+		cleanup()
+		const own = mount({ enabled: true, firstColumnLikeOthers: false, firstColumnFontWeight: 700 })
+		expect(own.getByText("West").classList.contains("vc-data-table-first")).toBe(true)
+		expect(own.getByText("$1,200").classList.contains("vc-data-table-first")).toBe(false)
+		const block = own.container.querySelector<HTMLElement>("[data-data-table]")!
+		expect(block.style.getPropertyValue("--vc-dt-first-weight")).toBe("700")
+	})
+
+	it("a column's own alignment wins", () => {
+		const utils = mount({ enabled: true, columnAlign: { region: "center", sales: "left" } })
+		const [regionHead, salesHead] = utils.getAllByRole("columnheader")
+		expect(regionHead!.className).toBe("vc-data-table-align-center")
+		expect(salesHead!.className).toBe("vc-data-table-align-left")
+		expect(utils.getByText("West").className).toBe("vc-data-table-align-center")
 	})
 
 	it("cuts at Max rows and offers the rest", () => {
@@ -116,6 +162,10 @@ describe("DataTableBlock", () => {
 		expect(utils.queryByRole("button", { name: "Download CSV" })).toBeNull()
 		fireEvent.click(utils.getByRole("button", { name: "Show all 3 rows" }))
 		expect(utils.getAllByRole("row")).toHaveLength(4)
+		// …and back to the cut, from the same button.
+		fireEvent.click(utils.getByRole("button", { name: "Show first 2 rows" }))
+		expect(utils.getAllByRole("row")).toHaveLength(3)
+		expect(utils.getByRole("button", { name: "Show all 3 rows" })).toBeTruthy()
 	})
 
 	it("behind a button: a real toggle wired with aria-expanded / aria-controls", () => {

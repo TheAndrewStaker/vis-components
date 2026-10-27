@@ -9,6 +9,7 @@ import {
 	channelConfigsMigrations,
 	clearLegacyAutoTickLabelAngle,
 	CONTENT_MIGRATIONS,
+	dataTableMigrations,
 	dataLabelsConfigMigrations,
 	datasetBodyMigrations,
 	datasetsMigrations,
@@ -701,6 +702,77 @@ describe("visuals v8 -> v9: custom-glyph shape references rebase onto the fixed 
 			shape: { overrides: { a: CUSTOM_GLYPH_BASE } },
 		})
 		expect(channelConfigsMigrations[4]!(null)).toBeNull()
+	})
+})
+
+describe("visuals v9 -> v10: data-table style defaults start following the theme", () => {
+	const upgrade = visualsMigrations[9]!
+
+	it("clears the backfilled true / true / right, keeps real choices", () => {
+		const backfilled = {
+			id: "a",
+			dataTableConfig: {
+				enabled: false,
+				headerBold: true,
+				striped: true,
+				numberAlign: "right",
+				textColor: "#123456",
+			},
+		}
+		const chosen = {
+			id: "b",
+			dataTableConfig: { headerBold: false, striped: false, numberAlign: "center" },
+		}
+		const [a, b] = upgrade([backfilled, chosen]) as Array<{
+			dataTableConfig: Record<string, unknown>
+		}>
+		expect(a!.dataTableConfig).toMatchObject({
+			enabled: false,
+			striped: null,
+			numberAlign: null,
+			textColor: "#123456",
+		})
+		// Bold on follows the theme's header weight; off pins the 400 it drew at.
+		expect(a!.dataTableConfig).not.toHaveProperty("headerBold")
+		expect(a!.dataTableConfig).not.toHaveProperty("headerFontWeight")
+		expect(b!.dataTableConfig).toMatchObject({
+			headerFontWeight: 400,
+			striped: false,
+			numberAlign: "center",
+		})
+		expect(b!.dataTableConfig).not.toHaveProperty("headerBold")
+	})
+
+	it("is idempotent and leaves visuals without a table config alone", () => {
+		const once = upgrade([{ id: "a", dataTableConfig: { headerBold: true } }])
+		expect(upgrade(once)).toEqual(once)
+		const bare = { id: "c" }
+		expect(upgrade([bare, null])).toEqual([bare, null])
+		expect(upgrade("nope")).toBe("nope")
+	})
+
+	it("moves the old caption (the text above the table) to the title", () => {
+		const [moved] = upgrade([
+			{ dataTableConfig: { caption: "Sales", captionFontWeight: 700, captionAlign: "center" } },
+		]) as Array<{ dataTableConfig: Record<string, unknown> }>
+		expect(moved!.dataTableConfig).toMatchObject({
+			title: "Sales",
+			titleFontWeight: 700,
+			titleAlign: "center",
+			caption: null,
+			captionFontWeight: null,
+			captionAlign: null,
+		})
+		// Already split: a real caption stays put.
+		const split = { dataTableConfig: { title: null, caption: "Source: survey" } }
+		expect(upgrade([split])).toEqual([split])
+	})
+
+	it("dataTable v1 -> v2 runs the same step over the draft slice", () => {
+		expect(
+			dataTableMigrations[1]!({ headerBold: true, striped: false, numberAlign: "right" })
+		).toMatchObject({ striped: false, numberAlign: null, title: null })
+		expect(dataTableMigrations[1]!(null)).toBeNull()
 	})
 })
 

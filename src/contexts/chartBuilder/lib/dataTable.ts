@@ -60,7 +60,8 @@ export type DataTableColumn = {
 	/** The field's current name — the header text. */
 	name: string
 	type: FieldType
-	/** Quantitative: aligned per `numberAlign`. */
+	/** Quantitative. Numbers and dates align per the Numbers & dates
+	 *  default unless the column has its own alignment (`columnAlign`). */
 	numeric: boolean
 }
 
@@ -86,7 +87,10 @@ export type DataTableModel = {
 	note: string | null
 }
 
-/** The column names the table shows, in order. "encoded" lists the
+/** The column names the table shows, in order. "select" lists the
+ *  `selected` variables in the view's order (one no longer in the view —
+ *  removed or renamed — is skipped; none left falls back to "encoded").
+ *  "encoded" lists the
  *  DIMENSIONS (categorical / ordinal / temporal) first, then the MEASURES
  *  (quantitative), each group in encoding order — so a horizontal chart
  *  whose x is the measure still reads "Category, …, Value". `typeOf`
@@ -97,10 +101,16 @@ export const dataTableColumnNames = (
 	view: Pick<DatasetView, "fields">,
 	encodings: Partial<Encodings>,
 	mode: DataTableColumns,
-	typeOf: (field: string) => FieldType = () => "categorical"
+	typeOf: (field: string) => FieldType = () => "categorical",
+	selected: readonly string[] = []
 ): string[] => {
 	const all = view.fields.map((f) => f.name)
 	if (mode === "all") return all
+	if (mode === "select") {
+		const pick = new Set(selected)
+		const picked = all.filter((f) => pick.has(f))
+		if (picked.length > 0) return picked
+	}
 	const present = new Set(all)
 	const out: string[] = []
 	for (const ch of DATA_TABLE_CHANNEL_ORDER) {
@@ -153,27 +163,53 @@ const orderRows = (
 	})
 }
 
-export const buildDataTable = (args: {
+type ColumnArgs = {
 	view: DatasetView
 	encodings: Partial<Encodings>
 	columns: DataTableColumns
+	/** The "select" mode's checked variables. */
+	selectedColumns?: readonly string[]
 	overrides: Record<string, FieldType>
-	fieldLevelOrders: Readonly<Record<string, readonly string[]>>
-	/** `tooltipFieldFormatsAtom` — the tooltip's inherited formats. */
-	formats: TooltipFormats
 	/** `plottedRows(...)` for the current chart. Aggregated → the table is
 	 *  its columns + rows (the "Columns" option doesn't apply: an aggregate
 	 *  has no other variables to add). Absent / not aggregated → view rows. */
 	plotted?: PlottedData
-}): DataTableModel => {
-	const { view, encodings, overrides, fieldLevelOrders, formats, plotted } = args
-	const hinted = hintedFormats(view)
-	if (plotted?.aggregated) {
-		const columns: DataTableColumn[] = plotted.columns.map((c) => ({
+}
+
+/** The table's columns alone, without building any rows — what the
+ *  sidebar's per-column alignment list shows. `buildDataTable` uses the
+ *  same function, so the two can't disagree. */
+export const dataTableColumns = (args: ColumnArgs): DataTableColumn[] => {
+	const { view, encodings, overrides, plotted } = args
+	if (plotted?.aggregated)
+		return plotted.columns.map((c) => ({
 			name: c.name,
 			type: c.type,
 			numeric: c.type === "quantitative",
 		}))
+	return dataTableColumnNames(
+		view,
+		encodings,
+		args.columns,
+		(name) => effectiveType(view, name, overrides),
+		args.selectedColumns
+	).map((name) => {
+		const type = effectiveType(view, name, overrides)
+		return { name, type, numeric: type === "quantitative" }
+	})
+}
+
+export const buildDataTable = (
+	args: ColumnArgs & {
+		fieldLevelOrders: Readonly<Record<string, readonly string[]>>
+		/** `tooltipFieldFormatsAtom` — the tooltip's inherited formats. */
+		formats: TooltipFormats
+	}
+): DataTableModel => {
+	const { view, fieldLevelOrders, formats, plotted } = args
+	const hinted = hintedFormats(view)
+	const columns = dataTableColumns(args)
+	if (plotted?.aggregated) {
 		// Aggregate columns inherit their MEASURE's format; Count / Share
 		// fall back to their fixed integer / percent format.
 		const specs = plotted.columns.map((c) =>
@@ -193,15 +229,6 @@ export const buildDataTable = (args: {
 			note: plotted.note,
 		}
 	}
-	const columns: DataTableColumn[] = dataTableColumnNames(
-		view,
-		encodings,
-		args.columns,
-		(name) => effectiveType(view, name, overrides)
-	).map((name) => {
-		const type = effectiveType(view, name, overrides)
-		return { name, type, numeric: type === "quantitative" }
-	})
 	const order = orderRows(view.rows, columns, fieldLevelOrders)
 	const specs = columns.map((c) => formats.get(c.name) ?? hinted.get(c.name))
 	const rows = order.map((i): DataTableRow => {

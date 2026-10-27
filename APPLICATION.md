@@ -3940,15 +3940,24 @@ non-visual alternative to the chart — a screen reader reads a real table
 with a caption and column headers — and lets sighted embed viewers read
 exact values. The top toggle, **Show a data table under the chart**, is
 off by default; every other control is hidden while it is off.
+Below the toggle the controls sit in collapsible subsections: **Table
+properties** (open by default — the list below up to Download link),
+**Title**, **Caption**, **Header**, **Table text** and **Rows**.
 
 - **Placement** — *Below the chart* renders the table always; *Behind a
   button* renders a **View data** / **Hide data** button under the chart
   that toggles it (a real `<button>` with `aria-expanded` and
   `aria-controls`; the table is not built until it is first opened).
-- **Caption** — the table's `<caption>`. Empty = "Data for <chart
-  title>", falling back to the visual's name (the placeholder shows it).
-- **Columns** — *Encoded variables only* (the default) or *All
-  variables*. Encoded columns list the dimensions (categorical, ordinal
+- **Columns** — *Encoded variables only* (the default), *All
+  variables*, or *Select variables*. Select variables shows a checkbox
+  for every variable in the data set (the main table, after reshape and
+  derived variables), in its order; the table shows the checked ones in
+  that order. Switching to it starts with the columns the table showed
+  a moment ago, so nothing changes until a box flips, and the last
+  checked box can't be cleared. Picks are kept by name: a renamed or
+  removed variable drops out (none left falls back to the encoded
+  columns), and the picks survive switching to another mode and back.
+  Encoded columns list the dimensions (categorical, ordinal
   and temporal variables) first, then the measures (quantitative), so a
   horizontal chart whose x is the value still reads "Category, …,
   Value". Within each group columns follow encoding order: x, y, r,
@@ -3957,22 +3966,70 @@ off by default; every other control is hidden while it is off.
   text), facets last. A field mapped twice is listed once. With nothing
   mapped the table lists every column.
 - **Max rows** — empty = all rows. When set, the first N rows show with
-  a **Show all N rows** button. With no limit set the table still renders
-  at most 1,000 rows up front (same button), so a very large data set
-  can't stall the page.
+  a **Show all N rows** link; once expanded it reads **Show first N
+  rows** and collapses back (one toggle in place, so keyboard focus
+  stays on it). With no limit set the table still renders at most 1,000
+  rows up front (same toggle), so a very large data set can't stall the
+  page.
 - **Download link** (on by default) — a **Download CSV** button under
   the table. The CSV carries the table's columns and EVERY row, with the
   raw (unformatted) cells, so it is machine-readable.
-- **Table text** — Family, Size (pt) and Color. Empty = inherit the
-  theme's base text font (the live theme, so a re-theme restyles the
-  table with no config write).
-- **Header** — Background (empty = none), Text color (empty = the
-  table's text color), **Bold** (on by default).
-- **Rows** — Border color (empty = a soft tint of the text color),
-  **Striped rows** (on by default) with a Stripe color (empty = a 4%
-  tint of the text color), and the alignment of numeric columns
-  (right by default; the shared alignment picker, so center is offered
-  too).
+- **Title** — the line ABOVE the table. It is the HTML `<caption>`, so
+  it also names the table for screen readers (and labels its scroll
+  region). **Text** empty = "Data for <chart title>", falling back to
+  the visual's name (the placeholder shows it). Then Family, Size (pt),
+  Weight, Color and Alignment.
+- **Caption** — a paragraph BELOW the table (a source, a note), which
+  the table is `aria-describedby`. **Text** is a multi-line box; empty =
+  no caption, and its Family / Size / Weight / Color / Alignment stay
+  hidden until it has text. Line breaks are kept. It sits above the
+  table's own computed note and the Show all / Download CSV links.
+- **Header** — the header row's Family, Size (pt), Weight and Text
+  color (empty family / size / text color follow the table text; weight is the
+  theme's, semibold out of the box), Background, and a **Bottom line**
+  under the row: Thickness (px, 2 by default; 0 = no line, and the
+  color control hides) and Color (empty = the row border color).
+- **Table text** — the cells: Family, Size (pt), Weight, Color; then
+  **Format first column like other columns** (checked by default).
+  Unchecked, a **First column** block appears with its own Family,
+  Size, Weight and Color for the first column's body cells (the header
+  row keeps the header's style); empty rows follow the table text.
+  Then **Column alignment**: every column the table shows, by name (the
+  aggregated tables' computed columns too — "sales (sum)", "Count"),
+  each with the shared alignment picker. A column's header and body
+  cells align together. Numbers and dates start at the theme's Numbers
+  & dates alignment (right out of the box); every other column starts
+  left. Picking a column's starting alignment stores nothing. Choices
+  are keyed by the column's name, so a renamed variable starts over at
+  its default. (Visuals that stored the old single number alignment
+  keep it as their numbers & dates starting point.)
+- **Rows** — Border color and **Striped rows** with a Stripe color.
+
+Every styling control starts from the theme's **Data tables** defaults
+(Settings → Themes, §12) and shows them as its placeholder: an empty
+field follows the live theme, so a re-theme restyles the table with no
+config write. Empty title, caption, header and first-column Family /
+Size / Color (and title / caption / first-column Weight) follow this
+visual's table text. Every control a visual sets against the theme
+shows a **reset** link beside it (each font row, Alignment, header
+Background, the Bottom line's Thickness and Color, the first-column
+checkbox, each column's alignment, Border color, Striped rows, Stripe
+color); it clears that one setting so it follows the theme again. A
+visual still carrying the old single number alignment shows the reset
+next to the "Numbers and dates start …" line.
+Choosing the inherited value for Striped rows, any Weight or any
+Alignment stores nothing. Out of the box the theme gives the base
+text font and weight, a semibold left-aligned title, a plain
+left-aligned caption, an unfilled semibold header (text in the table's
+color) over a 2px line, rules and stripes as soft tints of the text
+color, and right-aligned numbers. The visuals v10 migration (a) clears
+the Striped / right-alignment values older visuals stored as plain
+backfilled values, so they follow the theme (an off / left / center
+choice is kept), and turns their old header **Bold** flag into a
+weight — on follows the theme's header weight, off pins 400 (what it
+drew at) — and (b) moves the text
+older visuals stored as `caption` — which was the line above the
+table — and its styling to the title.
 
 There are no position nudges: the table sits in page flow under the
 chart, outside the layout solver and outside a fixed canvas size.
@@ -4629,6 +4686,30 @@ Theme settings:
   visual deviates. Themes saved before these fields existed fall back
   to the historical look (240px, 6px corners, Auto colors, opaque, a
   12px black shadow at 15%).
+- **Data tables** — the look of the optional data table under the
+  chart (§10b), in the sidebar's order and wording: Title and Caption
+  (family, size, weight, color, alignment each; the title defaults to
+  semibold), Header (family, size, weight — semibold by default — text
+  color, background, and a Bottom line: thickness, 2px by default, and
+  color), Table text (family, size, weight, color, Format first column
+  like other columns — checked by default — a First column block with
+  its own family, size, weight and color, and under Column
+  alignment the Numbers & dates row — where number and date columns
+  start; every other column starts left) and Rows (border color,
+  Striped rows, stripe color). Unlike the sidebar, the sheet keeps the
+  stripe color, the bottom line's color and the First column block
+  visible while stripes are off, the line is 0px or the first column is
+  formatted like the others: a visual that turns them on still takes
+  these values. Empty table-text rows follow the theme's
+  text font, so they track a later Text fonts change; empty title /
+  caption / header rows follow the table text; empty header background
+  = none, empty header line color = the row border color, empty border
+  / stripe = soft tints of the text color. Read live: the
+  sidebar's Data table section shows these as its placeholders and
+  stores an override only when a visual deviates. Themes saved before
+  these fields existed fall back to the shipped look (base text font,
+  semibold unfilled header over a 2px line, striped, numbers
+  right-aligned).
 - **Maps** — default stroke (line color + thickness) for the leader
   lines that connect a map's data labels back to their regions ("Draw
   leader lines" in the Data Labels panel, §6). Seeded on chart

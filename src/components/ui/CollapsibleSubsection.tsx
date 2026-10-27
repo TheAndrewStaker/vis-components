@@ -69,7 +69,7 @@ export const CollapsibleSubsection = ({
 		rootRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" })
 	}, [jumpHit, setJumpTarget])
 	return (
-		<div ref={rootRef} className="flex flex-col gap-2">
+		<div ref={rootRef} className="vc-jump-target flex flex-col gap-2">
 			<div className="flex items-center justify-between gap-2">
 				<button
 					type="button"

@@ -75,7 +75,7 @@ export const AsideSection = ({
 				{right}
 			</div>
 			{!collapsed && (
-				<div id={bodyId} className="relative px-3">
+				<div id={bodyId} className="vc-jump-target relative px-3">
 					{children}
 				</div>
 			)}

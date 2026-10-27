@@ -3,15 +3,17 @@ import { useAtomValue } from "jotai"
 
 import { buildDataTable, dataTableToCsv, type DataTableModel } from "../../lib/dataTable"
 import {
-	defaultDataTableCaption,
+	defaultDataTableTitle,
 	migrateDataTableConfig,
+	columnAlignOf,
+	resolveDataTableStyle,
 	type DataTableConfig,
+	type ResolvedDataTableStyle,
 } from "../../lib/dataTableConfig"
 import { sanitizeVisualFilename } from "../../lib/downloadVisuals"
 import { effectiveType } from "../../lib/fieldType"
 import { ptToPx } from "../../lib/fontUnit"
 import { plottedRows } from "../../lib/plottedData"
-import type { Theme } from "../../lib/types"
 import {
 	currentDataTableConfigAtom,
 	currentEncodingsAtom,
@@ -33,26 +35,39 @@ import { useCurrentTheme } from "../../store/useCurrentTheme"
  *  download always carries every row. */
 export const DATA_TABLE_SAFETY_ROWS = 1000
 
-/** The table's colors / font, every null resolved against the live theme.
- *  Exposed as CSS custom properties on the block; `.vc-data-table` in
- *  vis-components.css reads them (one inline style for the user's choices,
- *  everything structural stays in classes). */
-const tableStyle = (cfg: DataTableConfig, theme: Theme): CSSProperties => {
-	const text = cfg.textColor ?? theme.textFontColor
-	return {
-		fontFamily: cfg.fontFamily ?? theme.textFontFamily,
-		fontSize: `${ptToPx(cfg.fontSize ?? theme.textFontSize)}px`,
-		"--vc-dt-text": text,
-		"--vc-dt-border":
-			cfg.borderColor ?? `color-mix(in srgb, ${text} 22%, transparent)`,
-		"--vc-dt-stripe": cfg.striped
-			? (cfg.stripeColor ?? `color-mix(in srgb, ${text} 4%, transparent)`)
-			: "transparent",
-		"--vc-dt-head-bg": cfg.headerBackground ?? "transparent",
-		"--vc-dt-head-text": cfg.headerTextColor ?? text,
-		"--vc-dt-head-weight": cfg.headerBold ? "600" : "400",
-	} as CSSProperties
-}
+/** The table's colors / font, every null resolved against the live theme
+ *  (`resolveDataTableStyle`). Exposed as CSS custom properties on the block;
+ *  `.vc-data-table` in vis-components.css reads them (one inline style for
+ *  the user's choices, everything structural stays in classes). */
+const tableStyle = (look: ResolvedDataTableStyle): CSSProperties =>
+	({
+		fontFamily: look.fontFamily,
+		fontSize: `${ptToPx(look.fontSize)}px`,
+		fontWeight: look.fontWeight,
+		"--vc-dt-text": look.textColor,
+		"--vc-dt-first-family": look.firstColumnFontFamily,
+		"--vc-dt-first-size": `${ptToPx(look.firstColumnFontSize)}px`,
+		"--vc-dt-first-weight": String(look.firstColumnFontWeight),
+		"--vc-dt-first-color": look.firstColumnColor,
+		"--vc-dt-border": look.borderColor,
+		"--vc-dt-stripe": look.striped ? look.stripeColor : "transparent",
+		"--vc-dt-head-bg": look.headerBackground ?? "transparent",
+		"--vc-dt-head-text": look.headerTextColor,
+		"--vc-dt-head-family": look.headerFontFamily,
+		"--vc-dt-head-size": `${ptToPx(look.headerFontSize)}px`,
+		"--vc-dt-head-weight": String(look.headerFontWeight),
+		"--vc-dt-head-rule": `${look.headerBorderWidth}px solid ${look.headerBorderColor}`,
+		"--vc-dt-title-family": look.titleFontFamily,
+		"--vc-dt-title-size": `${ptToPx(look.titleFontSize)}px`,
+		"--vc-dt-title-color": look.titleColor,
+		"--vc-dt-title-weight": String(look.titleFontWeight),
+		"--vc-dt-title-align": look.titleAlign,
+		"--vc-dt-cap-family": look.captionFontFamily,
+		"--vc-dt-cap-size": `${ptToPx(look.captionFontSize)}px`,
+		"--vc-dt-cap-color": look.captionColor,
+		"--vc-dt-cap-weight": String(look.captionFontWeight),
+		"--vc-dt-cap-align": look.captionAlign,
+	}) as CSSProperties
 
 const downloadCsv = (model: DataTableModel, name: string): void => {
 	const blob = new Blob([dataTableToCsv(model)], {
@@ -73,11 +88,13 @@ const downloadCsv = (model: DataTableModel, name: string): void => {
  *  button, open), so a disabled table costs nothing. */
 const DataTable = ({
 	cfg,
-	captionText,
+	look,
+	titleText,
 	fileName,
 }: {
 	cfg: DataTableConfig
-	captionText: string
+	look: ResolvedDataTableStyle
+	titleText: string
 	fileName: string
 }) => {
 	const view = useCurrentDatasetView()
@@ -91,6 +108,7 @@ const DataTable = ({
 	const modeId = useChartModeDef().id
 	const [showAll, setShowAll] = useState(false)
 	const noteId = useId()
+	const captionId = useId()
 
 	const model = useMemo(() => {
 		if (!view) return null
@@ -106,18 +124,26 @@ const DataTable = ({
 			view,
 			encodings,
 			columns: cfg.columns,
+			selectedColumns: cfg.selectedColumns,
 			overrides,
 			fieldLevelOrders,
 			formats,
 			plotted,
 		})
-	}, [view, encodings, modeId, channelConfigs, cfg.columns, overrides, fieldLevelOrders, formats])
+	}, [view, encodings, modeId, channelConfigs, cfg.columns, cfg.selectedColumns, overrides, fieldLevelOrders, formats])
 	if (!model) return null
 
 	const total = model.rows.length
 	const limit = cfg.maxRows ?? DATA_TABLE_SAFETY_ROWS
-	const shown = showAll || total <= limit ? model.rows : model.rows.slice(0, limit)
-	const numClass = `vc-data-table-num-${cfg.numberAlign}`
+	/** More rows than the cut — the Show all / Show first toggle applies. */
+	const cuttable = total > limit
+	const shown = showAll || !cuttable ? model.rows : model.rows.slice(0, limit)
+	// One class per column — its own alignment pick, else left for text and
+	// the numbers & dates default for numbers and dates. The header cell
+	// aligns with its column.
+	const alignClass = model.columns.map(
+		(c) => `vc-data-table-align-${columnAlignOf(c, cfg, look)}`
+	)
 
 	return (
 		<>
@@ -126,22 +152,27 @@ const DataTable = ({
 			<div
 				className="vc-data-table-scroll"
 				role="region"
-				aria-label={captionText}
+				aria-label={titleText}
 				// eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- scrollable region must be focusable (WCAG 2.1.1)
 				tabIndex={0}
 			>
 				<table
 					className="vc-data-table"
-					aria-describedby={model.note ? noteId : undefined}
+					aria-describedby={
+						[cfg.caption !== null && captionId, model.note && noteId]
+							.filter(Boolean)
+							.join(" ") || undefined
+					}
 				>
-					<caption>{captionText}</caption>
+					{/* The title is the HTML caption: it names the table. */}
+					<caption>{titleText}</caption>
 					<thead>
 						<tr>
-							{model.columns.map((c) => (
+							{model.columns.map((c, ci) => (
 								<th
 									key={c.name}
 									scope="col"
-									className={c.numeric ? numClass : undefined}
+									className={alignClass[ci]}
 								>
 									{c.name}
 								</th>
@@ -152,7 +183,14 @@ const DataTable = ({
 						{shown.map((row) => (
 							<tr key={row.index}>
 								{model.columns.map((col, ci) => (
-									<td key={col.name} className={col.numeric ? numClass : undefined}>
+									<td
+									key={col.name}
+									className={
+										ci === 0 && !look.firstColumnLikeOthers
+											? `${alignClass[ci]} vc-data-table-first`
+											: alignClass[ci]
+									}
+								>
 										{row.cells[ci]?.text}
 									</td>
 								))}
@@ -161,20 +199,29 @@ const DataTable = ({
 					</tbody>
 				</table>
 			</div>
+			{cfg.caption !== null && (
+				<p id={captionId} className="vc-data-table-caption">
+					{cfg.caption}
+				</p>
+			)}
 			{model.note && (
 				<p id={noteId} className="vc-data-table-note">
 					{model.note}
 				</p>
 			)}
-			{(shown.length < total || cfg.showDownload) && (
+			{(cuttable || cfg.showDownload) && (
 				<div className="vc-data-table-actions">
-					{shown.length < total && (
+					{/* One toggle, not two buttons: it stays in place, so keyboard
+					 *  focus survives the switch either way. */}
+					{cuttable && (
 						<button
 							type="button"
-							className="vc-data-table-button"
-							onClick={() => setShowAll(true)}
+							className="vc-data-table-link"
+							onClick={() => setShowAll((v) => !v)}
 						>
-							Show all {total.toLocaleString()} rows
+							{showAll
+								? `Show first ${limit.toLocaleString()} rows`
+								: `Show all ${total.toLocaleString()} rows`}
 						</button>
 					)}
 					{cfg.showDownload && (
@@ -215,13 +262,19 @@ const EnabledDataTableBlock = ({
 	const background = useAtomValue(renderChannelConfigsAtom).backgroundColor
 	const [open, setOpen] = useState(false)
 	const regionId = useId()
-	const captionText = cfg.caption ?? defaultDataTableCaption(title, name)
+	const titleText = cfg.title ?? defaultDataTableTitle(title, name)
+	const look = resolveDataTableStyle(cfg, theme)
 	const style: CSSProperties = {
-		...tableStyle(cfg, theme),
+		...tableStyle(look),
 		...(background ? { backgroundColor: background } : {}),
 	}
 	const table = (
-		<DataTable cfg={cfg} captionText={captionText} fileName={name || title || "chart"} />
+		<DataTable
+			cfg={cfg}
+			look={look}
+			titleText={titleText}
+			fileName={name || title || "chart"}
+		/>
 	)
 
 	return (

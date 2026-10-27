@@ -332,7 +332,7 @@ export const emptyDataLabelsEncodings = (): DataLabelsEncodings => ({
 
 import type { AnnotationsConfig } from "./annotationsConfig"
 import type { CaptionConfig } from "./captionConfig"
-import type { DataTableConfig } from "./dataTableConfig"
+import type { DataTableConfig, DataTableNumberAlign } from "./dataTableConfig"
 import type { AccessibilityConfig } from "./accessibilityConfig"
 import type {
 	CanvasMargins,
@@ -867,6 +867,61 @@ export type Theme = {
 	tooltipShadowColor: string
 	/** Shadow opacity 0–1. */
 	tooltipShadowOpacity: number
+	/** Settings → Themes → Data tables: the look of the optional HTML table
+	 * under the chart. Per-visual overrides live in `DataTableConfig` (a null
+	 * there follows these; `resolveDataTableStyle` in dataTableConfig.ts is
+	 * the one chain). */
+	/** `null` = the theme's base text family (`textFontFamily`). */
+	dataTableFontFamily: string | null
+	/** POINTS. `null` = the theme's base text size (`textFontSize`). */
+	dataTableFontSize: number | null
+	/** `null` = the theme's base text weight (`textFontWeight`). */
+	dataTableFontWeight: number | null
+	/** `null` = the theme's base text color (`textFontColor`). */
+	dataTableTextColor: string | null
+	/** "Format first column like other columns". When false, the first
+	 * column's body cells take the font below; each `null` = the table
+	 * text's. */
+	dataTableFirstColumnLikeOthers: boolean
+	dataTableFirstColumnFontFamily: string | null
+	dataTableFirstColumnFontSize: number | null
+	dataTableFirstColumnFontWeight: number | null
+	dataTableFirstColumnColor: string | null
+	/** Header row fill. `null` = none (the header reads from its rule and
+	 * weight alone). */
+	dataTableHeaderBackground: string | null
+	/** `null` = the table's text color. */
+	dataTableHeaderTextColor: string | null
+	/** Header row font. `null` family / size = the table text's. */
+	dataTableHeaderFontFamily: string | null
+	dataTableHeaderFontSize: number | null
+	dataTableHeaderFontWeight: number
+	/** The rule under the header row. `null` color = the row border color;
+	 * width in px, 0 = no rule. */
+	dataTableHeaderBorderColor: string | null
+	dataTableHeaderBorderWidth: number
+	/** Row rules. `null` = a soft (22%) tint of the table's text color. */
+	dataTableBorderColor: string | null
+	/** Alternate-row fill on/off. */
+	dataTableStriped: boolean
+	/** `null` = a 4% tint of the table's text color. */
+	dataTableStripeColor: string | null
+	/** Alignment of numeric columns. */
+	dataTableNumberAlign: DataTableNumberAlign
+	/** Title above the table. `null` family / size / color = the table
+	 * text's. */
+	dataTableTitleFontFamily: string | null
+	dataTableTitleFontSize: number | null
+	dataTableTitleColor: string | null
+	dataTableTitleFontWeight: number
+	dataTableTitleAlign: DataTableNumberAlign
+	/** Caption below the table. `null` family / size / color / weight = the
+	 * table text's. */
+	dataTableCaptionFontFamily: string | null
+	dataTableCaptionFontSize: number | null
+	dataTableCaptionColor: string | null
+	dataTableCaptionFontWeight: number | null
+	dataTableCaptionAlign: DataTableNumberAlign
 	/** Settings → Themes → Exporting: default fixed-canvas margins (px,
 	 * sparse per side — an absent side is auto). A visual with a canvas
 	 * size inherits each side it hasn't set itself

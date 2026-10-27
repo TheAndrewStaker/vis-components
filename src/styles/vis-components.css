@@ -151,6 +151,13 @@
  * Component layer — reusable multi-class styles
  * -------------------------------------------------------------------------- */
 @layer components {
+	/* Anything a sidebar jump link scrolls to (useSidebarJump): stop this
+	 * far below the sidebar's top edge so the destination keeps some
+	 * context above it instead of pinning flush to the top. */
+	.vc-jump-target {
+		scroll-margin-top: 4rem;
+	}
+
 	/* Shaded background used behind every per-encoding option group in the
 	 * sidebar (Hue, Opacity, Axis, Angle/Length, Shape, Pattern, Base Font
 	 * subgroups, etc.). Change the two tokens above to restyle all 19 panels
@@ -585,11 +592,27 @@
 		border-collapse: collapse;
 		font-variant-numeric: tabular-nums;
 	}
+	/* The table's TITLE is its HTML <caption> (it names the table for
+	 * screen readers); the visible "caption" sits under the table as
+	 * .vc-data-table-caption. */
 	.vc-data-table caption {
 		caption-side: top;
-		text-align: left;
-		font-weight: 600;
+		font-family: var(--vc-dt-title-family);
+		font-size: var(--vc-dt-title-size);
+		color: var(--vc-dt-title-color);
+		font-weight: var(--vc-dt-title-weight);
+		text-align: var(--vc-dt-title-align);
 		padding-bottom: 0.375em;
+	}
+	.vc-data-table-caption {
+		font-family: var(--vc-dt-cap-family);
+		font-size: var(--vc-dt-cap-size);
+		color: var(--vc-dt-cap-color);
+		font-weight: var(--vc-dt-cap-weight);
+		text-align: var(--vc-dt-cap-align);
+		padding-top: 0.375em;
+		margin: 0;
+		white-space: pre-line;
 	}
 	.vc-data-table th,
 	.vc-data-table td {
@@ -601,20 +624,30 @@
 	.vc-data-table th {
 		background-color: var(--vc-dt-head-bg);
 		color: var(--vc-dt-head-text);
+		font-family: var(--vc-dt-head-family);
+		font-size: var(--vc-dt-head-size);
 		font-weight: var(--vc-dt-head-weight);
-		border-bottom-width: 2px;
+		border-bottom: var(--vc-dt-head-rule);
 		white-space: nowrap;
 	}
 	.vc-data-table tbody tr:nth-child(even) {
 		background-color: var(--vc-dt-stripe);
 	}
-	.vc-data-table .vc-data-table-num-right {
+	/* "Format first column like other columns" off: the first column's
+	 * body cells take their own font (the header row keeps the header's). */
+	.vc-data-table td.vc-data-table-first {
+		font-family: var(--vc-dt-first-family);
+		font-size: var(--vc-dt-first-size);
+		font-weight: var(--vc-dt-first-weight);
+		color: var(--vc-dt-first-color);
+	}
+	.vc-data-table .vc-data-table-align-right {
 		text-align: right;
 	}
-	.vc-data-table .vc-data-table-num-left {
+	.vc-data-table .vc-data-table-align-left {
 		text-align: left;
 	}
-	.vc-data-table .vc-data-table-num-center {
+	.vc-data-table .vc-data-table-align-center {
 		text-align: center;
 	}
 	/* One line under the table saying what an aggregated row is (or that a
@@ -628,13 +661,15 @@
 	.vc-data-table-actions {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: center;
-		gap: 1rem;
-		padding-top: 0.5rem;
+		align-items: baseline;
+		gap: 1.25rem;
+		padding-top: 0.375rem;
 	}
-	/* The "View data" / "Show all" buttons and the download link inherit the
-	 * table's font and color so they read as part of the figure, not the
-	 * app chrome. */
+	/* The "View data" toggle and the under-table links inherit the table's
+	 * font and color so they read as part of the figure, not the app
+	 * chrome. The toggle is a real button (it reveals the table); "Show all"
+	 * and "Download CSV" are quiet text links, a step smaller than the
+	 * cells, with a thin underline that firms up on hover. */
 	.vc-data-table-button {
 		font: inherit;
 		color: inherit;
@@ -649,12 +684,19 @@
 	}
 	.vc-data-table-link {
 		font: inherit;
+		font-size: 0.875em;
 		color: inherit;
 		cursor: pointer;
 		background: none;
 		border: 0;
 		padding: 0;
 		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 0.2em;
+		text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+	}
+	.vc-data-table-link:hover {
+		text-decoration-color: currentColor;
 	}
 	.vc-data-table-button:focus-visible,
 	.vc-data-table-link:focus-visible {

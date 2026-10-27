@@ -37,6 +37,7 @@ import { PalettesSection } from "./themeSections/PalettesSection"
 import { PatternsSection } from "./themeSections/PatternsSection"
 import { TextSection } from "./themeSections/TextSection"
 import { TooltipsSection } from "./themeSections/TooltipsSection"
+import { DataTablesSection } from "./themeSections/DataTablesSection"
 import { Button } from "../../../components/ui/Button"
 import { ThemePreview } from "./ThemePreview"
 import { ThemeSamplerPreview } from "./ThemeSamplerPreview"
@@ -410,6 +411,7 @@ export const ThemesPage = ({
 					<AxesSection {...sectionProps} />
 					<LegendSection {...sectionProps} />
 					<TooltipsSection {...sectionProps} />
+					<DataTablesSection {...sectionProps} />
 					<TextSection {...sectionProps} />
 					<PalettesSection {...sectionProps} />
 					<GradientsSection {...sectionProps} />

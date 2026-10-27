@@ -449,7 +449,7 @@ export const EncodingShelf = ({ channel }: Props) => {
 		<Disclosure
 			as="div"
 			id={encodingRowId(channel)}
-			className="flex flex-col gap-1"
+			className="vc-jump-target flex flex-col gap-1"
 		>
 			{({ open }) => (
 				<>

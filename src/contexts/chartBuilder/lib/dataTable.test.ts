@@ -7,9 +7,14 @@ import {
 } from "./dataTable"
 import {
 	DEFAULT_DATA_TABLE_CONFIG,
-	defaultDataTableCaption,
+	defaultDataTableTitle,
 	migrateDataTableConfig,
+	columnAlignOf,
+	defaultColumnAlign,
+	resolveDataTableStyle,
+	themeDataTableStyle,
 } from "./dataTableConfig"
+import { SYSTEM_LIGHT_THEME, themeOf } from "./systemThemes"
 import { emptyEncodings, type DatasetView, type Encodings } from "./types"
 
 const view = (over: Partial<DatasetView> = {}): DatasetView => ({
@@ -59,6 +64,20 @@ const build = (
 	})
 
 describe("dataTableColumnNames", () => {
+	it('"select" lists the checked variables in the view\'s order, skipping gone ones', () => {
+		const e = enc({ x: "region" })
+		const all = view().fields.map((f) => f.name)
+		const picked = [all[2]!, "renamed-away", all[0]!]
+		expect(dataTableColumnNames(view(), e, "select", undefined, picked)).toEqual([
+			all[0],
+			all[2],
+		])
+		// Nothing live left → the encoded columns.
+		expect(dataTableColumnNames(view(), e, "select", undefined, ["gone"])).toEqual([
+			"region",
+		])
+	})
+
 	it("lists encoded fields in encoding order: positions, channels, facets last", () => {
 		const e = enc({ facet: "note", hue: "size", y: "sales", x: "region" })
 		expect(dataTableColumnNames(view(), e, "encoded")).toEqual([
@@ -191,6 +210,17 @@ describe("migrateDataTableConfig", () => {
 		})
 	})
 
+	it("keeps explicit style choices and reads absent ones as follow-the-theme", () => {
+		const cfg = migrateDataTableConfig({
+			headerBorderWidth: 0,
+			striped: "yes",
+			numberAlign: "up",
+		})
+		expect(cfg.headerBorderWidth).toBe(0)
+		expect(cfg.striped).toBeNull()
+		expect(cfg.numberAlign).toBeNull()
+	})
+
 	it("is idempotent", () => {
 		const once = migrateDataTableConfig({ enabled: true, maxRows: 25.4, caption: "x" })
 		expect(migrateDataTableConfig(once)).toEqual(once)
@@ -198,12 +228,86 @@ describe("migrateDataTableConfig", () => {
 	})
 })
 
-describe("defaultDataTableCaption", () => {
+describe("column alignment", () => {
+	const look = { numberAlign: "right" as const }
+
+	it("numbers and dates take the numbers & dates default; the rest start left", () => {
+		expect(defaultColumnAlign("quantitative", look)).toBe("right")
+		expect(defaultColumnAlign("temporal", look)).toBe("right")
+		expect(defaultColumnAlign("categorical", look)).toBe("left")
+		expect(defaultColumnAlign("ordinal", { numberAlign: "center" })).toBe("left")
+	})
+
+	it("a column's own pick wins, and bad map entries are dropped on intake", () => {
+		const cfg = migrateDataTableConfig({ columnAlign: { a: "center", b: "up", c: 3 } })
+		expect(cfg.columnAlign).toEqual({ a: "center" })
+		expect(columnAlignOf({ name: "a", type: "quantitative" }, cfg, look)).toBe("center")
+		expect(columnAlignOf({ name: "b", type: "temporal" }, cfg, look)).toBe("right")
+	})
+})
+
+describe("defaultDataTableTitle", () => {
 	it("prefers the chart title, then the visual name", () => {
-		expect(defaultDataTableCaption("Sales by region", "Untitled")).toBe(
+		expect(defaultDataTableTitle("Sales by region", "Untitled")).toBe(
 			"Data for Sales by region"
 		)
-		expect(defaultDataTableCaption("  ", "My chart")).toBe("Data for My chart")
-		expect(defaultDataTableCaption("", "")).toBe("Data for this chart")
+		expect(defaultDataTableTitle("  ", "My chart")).toBe("Data for My chart")
+		expect(defaultDataTableTitle("", "")).toBe("Data for this chart")
+	})
+})
+
+describe("resolveDataTableStyle", () => {
+	const theme = themeOf(SYSTEM_LIGHT_THEME)
+
+	it("a visual that sets nothing gets the theme's base text font and derived tints", () => {
+		const look = resolveDataTableStyle(DEFAULT_DATA_TABLE_CONFIG, theme)
+		expect(look).toEqual(themeDataTableStyle(theme))
+		expect(look.fontFamily).toBe(theme.textFontFamily)
+		expect(look.fontSize).toBe(theme.textFontSize)
+		expect(look.textColor).toBe(theme.textFontColor)
+		expect(look.headerTextColor).toBe(theme.textFontColor)
+		expect(look.headerBackground).toBeNull()
+		expect(look.borderColor).toContain(theme.textFontColor)
+		expect(look).toMatchObject({
+			headerFontFamily: theme.textFontFamily,
+			headerFontWeight: 600,
+			headerBorderWidth: 2,
+			headerBorderColor: look.borderColor,
+			striped: true,
+			numberAlign: "right",
+		})
+	})
+
+	it("theme Data tables defaults sit between the visual and the base text", () => {
+		const themed = {
+			...theme,
+			dataTableFontSize: 9,
+			dataTableTextColor: "#222222",
+			dataTableHeaderFontWeight: 400,
+			dataTableStriped: false,
+			dataTableNumberAlign: "left" as const,
+		}
+		const look = resolveDataTableStyle(DEFAULT_DATA_TABLE_CONFIG, themed)
+		expect(look).toMatchObject({
+			fontSize: 9,
+			textColor: "#222222",
+			headerTextColor: "#222222",
+			headerFontSize: 9,
+			headerFontWeight: 400,
+			striped: false,
+			numberAlign: "left",
+		})
+		expect(look.stripeColor).toContain("#222222")
+
+		const pinned = resolveDataTableStyle(
+			{ ...DEFAULT_DATA_TABLE_CONFIG, fontSize: 14, headerFontWeight: 700, numberAlign: "center" },
+			themed
+		)
+		expect(pinned).toMatchObject({
+			fontSize: 14,
+			headerFontSize: 14,
+			headerFontWeight: 700,
+			numberAlign: "center",
+		})
 	})
 })

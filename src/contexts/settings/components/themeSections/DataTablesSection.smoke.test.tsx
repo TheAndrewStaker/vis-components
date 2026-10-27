@@ -1,0 +1,97 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { afterEach, describe, expect, it, vi } from "vitest"
+
+import { SYSTEM_LIGHT_THEME, themeOf } from "../../../chartBuilder/lib/systemThemes"
+import type { Theme } from "../../../chartBuilder/lib/types"
+import { TestProvider } from "../../../../testSupport/TestProvider"
+
+import { DataTablesSection } from "./DataTablesSection"
+import type { ThemeSetter } from "./types"
+
+afterEach(cleanup)
+
+const THEME: Theme = themeOf(SYSTEM_LIGHT_THEME)
+
+const mount = (theme: Theme = THEME) => {
+	const set = vi.fn() as unknown as ThemeSetter
+	render(
+		<TestProvider>
+			<DataTablesSection theme={theme} set={set} isReadOnly={false} />
+		</TestProvider>
+	)
+	// The section group starts collapsed; open it like the user would.
+	fireEvent.click(screen.getByRole("button", { name: /Data tables/, expanded: false }))
+	return set as unknown as ReturnType<typeof vi.fn>
+}
+
+describe("DataTablesSection — data table defaults", () => {
+	it("follows the sidebar's order and wording", () => {
+		mount()
+		const headings = screen.getAllByRole("heading").map((h) => h.textContent)
+		expect(headings).toEqual(["Title", "Caption", "Header", "Table text", "Rows"])
+		// Family / Size / Weight for title, caption, header, table text, first column.
+		for (const label of ["Family", "Size", "Weight"])
+			expect(screen.getAllByLabelText(label)).toHaveLength(5)
+		// Color: title, caption, the header's bottom line, table text, first column.
+		expect(screen.getAllByLabelText("Color")).toHaveLength(5)
+		expect(screen.getByText("First column")).toBeTruthy()
+		for (const label of [
+			"Text color",
+			"Background",
+			"Thickness",
+			"Border color",
+			"Striped rows",
+			"Stripe color",
+		])
+			expect(screen.getByLabelText(label)).toBeTruthy()
+		expect(screen.getByText("Bottom line")).toBeTruthy()
+		expect(screen.getByText("Column alignment")).toBeTruthy()
+		// Empty sizes all follow the base text size.
+		const sizes = screen.getAllByLabelText("Size") as HTMLInputElement[]
+		expect(sizes.map((el) => el.placeholder)).toEqual(
+			Array(5).fill(String(THEME.textFontSize))
+		)
+	})
+
+	it("writes sizes, weights, the toggles, and alignment", () => {
+		const set = mount()
+		const [titleSize, , headerSize, tableSize] = screen.getAllByLabelText("Size")
+		fireEvent.change(tableSize!, { target: { value: "9" } })
+		expect(set).toHaveBeenCalledWith("dataTableFontSize", 9)
+		fireEvent.change(titleSize!, { target: { value: "14" } })
+		expect(set).toHaveBeenCalledWith("dataTableTitleFontSize", 14)
+		fireEvent.change(headerSize!, { target: { value: "11" } })
+		expect(set).toHaveBeenCalledWith("dataTableHeaderFontSize", 11)
+		const [titleWeight, , headerWeight, tableWeight] = screen.getAllByLabelText("Weight")
+		fireEvent.change(titleWeight!, { target: { value: "700" } })
+		expect(set).toHaveBeenCalledWith("dataTableTitleFontWeight", 700)
+		fireEvent.change(headerWeight!, { target: { value: "400" } })
+		expect(set).toHaveBeenCalledWith("dataTableHeaderFontWeight", 400)
+		fireEvent.change(tableWeight!, { target: { value: "300" } })
+		expect(set).toHaveBeenCalledWith("dataTableFontWeight", 300)
+		fireEvent.change(screen.getByLabelText("Thickness"), { target: { value: "1" } })
+		expect(set).toHaveBeenCalledWith("dataTableHeaderBorderWidth", 1)
+		fireEvent.click(screen.getByLabelText("Striped rows"))
+		expect(set).toHaveBeenCalledWith("dataTableStriped", false)
+		// Alignment rows in order: title, caption, numbers & dates.
+		fireEvent.click(screen.getAllByRole("button", { name: /right/i })[0]!)
+		expect(set).toHaveBeenCalledWith("dataTableTitleAlign", "right")
+		fireEvent.click(screen.getAllByRole("button", { name: /left/i })[2]!)
+		expect(set).toHaveBeenCalledWith("dataTableNumberAlign", "left")
+	})
+
+	it("keeps the stripe and line colors settable while they're off", () => {
+		mount({ ...THEME, dataTableStriped: false, dataTableHeaderBorderWidth: 0 })
+		expect(screen.getByLabelText("Stripe color")).toBeTruthy()
+		expect(screen.getAllByLabelText("Color")).toHaveLength(5)
+	})
+
+	it("writes the first-column toggle and its font", () => {
+		const set = mount()
+		fireEvent.click(screen.getByLabelText("Format first column like other columns"))
+		expect(set).toHaveBeenCalledWith("dataTableFirstColumnLikeOthers", false)
+		const firstWeight = screen.getAllByLabelText("Weight")[4]!
+		fireEvent.change(firstWeight, { target: { value: "700" } })
+		expect(set).toHaveBeenCalledWith("dataTableFirstColumnFontWeight", 700)
+	})
+})
