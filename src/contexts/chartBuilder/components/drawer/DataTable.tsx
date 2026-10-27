@@ -4,7 +4,9 @@ import { effectiveDerivedName } from "../../lib/derivedVariables"
 import { compareByType } from "../../lib/drawOrder"
 import type { Field, FieldType } from "../../lib/types"
 import {
+	currentDatasetIdAtom,
 	currentDerivedVariablesAtom,
+	datasetIndexAtom,
 	derivedVariableEditorAtom,
 } from "../../store/atoms"
 import {
@@ -14,6 +16,8 @@ import {
 	useCurrentDatasetView,
 } from "../../store/useCurrentDatasetView"
 import { useEditedCells } from "../../store/useEditedCells"
+import { useReorderField } from "../../store/useReorderField"
+import { useDragReorder } from "../useDragReorder"
 
 const MAX_ROWS_RENDERED = 500
 const MIN_COL_WIDTH = 40
@@ -161,6 +165,36 @@ export const DataTable = () => {
 
 	const rowsSource = useMemo(() => dataset?.rows ?? [], [dataset])
 
+	// Drag a column header to reorder the data set's columns (the Fields
+	// panel follows). Dataset fields only — a reshape's minted columns and
+	// an older visual's live derived columns have no place in that list —
+	// and not while a reshape is applied, when the columns shown aren't
+	// that list. Same rule as the Fields panel.
+	const datasetId = useAtomValue(currentDatasetIdAtom)
+	const datasetIndex = useAtomValue(datasetIndexAtom)
+	const datasetFieldNames = useMemo(
+		() =>
+			new Set(
+				(datasetId ? (datasetIndex[datasetId]?.fields ?? []) : []).map((f) => f.name)
+			),
+		[datasetId, datasetIndex]
+	)
+	const reorderField = useReorderField()
+	const viewFields = dataset?.fields ?? []
+	const canReorder = !reshapeApplied && datasetFieldNames.size > 1
+	const canDrag = (name: string) => canReorder && datasetFieldNames.has(name)
+	const dnd = useDragReorder({
+		axis: "x",
+		count: viewFields.length,
+		onMove: (from, slot) => {
+			const moved = viewFields[from]
+			if (!moved || !canDrag(moved.name)) return
+			const before =
+				viewFields.slice(slot).find((f) => datasetFieldNames.has(f.name))?.name ?? null
+			void reorderField(moved.name, before)
+		},
+	})
+
 	const alignmentByField = useMemo<Map<string, ColumnAlignment>>(() => {
 		const m = new Map<string, ColumnAlignment>()
 		if (!dataset) return m
@@ -221,14 +255,32 @@ export const DataTable = () => {
 			>
 				<thead className="sticky top-0 z-[1] bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300">
 					<tr>
-						{dataset.fields.map((f) => {
+						{dataset.fields.map((f, i) => {
 							const alignment = alignmentByField.get(f.name) ?? "default"
 							const isActive = sort?.field === f.name
 							const width = colWidths[f.name]
+							const draggable = canDrag(f.name)
+							const source = draggable ? dnd.sourceProps(i, f.name) : null
+							const last = i === dataset.fields.length - 1
 							return (
 								<th
 									key={f.name}
 									scope="col"
+									{...(canReorder ? dnd.targetProps(i) : {})}
+									{...(source
+										? {
+												...source,
+												title: "Drag to reorder",
+												onDragStart: (e: React.DragEvent) => {
+													// The resize strip is its own pointer gesture.
+													if ((e.target as HTMLElement).closest("[role=separator]")) {
+														e.preventDefault()
+														return
+													}
+													source.onDragStart(e)
+												},
+											}
+										: {})}
 									aria-sort={
 										isActive
 											? sort?.dir === "asc"
@@ -248,7 +300,13 @@ export const DataTable = () => {
 									}
 									className={`relative border-r border-b border-stone-200 px-3 py-2 font-medium whitespace-nowrap dark:border-stone-700 ${alignmentClasses(
 										alignment
-									)}`}
+									)}${draggable ? " cursor-grab" : ""}${
+										dnd.isSlot(i) ? " border-l-2 border-l-indigo-500 dark:border-l-indigo-400" : ""
+									}${
+										last && dnd.isSlot(dataset.fields.length)
+											? " border-r-2 border-r-indigo-500 dark:border-r-indigo-400"
+											: ""
+									}${dnd.dragIndex === i ? " opacity-50" : ""}`}
 								>
 									{/* `flex` lets the sort button shrink + clip the field name
 									 * when the column is narrow, instead of leaking past the th's

@@ -647,6 +647,21 @@ Reshape panel); renaming a melted wide column instead rewrites its
 occurrences as CELL VALUES of the variable column (hue colors,
 per-value overrides, facet settings, pinned orders).
 
+**Reordering variables** — a field row in the Fields panel drags by its
+⠿ handle, and a column header in the data tray drags as a whole; the
+drop gap is marked while the drag is on. Column order, like a name, is
+a property of the DATASET (`Dataset.fields`, `store/useReorderField.ts`
+→ `lib/reorderFields.ts`): the data tray, the Fields panel, the Edit
+dialog and every visual bound to the data set follow it, and every
+version that keeps a column list of its own is put in the same order,
+so previewing an older version shows its columns as arranged (a column
+only that version has keeps its place after the ordered ones). Rows
+are never rewritten — they are keyed by name — and no visual config
+stores a column position, so nothing else changes. Only the data set's
+own fields drag: with a reshape applied (the rows shown aren't that
+list) and for an older visual's live derived columns there is no
+handle. The Edit dialog's grid does NOT reorder columns.
+
 ### 2.3 Visuals (save/load)
 A "visual" is a named snapshot of: chart name, the dataset (and the
 specific version it was authored against), field-type overrides, all

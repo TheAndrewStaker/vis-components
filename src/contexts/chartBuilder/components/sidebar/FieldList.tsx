@@ -20,12 +20,15 @@ import {
 import { originalFieldName } from "../../lib/renameField"
 import {
 	materializedDerivedAtom,
+	reshapeAppliedAtom,
 	useCurrentDatasetView,
 } from "../../store/useCurrentDatasetView"
 import {
 	useRenameDerivedVariable,
 	useRenameField,
 } from "../../store/useRenameField"
+import { useReorderField } from "../../store/useReorderField"
+import { useDragReorder } from "../useDragReorder"
 import { Disclosure } from "@headlessui/react"
 
 import { Checkbox } from "../../../../components/ui/Checkbox"
@@ -77,6 +80,26 @@ export const FieldList = () => {
 			(f) => f.name
 		)
 	)
+	// Drag a row by its handle to reorder the data set's columns (the tray
+	// follows). Dataset fields only — a reshape's minted columns and an
+	// older visual's live derived columns have no place in that list — and
+	// not while a reshape is applied, when the rows shown aren't that list.
+	const reorderField = useReorderField()
+	const reshapeApplied = useAtomValue(reshapeAppliedAtom)
+	const viewFields = dataset?.fields ?? []
+	const canReorder = !reshapeApplied && datasetFieldNames.size > 1
+	const canDrag = (name: string) => canReorder && datasetFieldNames.has(name)
+	const dnd = useDragReorder({
+		axis: "y",
+		count: viewFields.length,
+		onMove: (from, slot) => {
+			const moved = viewFields[from]
+			if (!moved || !canDrag(moved.name)) return
+			const before =
+				viewFields.slice(slot).find((f) => datasetFieldNames.has(f.name))?.name ?? null
+			void reorderField(moved.name, before)
+		},
+	})
 
 	if (!dataset) {
 		return (
@@ -96,8 +119,10 @@ export const FieldList = () => {
 
 	return (
 		<ul className="flex flex-col gap-1">
-			{dataset.fields.map((field) => {
+			{dataset.fields.map((field, i) => {
 				const effective = overrides[field.name] ?? field.inferredType
+				const draggable = canDrag(field.name)
+				const last = i === dataset.fields.length - 1
 				const reorderable =
 					effective === "categorical" || effective === "ordinal"
 				// The variable minting this column, so the ƒ pill can reopen it
@@ -111,12 +136,29 @@ export const FieldList = () => {
 				return (
 					<li
 						key={field.name}
-						className="flex flex-col gap-1 rounded-md border border-stone-200 bg-white px-2 py-1.5 dark:border-stone-700 dark:bg-stone-800"
+						{...(canReorder ? dnd.targetProps(i) : {})}
+						className={`flex flex-col gap-1 rounded-md border border-stone-200 bg-white px-2 py-1.5 dark:border-stone-700 dark:bg-stone-800${
+							dnd.isSlot(i) ? " border-t-indigo-500 dark:border-t-indigo-400" : ""
+						}${
+							last && dnd.isSlot(dataset.fields.length)
+								? " border-b-indigo-500 dark:border-b-indigo-400"
+								: ""
+						}${dnd.dragIndex === i ? " opacity-50" : ""}`}
 					>
 						<Disclosure>
 							{({ open }) => (
 								<>
 									<div className="flex items-center justify-between gap-2">
+										{draggable && (
+											<span
+												{...dnd.sourceProps(i, field.name)}
+												aria-hidden
+												title="Drag to reorder"
+												className="flex-shrink-0 cursor-grab select-none text-sm leading-none vc-muted"
+											>
+												⠿
+											</span>
+										)}
 										{datasetFieldNames.has(field.name) ? (
 											<FieldNameEditor field={field} />
 										) : field.derived ? (
