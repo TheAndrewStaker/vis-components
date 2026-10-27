@@ -274,6 +274,75 @@ describe("Line chart (scatter + connection) — points + line render together", 
 		).toBe(true)
 	})
 
+	it("the Tick line cap ends lines flush and draws one perpendicular tick per open end", () => {
+		// Connection > Line properties > Line cap = Tick: the polyline takes
+		// the flush (butt) cap AND each line gets exactly two tick <line>s —
+		// one centered on its first point, one on its last — in the line's
+		// stroke and thickness.
+		seedLocalStorage({ connectionField: "region" })
+		seedConnectionCfg({
+			...DEFAULT_CONNECTION_CONFIG,
+			lineCap: "tick",
+			lineCapTickLength: 10,
+		})
+		const { container } = render(
+			<TestProvider
+				initializeState={initLineChartState({ connectionField: "region" })}
+			>
+				<div style={{ width: 600, height: 400 }}>
+					<ScatterPlot />
+				</div>
+			</TestProvider>
+		)
+		const polylines = [...container.querySelectorAll("polyline:not(.vc-line-hit)")]
+		expect(polylines.length).toBe(2)
+		expect(
+			polylines.every((p) => p.getAttribute("stroke-linecap") === "butt")
+		).toBe(true)
+		const ticks = [...container.querySelectorAll("line.vc-line-end-tick")]
+		expect(ticks.length).toBe(4)
+		for (const pl of polylines) {
+			const pts = (pl.getAttribute("points") ?? "")
+				.split(" ")
+				.map((pair) => pair.split(",").map(Number))
+			const [fx, fy] = pts[0]
+			const [lx, ly] = pts[pts.length - 1]
+			const centeredOn = (x: number, y: number) =>
+				ticks.some((t) => {
+					const mx = (Number(t.getAttribute("x1")) + Number(t.getAttribute("x2"))) / 2
+					const my = (Number(t.getAttribute("y1")) + Number(t.getAttribute("y2"))) / 2
+					const len = Math.hypot(
+						Number(t.getAttribute("x2")) - Number(t.getAttribute("x1")),
+						Number(t.getAttribute("y2")) - Number(t.getAttribute("y1"))
+					)
+					return (
+						Math.abs(mx - x) < 1e-6 &&
+						Math.abs(my - y) < 1e-6 &&
+						Math.abs(len - 10) < 1e-6 &&
+						t.getAttribute("stroke") === pl.getAttribute("stroke") &&
+						t.getAttribute("stroke-width") === pl.getAttribute("stroke-width")
+					)
+				})
+			expect(centeredOn(fx, fy)).toBe(true)
+			expect(centeredOn(lx, ly)).toBe(true)
+		}
+	})
+
+	it("Round / Square line caps draw no end ticks", () => {
+		seedLocalStorage({ connectionField: "region" })
+		seedConnectionCfg({ ...DEFAULT_CONNECTION_CONFIG, lineCap: "square" })
+		const { container } = render(
+			<TestProvider
+				initializeState={initLineChartState({ connectionField: "region" })}
+			>
+				<div style={{ width: 600, height: 400 }}>
+					<ScatterPlot />
+				</div>
+			</TestProvider>
+		)
+		expect(container.querySelectorAll("line.vc-line-end-tick").length).toBe(0)
+	})
+
 	it("AreaPlot line-fill layer edges honor the Line cap option (square → stroke-linecap=butt)", () => {
 		seedAreaChartStorage({ connectionField: "region", hueField: "region" })
 		seedConnectionCfg({ ...DEFAULT_CONNECTION_CONFIG, lineCap: "square" })
@@ -296,6 +365,31 @@ describe("Line chart (scatter + connection) — points + line render together", 
 		expect(
 			layerLines.every((p) => p.getAttribute("stroke-linecap") === "butt")
 		).toBe(true)
+	})
+
+	it("AreaPlot line-fill layer edges get two end ticks per layer under the Tick line cap", () => {
+		seedAreaChartStorage({ connectionField: "region", hueField: "region" })
+		seedConnectionCfg({ ...DEFAULT_CONNECTION_CONFIG, lineCap: "tick" })
+		const { container } = render(
+			<TestProvider
+				initializeState={initAreaChartState({
+					connectionField: "region",
+					hueField: "region",
+				})}
+			>
+				<div style={{ width: 600, height: 400 }}>
+					<AreaPlot />
+				</div>
+			</TestProvider>
+		)
+		const layerLines = [...container.querySelectorAll("path:not(.vc-line-hit)")].filter(
+			(p) => p.getAttribute("fill") === "none"
+		)
+		expect(
+			layerLines.every((p) => p.getAttribute("stroke-linecap") === "butt")
+		).toBe(true)
+		const ticks = container.querySelectorAll("line.vc-line-end-tick")
+		expect(ticks.length).toBe(layerLines.length * 2)
 	})
 
 	it("AreaPlot in line-fill mode honors point sampling (`first-and-last` → 2 markers per layer)", () => {

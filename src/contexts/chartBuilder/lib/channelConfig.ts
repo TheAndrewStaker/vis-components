@@ -1258,8 +1258,14 @@ export type ConnectionConfig = {
 	 *  area/line-mode layer edges (dash segments too). Radar polygons are
 	 *  closed, so caps never show there. `"square"` maps to SVG's `butt`
 	 *  cap: the stroke ends flush at the endpoint's data position rather
-	 *  than extending half a stroke-width past it. */
-	lineCap?: "round" | "square"
+	 *  than extending half a stroke-width past it. `"tick"` ends flush too
+	 *  and adds a perpendicular tick mark centered on each open end (range
+	 *  plots, box-and-whisker whisker ends); see `lib/lineEndTicks`. */
+	lineCap?: "round" | "square" | "tick"
+	/** Length of the `"tick"` cap's perpendicular mark, in px. `null` /
+	 *  absent = AUTO, derived from the line's thickness
+	 *  (`autoLineEndTickLength`). Only read when `lineCap` is `"tick"`. */
+	lineCapTickLength?: number | null
 	/** Line smoothing amount in [0, 1] for scatter connection lines and
 	 *  area/line-mode layer edges. 0 (the default) draws straight segments
 	 *  through the points; higher values round the corners via a cardinal

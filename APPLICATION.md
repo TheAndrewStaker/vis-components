@@ -1822,12 +1822,20 @@ Connection is the line/area glue. Controls:
   curve still passes through every data point, but sharp turns round
   off and can overshoot slightly. Applies to scatter connection lines
   and area/line-mode layer edges; radar polygons ignore it.
-- **Line cap** — a Round (default) / Square segmented toggle, for the OPEN ends of
-  scatter connection polylines and area/line layer edges (dash
-  segments included). "Square" maps to SVG's `butt` cap: the stroke
-  ends flush at the endpoint's data position instead of extending half
-  a stroke-width past it. Radar polygons are closed, so caps never
-  show there.
+- **Line cap** — a Round (default) / Square / Tick segmented toggle, for the
+  OPEN ends of scatter connection polylines and area/line layer edges
+  (dash segments included). "Square" maps to SVG's `butt` cap: the
+  stroke ends flush at the endpoint's data position instead of
+  extending half a stroke-width past it. "Tick" ends flush the same
+  way and adds a perpendicular tick mark centered on each end of the
+  line (the first and last point only — never at dash-run or range
+  boundaries), in the line's own color, thickness, opacity and
+  hover-highlight treatment: the whisker ends of a box-and-whisker
+  plot, the ends of a range line. Picking Tick reveals a **Tick
+  length** input (px); blank = auto, `max(8, 4 × line thickness)`,
+  shown as the placeholder. Stored as `connection.lineCapTickLength`
+  (`null` = auto). Ticks draw on line-mode layer edges only, never on
+  filled areas. Radar polygons are closed, so caps never show there.
 - **Show points** — `all`, `none`, `first-only`, `last-only`,
   `first-and-last`, or `every-n` with stride N. Drives marker
   visibility along each line.

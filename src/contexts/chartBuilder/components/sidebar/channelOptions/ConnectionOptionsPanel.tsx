@@ -59,6 +59,7 @@ import { ResetLink } from "../../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
 import { Checkbox } from "../../../../../components/ui/Checkbox"
 import { Segmented } from "../../../../../components/ui/Segmented"
+import { autoLineEndTickLength } from "../../../lib/lineEndTicks"
 import { combine as c } from "../../../../../lib/cls"
 import {
 	ordinalSuffix,
@@ -841,6 +842,28 @@ export const ConnectionOptionsPanel = () => {
 								onChange={(lineCap) => updateCfg({ lineCap })}
 							/>
 						</div>
+						{cfg.lineCap === "tick" && (
+							<NumberInput
+								label="Tick length"
+								labelClassName={LABEL_COL}
+								changed={
+									cfg.lineCapTickLength !== null &&
+									cfg.lineCapTickLength !== undefined
+								}
+								value={cfg.lineCapTickLength ?? null}
+								// Blank = auto (scales with the line thickness); the
+								// placeholder shows the resolved auto value.
+								placeholder={String(autoLineEndTickLength(cfg.thickness))}
+								onClear={() => updateCfg({ lineCapTickLength: null })}
+								min={0}
+								step={1}
+								onChange={(n) => {
+									if (n >= 0) updateCfg({ lineCapTickLength: n })
+								}}
+								inputClassName="w-16"
+								suffix="px"
+							/>
+						)}
 					</div>
 				</CollapsibleSubsection>
 			)}
@@ -1038,6 +1061,7 @@ const STACKING_SEGMENTS: ReadonlyArray<{ key: StackMode; label: string }> = [
 const LINE_CAP_SEGMENTS = [
 	{ key: "round", label: "Round" },
 	{ key: "square", label: "Square" },
+	{ key: "tick", label: "Tick" },
 ] as const
 
 /** Write a new stackMode into the primary color channel's config slot.

@@ -26,6 +26,11 @@ import { getChartMode } from "../../lib/chartMode"
 import type { MeasureAxisRendererProps, ScatterRendererProps } from "../../lib/chartRendererProps"
 import { resolveConnectionStroke } from "../../lib/connectionStroke"
 import { resolveConnectionThickness } from "../../lib/connectionThickness"
+import {
+	connectionStrokeLinecap,
+	lineEndTicks,
+	resolveLineEndTickLength,
+} from "../../lib/lineEndTicks"
 import { cartesian } from "./coords"
 import {
 	dashArrayFor,
@@ -782,13 +787,15 @@ const buildAreas = ({
 	const patternBgFallback = channelConfigs.pattern?.backgroundColor ?? "#e2e8f0"
 	const thickness =
 		channelConfigs.connection?.thickness ?? DEFAULT_CONNECTION_CONFIG.thickness
-	// "square" maps to SVG's butt cap so line ends and dash segments end
-	// flush at the data position instead of extending half a stroke-width
-	// past it. Mirrors ScatterPlot's renderConnectionLines.
-	const strokeCap =
-		(channelConfigs.connection?.lineCap ?? "round") === "square"
-			? "butt"
-			: "round"
+	// "square" / "tick" map to SVG's butt cap so line ends and dash segments
+	// end flush at the data position instead of extending half a
+	// stroke-width past it. Mirrors ScatterPlot's renderConnectionLines;
+	// "tick" additionally draws a perpendicular end mark on LINE-mode layer
+	// edges (below), never on filled areas, where the edge has no open end
+	// to cap.
+	const lineCapChoice = channelConfigs.connection?.lineCap ?? "round"
+	const strokeCap = connectionStrokeLinecap(lineCapChoice)
+	const tickCap = lineCapChoice === "tick"
 	// Line smoothing: 0 (default) builds straight `M/L` edges exactly as
 	// before; > 0 rounds the top edge (and, for the fill polygon, the bottom
 	// edge too, so stacked layers keep tiling) via a cardinal spline. Shared
@@ -1319,6 +1326,34 @@ const buildAreas = ({
 						/>
 					)
 				}
+			}
+			// "Tick" line cap: a perpendicular mark centered on each open end
+			// of the layer's edge, in the edge's stroke / thickness /
+			// highlight treatment. Once per layer (not per range segment).
+			if (tickCap && lineEls.length > 0) {
+				const len = resolveLineEndTickLength(
+					channelConfigs.connection,
+					effThickness
+				)
+				const pts = top.map(([x, y]) => ({ x: x ?? 0, y: y ?? 0 }))
+				lineEls.push(
+					...lineEndTicks(pts, len).map((t, i) => (
+						<line
+							// eslint-disable-next-line react/no-array-index-key -- at most two ticks per layer (first / last end); index is stable per render
+							key={`${layerKey || "__layer__"}__tick-${i}`}
+							className="vc-line-end-tick"
+							x1={t.x1}
+							y1={t.y1}
+							x2={t.x2}
+							y2={t.y2}
+							stroke={effStroke}
+							strokeWidth={effThickness}
+							strokeLinecap="butt"
+							opacity={borderOpacity * mh.opacityMul}
+							pointerEvents="none"
+						/>
+					))
+				)
 			}
 			// Point markers — filtered by the user's `pointSampling`
 			// preference (mirrors ScatterPlot's behavior). The line

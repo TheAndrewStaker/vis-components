@@ -20,6 +20,11 @@ import { sortByDrawOrder } from "../../../lib/drawOrder"
 import { resolveSlotColor } from "../../../lib/resolveLayerColor"
 import { applyPositionScale, type PositionScale } from "../../../lib/scales"
 import { splitPolylineAtRange } from "../../../lib/dashRange"
+import {
+	connectionStrokeLinecap,
+	lineEndTicks,
+	resolveLineEndTickLength,
+} from "../../../lib/lineEndTicks"
 import type { DatasetView, Encodings, FieldType } from "../../../lib/types"
 import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import type { AestheticScales } from "../../../store/useAestheticScales"
@@ -177,9 +182,12 @@ export const renderConnectionLines = (
 	// absent → every line uses the single `cfg.thickness`, byte-identical to
 	// before. Resolved per group inside the flatMap below.
 	const thicknessByValue = cfg.thicknessByValue
-	// "square" maps to SVG's butt cap so lines and dash segments end flush
-	// at the data position instead of extending half a stroke-width past it.
-	const strokeCap = cfg.lineCap === "square" ? "butt" : "round"
+	// "square" and "tick" map to SVG's butt cap so lines and dash segments
+	// end flush at the data position instead of extending half a
+	// stroke-width past it; "tick" then adds a perpendicular mark centered
+	// on each open end (`withTicks` below).
+	const strokeCap = connectionStrokeLinecap(cfg.lineCap)
+	const tickCap = cfg.lineCap === "tick"
 	// Line smoothing: 0 (default) keeps the plain straight-segment <polyline>
 	// so existing visuals + tests render byte-identically; > 0 swaps in a
 	// cardinal-spline <path> through the same points. `renderLine` picks the
@@ -458,6 +466,35 @@ export const renderConnectionLines = (
 				strokeLinejoin: "round",
 				opacity: lineOpacity * mh.opacityMul,
 			} as const
+			// "Tick" line cap: one perpendicular <line> centered on each open
+			// end of the whole polyline (NOT per dash run / range segment —
+			// those are interior joins), in the line's own stroke, thickness
+			// and highlight treatment, drawn flush-ended so the T is crisp.
+			const withTicks = (els: React.ReactElement[]): React.ReactElement[] => {
+				if (!tickCap || els.length === 0) return els
+				const len = resolveLineEndTickLength(cfg, effThickness)
+				return [
+					...els,
+					...lineEndTicks(ptObjs, len).map((t, i) => (
+						<line
+							// eslint-disable-next-line react/no-array-index-key -- at most two ticks per line (first / last end); index is stable per render
+							key={`conn-${groupValue}-tick-${i}`}
+							/* `vc-line-end-tick` is a marker for tests / user CSS,
+							   not styling — there is deliberately no CSS rule. */
+							className="vc-line-end-tick"
+							x1={t.x1}
+							y1={t.y1}
+							x2={t.x2}
+							y2={t.y2}
+							stroke={effStroke}
+							strokeWidth={effThickness}
+							strokeLinecap="butt"
+							opacity={lineOpacity * mh.opacityMul}
+							pointerEvents="none"
+						/>
+					)),
+				]
+			}
 			// One segment of this group's line. Solid: a single polyline.
 			// Non-solid: a dashed top line, stacked on an underlay (the
 			// palette-paired gap color, solid, same thickness) when `gapFill`
@@ -530,7 +567,7 @@ export const renderConnectionLines = (
 					const raw = m.row[patternField]
 					return raw === undefined || raw === null ? null : String(raw)
 				})
-				return runs.flatMap((run, ri) => {
+				return withTicks(runs.flatMap((run, ri) => {
 					const spec =
 						run.value !== null
 							? dashSpecForPatternValue(
@@ -556,7 +593,7 @@ export const renderConnectionLines = (
 						dashArray,
 						run.value
 					)
-				})
+				}))
 			}
 			// No pattern encoding: one dash for the whole line (per-line
 			// override > global default, custom dasharray included).
@@ -579,7 +616,7 @@ export const renderConnectionLines = (
 					rangeMaxPx,
 					"x"
 				)
-				return [
+				return withTicks([
 					...renderSegment(`conn-${groupValue}-pre`, segs.before, null),
 					...renderSegment(`conn-${groupValue}-post`, segs.after, null),
 					...renderSegment(
@@ -589,9 +626,9 @@ export const renderConnectionLines = (
 						null,
 						blank
 					),
-				]
+				])
 			}
-			return renderSegment(`conn-${groupValue}`, ptObjs, dashArray)
+			return withTicks(renderSegment(`conn-${groupValue}`, ptObjs, dashArray))
 		})
 	return (
 		<g>
