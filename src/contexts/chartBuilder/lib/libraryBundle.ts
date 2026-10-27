@@ -515,17 +515,38 @@ const themeNameKey = (name: string): string => name.trim().toLowerCase()
  *     matching so a user theme called "Light" still arrives.
  *   - **userDefaultThemeId** is adopted only when the recipient has no pick
  *     of their own, mirroring `applyExampleSeed`, and follows the same theme
- *     remap. */
+ *     remap.
+ *   - **destinationFolderId** (the header's "Import from JSON… → Import
+ *     into" pick) re-roots the import: whatever would have landed at the
+ *     root — a visual with no folder, the top of an incoming folder chain
+ *     — lands in that folder instead, and path matching runs beneath it
+ *     (an incoming "Drafts" imported into "Q3" matches the recipient's
+ *     "Q3 ▸ Drafts", not a root-level "Drafts"). An id the library doesn't
+ *     have (deleted since the pick) means the root, as if unset. */
 export const mergeBundleIntoLibrary = (
 	bundle: SeedBundle,
 	existing: LibraryCollections,
-	options: { newId?: (prefix: string) => string; now?: number } = {}
+	options: {
+		newId?: (prefix: string) => string
+		now?: number
+		destinationFolderId?: string | null
+	} = {}
 ): BundleMergeResult => {
 	const newId = options.newId ?? freshId
 	const now = options.now ?? Date.now()
 
 	// --- folders: match by path, create what's missing -----------------
 	const existingById = new Map(existing.folders.map((f) => [f.id, f]))
+	// Everything below is phrased relative to the destination: its own path
+	// prefixes every incoming path before lookup, and it stands in for "no
+	// parent". A destination whose chain is broken counts as unset.
+	const requestedDestination = options.destinationFolderId ?? null
+	const destinationPath =
+		requestedDestination !== null
+			? folderPath(requestedDestination, existingById)
+			: null
+	const destination = destinationPath !== null ? requestedDestination : null
+	const prefix = destinationPath ?? []
 	const pathToId = new Map<string, string>()
 	for (const f of existing.folders) {
 		const path = folderPath(f.id, existingById)
@@ -551,7 +572,7 @@ export const mergeBundleIntoLibrary = (
 	const folderIdMap = new Map<string, string>()
 	let foldersAdded = 0
 	for (const [id, path] of ordered) {
-		const key = pathKey(path)
+		const key = pathKey([...prefix, ...path])
 		const hit = pathToId.get(key)
 		if (hit) {
 			folderIdMap.set(id, hit)
@@ -561,7 +582,9 @@ export const mergeBundleIntoLibrary = (
 		if (!source) continue
 		const parentPath = path.slice(0, -1)
 		const parentId =
-			parentPath.length === 0 ? null : pathToId.get(pathKey(parentPath)) ?? null
+			parentPath.length === 0
+				? destination
+				: pathToId.get(pathKey([...prefix, ...parentPath])) ?? destination
 		const created: Folder = {
 			id: newId("fl"),
 			name: source.name,
@@ -670,7 +693,9 @@ export const mergeBundleIntoLibrary = (
 				? pinnedVersionId
 				: null
 		const folderId =
-			v.folderId != null ? folderIdMap.get(v.folderId) ?? null : null
+			v.folderId != null
+				? folderIdMap.get(v.folderId) ?? destination
+				: destination
 		// `themeId` only tells the editor which dropdown entry to highlight —
 		// the applied values are already snapshotted into the visual — so
 		// repointing a name-matched theme changes nothing about how it draws.

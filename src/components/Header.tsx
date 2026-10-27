@@ -8,8 +8,13 @@ import {
 	accessibilityFindingCountAtom,
 	blackAndWhiteModeAtom,
 	currentDatasetIdAtom,
+	currentVisualIdAtom,
 	datasetIndexAtom,
+	foldersAtom,
+	visualsAtom,
 } from "../contexts/chartBuilder/store/atoms"
+import { FolderPickerModal } from "../contexts/library/components/FolderPickerModal"
+import { UNFILED_FOLDER_ID } from "../contexts/library/lib/folderSubtree"
 import { ImportProblemList } from "./ImportProblemList"
 import {
 	useImportLibraryBundle,
@@ -158,13 +163,23 @@ const MENU_ITEM_DIVIDED = `${MENU_ITEM} border-t border-stone-200 dark:border-st
 const MENU_TITLE = "vc-heading font-medium"
 const MENU_HINT = "text-sm vc-muted"
 
+/** What a menu item is waiting on: the destination-folder pick that
+ *  precedes it. An import holds the file already chosen. */
+type PendingAction =
+	| { kind: "keep" }
+	| { kind: "fresh" }
+	| { kind: "import"; file: File }
+
 /**
  * A split button. The main segment starts a new visualization on a clean
- * slate (no dataset); the arrow segment opens a menu: in the editor with a
- * dataset bound, carrying that dataset forward or (same as the main
- * segment) starting clean, and everywhere, importing a JSON file — one visual's "Download JSON" or a
- * whole library bundle (the same format), merged additively exactly as
- * Settings → Sharing does.
+ * slate (no dataset, at the root); the arrow segment opens a menu: in the
+ * editor with a dataset bound, carrying that dataset forward or starting
+ * clean, and everywhere, importing a JSON file — one visual's "Download
+ * JSON" or a whole library bundle (the same format), merged additively
+ * exactly as Settings → Sharing does. Each menu item first asks where the
+ * result should go (the Move/Duplicate folder picker, pre-set to the open
+ * visual's folder or the library folder being viewed) — skipped when the
+ * library has no folders, since the root is then the only answer.
  */
 const NewVisualizationButton = () => {
 	const pathname = useRouterState({ select: (s) => s.location.pathname })
@@ -176,6 +191,30 @@ const NewVisualizationButton = () => {
 	// opened one on the library page, where there is nothing to carry forward.
 	const currentDataset =
 		inEditor && datasetId ? datasets[datasetId] : undefined
+
+	const folders = useAtomValue(foldersAtom)
+	const hasFolders = folders.length > 0
+	// The picker's starting point: the open visual's folder in the editor,
+	// the folder being browsed on the library page (its `?folder=` param;
+	// the "unfiled" pseudo-folder means the root). Id lookup on the full
+	// list — the editor's own visual.
+	const currentVisualId = useAtomValue(currentVisualIdAtom)
+	const visuals = useAtomValue(visualsAtom)
+	const libraryFolder = useRouterState({
+		select: (s) =>
+			(s.location.search as Record<string, unknown> | undefined)?.folder,
+	})
+	const defaultFolderId = ((): string | null => {
+		const candidate = inEditor
+			? visuals.find((v) => v.id === currentVisualId)?.folderId
+			: inLibrary && typeof libraryFolder === "string"
+				? libraryFolder
+				: null
+		return candidate && candidate !== UNFILED_FOLDER_ID && folders.some((f) => f.id === candidate)
+			? candidate
+			: null
+	})()
+	const [pending, setPending] = useState<PendingAction | null>(null)
 
 	const navigate = useNavigate()
 	const clearDataset = useAtomCallback(
@@ -211,31 +250,82 @@ const NewVisualizationButton = () => {
 		}
 	}, [open])
 
-	const onKeepDataset = async () => {
+	/** Land on a fresh editor. The dataset id and destination folder ride
+	 *  the search params so VisualLoaderForNew can re-apply them after its
+	 *  reset; both are left off the URL when unset. */
+	const startNew = async (
+		keepDatasetId: string | undefined,
+		folderId: string | null
+	) => {
+		const search = {
+			...(keepDatasetId ? { datasetId: keepDatasetId } : {}),
+			...(folderId ? { folderId } : {}),
+		}
+		await navigate(
+			Object.keys(search).length > 0
+				? { to: "/editor/new", search }
+				: { to: "/editor/new" }
+		)
+	}
+	const runImport = async (file: File, folderId: string | null) => {
+		if (importing) return
+		setImportOutcome(
+			await importBundle(file, { destinationFolderId: folderId })
+		)
+	}
+	/** Run a menu action against a destination folder — straight away at
+	 *  the root when there are no folders to choose from, otherwise after
+	 *  the picker. */
+	const perform = async (action: PendingAction, folderId: string | null) => {
+		switch (action.kind) {
+			case "keep":
+				if (!currentDataset) return
+				await startNew(currentDataset.id, folderId)
+				return
+			case "fresh":
+				// Clear the bound dataset explicitly: /editor/new alone resets the
+				// draft, but a dataset the editor still holds would be re-bound.
+				clearDataset()
+				await startNew(undefined, folderId)
+				return
+			case "import":
+				await runImport(action.file, folderId)
+				return
+		}
+	}
+	const request = (action: PendingAction) => {
+		if (hasFolders) setPending(action)
+		else void perform(action, null)
+	}
+
+	const onKeepDataset = () => {
 		if (!currentDataset) return
 		setOpen(false)
-		// Carry the dataset id across the route change so VisualLoaderForNew
-		// can re-bind it after the reset.
-		await navigate({
-			to: "/editor/new",
-			search: { datasetId: currentDataset.id },
-		})
+		request({ kind: "keep" })
 	}
+	// The main segment: always a clean slate at the root, no questions.
 	const onFreshDataset = async () => {
 		setOpen(false)
-		// Clear the bound dataset explicitly: /editor/new alone resets the
-		// draft, but a dataset the editor still holds would be re-bound.
-		clearDataset()
-		await navigate({ to: "/editor/new" })
+		await perform({ kind: "fresh" }, null)
+	}
+	const onFreshDatasetInto = () => {
+		setOpen(false)
+		request({ kind: "fresh" })
 	}
 	const onPickImport = () => {
 		setOpen(false)
 		importInputRef.current?.click()
 	}
-	const onImportFile = async (file: File) => {
+	// The file comes first (the native picker has no room for a question);
+	// the destination is asked once there is something to place.
+	const onImportFile = (file: File) => {
 		if (importing) return
-		setImportOutcome(await importBundle(file))
+		request({ kind: "import", file })
 	}
+	const pickerTitle =
+		pending?.kind === "import"
+			? `Import ${pending.file.name}`
+			: "New visualization"
 
 	// Escape closes the menu and hands focus back to the arrow segment, so a
 	// keyboard user isn't stranded on a menu item that just disappeared.
@@ -294,7 +384,7 @@ const NewVisualizationButton = () => {
 							<button
 								type="button"
 								role="menuitem"
-								onClick={onFreshDataset}
+								onClick={onFreshDatasetInto}
 								className={MENU_ITEM_DIVIDED}
 							>
 								<div className={MENU_TITLE}>New with a new data set</div>
@@ -330,7 +420,19 @@ const NewVisualizationButton = () => {
 				onChange={(e) => {
 					const file = e.target.files?.[0]
 					e.target.value = ""
-					if (file) void onImportFile(file)
+					if (file) onImportFile(file)
+				}}
+			/>
+			<FolderPickerModal
+				open={pending !== null}
+				title={pickerTitle}
+				confirmLabel={pending?.kind === "import" ? "Import" : "Start"}
+				initialTarget={defaultFolderId}
+				onCancel={() => setPending(null)}
+				onConfirm={(folderId) => {
+					const action = pending
+					setPending(null)
+					if (action) void perform(action, folderId)
 				}}
 			/>
 			<ImportOutcomeModal

@@ -53,6 +53,8 @@ import {
 	currentDataLabelsConfigAtom,
 	currentDataLabelsEncodingsAtom,
 	currentDatasetIdAtom,
+	foldersAtom,
+	newVisualFolderIdAtom,
 	currentDerivedVariablesAtom,
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
@@ -152,7 +154,12 @@ export const useSaveVisual = () => {
 			const visual: Visual = {
 			id,
 			name: name.trim() || "Untitled",
-			folderId: existing?.folderId ?? null,
+			// A new visual files where the header's destination pick said (a
+			// folder deleted since the pick falls back to the root rather than
+			// saving a dangling id); after that the library owns the folder.
+			folderId: existing
+				? (existing.folderId ?? null)
+				: resolveNewVisualFolder(get(newVisualFolderIdAtom), get(foldersAtom)),
 			datasetId: datasetId ?? null,
 			createdAtVersionId,
 			fieldTypeOverrides: { ...overrides },
@@ -263,6 +270,9 @@ export const useLoadVisual = () => {
 			set(currentVisualIdAtom, visual.id)
 			set(currentVisualNameAtom, visual.name)
 			set(currentDatasetIdAtom, visual.datasetId)
+			// Mirror the stored folder so a pick made for an earlier /editor/new
+			// can't linger; saves of an existing visual don't read it anyway.
+			set(newVisualFolderIdAtom, visual.folderId ?? null)
 			// Loading a different visual always returns to "latest" view; lingering
 			// preview state from a prior visual would be confusing.
 			set(previewVersionIdAtom, null)
@@ -418,6 +428,16 @@ export const useResetVisual = () => {
 			// here is the library's "New visualization" link, and any post-upload
 			// flow sets `currentDatasetIdAtom` again via `useCreateNewDataset`.
 			set(currentDatasetIdAtom, null)
+			// Root unless VisualLoaderForNew re-applies a `?folderId=…` pick.
+			set(newVisualFolderIdAtom, null)
 		}, [])
 	)
 }
+
+/** The folder a first save files under: the picked one if it still exists,
+ *  else the root. Exported for tests. */
+export const resolveNewVisualFolder = (
+	picked: string | null,
+	folders: readonly { id: string }[]
+): string | null =>
+	picked !== null && folders.some((f) => f.id === picked) ? picked : null

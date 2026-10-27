@@ -381,6 +381,84 @@ describe("mergeBundleIntoLibrary — folders", () => {
 		expect(result.added.folders).toBe(0)
 		expect(result.visuals[0]?.folderId).toBeNull()
 	})
+
+	describe("with a destination folder", () => {
+		const into = (b: SeedBundle, existing: LibraryCollections, dest: string | null) =>
+			mergeBundleIntoLibrary(b, existing, {
+				newId: counter(),
+				now: 500,
+				destinationFolderId: dest,
+			})
+
+		it("files a folderless visual in the destination instead of the root", () => {
+			const existing = library({ folders: [folder("fl-q3", "Q3", null)] })
+			const result = into(bundle({ visuals: [vis({ id: "v1" })] }), existing, "fl-q3")
+			expect(result.visuals[0]?.folderId).toBe("fl-q3")
+			expect(result.added.folders).toBe(0)
+		})
+
+		it("nests an incoming folder chain under the destination and matches beneath it", () => {
+			// The recipient has a root-level "Drafts" AND "Q3 ▸ Drafts"; importing
+			// into Q3 must pick the nested one, and create "2026" under it.
+			const existing = library({
+				folders: [
+					folder("fl-q3", "Q3", null),
+					folder("fl-drafts-root", "Drafts", null),
+					folder("fl-drafts-q3", "Drafts", "fl-q3"),
+				],
+			})
+			const result = into(
+				bundle({
+					folders: [folder("in-1", "Drafts", null), folder("in-2", "2026", "in-1")],
+					visuals: [
+						vis({ id: "v-drafts", folderId: "in-1" }),
+						vis({ id: "v-2026", folderId: "in-2" }),
+					],
+				}),
+				existing,
+				"fl-q3"
+			)
+			expect(result.added.folders).toBe(1)
+			const created = result.folders.find((f) => f.name === "2026")
+			expect(created?.parentId).toBe("fl-drafts-q3")
+			expect(result.visuals.find((v) => v.id === "v-drafts")?.folderId).toBe(
+				"fl-drafts-q3"
+			)
+			expect(result.visuals.find((v) => v.id === "v-2026")?.folderId).toBe(
+				created?.id
+			)
+		})
+
+		it("creates a top-level incoming folder as a child of the destination", () => {
+			const existing = library({ folders: [folder("fl-q3", "Q3", null)] })
+			const result = into(
+				bundle({
+					folders: [folder("in-1", "Work", null)],
+					visuals: [vis({ id: "v1", folderId: "in-1" })],
+				}),
+				existing,
+				"fl-q3"
+			)
+			const created = result.folders.find((f) => f.name === "Work")
+			expect(created?.parentId).toBe("fl-q3")
+			expect(result.visuals[0]?.folderId).toBe(created?.id)
+		})
+
+		it("treats a destination the library no longer has as the root", () => {
+			const result = into(bundle({ visuals: [vis({ id: "v1" })] }), library(), "gone")
+			expect(result.visuals[0]?.folderId).toBeNull()
+		})
+
+		it("a dangling incoming folder reference also falls back to the destination", () => {
+			const existing = library({ folders: [folder("fl-q3", "Q3", null)] })
+			const result = into(
+				bundle({ visuals: [vis({ id: "v1", folderId: "nope" })] }),
+				existing,
+				"fl-q3"
+			)
+			expect(result.visuals[0]?.folderId).toBe("fl-q3")
+		})
+	})
 })
 
 /* --------------------------------- visuals ------------------------------- */

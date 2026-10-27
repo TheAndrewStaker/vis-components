@@ -51,7 +51,12 @@ export const useImportLibraryBundle = () => {
 	const [importing, setImporting] = useState(false)
 
 	const merge = useAtomCallback(
-		useCallback(async (get, set, text: string): Promise<ImportBundleOutcome> => {
+		useCallback(async (
+			get,
+			set,
+			text: string,
+			destinationFolderId: string | null
+		): Promise<ImportBundleOutcome> => {
 			const parsed = parseLibraryBundle(text)
 			if (!parsed.ok) {
 				// One problem reads fine in the headline; several get the list.
@@ -72,13 +77,17 @@ export const useImportLibraryBundle = () => {
 			// is the second of the two callers (export is the other) allowed to
 			// pay for it.
 			const existingDatasets = await getStorageAdapter().loadDatasets()
-			const merged = mergeBundleIntoLibrary(parsed.bundle, {
-				visuals: get(visualsAtom),
-				folders: get(foldersAtom),
-				datasets: existingDatasets,
-				themes: get(themesAtom),
-				userDefaultThemeId: loadUserDefaultThemeId(),
-			})
+			const merged = mergeBundleIntoLibrary(
+				parsed.bundle,
+				{
+					visuals: get(visualsAtom),
+					folders: get(foldersAtom),
+					datasets: existingDatasets,
+					themes: get(themesAtom),
+					userDefaultThemeId: loadUserDefaultThemeId(),
+				},
+				{ destinationFolderId }
+			)
 			// Folders and data sets first: the visuals write is what the library
 			// renders from, so its targets should already exist. Sequential, so
 			// a failure is reported against the collection that failed and
@@ -126,11 +135,17 @@ export const useImportLibraryBundle = () => {
 		}, [])
 	)
 
+	/** `destinationFolderId` re-roots the import under that folder (the
+	 *  header's "Import into" pick); omitted or null, the root — see
+	 *  `mergeBundleIntoLibrary`. */
 	const importBundle = useCallback(
-		async (file: File): Promise<ImportBundleOutcome> => {
+		async (
+			file: File,
+			options: { destinationFolderId?: string | null } = {}
+		): Promise<ImportBundleOutcome> => {
 			setImporting(true)
 			try {
-				return await merge(await file.text())
+				return await merge(await file.text(), options.destinationFolderId ?? null)
 			} catch (error) {
 				// Reading the file or the existing data-set store failed — both
 				// happen before anything is written.

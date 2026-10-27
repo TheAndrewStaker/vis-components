@@ -8,6 +8,7 @@ import {
 	currentVisualIdAtom,
 	currentVisualNameAtom,
 	foldersAtom,
+	newVisualFolderIdAtom,
 	liveVisualsAtom,
 	saveStatusAtom,
 	visualsAtom,
@@ -53,13 +54,18 @@ export const saveIndicatorText = (
 	return `Saved by ${firstName(saved.updatedBy.name)} ${today ? "at" : "on"} ${when}`
 }
 
-/** The saved visual's folder path, each crumb a link back to that folder's
- *  library view. Renders nothing for a root-level or never-saved visual. */
+/** The visual's folder path, each crumb a link back to that folder's
+ *  library view. A saved visual's crumbs come off the stored record; a
+ *  never-saved one shows the destination the header's "New…" menu picked
+ *  (`newVisualFolderIdAtom`), so the choice is visible before the first
+ *  save files it. Renders nothing at the root. */
 const FolderBreadcrumbs = ({ visualId }: { visualId: string | null }) => {
 	// Id lookup, so the full list (a trashed visual still has a folder).
 	const visuals = useAtomValue(visualsAtom)
 	const folders = useAtomValue(foldersAtom)
-	const folderId = visuals.find((v) => v.id === visualId)?.folderId ?? null
+	const pendingFolderId = useAtomValue(newVisualFolderIdAtom)
+	const saved = visuals.find((v) => v.id === visualId)
+	const folderId = saved ? (saved.folderId ?? null) : pendingFolderId
 	const path = folderAncestors(folders, folderId)
 	if (path.length === 0) return null
 	return (

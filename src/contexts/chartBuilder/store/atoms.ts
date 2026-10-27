@@ -866,6 +866,15 @@ export const currentVisualIdAtom = persistedAtom<string | null>(
 	saveCurrentVisualId
 )
 
+/** Where a NOT-yet-saved visual will land in the library (null = root).
+ *  Set from `/editor/new?folderId=…` — the header's "New with this data
+ *  set" / "New with a new data set" items ask for a destination — and read
+ *  by the first save only; after that the stored visual's `folderId` is the
+ *  truth (the library's Move keeps editing it). In-memory: a reload of
+ *  /editor/new re-reads the search param. Not an undo step (it's where the
+ *  visual files, not what it draws), so deliberately NOT in `DRAFT_ATOMS`. */
+export const newVisualFolderIdAtom = atom<string | null>(null)
+
 /** True when the visual open in the editor has at least one PUBLISHED embed
  *  instance — the same test the Export modal's Embed tab uses (a publish id
  *  AND public urls). A copied-but-never-published instance does NOT count:

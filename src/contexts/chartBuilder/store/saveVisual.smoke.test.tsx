@@ -38,6 +38,8 @@ import {
 	currentThemeIdAtom,
 	currentVisualIdAtom,
 	currentVisualNameAtom,
+	foldersAtom,
+	newVisualFolderIdAtom,
 	visualsAtom,
 } from "./atoms"
 import { useLoadVisual, useSaveVisual } from "./saveVisual"
@@ -235,6 +237,42 @@ describe("useSaveVisual → useLoadVisual round-trip", () => {
 		expect(visuals).toHaveLength(1)
 		expect(visuals[0]!.name).toBe("Renamed")
 		expect(visuals[0]!.createdAt).toBe(createdAt)
+	})
+
+	it("a first save files under the picked destination; later saves keep the stored folder", async () => {
+		const saving = renderInStore(() => useSaveVisual(), (s) => {
+			seedEditor(s)
+			s.set(foldersAtom, [{ id: "fl-q3", name: "Q3", parentId: null, createdAt: 1 }])
+			s.set(newVisualFolderIdAtom, "fl-q3")
+		})
+		await act(async () => {
+			await saving.result.current()
+		})
+		expect(saving.store.get(visualsAtom)[0]!.folderId).toBe("fl-q3")
+
+		// The library moved it (Move / drag) and the draft pick has gone stale:
+		// a re-save follows the stored record, not the pick.
+		saving.store.set(visualsAtom, (prev) =>
+			prev.map((v) => ({ ...v, folderId: null }))
+		)
+		saving.store.set(newVisualFolderIdAtom, "fl-q3")
+		await act(async () => {
+			await saving.result.current()
+		})
+		expect(saving.store.get(visualsAtom)).toHaveLength(1)
+		expect(saving.store.get(visualsAtom)[0]!.folderId).toBeNull()
+	})
+
+	it("a picked destination the library no longer has saves at the root, not dangling", async () => {
+		const saving = renderInStore(() => useSaveVisual(), (s) => {
+			seedEditor(s)
+			s.set(foldersAtom, [])
+			s.set(newVisualFolderIdAtom, "fl-deleted")
+		})
+		await act(async () => {
+			await saving.result.current()
+		})
+		expect(saving.store.get(visualsAtom)[0]!.folderId).toBeNull()
 	})
 
 	it("re-stamps the version pin when the visual moves to another data set", async () => {

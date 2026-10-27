@@ -1,7 +1,11 @@
 import { useEffect } from "react"
 import { useParams, useNavigate, useSearch } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
-import { currentDatasetIdAtom, visualsHydratedAtom } from "../store/atoms"
+import {
+	currentDatasetIdAtom,
+	newVisualFolderIdAtom,
+	visualsHydratedAtom,
+} from "../store/atoms"
 import { useLoadVisual, useResetVisual } from "../store/saveVisual"
 
 import { EditorLayout } from "./EditorLayout"
@@ -9,17 +13,20 @@ import { PublishedEditGate } from "./PublishedEditGate"
 
 export const VisualLoaderForNew = () => {
 	const reset = useResetVisual()
-	// Optional search param: `/editor/new?datasetId=<id>` preserves a dataset
+	// Optional search params: `/editor/new?datasetId=<id>` preserves a dataset
 	// binding across the route change (used by the Header's "With this data
-	// set" flow). After reset clears state, we re-bind the dataset.
-	const { datasetId } = useSearch({ from: "/editor/new" })
+	// set" flow), and `?folderId=<id>` is the destination folder the same menu
+	// asked for. After reset clears state, we re-bind both.
+	const { datasetId, folderId } = useSearch({ from: "/editor/new" })
 	const setDatasetId = useSetAtom(currentDatasetIdAtom)
+	const setFolderId = useSetAtom(newVisualFolderIdAtom)
 	useEffect(() => {
 		;(async () => {
 			await reset()
 			if (datasetId) setDatasetId(datasetId)
+			if (folderId) setFolderId(folderId)
 		})()
-	}, [reset, datasetId, setDatasetId])
+	}, [reset, datasetId, folderId, setDatasetId, setFolderId])
 	return <EditorLayout />
 }
 

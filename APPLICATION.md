@@ -4959,8 +4959,10 @@ inlined, unminified so checked-in diffs stay reviewable) meant to be
 shared by email/chat and opened straight from disk. Under `file://`
 the router switches to hash-based URLs (`index.html#/editor/new`);
 served over http(s) it keeps clean paths. The header shows a version
-chip (`v1.0`, from package.json via a compile-time define) whose
-tooltip is the build timestamp, so any shared copy self-identifies.
+chip (`v1.10`, `v1.11`, …: package.json's major.minor via a
+compile-time define; a pre-commit hook steps the minor on every
+commit) whose tooltip is the build timestamp, so any shared copy
+self-identifies.
 
 **Bundle your library as JSON** (Settings → Sharing → "Download
 bundle") serializes the whole library — visuals with previews, their
@@ -4979,7 +4981,14 @@ in the library:
 - **Folders** match existing ones by full path (the chain of names
   from the root), so a shared "Q3 ▸ Drafts" lands in the recipient's
   own "Q3 ▸ Drafts" rather than a second copy; anything unmatched is
-  created under the resolved parent, nesting intact.
+  created under the resolved parent, nesting intact. An import can
+  name a **destination folder** (the header's import does; see
+  below): then whatever would have landed at the root — a visual
+  with no folder, the top of an incoming chain — lands in that folder
+  instead, and the path matching runs beneath it (an incoming
+  "Drafts" imported into "Q3" matches "Q3 ▸ Drafts", not a root-level
+  "Drafts"). The Sharing page's import names none, so it lands at the
+  root as before.
 - **Visuals** are always added. An incoming id survives when it's
   free locally (restoring your own backup into an empty library keeps
   stable ids) and takes a fresh one on collision. Importing the same
@@ -5014,19 +5023,35 @@ in the library:
 
 The same import is also reachable from anywhere: the header's **New
 visualization** control is a split button. Its main segment starts a
-new visualization on a clean slate (no data set bound); its arrow
-segment opens a menu — in the editor with a data set bound, **New
-with this data set** (keeps the data, clears encodings and styling)
-and **New with a new data set** (the main segment's action, spelled
-out beside its alternative), and everywhere **Import from JSON…**, which
-opens the file picker for a bundle or a single visual's Download JSON
-(the same format) and runs exactly the merge above
-(`store/importBundle.ts`, shared with the Sharing page). Because the
-header has no status line, the result is acknowledged in a modal
-("Import complete" / "Import failed"), which away from the library
-also offers **Open library** to go look at what landed. The Settings
-pages hide the control (configuring the tool, not making charts), so
-there the Sharing page's own button remains the way in.
+new visualization on a clean slate (no data set bound, at the root);
+its arrow segment opens a menu — in the editor with a data set bound,
+**New with this data set** (keeps the data, clears encodings and
+styling) and **New with a new data set** (a clean slate, like the
+main segment), and everywhere **Import from JSON…**, which opens the
+file picker for a bundle or a single visual's Download JSON (the same
+format) and runs exactly the merge above (`store/importBundle.ts`,
+shared with the Sharing page).
+
+Each menu item first asks **where the result should go**: the same
+destination-folder picker Move and Duplicate use, pre-set to the open
+visual's folder in the editor or to the folder being browsed on the
+library page (root otherwise). For the two "New…" items the pick
+rides the route as `/editor/new?folderId=…` and is held in a draft
+atom (`newVisualFolderIdAtom`) that only the FIRST save reads — after
+that the stored visual's folder is the truth, so a Move in the library
+is never undone by a later autosave; a folder deleted between the pick
+and the save means the root, never a dangling id. Until that first
+save the editor's folder breadcrumbs already show the pick. For the
+import, the file is chosen first (the native picker has no room for a
+question) and the destination is asked once there is something to
+place; it is passed to the merge as described above. With no folders
+in the library the picker is skipped — the root is the only answer —
+and the main segment never asks. Because the header has no status
+line, an import's result is acknowledged in a modal ("Import
+complete" / "Import failed"), which away from the library also offers
+**Open library** to go look at what landed. The Settings pages hide
+the control (configuring the tool, not making charts), so there the
+Sharing page's own button remains the way in.
 
 The same file also ships **bundled examples**: renamed to
 `src/seed/examples.json` (the public seed) or the gitignored
