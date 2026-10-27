@@ -24,7 +24,7 @@ describe("LegendSection — legend swatch defaults", () => {
 		const set = mount()
 		fireEvent.click(screen.getByRole("button", { name: "Line segment" }))
 		expect(set).toHaveBeenCalledWith("legendSwatchShape", "line")
-		fireEvent.click(screen.getByRole("button", { name: "Shape 1" }))
+		fireEvent.click(screen.getByRole("button", { name: "Circle" }))
 		expect(set).toHaveBeenCalledWith("legendSwatchShape", 0)
 
 		const size = screen.getByLabelText("Swatch size") as HTMLInputElement

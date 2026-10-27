@@ -1,5 +1,8 @@
 import { SHAPE_PALETTE } from "../../../chartBuilder/lib/scales"
-import { swatchChipClass } from "../../../chartBuilder/components/sidebar/channelOptions/glyphShared"
+import {
+	shapeName,
+	swatchChipClass,
+} from "../../../chartBuilder/components/sidebar/channelOptions/glyphShared"
 
 import {
 	ColorInput,
@@ -49,7 +52,7 @@ export const MarkSection = ({ theme, set, isReadOnly }: ThemeSectionProps) => (
 								key={idx}
 								type="button"
 								onClick={() => set("defaultShape", idx)}
-								aria-label={`Shape ${idx + 1}`}
+								aria-label={shapeName(idx)}
 								aria-pressed={selected}
 								className={swatchChipClass(selected, "w-7")}
 							>

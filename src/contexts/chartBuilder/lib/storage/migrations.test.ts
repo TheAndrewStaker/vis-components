@@ -14,9 +14,11 @@ import {
 	datasetsMigrations,
 	measureFacetGapsFromPlotEdges,
 	readThemeFontSizesV2,
+	rebaseCustomGlyphRefs,
 	resetVisualFontSizesV1ToV2,
 	visualsMigrations,
 } from "./migrations"
+import { CUSTOM_GLYPH_BASE } from "../customGlyphs"
 
 /** Migration tests for the two non-identity migration arrays.
  *
@@ -646,6 +648,59 @@ describe("visualsMigrations v7 -> v8 (facet gaps measured plot edge to plot edge
 		expect(channelConfigsMigrations[3]!({ facet: { gapX: 0 } })).toEqual({
 			facet: { gapX: 30, gapsFrom: "plot" },
 		})
+	})
+})
+
+describe("visuals v8 -> v9: custom-glyph shape references rebase onto the fixed base", () => {
+	const upgrade = visualsMigrations[8]!
+
+	it("moves the old custom range [6, 1000) up to CUSTOM_GLYPH_BASE, built-ins untouched", () => {
+		const [out] = upgrade([
+			{
+				id: "v",
+				channelConfigs: {
+					defaultShape: 6,
+					shape: { overrides: { East: 2, West: 7, North: 6 }, outlineWidth: 1 },
+					other: 1,
+				},
+			},
+		]) as Array<{ channelConfigs: Record<string, unknown> }>
+		expect(out!.channelConfigs).toEqual({
+			defaultShape: CUSTOM_GLYPH_BASE,
+			shape: {
+				overrides: { East: 2, West: CUSTOM_GLYPH_BASE + 1, North: CUSTOM_GLYPH_BASE },
+				outlineWidth: 1,
+			},
+			other: 1,
+		})
+	})
+
+	it("is idempotent: rebased or built-in-only configs come back as the same reference", () => {
+		const rebased = {
+			channelConfigs: { defaultShape: CUSTOM_GLYPH_BASE, shape: { overrides: { a: 3 } } },
+		}
+		expect(rebaseCustomGlyphRefs(rebased)).toBe(rebased)
+		const builtIns = { channelConfigs: { defaultShape: 5, shape: { overrides: { a: 0 } } } }
+		expect(rebaseCustomGlyphRefs(builtIns)).toBe(builtIns)
+		const once = rebaseCustomGlyphRefs({ channelConfigs: { defaultShape: 8 } })
+		expect(rebaseCustomGlyphRefs(once)).toBe(once)
+	})
+
+	it("tolerates sparse visuals and non-array input", () => {
+		const sparse = { id: "s" }
+		const noShape = { channelConfigs: { x: {} } }
+		expect(upgrade([sparse, null, noShape])).toEqual([sparse, null, noShape])
+		expect(upgrade("nope")).toBe("nope")
+	})
+
+	it("channelConfigs v4 -> v5 runs the same step over the draft slice", () => {
+		expect(
+			channelConfigsMigrations[4]!({ defaultShape: 7, shape: { overrides: { a: 6 } } })
+		).toEqual({
+			defaultShape: CUSTOM_GLYPH_BASE + 1,
+			shape: { overrides: { a: CUSTOM_GLYPH_BASE } },
+		})
+		expect(channelConfigsMigrations[4]!(null)).toBeNull()
 	})
 })
 

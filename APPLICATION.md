@@ -1682,8 +1682,11 @@ curated common set): a complete `:fire:` converts on the keystroke
 that closes it, and a bare `:joy` left in the box converts when Add
 is clicked. The input never truncates while typing — Add disables
 (with a hint) when the resolved text exceeds the cap.
-Internally shape references stay palette indices — index ≥ 6 points
-into `ShapeConfig.customGlyphs` — so themes, saved visuals, and the
+Internally shape references stay palette indices — index ≥
+`CUSTOM_GLYPH_BASE` (1000, a fixed constant well past the built-ins, so
+the palette can grow without shifting saved references; visuals v8→v9
+rebased the old "6 = first custom" indices) points into
+`ShapeConfig.customGlyphs` — so themes, saved visuals, and the
 auto-cycle (built-ins only) are untouched. Deleting a glyph (× on the
 chip) tombstones its slot rather than splicing, keeping other rows'
 indices stable; anything still referencing the deleted slot falls back

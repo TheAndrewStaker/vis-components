@@ -2,7 +2,7 @@ import { CHIP_INK } from "../../lib/previewInk"
 import type { LegendSwatchShape } from "../../lib/labelsConfig"
 import { SHAPE_PALETTE, symbolPath } from "../../lib/scales"
 
-import { swatchChipClass } from "./channelOptions/glyphShared"
+import { shapeName, swatchChipClass } from "./channelOptions/glyphShared"
 
 const PREVIEW_SIZE = 20
 
@@ -19,7 +19,7 @@ const swatchShapeName = (shape: LegendSwatchShape): string =>
 		? "Rectangle"
 		: shape === "line"
 			? "Line segment"
-			: `Shape ${shape + 1}`
+			: shapeName(shape)
 
 /** Preview glyph for the swatch shape picker. `null` renders the default
  *  rounded rectangle, `"line"` a short line segment, otherwise the matching

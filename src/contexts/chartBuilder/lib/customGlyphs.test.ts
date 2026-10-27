@@ -41,6 +41,22 @@ describe("resolveGlyph", () => {
 		})
 	})
 
+	it("sits at a fixed base past the palette, so built-ins can grow", () => {
+		expect(CUSTOM_GLYPH_BASE).toBe(1000)
+		expect(CUSTOM_GLYPH_BASE).toBeGreaterThan(SHAPE_PALETTE.length)
+	})
+
+	it("falls back to the circle for the gap between the palette and the base", () => {
+		expect(resolveGlyph(SHAPE_PALETTE.length, [TEXT_GLYPH])).toEqual({
+			kind: "symbol",
+			idx: 0,
+		})
+		expect(resolveGlyph(CUSTOM_GLYPH_BASE - 1, [TEXT_GLYPH])).toEqual({
+			kind: "symbol",
+			idx: 0,
+		})
+	})
+
 	it("falls back to the circle for out-of-range or missing lists", () => {
 		expect(resolveGlyph(CUSTOM_GLYPH_BASE, undefined)).toEqual({
 			kind: "symbol",

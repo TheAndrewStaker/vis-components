@@ -6,8 +6,8 @@ import { SHAPE_PALETTE, symbolPath } from "./scales"
  * Custom mark glyphs — the "Custom" option in the Shape picker.
  *
  * Shape references stay numeric palette indices tool-wide; an index
- * `i >= SHAPE_PALETTE.length` refers to the chart's
- * `ShapeConfig.customGlyphs[i - SHAPE_PALETTE.length]` entry (a short text
+ * `i >= CUSTOM_GLYPH_BASE` refers to the chart's
+ * `ShapeConfig.customGlyphs[i - CUSTOM_GLYPH_BASE]` entry (a short text
  * string or an uploaded image stored as a small data URL). `resolveGlyph`
  * turns any index into a renderable descriptor, and `GlyphMark` is the one
  * place that knows how each kind renders — used by chart marks, legend
@@ -27,20 +27,24 @@ export const MAX_TEXT_GLYPH_CHARS = 3
  * localStorage visual blob. */
 const MAX_IMAGE_GLYPH_PX = 128
 
-/** First shape index that refers into `customGlyphs` (one past the
- * built-in symbol palette). */
-export const CUSTOM_GLYPH_BASE = SHAPE_PALETTE.length
+/** First shape index that refers into `customGlyphs`. A FIXED constant,
+ * deliberately far past the built-in palette, so appending a built-in
+ * symbol never shifts the custom references saved visuals carry. (The
+ * base used to be `SHAPE_PALETTE.length` = 6; the visuals v8→v9 /
+ * channelConfigs v4→v5 migration rebased stored references here.) */
+export const CUSTOM_GLYPH_BASE = 1000
 
 /** Resolve a shape index to a renderable glyph. Built-in indices map to
  * their symbol; custom indices look up the chart's glyph list. Tombstoned
- * (null) or out-of-range custom references fall back to the circle so a
- * deleted glyph degrades gracefully instead of vanishing marks. */
+ * (null) or out-of-range custom references — and the unused gap between
+ * the palette and the custom base — fall back to the circle so a deleted
+ * glyph degrades gracefully instead of vanishing marks. */
 export const resolveGlyph = (
 	idx: number,
 	customGlyphs?: ReadonlyArray<CustomGlyph | null>
 ): ResolvedGlyph => {
 	if (idx >= 0 && idx < SHAPE_PALETTE.length) return { kind: "symbol", idx }
-	const custom = customGlyphs?.[idx - CUSTOM_GLYPH_BASE]
+	const custom = idx >= CUSTOM_GLYPH_BASE ? customGlyphs?.[idx - CUSTOM_GLYPH_BASE] : null
 	if (!custom) return { kind: "symbol", idx: 0 }
 	return custom
 }

@@ -27,6 +27,7 @@ import { structureVisualKeys } from "./savedKeyStructure"
 import {
 	clearLegacyAutoTickLabelAngle,
 	measureFacetGapsFromPlotEdges,
+	rebaseCustomGlyphRefs,
 } from "./storage/migrations"
 import { getStorageAdapter } from "./storage/registry"
 import { normalizeSavedTheme } from "./systemThemes"
@@ -703,13 +704,16 @@ export const mergeBundleIntoLibrary = (
 		// Bundles carry no storage version, so pre-v6 `tickLabelAngle: 0`
 		// (then "auto") would land as today's explicit "keep level", a
 		// pre-v7 export carries joined facet / piece keys, a pre-v8 one
-		// cell-edge facet gaps, and a flow chart from before 2026-10-19 its
-		// Node-titles styling. All four steps are idempotent; apply them to
+		// cell-edge facet gaps, a pre-v9 one custom-glyph shape indices at
+		// the old base, and a flow chart from before 2026-10-19 its
+		// Node-titles styling. All five steps are idempotent; apply them to
 		// every import.
 		imported.push({
 			...foldFlowNodeTitles(
 				structureVisualKeys(
-					measureFacetGapsFromPlotEdges(clearLegacyAutoTickLabelAngle(v))
+					rebaseCustomGlyphRefs(
+						measureFacetGapsFromPlotEdges(clearLegacyAutoTickLabelAngle(v))
+					)
 				)
 			),
 			id,

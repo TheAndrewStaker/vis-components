@@ -853,8 +853,10 @@ export type ShapeConfig = {
 	 * outlineHue scale color; per-category `strokeOverrides` still win on
 	 * top. Only fire when an outline variable is mapped. */
 	outlineColorRules?: TextColorRule[]
-	/** Per-chart custom glyphs. A shape index `i >= SHAPE_PALETTE.length`
-	 * refers to `customGlyphs[i - SHAPE_PALETTE.length]`. Deleted slots are
+	/** Per-chart custom glyphs. A shape index `i >= CUSTOM_GLYPH_BASE`
+	 * (lib/customGlyphs) refers to `customGlyphs[i - CUSTOM_GLYPH_BASE]`.
+	 * The base is a fixed constant past the built-in palette, so appending
+	 * a built-in symbol never shifts these references. Deleted slots are
 	 * tombstoned to `null` (never spliced) so existing index references —
 	 * `defaultShape`, per-category `overrides` — stay stable; a reference to
 	 * a tombstoned / out-of-range slot resolves to the circle symbol (see

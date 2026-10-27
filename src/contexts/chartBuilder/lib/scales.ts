@@ -801,6 +801,10 @@ export const modulateColor = (
 // All shapes are filled — the user customizes hollow / outline-only looks
 // via the per-shape fill / outline color controls (set fill to "none" for
 // an outlined-only mark, or pair a light fill with a dark stroke).
+// Append only: a shape's palette index is what saved visuals, themes and
+// legend swatch choices store. Custom glyphs live at a FIXED base well
+// past the palette (`CUSTOM_GLYPH_BASE` in lib/customGlyphs), so growing
+// this list never collides with them.
 export const SHAPE_PALETTE = [
 	symbolCircle,
 	symbolSquare,

@@ -28,9 +28,9 @@ import type { Migration } from "./versioning"
  *   v0 = pre-versioning (unwrapped JSON; no `_v` field). Existing user
  *        data lives here, so the v0→v1 migration must be tolerant of
  *        the existing on-disk shape. */
-export const VISUALS_VERSION = 8
+export const VISUALS_VERSION = 9
 export const DATASETS_VERSION = 1
-export const CHANNEL_CONFIGS_VERSION = 4
+export const CHANNEL_CONFIGS_VERSION = 5
 export const LABELS_VERSION = 1
 export const LEGEND_VERSION = 2
 export const TOOLTIP_VERSION = 1
@@ -400,7 +400,76 @@ export const visualsMigrations: Migration[] = [
 		if (!Array.isArray(raw)) return raw
 		return raw.map((visual) => measureFacetGapsFromPlotEdges(visual))
 	},
+	// v8 -> v9: custom-glyph shape references move from "one past the
+	// built-in palette" (6) to the fixed `CUSTOM_GLYPH_BASE` — see
+	// `rebaseCustomGlyphRefs`.
+	(raw) => {
+		if (!Array.isArray(raw)) return raw
+		return raw.map((visual) => rebaseCustomGlyphRefs(visual))
+	},
 ]
+
+/** Where custom-glyph shape references began before the base became a
+ *  fixed constant: one past the six built-in symbols of the time. */
+const LEGACY_CUSTOM_GLYPH_BASE = 6
+/** `CUSTOM_GLYPH_BASE` (lib/customGlyphs) frozen at migration time, per
+ *  this file's conventions. */
+const V9_CUSTOM_GLYPH_BASE = 1000
+
+/** The visuals v8→v9 step for one visual-shaped record. Custom glyphs
+ *  used to start at shape index 6 (`SHAPE_PALETTE.length`), so appending
+ *  any built-in symbol would have turned every saved custom-glyph
+ *  reference into that symbol. The base is now a fixed constant far past
+ *  the palette; a stored `defaultShape` or per-category
+ *  shape override in the old custom range `[6, 1000)` moves up by the
+ *  difference. Idempotent — a rebased reference is already ≥ 1000 and
+ *  passes through, and a record with nothing to move comes back as the
+ *  same reference — so it is also safe on the unversioned intake paths
+ *  (seed bundles, library-bundle imports). Built-in indices (< 6) are
+ *  untouched; nothing else stores a custom-glyph index (legend and
+ *  data-label swatch shapes, theme defaults are built-ins only). */
+export const rebaseCustomGlyphRefs = <T>(visual: T): T => {
+	if (typeof visual !== "object" || !visual) return visual
+	const vis = visual as Record<string, unknown>
+	const cc = vis.channelConfigs
+	if (typeof cc !== "object" || !cc) return visual
+	const next = rebaseCustomGlyphRefsInConfigs(cc as Record<string, unknown>)
+	return next === cc ? visual : ({ ...vis, channelConfigs: next } as T)
+}
+
+const rebaseGlyphIndex = (v: unknown): unknown =>
+	typeof v === "number" &&
+	Number.isInteger(v) &&
+	v >= LEGACY_CUSTOM_GLYPH_BASE &&
+	v < V9_CUSTOM_GLYPH_BASE
+		? v - LEGACY_CUSTOM_GLYPH_BASE + V9_CUSTOM_GLYPH_BASE
+		: v
+
+/** Same step over a bare `ChannelConfigs` record (the editor's persisted
+ *  draft slice, channelConfigs v4→v5). Returns the input reference when
+ *  nothing changed. */
+const rebaseCustomGlyphRefsInConfigs = (
+	cc: Record<string, unknown>,
+): Record<string, unknown> => {
+	let next: Record<string, unknown> | null = null
+	const defaultShape = rebaseGlyphIndex(cc.defaultShape)
+	if (defaultShape !== cc.defaultShape) next = { ...cc, defaultShape }
+	const shape = cc.shape
+	if (typeof shape === "object" && shape) {
+		const overrides = (shape as Record<string, unknown>).overrides
+		if (typeof overrides === "object" && overrides) {
+			let moved: Record<string, unknown> | null = null
+			for (const [k, v] of Object.entries(overrides as Record<string, unknown>)) {
+				const rebased = rebaseGlyphIndex(v)
+				if (rebased !== v) moved = { ...(moved ?? (overrides as Record<string, unknown>)), [k]: rebased }
+			}
+			if (moved) {
+				next = { ...(next ?? cc), shape: { ...shape, overrides: moved } }
+			}
+		}
+	}
+	return next ?? cc
+}
 
 /** What the chrome between two panels added to a cell-edge gap: a shared
  *  axis puts 28px (right margin + spine) between columns and ~20–40px
@@ -577,6 +646,12 @@ export const channelConfigsMigrations: Migration[] = [
 	(raw) => {
 		if (typeof raw !== "object" || !raw) return raw
 		return measureFacetGapsFromPlotEdgesInConfigs(raw as Record<string, unknown>)
+	},
+	// v4 -> v5: custom-glyph shape references rebase onto the fixed
+	// `CUSTOM_GLYPH_BASE` (the visuals v8→v9 step, for the draft slice).
+	(raw) => {
+		if (typeof raw !== "object" || !raw) return raw
+		return rebaseCustomGlyphRefsInConfigs(raw as Record<string, unknown>)
 	},
 ]
 /** mapConfig v0 (pre-versioning) shape matched the original `MapConfig`, so
