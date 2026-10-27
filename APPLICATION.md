@@ -167,13 +167,20 @@ tab-separated blocks to and from the clipboard, so a block copied
 from a spreadsheet pastes straight in (a block pastes from the
 selection's top-left corner and grows the table with new rows as
 needed; a single value pastes into every selected cell); ⌘Z / ⇧⌘Z
-undo and redo every change made in the dialog. A toolbar adds a row
-(at the end) or a column (named "Column N", its name box opened
-ready to type over) and deletes the rows or columns the selection
-spans. Each column header has a sort control (⇅ → ▲ → ▼ → off) that
+undo and redo every change made in the dialog. A "+" past the last
+column name adds a column (named "Column N" and selected; column
+names are NOT edited in the dialog — a variable is renamed in the
+Fields panel, §2.2), and the blank line under the data adds a row:
+its "+" in the row-number gutter lands on the first cell, a click in
+one of its cells lands on that column. Rows and columns are deleted
+from a right-click menu (Shift+F10 or the Menu key from the
+keyboard): right-clicking a row number, a column name or a cell
+outside the selection selects it first, and the menu names what it
+covers ("Delete 2 rows" from a row number, "Delete column" from a
+column name, both from a cell). The toolbar keeps Undo / Redo only.
+Each column header has a sort control (⇅ → ▲ → ▼ → off) that
 reorders what is SHOWN only — the saved rows keep their import order,
-so sorting to find a cell never reads as a change. Columns are
-renamed by double-clicking the name (a blank name is ignored). A
+so sorting to find a cell never reads as a change. A
 column that writes its numbers a particular way — comma-grouped
 "2,123,123", dollars "$1,234.56", accounting "(1,234)", percents
 "14%" — keeps writing them that way: a number typed or pasted into it
@@ -208,15 +215,15 @@ made from another, hand-edited, reshaped or derived (`isWorkingCopy`,
 `lib/datasetEdits.ts`) — **appends** a version to it (`editedFrom` the
 version shown) rather than forking again — the dialog says so and its
 button reads "Save new version"; the name box renames the data set
-when changed, and sibling visuals bound to it get any column rename.
+when changed.
 
 Columns are matched to fields by `planEditedFields`
 (`lib/datasetEdits.ts`): a header equal to a field's current name is
 that field, a header equal to a field's FORMER name is that field
 (the rows carry the former key and remap at view time, as for an
 upload), the remaining headers and remaining fields pair up in order
-as **renames** — a changed header renames the variable exactly like
-the Fields-panel rename (old name appended to `sourceNames`, the open
+as **renames** — such a pair renames the variable exactly like the
+Fields-panel rename (old name appended to `sourceNames`, the open
 editor's atoms rewritten through `renameFieldAcrossEditorAtoms`) —
 and what is left is an added column (edited side) or a dropped one
 (field side). A fork drops dropped columns and keeps a matched field's
@@ -224,9 +231,10 @@ stored type only when the new inference is compatible with it (the
 version-upload leniency), taking the new inference otherwise; an
 append keeps dropped fields (the field list is shared across
 versions; they read empty for the new version) and pins every type.
-A dropped-and-added pair reads as a rename by design: a changed
-header is the common case in a text box, and a rename carries the
-encodings along where a drop would strand them.
+A dropped-and-added pair reads as a rename by design (the grid does
+not edit headers, so the pair arises from a deleted column plus an
+added one): a rename carries the encodings along where a drop would
+strand them.
 
 Under the box a live summary reads the parse complaint, "No changes
 yet." (Save disabled), or `N rows · M columns · X cells changed · Y

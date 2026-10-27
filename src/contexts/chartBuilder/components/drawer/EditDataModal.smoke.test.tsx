@@ -4,6 +4,7 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { buildDataset as buildDatasetFixture } from "../../../../testSupport/fixtures"
@@ -25,9 +26,9 @@ import { DataDrawer } from "./DataDrawer"
 
 /** The tray's Edit dialog: the first edit of imported data forks a new data
  *  set (a copy of the shown version as v1, the edit as v2) that the editor
- *  moves onto, the table outlines the changed cells, a renamed column is a
- *  variable rename the encodings follow, and editing the copy again appends
- *  a version instead of forking once more. The data is edited in a grid of
+ *  moves onto, the table outlines the changed cells, and editing the copy
+ *  again appends a version instead of forking once more. Column names are
+ *  not editable here (that is the Fields panel's job). The data is edited in a grid of
  *  cells: see the "grid" block below for its selection, clipboard, sort and
  *  row / column manners. */
 
@@ -105,20 +106,35 @@ const openDialog = () => {
 	return screen.getByRole("dialog")
 }
 
+/** The grid's data rows (not the blank "add a row" line under them). */
+const dataRows = (): HTMLElement[] =>
+	[...screen.getByRole("grid").querySelectorAll("tbody tr[role=row]")].filter(
+		(tr) => tr.querySelector("td[role=gridcell]") !== null
+	) as HTMLElement[]
+
 /** The grid's cells in shown order, as rows of text. */
 const gridRows = (): string[][] =>
-	[...screen.getByRole("grid").querySelectorAll("tbody tr[role=row]")].map((tr) =>
-		[...tr.querySelectorAll("td")].map((td) => td.textContent ?? "")
+	dataRows().map((tr) =>
+		[...tr.querySelectorAll("td[role=gridcell]")].map((td) => td.textContent ?? "")
 	)
 
 const cell = (pos: number, col: number): HTMLElement => {
-	const tr = screen.getByRole("grid").querySelectorAll("tbody tr[role=row]")[pos]
-	const td = tr?.querySelectorAll("td")[col]
+	const td = dataRows()[pos]?.querySelectorAll("td[role=gridcell]")[col]
 	if (!td) throw new Error(`no cell at ${pos},${col}`)
-	return td
+	return td as HTMLElement
 }
 
 const proxy = () => screen.getByLabelText("Selected cells") as HTMLTextAreaElement
+
+/** The grid's header cell for a column (the tray's data table behind the
+ *  dialog titles its headers the same way). */
+const header = (name: string): HTMLElement =>
+	within(screen.getByRole("grid")).getByTitle(name)
+
+const menuItems = () =>
+	within(screen.getByRole("menu"))
+		.getAllByRole("menuitem")
+		.map((b) => b.textContent)
 
 /** Double-click a cell, type a value, press Enter. */
 const typeInto = (pos: number, col: number, value: string) => {
@@ -151,7 +167,7 @@ describe("Edit data in the tray", () => {
 	it("forks a new data set from a cell edit and outlines the changed cell", async () => {
 		const store = mount(imported())
 		const dialog = openDialog()
-		expect(dialog.textContent).toContain("creates a new data set altogether")
+		expect(dialog.textContent).toContain("creates a new data set version")
 		expect(gridRows()).toEqual([
 			["Lima", "10"],
 			["Quito", "20"],
@@ -197,37 +213,6 @@ describe("Edit data in the tray", () => {
 		)
 	})
 
-	it("treats a renamed column as a rename the encodings follow", async () => {
-		const store = mount(imported())
-		openDialog()
-		fireEvent.doubleClick(screen.getByTitle("sales — double-click to rename"))
-		const nameBox = screen.getByLabelText("Column name") as HTMLInputElement
-		expect(nameBox.value).toBe("sales")
-		fireEvent.change(nameBox, { target: { value: "revenue" } })
-		fireEvent.keyDown(nameBox, { key: "Enter" })
-		await waitFor(() =>
-			expect(screen.getByRole("dialog").textContent).toContain(
-				"renamed: sales → revenue"
-			)
-		)
-		const save = screen.getByText("Save as new data set").closest("button")!
-		await waitFor(() => expect(save.disabled).toBe(false))
-		fireEvent.click(save)
-
-		await waitFor(() => expect(store.get(currentDatasetIdAtom)).not.toBe(ID))
-		const forked =
-			store.get(loadedDatasetsAtom)[store.get(currentDatasetIdAtom)!]!
-		expect(forked.fields[1]).toEqual({
-			name: "revenue",
-			inferredType: "quantitative",
-			sourceNames: ["sales"],
-		})
-		expect(store.get(currentEncodingsAtom).y.field).toBe("revenue")
-		// Values didn't change, only the header: nothing is outlined.
-		await waitFor(() => expect(screen.getByText("revenue")).toBeTruthy())
-		expect(editedCells()).toEqual([])
-	})
-
 	it("refuses unparseable text and an empty name, warns on a colliding name, and cancels cleanly", async () => {
 		const store = mount(imported())
 		const dialog = openDialog()
@@ -243,17 +228,8 @@ describe("Edit data in the tray", () => {
 		])
 		expect(dialog.textContent).toContain("at least one data row")
 		expect(save.disabled).toBe(true)
-		// A blank or duplicate column name can't be saved either.
 		fireEvent.keyDown(proxy(), { key: "z", metaKey: true })
 		expect(gridRows()[1]).toEqual(["Quito", "20"])
-		fireEvent.doubleClick(screen.getByTitle("sales — double-click to rename"))
-		fireEvent.change(screen.getByLabelText("Column name"), {
-			target: { value: "city" },
-		})
-		fireEvent.keyDown(screen.getByLabelText("Column name"), { key: "Enter" })
-		expect(dialog.textContent).toContain("must be unique")
-		expect(save.disabled).toBe(true)
-		fireEvent.keyDown(proxy(), { key: "z", metaKey: true })
 
 		// A real change, but no name.
 		typeInto(1, 1, "25")
@@ -280,9 +256,9 @@ describe("Edit data in the tray", () => {
 		const store = mount(handEdited())
 		await waitFor(() => expect(editedCells()).toEqual(["25"]))
 		const dialog = openDialog()
-		expect(dialog.textContent).toContain("already a working copy")
+		expect(dialog.textContent).toContain("creates a new data set version")
 		typeInto(0, 1, "11")
-		fireEvent.click(screen.getByText("+ Add row"))
+		fireEvent.click(screen.getByLabelText("Add row"))
 		expect(gridRows()).toHaveLength(4)
 		pasteAt(3, 0, "Cusco\t5")
 		expect(gridRows()[3]).toEqual(["Cusco", "5"])
@@ -317,7 +293,7 @@ describe("Edit data in the tray", () => {
 			fireEvent.click(sort)
 			expect(gridRows().map((r) => r[0])).toEqual(["Bogotá", "Quito", "Lima"])
 			expect(
-				screen.getByTitle("sales — double-click to rename").getAttribute("aria-sort")
+				header("sales").getAttribute("aria-sort")
 			).toBe("descending")
 			// Edit through the sorted view: the top row is Bogotá now.
 			typeInto(0, 1, "31")
@@ -368,13 +344,21 @@ describe("Edit data in the tray", () => {
 			expect(selectedCells()).toEqual(["Bogotá", "30"])
 			fireEvent.mouseDown(screen.getByText("2"), { shiftKey: true })
 			expect(selectedCells()).toEqual(["Quito", "20", "Bogotá", "30"])
-			expect(screen.getByText("Delete 2 rows")).toBeTruthy()
+			// Right-click inside the selection: the menu names what it covers —
+			// rows from a row number, columns from a column name.
+			fireEvent.contextMenu(screen.getByText("2"))
+			expect(menuItems()).toEqual(["Delete 2 rows"])
+			fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" })
+			expect(screen.queryByRole("menu")).toBeNull()
+			expect(screen.getByRole("dialog")).toBeTruthy()
 
 			// A column name selects the column.
-			fireEvent.mouseDown(screen.getByTitle("city — double-click to rename"))
+			fireEvent.mouseDown(header("city"))
 			expect(selectedCells()).toEqual(["Lima", "Quito", "Bogotá"])
-			expect(screen.getByText("Delete 3 rows")).toBeTruthy()
-			expect(screen.getByText("Delete column")).toBeTruthy()
+			fireEvent.contextMenu(header("city"))
+			expect(menuItems()).toEqual(["Delete column"])
+			fireEvent.mouseDown(document.body)
+			expect(screen.queryByRole("menu")).toBeNull()
 
 			// Arrows move the focus; Shift+arrow extends.
 			fireEvent.mouseDown(cell(0, 0))
@@ -456,16 +440,15 @@ describe("Edit data in the tray", () => {
 			})
 		})
 
-		it("adds and deletes rows and columns from the toolbar; typing edits the focus cell", () => {
+		it("adds rows and columns from the + cells, deletes them from the right-click menu; typing edits the focus cell", () => {
 			mount(imported())
 			openDialog()
-			fireEvent.click(screen.getByText("+ Add column"))
-			// The new column opens its name box, prefilled and selected.
-			const nameBox = screen.getByLabelText("Column name") as HTMLInputElement
-			expect(nameBox.value).toBe("Column 3")
-			fireEvent.change(nameBox, { target: { value: "region" } })
-			fireEvent.keyDown(nameBox, { key: "Enter" })
-			expect(screen.getByTitle("region — double-click to rename")).toBeTruthy()
+			fireEvent.click(screen.getByLabelText("Add column"))
+			// The new column gets a fresh name (renamed in the Fields panel, not
+			// here: there is no name box) and comes in selected.
+			expect(screen.queryByLabelText("Column name")).toBeNull()
+			expect(header("Column 3")).toBeTruthy()
+			expect(selectedCells()).toEqual(["", "", ""])
 			expect(gridRows()[0]).toEqual(["Lima", "10", ""])
 
 			// Typing over a selected cell starts an edit with that character.
@@ -485,19 +468,40 @@ describe("Edit data in the tray", () => {
 			expect(gridRows()[1]).toEqual(["Quito", "20", ""])
 			expect(screen.getByRole("dialog")).toBeTruthy()
 
-			fireEvent.mouseDown(screen.getByTitle("sales — double-click to rename"))
-			fireEvent.click(screen.getByText("Delete column"))
+			// Right-clicking a column outside the selection selects it first.
+			fireEvent.mouseDown(cell(0, 0))
+			fireEvent.contextMenu(header("sales"))
+			fireEvent.click(screen.getByRole("menuitem", { name: "Delete column" }))
+			expect(screen.queryByRole("menu")).toBeNull()
 			expect(gridRows()[0]).toEqual(["Lima", "South"])
 
-			fireEvent.mouseDown(screen.getByText("2"))
-			fireEvent.click(screen.getByText("Delete row"))
+			fireEvent.contextMenu(screen.getByText("2"))
+			fireEvent.click(screen.getByRole("menuitem", { name: "Delete row" }))
 			expect(gridRows()).toEqual([
 				["Lima", "South"],
 				["Bogotá", ""],
 			])
-			fireEvent.click(screen.getByText("+ Add row"))
+			// The blank line under the data: its + adds a row at the first
+			// column, a click in one of its cells adds a row at that column.
+			fireEvent.click(screen.getByLabelText("Add row"))
 			expect(gridRows()).toHaveLength(3)
 			expect(selectedCells()).toEqual([""])
+			const blankLine = screen.getByLabelText("Add row").closest("tr")!
+			fireEvent.mouseDown(blankLine.querySelectorAll("td")[1]!)
+			expect(gridRows()).toHaveLength(4)
+			expect(proxy()).toBe(document.activeElement)
+			fireEvent.keyDown(proxy(), { key: "E" })
+			fireEvent.change(screen.getByLabelText("Cell value"), { target: { value: "East" } })
+			fireEvent.keyDown(screen.getByLabelText("Cell value"), { key: "Enter" })
+			expect(gridRows()[3]).toEqual(["", "East"])
+
+			// Shift+F10 opens the menu for the keyboard, below the focus cell,
+			// offering both (a cell is neither a row nor a column).
+			fireEvent.keyDown(proxy(), { key: "F10", shiftKey: true })
+			expect(menuItems()).toEqual(["Delete row", "Delete column"])
+			expect(document.activeElement?.getAttribute("role")).toBe("menuitem")
+			fireEvent.click(screen.getByRole("menuitem", { name: "Delete row" }))
+			expect(gridRows()).toHaveLength(3)
 		})
 	})
 })

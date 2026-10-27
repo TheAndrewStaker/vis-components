@@ -137,21 +137,9 @@ const EditDataBody = ({
 	return (
 		<div className="flex flex-col gap-3">
 			<div className="text-sm vc-muted">
-				{mode === "fork" ? (
-					<>
-						Editing this data creates a new data set altogether.{" "}
-						<span className="font-medium vc-text">&ldquo;{view.name}&rdquo;</span>{" "}
-						stays as it is, and this visualization moves to the edited copy.
-					</>
-				) : (
-					<>
-						This data set is already a working copy; saving adds a new version
-						with your changes.
-					</>
-				)}{" "}
-				A renamed column (double-click its name) renames that variable. Cells
-				that differ from the imported data are outlined here and in the data
-				table.
+				Editing data here creates a new data set version. Edited cells will be
+				highlighted in the table so that you can track what changed. Edit
+				column names under Fields in the main menu.
 			</div>
 			<EditDataGrid
 				grid={history.grid}

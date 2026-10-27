@@ -23,7 +23,6 @@ import {
 	parseClipboardBlock,
 	pasteBlock,
 	rectToTsv,
-	renameColumn,
 	setCell,
 	type CellRange,
 	type CellRef,
@@ -37,7 +36,9 @@ import {
  *  ⌘C / ⌘X / ⌘V move tab-separated blocks to and from the clipboard, so a
  *  block pastes straight in from a spreadsheet; Delete blanks the
  *  selection; ⌘Z / ⇧⌘Z undo and redo. A column's sort control reorders
- *  what is SHOWN only (`lib/editGrid.ts`). Rows render through a window
+ *  what is SHOWN only (`lib/editGrid.ts`). Column names are not edited
+ *  here — a variable is renamed in the Fields panel — so a new column
+ *  keeps its "Column N" name until then. Rows render through a window
  *  (`ROW_HEIGHT` each) so a large data set opens instantly.
  *
  *  Keyboard events land on a visually hidden textarea (`proxy`) that holds
@@ -48,6 +49,10 @@ import {
 export const ROW_HEIGHT = 28
 const HEADER_HEIGHT = 32
 const GUTTER_WIDTH = 48
+/** The "+" column past the last header, which adds a column. */
+const ADD_WIDTH = 32
+/** Room for the delete menu so it never opens off the right edge. */
+const MENU_WIDTH = 176
 const OVERSCAN = 12
 
 /** A plain undo stack over whole grids. Every change the grid commits is one
@@ -87,9 +92,7 @@ export const useGridHistory = (seed: Grid) => {
 	}
 }
 
-type Editing =
-	| { kind: "cell"; pos: number; col: number; value: string }
-	| { kind: "header"; col: number; value: string }
+type Editing = { kind: "cell"; pos: number; col: number; value: string }
 
 type DragMode = "cells" | "rows" | "cols"
 
@@ -127,6 +130,13 @@ export const EditDataGrid = ({
 		setEditingState(next)
 	}
 	const drag = useRef<DragMode | null>(null)
+	// The right-click menu at a viewport point: rows from a row number,
+	// columns from a column name, both from a cell.
+	const [menu, setMenu] = useState<{
+		x: number
+		y: number
+		offers: "rows" | "cols" | "both"
+	} | null>(null)
 	const proxy = useRef<HTMLTextAreaElement>(null)
 	const scroller = useRef<HTMLDivElement>(null)
 	const [scrollTop, setScrollTop] = useState(0)
@@ -137,7 +147,7 @@ export const EditDataGrid = ({
 	const lastPos = rowCount - 1
 	const lastCol = colCount - 1
 	const widths = useMemo(() => columnWidths(grid), [grid])
-	const tableWidth = GUTTER_WIDTH + widths.reduce((a, b) => a + b, 0)
+	const tableWidth = GUTTER_WIDTH + ADD_WIDTH + widths.reduce((a, b) => a + b, 0)
 	const changed = useMemo(() => makeChangedLookup(seed), [seed])
 
 	// A selection that outlives the rows or columns it covered (a delete,
@@ -249,19 +259,14 @@ export const EditDataGrid = ({
 	const startEdit = (pos: number, col: number, value: string) => {
 		setEditing({ kind: "cell", pos, col, value })
 	}
-	/** Commit whatever is being edited (cell or header). Reads the ref so a
-	 *  blur and a keydown in the same tick can't both commit. */
+	/** Commit the cell being edited. Reads the ref so a blur and a keydown
+	 *  in the same tick can't both commit. */
 	const commitEdit = () => {
 		const e = editingRef.current
 		if (!e) return
 		editingRef.current = null
 		setEditing(null)
-		if (e.kind === "cell") commit((g) => setCell(g, e.pos, e.col, e.value))
-		else {
-			// A blank rename keeps the name the column had.
-			const name = e.value.trim()
-			if (name !== "") commit((g) => renameColumn(g, e.col, name))
-		}
+		commit((g) => setCell(g, e.pos, e.col, e.value))
 	}
 	const cancelEdit = () => {
 		editingRef.current = null
@@ -325,6 +330,11 @@ export const EditDataGrid = ({
 			return
 		}
 		e.currentTarget.value = ""
+		if (key === "ContextMenu" || (key === "F10" && e.shiftKey)) {
+			e.preventDefault()
+			openMenuAtFocus()
+			return
+		}
 		switch (key) {
 			case "ArrowUp":
 				e.preventDefault()
@@ -394,31 +404,32 @@ export const EditDataGrid = ({
 			e.preventDefault()
 			commitEdit()
 			focusProxy()
-			if (ed.kind === "cell") {
-				if (e.key === "Tab") moveFocus(0, e.shiftKey ? -1 : 1, false)
-				else if (e.key === "Enter") moveFocus(e.shiftKey ? -1 : 1, 0, false)
-				else moveFocus(e.key === "ArrowUp" ? -1 : 1, 0, false)
-			}
+			if (e.key === "Tab") moveFocus(0, e.shiftKey ? -1 : 1, false)
+			else if (e.key === "Enter") moveFocus(e.shiftKey ? -1 : 1, 0, false)
+			else moveFocus(e.key === "ArrowUp" ? -1 : 1, 0, false)
 		}
 	}
 
 	// --- Toolbar actions -----------------------------------------------------------
-	const onAddRow = () => {
+	/** Append a row and land on it — in the column the user clicked on the
+	 *  blank line, or the first one from the "+" button. */
+	const onAddRow = (col = 0) => {
 		commitEdit()
 		commit((g) => addRow(g))
 		const pos = rowCount
-		setSelection({ anchor: { pos, col: 0 }, focus: { pos, col: 0 } })
+		setSelection({ anchor: { pos, col }, focus: { pos, col } })
 		focusProxy()
 	}
 	const onAddColumn = () => {
 		commitEdit()
-		const name = freshColumnName(grid)
-		commit((g) => addColumn(g, name))
-		setSelection(null)
-		// The new column opens with its name box selected, ready to be typed over.
-		setEditing({ kind: "header", col: colCount, value: name })
+		commit((g) => addColumn(g, freshColumnName(grid)))
+		// The new column comes in selected; its name is changed in the Fields panel.
+		const col = colCount
+		setSelection({ anchor: { pos: 0, col }, focus: { pos: rowCount - 1, col } })
+		focusProxy()
 	}
 	const onDeleteRows = () => {
+		setMenu(null)
 		if (!rect) return
 		commitEdit()
 		commit((g) => deleteRows(g, rect.top, rect.bottom))
@@ -426,6 +437,7 @@ export const EditDataGrid = ({
 		focusProxy()
 	}
 	const onDeleteColumns = () => {
+		setMenu(null)
 		if (!rect) return
 		commitEdit()
 		commit((g) => deleteColumns(g, rect.left, rect.right))
@@ -436,6 +448,63 @@ export const EditDataGrid = ({
 	const selectedRows = rect ? rect.bottom - rect.top + 1 : 0
 	const selectedCols = rect ? rect.right - rect.left + 1 : 0
 
+	// --- Delete menu -----------------------------------------------------------
+	// Right-clicking a row number, a column name or a cell opens the menu
+	// for the selection; a right-click outside the selection moves the
+	// selection there first, so the menu always names what it will delete.
+	const openMenuAt = (x: number, y: number, offers: "rows" | "cols" | "both") => {
+		commitEdit()
+		setMenu({
+			x: Math.max(0, Math.min(x, window.innerWidth - MENU_WIDTH)),
+			y: Math.max(0, Math.min(y, window.innerHeight - 96)),
+			offers,
+		})
+	}
+	const onRowContextMenu = (pos: number) => (e: React.MouseEvent) => {
+		e.preventDefault()
+		if (!rect || pos < rect.top || pos > rect.bottom) selectRow(pos, false)
+		openMenuAt(e.clientX, e.clientY, "rows")
+	}
+	const onColContextMenu = (col: number) => (e: React.MouseEvent) => {
+		e.preventDefault()
+		if (!rect || col < rect.left || col > rect.right) selectCol(col, false)
+		openMenuAt(e.clientX, e.clientY, "cols")
+	}
+	const onCellContextMenu = (pos: number, col: number) => (e: React.MouseEvent) => {
+		e.preventDefault()
+		if (!rect || !inRect(rect, pos, col)) select({ pos, col }, false)
+		openMenuAt(e.clientX, e.clientY, "both")
+	}
+	/** The keyboard's way in (Shift+F10 / the Menu key): below the focus cell. */
+	const openMenuAtFocus = () => {
+		const el = scroller.current
+		if (!el || !focusCell) return
+		const box = el.getBoundingClientRect()
+		const left =
+			GUTTER_WIDTH + widths.slice(0, focusCell.col).reduce((a, b) => a + b, 0)
+		openMenuAt(
+			box.left + left - el.scrollLeft,
+			box.top + HEADER_HEIGHT + (focusCell.pos + 1) * ROW_HEIGHT - el.scrollTop,
+			"both"
+		)
+	}
+	useEffect(() => {
+		if (!menu) return
+		const close = () => setMenu(null)
+		// Any click outside the menu, or a resize, dismisses it.
+		const onDown = (e: MouseEvent) => {
+			if (!(e.target as HTMLElement).closest("[data-grid-menu]")) close()
+		}
+		window.addEventListener("mousedown", onDown)
+		window.addEventListener("resize", close)
+		return () => {
+			window.removeEventListener("mousedown", onDown)
+			window.removeEventListener("resize", close)
+		}
+	}, [menu])
+
+	const menuItem =
+		"block w-full px-3 py-1.5 text-left text-sm hover:bg-stone-100 focus:bg-stone-100 focus:outline-none dark:hover:bg-stone-700 dark:focus:bg-stone-700 vc-text"
 	const toolButton =
 		"text-sm transition-colors hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-inherit dark:hover:text-white vc-muted"
 
@@ -447,32 +516,6 @@ export const EditDataGrid = ({
 				</button>
 				<button type="button" className={toolButton} onClick={redo} disabled={!canRedo}>
 					Redo
-				</button>
-				<span className="h-4 border-l border-stone-300 dark:border-stone-700" />
-				<button
-					type="button"
-					className={toolButton}
-					onClick={onDeleteRows}
-					disabled={!rect}
-				>
-					{rect && selectedRows !== 1 ? `Delete ${selectedRows} rows` : "Delete row"}
-				</button>
-				<button
-					type="button"
-					className={toolButton}
-					onClick={onDeleteColumns}
-					disabled={!rect}
-				>
-					{rect && selectedCols !== 1
-						? `Delete ${selectedCols} columns`
-						: "Delete column"}
-				</button>
-				<span className="flex-1" />
-				<button type="button" className={toolButton} onClick={onAddRow}>
-					+ Add row
-				</button>
-				<button type="button" className={toolButton} onClick={onAddColumn}>
-					+ Add column
 				</button>
 			</div>
 			<div className="relative">
@@ -493,7 +536,10 @@ export const EditDataGrid = ({
 				/>
 				<div
 					ref={scroller}
-					onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+					onScroll={(e) => {
+						setScrollTop(e.currentTarget.scrollTop)
+						setMenu(null)
+					}}
 					// Scroll anchoring would chase the spacer rows as the window
 					// moves and re-scroll the box in a loop; the window math owns
 					// the scroll position.
@@ -513,6 +559,7 @@ export const EditDataGrid = ({
 							{widths.map((w, i) => (
 								<col key={grid.columns[i]?.key ?? i} style={{ width: w }} />
 							))}
+							<col style={{ width: ADD_WIDTH }} />
 						</colgroup>
 						<thead>
 							<tr role="row" style={{ height: HEADER_HEIGHT }}>
@@ -521,7 +568,6 @@ export const EditDataGrid = ({
 									className="sticky top-0 left-0 z-[3] border-r border-b border-stone-200 bg-stone-100 dark:border-stone-700 dark:bg-stone-800"
 								/>
 								{grid.columns.map((column, col) => {
-									const isEditing = editing?.kind === "header" && editing.col === col
 									const sorted = grid.sort?.col === col ? grid.sort.dir : null
 									const whole = rect !== null && col >= rect.left && col <= rect.right
 									return (
@@ -532,9 +578,10 @@ export const EditDataGrid = ({
 											aria-sort={
 												sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"
 											}
-											title={`${column.name} — double-click to rename`}
+											title={column.name}
+											onContextMenu={onColContextMenu(col)}
 											onMouseDown={(e) => {
-												if (e.button !== 0 || isEditing) return
+												if (e.button !== 0) return
 												if ((e.target as HTMLElement).closest("button")) return
 												e.preventDefault()
 												commitEdit()
@@ -545,66 +592,60 @@ export const EditDataGrid = ({
 											onMouseEnter={() => {
 												if (drag.current === "cols") selectCol(col, true)
 											}}
-											onDoubleClick={() => {
-												commitEdit()
-												setEditing({ kind: "header", col, value: column.name })
-											}}
 											className={c(
 												"sticky top-0 z-[2] border-r border-b border-stone-200 bg-stone-100 px-2 text-left font-medium whitespace-nowrap text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300",
 												whole && "bg-indigo-100 dark:bg-indigo-900/50"
 											)}
 										>
-											{isEditing ? (
-												<input
-													aria-label={`Column name`}
-													value={editing.value}
-													onChange={(e) =>
-														setEditing({ kind: "header", col, value: e.target.value })
+											<div className="flex items-center gap-1">
+												<span className="min-w-0 flex-1 truncate">{column.name}</span>
+												<button
+													type="button"
+													aria-label={`Sort by ${column.name}`}
+													title={
+														sorted === null
+															? "Sort ascending"
+															: sorted === "asc"
+																? "Sort descending"
+																: "Clear sort"
 													}
-													onKeyDown={onEditorKeyDown}
-													onBlur={commitEdit}
-													onFocus={(e) => e.target.select()}
-													className="w-full bg-transparent font-medium outline-none select-text"
-													// eslint-disable-next-line jsx-a11y/no-autofocus -- the rename box replaces the name the user just double-clicked
-													autoFocus
-												/>
-											) : (
-												<div className="flex items-center gap-1">
-													<span className="min-w-0 flex-1 truncate">{column.name}</span>
-													<button
-														type="button"
-														aria-label={`Sort by ${column.name}`}
-														title={
-															sorted === null
-																? "Sort ascending"
-																: sorted === "asc"
-																	? "Sort descending"
-																	: "Clear sort"
-														}
-														onClick={() => {
-															commitEdit()
-															commit((g) => applySort(g, nextSort(g.sort, col)))
-														}}
-														className={c(
-															"flex-shrink-0 px-0.5 text-xs leading-none",
-															sorted
-																? "text-vc-brand-text dark:text-vc-electric-indigo-300"
-																: "text-stone-400 hover:text-stone-700 dark:text-stone-500 dark:hover:text-stone-200"
-														)}
-													>
-														{sorted === "asc" ? "▲" : sorted === "desc" ? "▼" : "⇅"}
-													</button>
-												</div>
-											)}
+													onClick={() => {
+														commitEdit()
+														commit((g) => applySort(g, nextSort(g.sort, col)))
+													}}
+													className={c(
+														"flex-shrink-0 px-0.5 text-xs leading-none",
+														sorted
+															? "text-vc-brand-text dark:text-vc-electric-indigo-300"
+															: "text-stone-400 hover:text-stone-700 dark:text-stone-500 dark:hover:text-stone-200"
+													)}
+												>
+													{sorted === "asc" ? "▲" : sorted === "desc" ? "▼" : "⇅"}
+												</button>
+											</div>
 										</th>
 									)
 								})}
+								<th
+									scope="col"
+									className="sticky top-0 z-[2] border-b border-stone-200 bg-stone-100 p-0 text-center dark:border-stone-700 dark:bg-stone-800"
+								>
+									<button
+										type="button"
+										onClick={onAddColumn}
+										aria-label="Add column"
+										title="Add column"
+										className="h-full w-full text-base leading-none font-medium hover:text-brand-500 dark:hover:text-indigo-400 vc-muted"
+									>
+										+
+									</button>
+								</th>
 							</tr>
 						</thead>
 						<tbody>
 							{topSpacer > 0 && (
 								<tr aria-hidden="true" style={{ height: topSpacer }}>
-									<td colSpan={colCount + 1} />
+									<td colSpan={colCount + 2} />
 								</tr>
 							)}
 							{grid.order.slice(firstPos, endPos).map((rowIndex, i) => {
@@ -616,6 +657,7 @@ export const EditDataGrid = ({
 									<tr key={row.key} role="row" aria-rowindex={pos + 2} style={{ height: ROW_HEIGHT }}>
 										<th
 											scope="row"
+											onContextMenu={onRowContextMenu(pos)}
 											onMouseDown={(e) => {
 												if (e.button !== 0) return
 												e.preventDefault()
@@ -650,6 +692,7 @@ export const EditDataGrid = ({
 													aria-selected={selected}
 													aria-colindex={col + 2}
 													{...(isChanged ? { "data-edited": "true" } : {})}
+													onContextMenu={onCellContextMenu(pos, col)}
 													onMouseDown={(e) => {
 														if (e.button !== 0 || isEditing) return
 														e.preventDefault()
@@ -697,22 +740,91 @@ export const EditDataGrid = ({
 												</td>
 											)
 										})}
+										<td />
 									</tr>
 								)
 							})}
 							{bottomSpacer > 0 && (
 								<tr aria-hidden="true" style={{ height: bottomSpacer }}>
-									<td colSpan={colCount + 1} />
+									<td colSpan={colCount + 2} />
 								</tr>
 							)}
+							{/* The blank line under the data: its "+" (or a click in
+							  * any of its cells) adds a row and lands there. */}
+							<tr role="row" aria-rowindex={rowCount + 2} style={{ height: ROW_HEIGHT }}>
+								<th
+									scope="row"
+									className="sticky left-0 z-[1] border-r border-stone-200 bg-stone-100 p-0 text-center dark:border-stone-700 dark:bg-stone-800"
+								>
+									<button
+										type="button"
+										onClick={() => onAddRow()}
+										aria-label="Add row"
+										title="Add row"
+										className="h-full w-full text-base leading-none font-medium hover:text-brand-500 dark:hover:text-indigo-400 vc-muted"
+									>
+										+
+									</button>
+								</th>
+								{grid.columns.map((column, col) => (
+									<td
+										key={column.key}
+										onMouseDown={(e) => {
+											if (e.button !== 0) return
+											e.preventDefault()
+											onAddRow(col)
+										}}
+										className="cursor-cell border-r border-stone-100 bg-stone-50/60 dark:border-stone-800 dark:bg-stone-900/40"
+									/>
+								))}
+								<td />
+							</tr>
 						</tbody>
 					</table>
 				</div>
-			</div>
-			<div className="text-xs vc-muted">
-				Click a cell, drag for a range, or click a row number or column name.
-				Double-click or type to edit; Delete clears; ⌘C / ⌘V copy and paste
-				blocks to and from a spreadsheet; ⌘Z undoes.
+				{menu && rect && (
+					<div
+						role="menu"
+						aria-label="Selection"
+						data-grid-menu
+						tabIndex={-1}
+						onKeyDown={(e) => {
+							if (e.key === "Escape") {
+								e.preventDefault()
+								e.stopPropagation() // not the dialog's Escape
+								setMenu(null)
+								focusProxy()
+							}
+						}}
+						style={{ position: "fixed", left: menu.x, top: menu.y, width: MENU_WIDTH }}
+						className="z-30 rounded border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-800"
+					>
+						{menu.offers !== "cols" && (
+							<button
+								type="button"
+								role="menuitem"
+								onClick={onDeleteRows}
+								className={menuItem}
+								// eslint-disable-next-line jsx-a11y/no-autofocus -- the menu the user just opened takes focus, as a native one does
+								autoFocus
+							>
+								{selectedRows !== 1 ? `Delete ${selectedRows} rows` : "Delete row"}
+							</button>
+						)}
+						{menu.offers !== "rows" && (
+							<button
+								type="button"
+								role="menuitem"
+								onClick={onDeleteColumns}
+								className={menuItem}
+								// eslint-disable-next-line jsx-a11y/no-autofocus -- as above, when this is the first item
+								autoFocus={menu.offers === "cols"}
+							>
+								{selectedCols !== 1 ? `Delete ${selectedCols} columns` : "Delete column"}
+							</button>
+						)}
+					</div>
+				)}
 			</div>
 		</div>
 	)
