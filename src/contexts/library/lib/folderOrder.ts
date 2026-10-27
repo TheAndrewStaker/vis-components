@@ -1,9 +1,20 @@
+import { isStockFolderId } from "../../chartBuilder/lib/stockFolders"
 import type { Folder } from "../../chartBuilder/lib/types"
 
+/** The shipped examples' folder — the stock shelf. Pinned to the bottom of
+ *  its sibling group regardless of `sortIndex` or name, and the tree keeps
+ *  it read-only: no rename, drag, reorder, subfolder or delete. Its
+ *  CONTENTS stay ordinary (examples open, edit, and move out like any
+ *  visual). Identity is the PUBLIC seed's folder-id set (registered at
+ *  boot, see lib/stockFolders.ts), whichever seed the build loaded. */
+export const isStockFolder = (folder: Folder): boolean =>
+	isStockFolderId(folder.id)
+
 /** Display order for one sibling group: hand-placed folders first by
- *  `sortIndex` ascending, then never-placed folders alphabetically. Every
- *  folder list in the app orders through this so a hand-placed order shows
- *  up identically in the sidebar tree and in the Move pickers. */
+ *  `sortIndex` ascending, then never-placed folders alphabetically, and the
+ *  stock shelf (see `isStockFolder`) last of all. Every folder list in the
+ *  app orders through this so a hand-placed order shows up identically in
+ *  the sidebar tree and in the Move pickers. */
 export const orderedSiblings = (
 	folders: readonly Folder[],
 	parentId: string | null
@@ -11,6 +22,9 @@ export const orderedSiblings = (
 	folders
 		.filter((f) => f.parentId === parentId)
 		.sort((a, b) => {
+			const aStock = isStockFolder(a)
+			const bStock = isStockFolder(b)
+			if (aStock !== bStock) return aStock ? 1 : -1
 			const ai = a.sortIndex
 			const bi = b.sortIndex
 			if (ai !== undefined && bi !== undefined) return ai - bi
@@ -20,6 +34,15 @@ export const orderedSiblings = (
 			if (bi !== undefined) return 1
 			return a.name.localeCompare(b.name)
 		})
+
+/** The siblings a hand placement can step through: `orderedSiblings` minus
+ *  the pinned stock shelf. Drives the Move up / Move down menu items, so
+ *  the last user folder doesn't offer a "move down" that would only swap
+ *  it with a row that never moves. */
+export const orderableSiblings = (
+	folders: readonly Folder[],
+	parentId: string | null
+): Folder[] => orderedSiblings(folders, parentId).filter((f) => !isStockFolder(f))
 
 /** Every folder depth-first in the tree's display order — a parent
  *  immediately followed by its subtree. `depth` is the nesting level (0 =

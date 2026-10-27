@@ -57,6 +57,7 @@ import {
 	type SeedPromotions,
 } from "../exampleOverlay"
 import type { UserFont } from "../fontLibrary"
+import { withStockFolderNames } from "../stockFolders"
 import type {
 	Dataset,
 	DatasetMeta,
@@ -734,7 +735,7 @@ export const createHttpStorageAdapter = (): StorageContentAdapter => {
 			setBaseline(baselines.folders, toMap(folders))
 			adoptPersistedSeedIds(folders.map((f) => f.id))
 			loaded.folders = true
-			return overlayFolders(folders)
+			return withStockFolderNames(overlayFolders(folders))
 		}),
 		saveFolders: async (folders) => {
 			await ensureSeedAdoptionsKnown()

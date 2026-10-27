@@ -1,12 +1,18 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 
+import {
+	clearStockFolders,
+	setStockFolders,
+} from "../../chartBuilder/lib/stockFolders"
 import type { Folder } from "../../chartBuilder/lib/types"
 import {
 	canReorderFolderInto,
 	clearSortIndex,
 	folderTreeOrder,
 	insertionPointFor,
+	isStockFolder,
 	nextSortIndex,
+	orderableSiblings,
 	orderedSiblings,
 	reorderFolder,
 } from "./folderOrder"
@@ -285,5 +291,41 @@ describe("clearSortIndex / nextSortIndex", () => {
 			mkFolder("c", "a", "Child", 9),
 		]
 		expect(nextSortIndex(folders, null)).toBe(5)
+	})
+})
+
+describe("the stock shelf (shipped examples' folder)", () => {
+	const stock = mkFolder("fl-stock", null, "Aardvark examples", 0)
+	const install = () => setStockFolders([stock])
+	afterEach(clearStockFolders)
+
+	it("sorts last among its siblings whatever its name or sortIndex", () => {
+		install()
+		const folders = [
+			stock,
+			mkFolder("b", null, "Bravo", 1),
+			mkFolder("z", null, "Zulu"),
+		]
+		expect(names(orderedSiblings(folders, null))).toEqual([
+			"Bravo",
+			"Zulu",
+			"Aardvark examples",
+		])
+		expect(isStockFolder(stock)).toBe(true)
+		expect(isStockFolder(folders[1]!)).toBe(false)
+	})
+
+	it("is an ordinary folder when none is registered", () => {
+		const folders = [stock, mkFolder("b", null, "Bravo", 1)]
+		expect(names(orderedSiblings(folders, null))).toEqual([
+			"Aardvark examples",
+			"Bravo",
+		])
+	})
+
+	it("is left out of the orderable siblings", () => {
+		install()
+		const folders = [stock, mkFolder("b", null, "Bravo")]
+		expect(names(orderableSiblings(folders, null))).toEqual(["Bravo"])
 	})
 })

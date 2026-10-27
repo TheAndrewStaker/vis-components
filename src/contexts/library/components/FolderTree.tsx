@@ -29,7 +29,9 @@ import {
 	clearSortIndex,
 	folderTreeOrder,
 	insertionPointFor,
+	isStockFolder,
 	nextSortIndex,
+	orderableSiblings,
 	orderedSiblings,
 	reorderFolder,
 } from "../lib/folderOrder"
@@ -533,9 +535,14 @@ const FolderTreeItem = ({
 	depth,
 }: FolderTreeItemProps) => {
 	const expanded = !collapsedFolderIds.has(folder.id)
+	// The shipped examples' shelf: pinned last by `orderedSiblings`, drawn
+	// in plain heading ink rather than brand purple, and read-only — no
+	// rename (double-click or menu), no drag, no subfolder, no delete. Its
+	// contents are still ordinary rows.
+	const stock = isStockFolder(folder)
 	const [editing, setEditing] = useState(false)
 	const [menuOpen, setMenuOpen] = useState(false)
-	const siblings = orderedSiblings(folders, folder.parentId)
+	const siblings = orderableSiblings(folders, folder.parentId)
 	const siblingIndex = siblings.findIndex((f) => f.id === folder.id)
 	const [editName, setEditName] = useState(folder.name)
 	const { dropZone, dropHandlers } = useFolderDropTarget({
@@ -582,9 +589,9 @@ const FolderTreeItem = ({
 				data-folder-row
 				data-drop-zone={rowDropZone ?? undefined}
 				style={{ paddingLeft: `${depth * 16 + 4}px` }}
-				draggable={!editing}
+				draggable={!editing && !stock}
 				onDragStart={(e) => {
-					if (editing) {
+					if (editing || stock) {
 						e.preventDefault()
 						return
 					}
@@ -603,7 +610,11 @@ const FolderTreeItem = ({
 							e.stopPropagation()
 							onToggleExpanded(folder.id)
 						}}
-						className={`flex ${ROW_CHEVRON_BOX} items-center justify-center text-vc-brand-text dark:text-vc-electric-indigo-300`}
+						className={`flex ${ROW_CHEVRON_BOX} items-center justify-center ${
+							stock
+								? "vc-heading"
+								: "text-vc-brand-text dark:text-vc-electric-indigo-300"
+						}`}
 						aria-label={
 							expanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`
 						}
@@ -638,10 +649,15 @@ const FolderTreeItem = ({
 					// button the name is also the row's Tab stop and Enter target.
 					<button
 						type="button"
-						className="min-w-0 flex-1 truncate text-left font-bold text-vc-brand-text dark:text-vc-electric-indigo-300"
+						className={`min-w-0 flex-1 truncate text-left font-bold ${
+							stock
+								? "vc-heading"
+								: "text-vc-brand-text dark:text-vc-electric-indigo-300"
+						}`}
 						aria-current={isSelected ? "true" : undefined}
 						onDoubleClick={(e) => {
 							e.stopPropagation()
+							if (stock) return
 							setEditing(true)
 							setEditName(folder.name)
 						}}
@@ -651,7 +667,10 @@ const FolderTreeItem = ({
 				)}
 				{/* Always visible on touch (no hover there) and while the row's
 				 *  menu is open, so it doesn't vanish under a moving pointer;
-				 *  revealed for a keyboard user who tabs onto one of them. */}
+				 *  revealed for a keyboard user who tabs onto one of them.
+				 *  The stock shelf has none of these: every one of them edits
+				 *  the folder itself. */}
+				{!stock && (
 				<div
 					className={`flex gap-1.5 group-hover:opacity-100 kbd:group-has-focus-visible/folderrow:opacity-100 pointer-coarse:opacity-100 ${
 						menuOpen ? "opacity-100" : "opacity-0"
@@ -714,6 +733,7 @@ const FolderTreeItem = ({
 						onMoveInto={(parentId) => onMoveInto(folder.id, parentId)}
 					/>
 				</div>
+				)}
 			</div>
 			{expanded && (
 				<>
@@ -860,7 +880,7 @@ export const FolderTree = ({
 		setFolders((prev) => {
 			const folder = prev.find((f) => f.id === folderId)
 			if (!folder) return prev
-			const group = orderedSiblings(prev, folder.parentId)
+			const group = orderableSiblings(prev, folder.parentId)
 			const i = group.findIndex((f) => f.id === folderId)
 			const j = i + dir
 			if (i === -1 || j < 0 || j >= group.length) return prev
@@ -895,6 +915,9 @@ export const FolderTree = ({
 		// Visual drags don't order anything (visuals stay alphabetical), so
 		// the whole row remains one "move into this folder" target.
 		if (drag.kind === "visuals") return "inside" as const
+		// The stock shelf neither takes user folders nor orders against
+		// them: it's pinned, and nesting would edit it.
+		if (isStockFolder(folder)) return null
 		const rect = e.currentTarget.getBoundingClientRect()
 		const zone = dropZoneFor(rect, e.clientY)
 		if (zone === "inside") {
@@ -918,6 +941,7 @@ export const FolderTree = ({
 		const drag = getCurrentDrag()
 		if (!drag) return null
 		if (drag.kind === "visuals") return "inside" as const
+		if (isStockFolder(folder)) return null
 		return canDropFolderOn(folders, drag.folderId, folder.id)
 			? ("inside" as const)
 			: null

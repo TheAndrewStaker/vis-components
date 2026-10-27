@@ -11,6 +11,7 @@ import {
 import { runDatasetStoreCleanup } from "./contexts/chartBuilder/lib/datasetSweep"
 import { createHttpStorageAdapter } from "./contexts/chartBuilder/lib/storage/httpAdapter"
 import { setStorageAdapter } from "./contexts/chartBuilder/lib/storage/registry"
+import { setStockFolders } from "./contexts/chartBuilder/lib/stockFolders"
 import { setSignOutUrl } from "./lib/signOutUrl"
 import { setCurrentUser } from "./lib/currentUser"
 import { setAppOrigin } from "./lib/appOrigin"
@@ -77,6 +78,10 @@ if (!root) throw new Error("Root element #root not found")
 //     against the seeded visuals that reference them). All of them swallow
 //     their own errors.
 const bootstrapStorage = async (): Promise<void> => {
+	// The stock-examples shelf is the PUBLIC seed's folder whichever seed
+	// won: a private override shares its id, and the shelf's pin, read-only
+	// row and name are the app's, not the library's (lib/stockFolders.ts).
+	setStockFolders((publicSeed as unknown as SeedBundle).folders ?? [])
 	const serverConfig = await probeServerMode()
 	if (serverConfig) {
 		setAppOrigin(serverConfig.baseUrl)

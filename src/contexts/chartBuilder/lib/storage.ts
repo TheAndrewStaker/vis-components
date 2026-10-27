@@ -136,6 +136,7 @@ import {
 } from "./exampleOverlay"
 import type { UserFont } from "./fontLibrary"
 import { ephemeralStorage } from "./storage/ephemeral"
+import { withStockFolderNames } from "./stockFolders"
 import {
 	loadVersioned,
 	migrateVersioned,
@@ -441,7 +442,7 @@ export const mergeThumbnails = (
 	)
 
 export const loadFolders = (): Folder[] =>
-	overlayFolders(safeGet<Folder[]>(KEY_FOLDERS, []))
+	withStockFolderNames(overlayFolders(safeGet<Folder[]>(KEY_FOLDERS, [])))
 
 /** Ephemeral seed folders never persist; a folder of the user's own nested
  *  under one promotes that parent chain (see `persistSeedPromotions`) so the

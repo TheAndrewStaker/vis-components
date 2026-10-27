@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { stringifyJsonDangerous } from "../../../lib/json"
 import { EMPTY_CHANNEL_CONFIGS } from "../../chartBuilder/lib/channelConfig"
+import {
+	clearStockFolders,
+	setStockFolders,
+} from "../../chartBuilder/lib/stockFolders"
 import { DEFAULT_LABELS_CONFIG } from "../../chartBuilder/lib/labelsConfig"
 import type { Folder, Visual } from "../../chartBuilder/lib/types"
 import { emptyEncodings } from "../../chartBuilder/lib/types"
@@ -500,5 +504,72 @@ describe("FolderTree row menu (touch/keyboard fallback for drag)", () => {
 		const input = container.querySelector('input[type="text"]') as HTMLInputElement
 		expect(input).not.toBeNull()
 		expect(input.value).toBe("Alpha")
+	})
+})
+
+describe("the stock shelf (shipped examples' folder)", () => {
+	// Alphabetically FIRST, so the pin — not the sort — puts it last. The
+	// library holds it under an older name; the registry's name wins.
+	const stock = mkFolder("fl-stock", null, "Aardvark examples")
+	const installStock = (extraFolders: Folder[], visuals: Visual[] = []) => {
+		setStockFolders([stock])
+		seedStorage(
+			[mkFolder("fl-stock", null, "Examples"), ...extraFolders],
+			[mkVisual("vis-seed", "fl-stock", "Shipped chart"), ...visuals]
+		)
+	}
+	afterEach(clearStockFolders)
+
+	it("renders last, in heading ink, with no action buttons", () => {
+		installStock([mkFolder("fl-b", null, "Beta"), mkFolder("fl-z", null, "Zed")])
+		const { container, getByText, getByLabelText, queryByLabelText } =
+			renderTree()
+		expect(
+			folderRowOrder(container, ["Aardvark examples", "Beta", "Zed"])
+		).toEqual(["Beta", "Zed", "Aardvark examples"])
+		expect(getByText("Shipped chart")).toBeTruthy()
+		const name = getByText("Aardvark examples")
+		expect(name.className).toContain("vc-heading")
+		expect(name.className).not.toContain("text-vc-brand-text")
+		expect(getByLabelText("Collapse Aardvark examples").className).toContain(
+			"vc-heading"
+		)
+		expect(queryByLabelText("Actions for Aardvark examples")).toBeNull()
+		expect(queryByLabelText("New subfolder in Aardvark examples")).toBeNull()
+		expect(
+			folderRow(container, "Aardvark examples").getAttribute("draggable")
+		).toBe("false")
+	})
+
+	it("ignores a double-click rename, while a user folder still takes one", () => {
+		installStock([mkFolder("fl-b", null, "Beta")])
+		const { container, getByText } = renderTree()
+		const box = () => container.querySelector('input[aria-label="New folder name"]')
+		fireEvent.doubleClick(getByText("Aardvark examples"))
+		expect(box()).toBeNull()
+		fireEvent.doubleClick(getByText("Beta"))
+		expect(box()).not.toBeNull()
+	})
+
+	it("neither nests a user folder nor orders against it", () => {
+		installStock([mkFolder("fl-b", null, "Beta"), mkFolder("fl-z", null, "Zed")])
+		const { container } = renderTree()
+		dragTo(folderRow(container, "Beta"), folderRow(container, "Aardvark examples"), "inside")
+		dragTo(folderRow(container, "Beta"), folderRow(container, "Aardvark examples"), "after")
+		const beta = readStoredFolders().find((f) => f.id === "fl-b")
+		expect(beta?.parentId).toBeNull()
+		expect(beta?.sortIndex).toBeUndefined()
+		expect(
+			folderRowOrder(container, ["Aardvark examples", "Beta", "Zed"])
+		).toEqual(["Beta", "Zed", "Aardvark examples"])
+	})
+
+	it("still takes a visual dropped onto it", () => {
+		installStock([], [mkVisual("vis-1", null, "Loose")])
+		const { container, getByTitle } = renderTree()
+		dragTo(getByTitle("Loose"), folderRow(container, "Aardvark examples"))
+		expect(readStoredVisuals().find((v) => v.id === "vis-1")?.folderId).toBe(
+			"fl-stock"
+		)
 	})
 })

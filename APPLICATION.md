@@ -5263,6 +5263,21 @@ first-run user. How it lands depends on which seed and which mode:
   from the bundle too, never from the thumbnail side-table. The
   user's own work is untouched by any of this and persists exactly as
   it always has.
+  - **The shipped folder is a fixed shelf.** The bundle's folder
+    ("Stock Examples") is pinned to the bottom of the library's folder
+    tree regardless of name or hand-placed order, drawn in plain
+    heading ink rather than the brand purple of user folders, and is
+    read-only as a folder: no rename (double-click or menu), no drag,
+    no reorder, no subfolder, no delete, and user folders can't be
+    nested inside it or ordered against it. Its contents are ordinary
+    rows — the examples open, edit and move out like anything else,
+    and a visual can still be dropped into it. Identity is the PUBLIC
+    seed's folder-id set, registered at boot whichever seed the build
+    loaded (`lib/stockFolders.ts`), so a private override that shares
+    the id and a library that holds the folder durably get the same
+    pin — and the same name: the folder is read under the public
+    seed's name at every folder load, whatever a library stored it
+    as, and re-persists under it on its next save.
   - **Copies are real work.** Duplicating an example (or otherwise
     saving something of your own that points at one) persists in
     full, so whatever it still references in the overlay — its data
