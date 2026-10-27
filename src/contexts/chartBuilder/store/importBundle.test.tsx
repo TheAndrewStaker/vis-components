@@ -83,6 +83,29 @@ describe("useImportLibraryBundle", () => {
 		expect(store.get(visualsAtom).map((v) => v.id)).toContain("vs-chart-1")
 	})
 
+	it("renames the visual when the file holds exactly one, and leaves several alone", async () => {
+		const { result, store } = renderInStore(() => useImportLibraryBundle())
+		await act(async () => {
+			await result.current.importBundle(bundleFile(minimalBundle()), {
+				visualName: "  Renamed on the way in ",
+			})
+		})
+		expect(store.get(visualsAtom).map((v) => v.name)).toEqual([
+			"Renamed on the way in",
+		])
+
+		const two = minimalBundle()
+		two.visuals.push({ ...two.visuals[0]!, id: "vs-chart-2", name: "Second" })
+		await act(async () => {
+			await result.current.importBundle(bundleFile(two), { visualName: "Nope" })
+		})
+		expect(store.get(visualsAtom).map((v) => v.name)).toEqual([
+			"Renamed on the way in",
+			"My chart",
+			"Second",
+		])
+	})
+
 	it("rejects a bad file with the problem list and changes nothing", async () => {
 		const { result, store } = renderInStore(() => useImportLibraryBundle())
 		const bad = minimalBundle()

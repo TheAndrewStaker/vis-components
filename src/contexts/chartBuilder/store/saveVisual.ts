@@ -12,6 +12,7 @@ import {
 } from "../lib/accessibilityConfig"
 import { knownFacetPanels, resolveFacetPanels } from "../lib/resolveFacetPanels"
 import { structureVisualKeys } from "../lib/savedKeyStructure"
+import { UNTITLED_VISUAL_NAME } from "../lib/nameUniqueness"
 import { currentDatasetViewAtom } from "./useCurrentDatasetView"
 import { captureThumbnail } from "../lib/captureThumbnail"
 import {
@@ -153,7 +154,7 @@ export const useSaveVisual = () => {
 
 			const visual: Visual = {
 			id,
-			name: name.trim() || "Untitled",
+			name: name.trim() || UNTITLED_VISUAL_NAME,
 			// A new visual files where the header's destination pick said (a
 			// folder deleted since the pick falls back to the root rather than
 			// saving a dangling id); after that the library owns the folder.
@@ -404,7 +405,7 @@ export const useResetVisual = () => {
 			// A fresh visual starts with a fresh undo stack.
 			set(editorHistoryEpochAtom, (n) => n + 1)
 			set(currentVisualIdAtom, null)
-			set(currentVisualNameAtom, "Untitled")
+			set(currentVisualNameAtom, UNTITLED_VISUAL_NAME)
 			set(currentEncodingsAtom, emptyEncodings())
 			set(currentFieldOverridesAtom, {})
 			set(currentChannelConfigsAtom, configsFromTheme(defaultTheme))

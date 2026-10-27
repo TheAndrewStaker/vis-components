@@ -1,3 +1,8 @@
+/** What a visual is called until someone names it: the reset value, the
+ *  save fallback for a blank name, and the name the chart title keeps
+ *  mirroring into (LabelsPanel) until the user types something else. */
+export const UNTITLED_VISUAL_NAME = "Untitled"
+
 /** Canonical form for comparing entity names. Trim surrounding whitespace,
  * then lowercase. A name like `"  Kinds of Cats  "` collides with
  * `"kinds of cats"` — intentional, since users rarely want case-only or

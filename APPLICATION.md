@@ -5221,21 +5221,36 @@ file picker for a bundle or a single visual's Download JSON (the same
 format) and runs exactly the merge above (`store/importBundle.ts`,
 shared with the Sharing page).
 
-Each menu item first asks **where the result should go**: the same
-destination-folder picker Move and Duplicate use, pre-set to the open
-visual's folder in the editor or to the folder being browsed on the
-library page (root otherwise). For the two "New…" items the pick
-rides the route as `/editor/new?folderId=…` and is held in a draft
-atom (`newVisualFolderIdAtom`) that only the FIRST save reads — after
-that the stored visual's folder is the truth, so a Move in the library
-is never undone by a later autosave; a folder deleted between the pick
-and the save means the root, never a dangling id. Until that first
-save the editor's folder breadcrumbs already show the pick. For the
-import, the file is chosen first (the native picker has no room for a
-question) and the destination is asked once there is something to
-place; it is passed to the merge as described above. With no folders
-in the library the picker is skipped — the root is the only answer —
-and the main segment never asks. Because the header has no status
+Each menu item first asks **what to call the result and where it
+should go**: a name box above the same destination-folder picker Move
+and Duplicate use, pre-set to the open visual's folder in the editor
+or to the folder being browsed on the library page (root otherwise).
+For the two "New…" items the box starts with the name the visual
+would otherwise get — "Untitled" (`UNTITLED_VISUAL_NAME`), selected
+whole so typing replaces it — and refuses a TYPED name another live
+visual already has: the same rule as the Save button, and the only
+place the rule can be applied before autosave would file the
+collision; a name in the Trash is free. The untouched default is let
+through even beside an existing "Untitled", exactly as the editor's
+reset + autosave would have filed it. Name and folder ride the route
+as `/editor/new?name=…&folderId=…` (the default name stays off the
+URL; the reset produces it); the name seeds the draft title and the
+folder is held in a draft atom (`newVisualFolderIdAtom`)
+that only the FIRST save reads — after that the stored visual's folder
+is the truth, so a Move in the library is never undone by a later
+autosave; a folder deleted between the pick and the save means the
+root, never a dangling id. Until that first save the editor's folder
+breadcrumbs already show the pick. For the import, the file is chosen
+first (the native picker has no room for a question) and the dialog
+follows once there is something to place: the name box appears only
+when the file holds exactly ONE visual (a single "Download JSON"),
+seeded with that visual's name — a library bundle has nothing to call
+by one name — and a clash there only warns, since an import may
+duplicate by design. Both answers go to the merge as described above.
+The folder list appears only when the library has folders, and when
+the dialog would have nothing to ask at all (a multi-visual file into
+a folderless library) it is skipped; the main segment never asks.
+Because the header has no status
 line, an import's result is acknowledged in a modal ("Import
 complete" / "Import failed"), which away from the library also offers
 **Open library** to go look at what landed. The Settings pages hide

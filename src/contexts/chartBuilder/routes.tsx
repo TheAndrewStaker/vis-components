@@ -11,16 +11,21 @@ export const editorNewRoute = createRoute({
 	// `?datasetId=…` lets the Header's "New visualization → With this data set"
 	// option carry the current dataset across the route change. Without it,
 	// VisualLoaderForNew's reset would clear the dataset binding.
-	// `?folderId=…` carries the destination folder the same menu asked for;
-	// absent = root.
+	// `?folderId=…` carries the destination folder the same menu asked for
+	// (absent = root), and `?name=…` the name typed beside it (absent =
+	// "Untitled").
 	validateSearch: (
 		search: Record<string, unknown>,
-	): { datasetId?: string; folderId?: string } => ({
+	): { datasetId?: string; folderId?: string; name?: string } => ({
 		datasetId:
 			typeof search.datasetId === "string" ? search.datasetId : undefined,
 		folderId:
 			typeof search.folderId === "string" && search.folderId.length > 0
 				? search.folderId
+				: undefined,
+		name:
+			typeof search.name === "string" && search.name.trim().length > 0
+				? search.name
 				: undefined,
 	}),
 })

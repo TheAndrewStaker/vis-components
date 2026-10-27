@@ -48,9 +48,10 @@ vi.mock("@tanstack/react-router", () => ({
  *  alternatives — "New with this data set" and "New with a new data set"
  *  in the editor, and everywhere
  *  "Import from JSON…", the Settings → Sharing bundle import reachable
- *  without leaving the page. Each menu item asks for a destination folder
- *  first — when the library has folders; with none, the root is the only
- *  answer and nothing is asked. */
+ *  without leaving the page. Each menu item first asks what to call the
+ *  result and where to put it; the folder list only appears when the
+ *  library has folders, and the dialog is skipped altogether when it would
+ *  have nothing to ask (a multi-visual import into a folderless library). */
 
 afterEach(() => {
 	cleanup()
@@ -155,13 +156,21 @@ describe("Header → New visualization dropdown", () => {
 		expect(items[2]).toContain("Import from JSON…")
 
 		fireEvent.click(screen.getByText("New with this data set"))
+		// No folders: the dialog asks only for a name, pre-filled with what
+		// the visual would otherwise be called.
+		expect(navigate).not.toHaveBeenCalled()
+		expect(screen.queryByText("Pick a destination folder.")).toBeNull()
+		const nameBox = screen.getByLabelText("Name") as HTMLInputElement
+		expect(nameBox.value).toBe("Untitled")
+		fireEvent.change(nameBox, { target: { value: "  Sales by region " } })
+		fireEvent.click(screen.getByText("Start"))
 		expect(navigate).toHaveBeenCalledWith({
 			to: "/editor/new",
-			search: { datasetId: "ds-1" },
+			search: { datasetId: "ds-1", name: "Sales by region" },
 		})
 	})
 
-	it("the menu's clean-slate entry matches the main segment", () => {
+	it("the menu's clean-slate entry asks for a name, then matches the main segment", () => {
 		pathname = "/editor/dv-1"
 		const { store } = mount((s) => {
 			s.set(loadedDatasetsAtom, { "ds-1": dataset() })
@@ -170,11 +179,47 @@ describe("Header → New visualization dropdown", () => {
 		openMenu()
 		fireEvent.click(screen.getByText("New with a new data set"))
 		expect(screen.queryByRole("menu")).toBeNull()
+		// Enter in the untouched name box confirms; the default "Untitled" is
+		// what the reset produces, so nothing rides the URL.
+		fireEvent.keyDown(screen.getByLabelText("Name"), { key: "Enter" })
 		expect(navigate).toHaveBeenCalledWith({ to: "/editor/new" })
 		expect(store.get(currentDatasetIdAtom)).toBeNull()
 	})
 
-	it("imports a picked bundle into the live library and reports it", async () => {
+	it("a name another live visual has blocks Start; a trashed one's, and the untouched default, don't", () => {
+		pathname = "/editor/dv-1"
+		mount((s) => {
+			s.set(visualsAtom, [
+				{ ...vis("v-live"), name: "Quarterly" },
+				{ ...vis("v-untitled"), name: "Untitled" },
+				{ ...vis("v-gone"), name: "Archived", deletedAt: 5 } as Visual,
+			])
+			s.set(loadedDatasetsAtom, { "ds-1": dataset() })
+			s.set(currentDatasetIdAtom, "ds-1")
+		})
+		openMenu()
+		fireEvent.click(screen.getByText("New with this data set"))
+		const nameBox = screen.getByLabelText("Name")
+		// An "Untitled" already exists, yet the default is not an error: it is
+		// exactly what the editor would have filed without this dialog.
+		expect(screen.queryByRole("alert")).toBeNull()
+		expect((screen.getByText("Start") as HTMLButtonElement).disabled).toBe(false)
+		fireEvent.change(nameBox, { target: { value: "quarterly" } })
+		expect(screen.getByRole("alert").textContent).toMatch(/already exists/)
+		expect((screen.getByText("Start") as HTMLButtonElement).disabled).toBe(true)
+		fireEvent.keyDown(nameBox, { key: "Enter" })
+		expect(navigate).not.toHaveBeenCalled()
+
+		fireEvent.change(nameBox, { target: { value: "Archived" } })
+		expect(screen.queryByRole("alert")).toBeNull()
+		fireEvent.click(screen.getByText("Start"))
+		expect(navigate).toHaveBeenCalledWith({
+			to: "/editor/new",
+			search: { datasetId: "ds-1", name: "Archived" },
+		})
+	})
+
+	it("imports a picked single-visual file under the name typed, and reports it", async () => {
 		pathname = "/editor/dv-1"
 		const { container, store } = mount((s) => {
 			s.set(visualsAtom, [vis("v-mine")])
@@ -196,12 +241,22 @@ describe("Header → New visualization dropdown", () => {
 			})
 		)
 
+		// One visual in the file: the dialog offers to rename it, seeded with
+		// the file's own name. No folders, so no folder list.
+		const nameBox = (await screen.findByLabelText("Name")) as HTMLInputElement
+		expect(nameBox.value).toBe("Visual v-theirs")
+		expect(screen.queryByText("Pick a destination folder.")).toBeNull()
+		// Nothing has landed yet.
+		expect(store.get(visualsAtom).map((v) => v.id)).toEqual(["v-mine"])
+		fireEvent.change(nameBox, { target: { value: "Theirs, renamed" } })
+		fireEvent.click(screen.getByText("Import"))
+
 		expect(await screen.findByText("Import complete")).toBeTruthy()
 		expect(screen.getByText(/Imported 1 visualization/)).toBeTruthy()
 		await waitFor(() => {
-			expect(store.get(visualsAtom).map((v) => v.id)).toEqual([
-				"v-mine",
-				"v-theirs",
+			expect(store.get(visualsAtom).map((v) => [v.id, v.name])).toEqual([
+				["v-mine", "Visual v-mine"],
+				["v-theirs", "Theirs, renamed"],
 			])
 		})
 
@@ -209,6 +264,24 @@ describe("Header → New visualization dropdown", () => {
 		fireEvent.click(screen.getByText("Open library"))
 		expect(navigate).toHaveBeenCalledWith({ to: "/" })
 		expect(screen.queryByText("Import complete")).toBeNull()
+	})
+
+	it("a multi-visual bundle into a folderless library imports straight away — nothing to ask", async () => {
+		const { container, store } = mount()
+		pickFile(
+			container,
+			bundleFile({
+				exportedAt: "2026-10-05T00:00:00.000Z",
+				visuals: [vis("v-a"), vis("v-b")],
+				folders: [],
+				datasets: {},
+				themes: [],
+				userDefaultThemeId: null,
+			})
+		)
+		expect(await screen.findByText("Import complete")).toBeTruthy()
+		expect(screen.queryByLabelText("Name")).toBeNull()
+		expect(store.get(visualsAtom).map((v) => v.id)).toEqual(["v-a", "v-b"])
 	})
 
 	describe("with folders in the library, every menu item asks where to put the result", () => {
@@ -301,20 +374,21 @@ describe("Header → New visualization dropdown", () => {
 				})
 			)
 			// Nothing imported yet — the destination comes first.
-			expect(screen.getByText("Import library-bundle.json")).toBeTruthy()
+			expect(await screen.findByText("Import library-bundle.json")).toBeTruthy()
 			expect(store.get(visualsAtom).map((v) => v.id)).toEqual(["v-mine"])
 
 			fireEvent.click(screen.getByText("Q3"))
+			// The file's name is kept when the box is left alone.
 			fireEvent.click(screen.getByText("Import"))
 			expect(await screen.findByText("Import complete")).toBeTruthy()
 			await waitFor(() => {
-				expect(
-					store.get(visualsAtom).find((v) => v.id === "v-theirs")?.folderId
-				).toBe("fl-q3")
+				const theirs = store.get(visualsAtom).find((v) => v.id === "v-theirs")
+				expect(theirs?.folderId).toBe("fl-q3")
+				expect(theirs?.name).toBe("Visual v-theirs")
 			})
 		})
 
-		it("on the library page the picker starts on the folder being browsed", () => {
+		it("on the library page the picker starts on the folder being browsed", async () => {
 			search = { folder: "fl-q3" }
 			const { container } = mount((s) => {
 				s.set(foldersAtom, FOLDERS)
@@ -334,7 +408,7 @@ describe("Header → New visualization dropdown", () => {
 				})
 			)
 			// The browsed folder is the highlighted row.
-			const q3 = screen.getByText("Q3")
+			const q3 = await screen.findByText("Q3")
 			expect(q3.className).toContain("vc-nav-active")
 			expect(screen.getByText("Root (no folder)").className).not.toContain(
 				"vc-nav-active"

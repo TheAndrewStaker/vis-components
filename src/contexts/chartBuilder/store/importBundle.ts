@@ -55,7 +55,8 @@ export const useImportLibraryBundle = () => {
 			get,
 			set,
 			text: string,
-			destinationFolderId: string | null
+			destinationFolderId: string | null,
+			visualName: string | null
 		): Promise<ImportBundleOutcome> => {
 			const parsed = parseLibraryBundle(text)
 			if (!parsed.ok) {
@@ -77,8 +78,16 @@ export const useImportLibraryBundle = () => {
 			// is the second of the two callers (export is the other) allowed to
 			// pay for it.
 			const existingDatasets = await getStorageAdapter().loadDatasets()
+			// A rename applies to a ONE-visual bundle only (a single "Download
+			// JSON"); a library bundle has nothing to call by one name.
+			const rename = visualName?.trim() ?? ""
+			const only = parsed.bundle.visuals[0]
+			const bundle =
+				rename !== "" && parsed.bundle.visuals.length === 1 && only
+					? { ...parsed.bundle, visuals: [{ ...only, name: rename }] }
+					: parsed.bundle
 			const merged = mergeBundleIntoLibrary(
-				parsed.bundle,
+				bundle,
 				{
 					visuals: get(visualsAtom),
 					folders: get(foldersAtom),
@@ -137,15 +146,20 @@ export const useImportLibraryBundle = () => {
 
 	/** `destinationFolderId` re-roots the import under that folder (the
 	 *  header's "Import into" pick); omitted or null, the root — see
-	 *  `mergeBundleIntoLibrary`. */
+	 *  `mergeBundleIntoLibrary`. `visualName` renames the visual when the
+	 *  file holds exactly one; ignored (blank or multi-visual) otherwise. */
 	const importBundle = useCallback(
 		async (
 			file: File,
-			options: { destinationFolderId?: string | null } = {}
+			options: { destinationFolderId?: string | null; visualName?: string | null } = {}
 		): Promise<ImportBundleOutcome> => {
 			setImporting(true)
 			try {
-				return await merge(await file.text(), options.destinationFolderId ?? null)
+				return await merge(
+					await file.text(),
+					options.destinationFolderId ?? null,
+					options.visualName ?? null
+				)
 			} catch (error) {
 				// Reading the file or the existing data-set store failed — both
 				// happen before anything is written.
