@@ -130,6 +130,7 @@ export type ComposeVisualResult =
 /** The chart modes each quick-start family draws. */
 export const FAMILY_MODES: Record<QuickStartChartType, readonly ChartMode[]> = {
 	bar: ["bars-x", "bars-y"],
+	combo: ["combo-x", "combo-y"],
 	scatter: ["scatter"],
 	hexbin: ["hexbin"],
 	dumbbell: ["scatter"],
