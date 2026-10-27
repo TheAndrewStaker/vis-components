@@ -280,9 +280,9 @@ column widths by category count" or "… by unit range"; "panel heights /
 panel widths" when there is a single row / column).
 
 ```
-xWeight (per panel) = if proportionalSizingByUnit: data range on x
+xWeight (per panel) = if proportionalSizingByUnit: drawn x-domain span
                       else:                        # x-categories
-yWeight (per panel) = if proportionalSizingByUnit: data range on y
+yWeight (per panel) = if proportionalSizingByUnit: drawn y-domain span
                       else:                        # y-categories
 
 colWeights[c] = max(xWeight for panels in col c)
@@ -314,7 +314,13 @@ Nothing downstream reads `cell` — everything draws into `inner`.
 
 - `"categoryCount"` (default): weights are integer category counts.
 - `"axisRange"` (by-unit): weights are quantitative ranges (can be sub-1
-  fractional values, e.g. data range 0.01–0.25).
+  fractional values, e.g. data range 0.01–0.25). The range is the span of
+  the domain the axis DRAWS, not the raw data min–max: every renderer
+  rounds the auto-fit ends outward with d3's `.nice()` (data 1.2k–32k
+  draws 0–35k), and a user-pinned end — facet override, else the axis
+  panel's Scale range — stays exact. Weighing the raw extent gave every
+  panel a different px-per-unit, so one tick value sat at a different
+  height in each panel.
 
 ### Share-axes × proportional interaction
 

@@ -2012,7 +2012,11 @@ Visible when `facet` is mapped. Controls:
 - **Size row heights / column widths by unit range** — same idea, but for
   quantitative axes: panels with a larger axis range get proportionally
   more space. E.g. panel A's y is 0–10 and panel B's y is 0–20 → B is
-  twice as tall, whether they're stacked or side by side. Same gating.
+  twice as tall, whether they're stacked or side by side. The range is
+  the axis as DRAWN (the auto-fit ends rounded outward to the tick grid,
+  a pinned end exact), so one unit is the same number of pixels in
+  every panel and a given tick value sits at the same height across
+  the row. Same gating.
 - **Axis range** — Min / Max inputs for the continuous axis (titled
   "Y axis range", "Angle axis range", …), shaped by
   its share mode: one overall range under "All panels", one per row /

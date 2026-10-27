@@ -372,6 +372,74 @@ describe("buildSolverPanelInputs", () => {
 		expect(inputs.map((p) => p.yWeight)).toEqual([10, 5])
 	})
 
+	// Every renderer draws the d3-nice'd auto-fit domain (1.2–32 → 0–35, 1.1–29 → 0–30),
+	// so the weight spans that domain, not the raw data min–max; otherwise
+	// px-per-unit differs per panel and "30" sits at a different height in
+	// each one.
+	it("weighs by the nice'd axis domain, not the raw data extent", () => {
+		const inputs = build({
+			rows: [
+				{ cat: "a", val: "1.2", g: "g1" },
+				{ cat: "b", val: "32", g: "g1" },
+				{ cat: "a", val: "1.1", g: "g2" },
+				{ cat: "b", val: "29", g: "g2" },
+			],
+			encodings: xyEncodings("cat", "val", "g"),
+			isFaceted: true,
+			facetCfg: {
+				...DEFAULT_FACET_CONFIG,
+				shareY: "none",
+				proportionalSizingY: "unit",
+			},
+		})
+		expect(inputs.map((p) => p.yWeight)).toEqual([35, 30])
+	})
+
+	// A pinned end stays exact (the renderer never re-nices it); the other
+	// end is still the nice'd auto-fit value.
+	it("keeps a pinned end exact and nices the free end", () => {
+		const inputs = build({
+			rows: [
+				{ cat: "a", val: "1.2", g: "g1" },
+				{ cat: "b", val: "32", g: "g1" },
+				{ cat: "a", val: "1.1", g: "g2" },
+				{ cat: "b", val: "29", g: "g2" },
+			],
+			encodings: xyEncodings("cat", "val", "g"),
+			isFaceted: true,
+			facetCfg: {
+				...DEFAULT_FACET_CONFIG,
+				shareY: "none",
+				proportionalSizingY: "unit",
+				rowAxisOverrides: { g1: { min: 3 } },
+			},
+		})
+		expect(inputs.map((p) => p.yWeight)).toEqual([32, 30])
+	})
+
+	// The Y axis panel's own Scale range is the lowest-precedence pin on
+	// the render side (panelRenderInputs); the weight reads it too, so a
+	// range every panel draws can't leave the weights uneven.
+	it("falls back to the axis panel's Scale range for the unit weight", () => {
+		const inputs = build({
+			rows: [
+				{ cat: "a", val: "0", g: "g1" },
+				{ cat: "b", val: "10", g: "g1" },
+				{ cat: "a", val: "0", g: "g2" },
+				{ cat: "b", val: "5", g: "g2" },
+			],
+			encodings: xyEncodings("cat", "val", "g"),
+			isFaceted: true,
+			channelConfigs: { y: { ...DEFAULT_AXIS_CONFIG, min: 0, max: 50 } },
+			facetCfg: {
+				...DEFAULT_FACET_CONFIG,
+				shareY: "none",
+				proportionalSizingY: "unit",
+			},
+		})
+		expect(inputs.map((p) => p.yWeight)).toEqual([50, 50])
+	})
+
 	it("applies the row range override to the unit weight in a single-column grid", () => {
 		const inputs = build({
 			rows: [

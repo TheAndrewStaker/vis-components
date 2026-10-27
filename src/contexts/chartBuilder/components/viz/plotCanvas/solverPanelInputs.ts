@@ -588,11 +588,15 @@ export const buildSolverPanelInputs = ({
 		const yWeightOverrideMin =
 			yPerGroupOverrideForWeight?.min ??
 			yOverallOverrideForWeight?.min ??
-			yLegacyOverrideForWeight?.yMin
+			yLegacyOverrideForWeight?.yMin ??
+			channelConfigs.y?.min ??
+			undefined
 		const yWeightOverrideMax =
 			yPerGroupOverrideForWeight?.max ??
 			yOverallOverrideForWeight?.max ??
-			yLegacyOverrideForWeight?.yMax
+			yLegacyOverrideForWeight?.yMax ??
+			channelConfigs.y?.max ??
+			undefined
 		const xColOverrideAppliesForWeight =
 			shareXMode === "perGroup" ||
 			(shareXMode === "none" &&
@@ -612,20 +616,40 @@ export const buildSolverPanelInputs = ({
 		const xWeightOverrideMin =
 			xPerGroupOverrideForWeight?.min ??
 			xOverallOverrideForWeight?.min ??
-			xLegacyOverrideForWeight?.xMin
+			xLegacyOverrideForWeight?.xMin ??
+			channelConfigs.x?.min ??
+			undefined
 		const xWeightOverrideMax =
 			xPerGroupOverrideForWeight?.max ??
 			xOverallOverrideForWeight?.max ??
-			xLegacyOverrideForWeight?.xMax
+			xLegacyOverrideForWeight?.xMax ??
+			channelConfigs.x?.max ??
+			undefined
+		// The weight is the span of the domain the axis DRAWS, not the raw
+		// data min–max: every renderer rounds the auto-fit ends outward with
+		// d3's `.nice()` (a box plot over 1.2k–32k draws 0–35k) and only a
+		// user-pinned end stays exact. Weighing the raw extent put a
+		// different px-per-unit in every panel — "$30k" sat at a different
+		// height in each one (user-reported October 2026). Pins resolve in
+		// the renderer's order (panelRenderInputs): facet override, then the
+		// axis panel's own Scale range.
 		const effectiveRange = (
 			extent: { min: number; max: number } | null,
+			temporal: boolean,
 			overrideMin: number | undefined,
 			overrideMax: number | undefined,
 		): number => {
 			const dataMin = extent?.min ?? 0
 			const dataMax = extent?.max ?? 0
-			const min = overrideMin ?? dataMin
-			const max = overrideMax ?? dataMax
+			const [niceMin, niceMax] = temporal
+				? scaleTime()
+						.domain([new Date(dataMin), new Date(dataMax)])
+						.nice()
+						.domain()
+						.map((d) => d.getTime())
+				: scaleLinear().domain([dataMin, dataMax]).nice().domain()
+			const min = overrideMin ?? niceMin
+			const max = overrideMax ?? niceMax
 			return Math.max(0, max - min)
 		}
 		// Weights follow the share group (xWeightRows / yWeightRows), so
@@ -641,6 +665,7 @@ export const buildSolverPanelInputs = ({
 							RANGE_EPSILON,
 							effectiveRange(
 								xQuantExtent(xWeightRows),
+								measureAxis !== "x" && xType === "temporal",
 								xWeightOverrideMin,
 								xWeightOverrideMax,
 							),
@@ -654,6 +679,7 @@ export const buildSolverPanelInputs = ({
 							RANGE_EPSILON,
 							effectiveRange(
 								yQuantExtent(yWeightRows),
+								measureAxis !== "y" && yType === "temporal",
 								yWeightOverrideMin,
 								yWeightOverrideMax,
 							),
