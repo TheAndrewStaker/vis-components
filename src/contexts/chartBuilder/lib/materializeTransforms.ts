@@ -19,6 +19,7 @@ import {
 } from "./derivedVariables"
 import { applyDollarConversionToView } from "./dollarCells"
 import { applyPercentConversionToView } from "./percentCells"
+import { applyPivotToView, type PivotConfig } from "./pivot"
 import { applyReshapeToView, type ReshapeConfig } from "./reshape"
 import type { DatasetView, Field, FieldType } from "./types"
 
@@ -49,12 +50,20 @@ export const storedFields = (fields: readonly Field[]): Field[] =>
 	fields.map(storedField)
 
 export type Baked = StoredTable & {
-	/** The wide table the reshape saw (the source plus the derived variables
-	 *  it uses): what the panel's "N rows × M columns →" counts. */
+	/** The table the reshape saw (the source plus the derived variables it
+	 *  uses — the wide table before a melt, the long one before a pivot):
+	 *  what the panel's "N rows × M columns →" counts. */
 	wide: StoredTable
-	/** Whether the reshape applied — it passes the table through while
-	 *  half-configured (nothing to combine, a naming collision). */
+	/** The table after the reshape and before the variables that run on it:
+	 *  the kept ID columns plus what the melt / pivot minted. `wide` itself
+	 *  when neither applied. */
+	shaped: StoredTable
+	/** Whether the wide→long reshape applied — it passes the table through
+	 *  while half-configured (nothing to combine, a naming collision). */
 	reshaped: boolean
+	/** Whether the long→wide pivot applied (none given, or nothing to split
+	 *  out / fill with). */
+	pivoted: boolean
 	/** The derived variables that applied, each under the name its column
 	 *  got (a blank name saves as its positional default), in evaluation
 	 *  order. A variable that couldn't apply — a collision, a reference to a
@@ -70,31 +79,35 @@ const addedNames = (
 	return new Set(after.filter((f) => !had.has(f.name)).map((f) => f.name))
 }
 
-/** The table a new version stores after `reshape` and `derived` over the
- *  version shown (`raw`: the stored rows, renamed fields remapped). A
- *  variable the reshape uses runs on the wide table before the melt, every
- *  other one after it (see `derivedReshapeStages.ts`); both stages evaluate
- *  against the cell conversions but write only their new columns onto the
- *  unconverted rows, so "$1,234" stays "$1,234" in storage. */
+/** The table a new version stores after `reshape` (wide→long), `pivot`
+ *  (long→wide) and `derived` over the version shown (`raw`: the stored
+ *  rows, renamed fields remapped). A variable the reshape uses runs on the
+ *  source table before it, every other one after it (see
+ *  `derivedReshapeStages.ts`); both stages evaluate against the cell
+ *  conversions but write only their new columns onto the unconverted rows,
+ *  so "$1,234" stays "$1,234" in storage. A version applies ONE reshape;
+ *  when both are given the melt runs first. */
 export const bakeTransforms = (
 	raw: DatasetView,
 	overrides: Record<string, FieldType>,
 	reshape: ReshapeConfig,
-	derived: DerivedVariablesConfig
+	derived: DerivedVariablesConfig,
+	pivot?: PivotConfig
 ): Baked => {
-	const stages = splitDerivedVariablesAroundReshape(raw.fields, derived, reshape)
+	const stages = splitDerivedVariablesAroundReshape(raw.fields, derived, reshape, pivot)
 	const wide =
 		applyDerivedVariablesBeforeReshape(raw, derived, stages.beforeIds, () =>
 			applyCellConversions(raw, overrides)
 		) ?? raw
 	const long = applyReshapeToView(wide, reshape) ?? wide
+	const shaped = applyPivotToView(long, pivot) ?? long
 	const final =
-		applyDerivedVariablesBeforeReshape(long, derived, stages.afterIds, () =>
-			applyCellConversions(long, overrides)
-		) ?? long
+		applyDerivedVariablesBeforeReshape(shaped, derived, stages.afterIds, () =>
+			applyCellConversions(shaped, overrides)
+		) ?? shaped
 	const applied = new Set([
 		...addedNames(raw.fields, wide.fields),
-		...addedNames(long.fields, final.fields),
+		...addedNames(shaped.fields, final.fields),
 	])
 	const variables = derived.variables.flatMap((v, i) => {
 		const name = effectiveDerivedName(v, i)
@@ -104,7 +117,9 @@ export const bakeTransforms = (
 		fields: storedFields(final.fields),
 		rows: final.rows,
 		wide: { fields: storedFields(wide.fields), rows: wide.rows },
+		shaped: { fields: storedFields(shaped.fields), rows: shaped.rows },
 		reshaped: long !== wide,
+		pivoted: shaped !== long,
 		variables,
 	}
 }

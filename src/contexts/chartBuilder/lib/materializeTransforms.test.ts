@@ -131,3 +131,70 @@ describe("dropColumn / moveField / storedFields", () => {
 		).toEqual([{ name: "a", inferredType: "quantitative" }])
 	})
 })
+
+describe("bakeTransforms — long → wide pivot", () => {
+	const LONG: Field[] = [
+		{ name: "store", inferredType: "categorical" },
+		{ name: "day", inferredType: "categorical" },
+		{ name: "sales", inferredType: "quantitative" },
+	]
+	const LONG_ROWS = [
+		{ store: "A", day: "monday", sales: "$1,000" },
+		{ store: "A", day: "tuesday", sales: "2" },
+		{ store: "B", day: "monday", sales: "$3,000" },
+		{ store: "B", day: "tuesday", sales: "4" },
+	]
+	const pivot = { idFields: ["store"], keyFields: ["day"], valueFields: ["sales"] }
+
+	it("spreads the long table out and keeps the original cells as imported", () => {
+		const baked = bakeTransforms(view(LONG_ROWS, LONG), {}, DEFAULT_RESHAPE_CONFIG, { variables: [] }, pivot)
+		expect(baked.pivoted).toBe(true)
+		expect(baked.reshaped).toBe(false)
+		expect(baked.fields.map((f) => f.name)).toEqual(["store", "monday", "tuesday"])
+		expect(baked.rows).toEqual([
+			{ store: "A", monday: "$1,000", tuesday: "2" },
+			{ store: "B", monday: "$3,000", tuesday: "4" },
+		])
+		// `wide` is the table the pivot saw; `shaped` the table it made.
+		expect(baked.wide.fields.map((f) => f.name)).toEqual(["store", "day", "sales"])
+		expect(baked.shaped.fields).toEqual(baked.fields)
+	})
+
+	it("runs a variable the pivot fills with before it, and the rest after", () => {
+		const doubled: DerivedVariable = {
+			id: "d",
+			name: "double",
+			kind: "math",
+			math: { formula: "{sales} * 2" },
+		}
+		const widthwise: DerivedVariable = {
+			id: "w",
+			name: "week",
+			kind: "math",
+			math: { formula: "{monday} + {tuesday}" },
+		}
+		const baked = bakeTransforms(
+			view(LONG_ROWS, LONG),
+			{},
+			DEFAULT_RESHAPE_CONFIG,
+			{ variables: [doubled, widthwise] },
+			{ ...pivot, valueFields: ["double"] }
+		)
+		expect(baked.pivoted).toBe(true)
+		expect(baked.variables.map((v) => v.name)).toEqual(["double", "week"])
+		expect(baked.fields.map((f) => f.name)).toEqual(["store", "monday", "tuesday", "week"])
+		expect(baked.rows[0]).toEqual({ store: "A", monday: "2000", tuesday: "4", week: "2004" })
+	})
+
+	it("is not pivoted without a split-out and a value column", () => {
+		const baked = bakeTransforms(
+			view(LONG_ROWS, LONG),
+			{},
+			DEFAULT_RESHAPE_CONFIG,
+			{ variables: [] },
+			{ idFields: ["store"], keyFields: ["day"], valueFields: [] }
+		)
+		expect(baked.pivoted).toBe(false)
+		expect(baked.rows).toBe(LONG_ROWS)
+	})
+})

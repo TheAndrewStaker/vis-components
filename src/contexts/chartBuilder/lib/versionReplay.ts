@@ -39,10 +39,10 @@ import {
 	type Baked,
 	type StoredTable,
 } from "./materializeTransforms"
+import { pivotGroups, type PivotConfig } from "./pivot"
 import {
 	DEFAULT_RESHAPE_CONFIG,
 	allMeltFields,
-	presentGroups,
 	presentMeltFields,
 	reshapeIssues,
 	type ReshapeConfig,
@@ -60,6 +60,12 @@ type VersionLike = {
 /** How the reshape is named where a list of re-applied (or skipped) steps
  *  is shown — beside the derived variables' own names. */
 export const REPLAY_RESHAPE_LABEL = "reshape (wide → long)"
+/** Same, for a long→wide pivot. */
+export const REPLAY_PIVOT_LABEL = "reshape (long → wide)"
+/** Whether a listed name is one of the reshape labels (shown bare) rather
+ *  than a derived variable's name (shown quoted). */
+const isReshapeLabel = (name: string): boolean =>
+	name === REPLAY_RESHAPE_LABEL || name === REPLAY_PIVOT_LABEL
 
 /** The versions from `versionId` back to the import its chain descends
  *  from, nearest first. A dangling or cyclic `editedFrom` (a deleted base)
@@ -183,6 +189,7 @@ export const runReplayStep = (
 	}
 
 	const reshape = transform.reshape ?? DEFAULT_RESHAPE_CONFIG
+	const pivot = transform.pivot
 	const added = transform.added ?? []
 	const recomputed = transform.recomputed ?? []
 	const availableBefore = new Set(current.fields.map((f) => f.name))
@@ -195,8 +202,8 @@ export const runReplayStep = (
 	const unfed = new Map<string, string>()
 	let baked: Baked
 	for (;;) {
-		baked = bakeTransforms(asView(base, current), overrides, reshape, { variables })
-		const starved = unfedVariables(current.fields, variables, baked, reshape)
+		baked = bakeTransforms(asView(base, current), overrides, reshape, { variables }, pivot)
+		const starved = unfedVariables(current.fields, variables, baked, reshape, pivot)
 		if (starved.size === 0) break
 		for (const [id, reason] of starved) unfed.set(id, reason)
 		variables = variables.filter((v) => !starved.has(v.id))
@@ -205,6 +212,10 @@ export const runReplayStep = (
 	if (transform.reshape) {
 		if (baked.reshaped) applied.reshape = transform.reshape
 		else skipped.push({ name: REPLAY_RESHAPE_LABEL, reason: reshapeReason(current.fields, transform.reshape) })
+	}
+	if (pivot) {
+		if (baked.pivoted) applied.pivot = pivot
+		else skipped.push({ name: REPLAY_PIVOT_LABEL, reason: pivotReason(current.fields, pivot) })
 	}
 	const appliedIds = new Set(baked.variables.map((v) => v.id))
 	const available = new Set([
@@ -232,6 +243,7 @@ export const runReplayStep = (
 
 	const any =
 		applied.reshape !== undefined ||
+		applied.pivot !== undefined ||
 		(applied.added?.length ?? 0) > 0 ||
 		(applied.recomputed?.length ?? 0) > 0 ||
 		(applied.removed?.length ?? 0) > 0
@@ -239,32 +251,30 @@ export const runReplayStep = (
 }
 
 /** The variables the bake ran whose referenced columns were NOT all there
- *  in the stage they ran in — the wide table before the melt for a variable
- *  the reshape uses, the long table after it for the rest — each with the
- *  reason to show. Walks in list order, so a variable fed by an earlier
- *  fed one counts as fed. */
+ *  in the stage they ran in — the source table before the reshape for a
+ *  variable the reshape uses, the reshaped table after it for the rest —
+ *  each with the reason to show. Walks in list order, so a variable fed by
+ *  an earlier fed one counts as fed. */
 const unfedVariables = (
 	wideFields: readonly Field[],
 	variables: DerivedVariable[],
 	baked: Baked,
-	reshape: ReshapeConfig
+	reshape: ReshapeConfig,
+	pivot: PivotConfig | undefined
 ): Map<string, string> => {
 	const out = new Map<string, string>()
 	if (variables.length === 0) return out
 	const ran = new Set(baked.variables.map((v) => v.id))
-	const stages = splitDerivedVariablesAroundReshape(wideFields, { variables }, reshape)
+	const stages = splitDerivedVariablesAroundReshape(wideFields, { variables }, reshape, pivot)
 	const availableWide = new Set(wideFields.map((f) => f.name))
-	const availableLong = baked.reshaped
-		? new Set([
-				...wideFields.filter((f) => reshape.idFields.includes(f.name)).map((f) => f.name),
-				// The pairs the melt minted — every group that had a column in
-				// the wide table the reshape saw (before-melt variables included).
-				...presentGroups(baked.wide.fields, reshape).flatMap((g) => [
-					g.variableName,
-					g.valueName,
-				]),
-			])
-		: new Set(availableWide)
+	// The columns after the reshape: the kept IDs and what the melt / pivot
+	// minted (`baked.shaped`), minus the variables that ran — a before-stage
+	// one counts only once the walk finds it fed.
+	const ranNames = new Set(
+		variables.flatMap((v, i) => (ran.has(v.id) ? [effectiveDerivedName(v, i)] : []))
+	)
+	const shapedNames = new Set(baked.shaped.fields.map((f) => f.name))
+	const availableLong = new Set([...shapedNames].filter((n) => !ranNames.has(n)))
 	variables.forEach((variable, index) => {
 		if (!ran.has(variable.id)) return
 		const name = effectiveDerivedName(variable, index)
@@ -275,7 +285,8 @@ const unfedVariables = (
 		const fedLong = after && refs.every((r) => availableLong.has(r))
 		if (fedWide) {
 			availableWide.add(name)
-			if (!baked.reshaped || reshape.idFields.includes(name)) availableLong.add(name)
+			// It survives the reshape only as a kept column.
+			if (shapedNames.has(name)) availableLong.add(name)
 		}
 		if (fedLong) availableLong.add(name)
 		if (!fedWide && !fedLong)
@@ -288,6 +299,23 @@ const reshapeReason = (fields: Field[], config: ReshapeConfig): string => {
 	if (presentMeltFields(fields, config).length === 0)
 		return `none of its columns (${quotedList(allMeltFields(config))}) are in the data`
 	return reshapeIssues(fields, config)[0] ?? "can't be applied to this data"
+}
+
+/** Why a pivot didn't apply (no group spreads anything): the split-out or
+ *  value columns the groups need that the data lacks. */
+const pivotReason = (fields: Field[], config: PivotConfig): string => {
+	const has = new Set(fields.map((f) => f.name))
+	const missing = [
+		...new Set(
+			pivotGroups(config).flatMap((g) => [
+				...(g.keyFields.some((n) => has.has(n)) ? [] : g.keyFields),
+				...(g.valueFields.some((n) => has.has(n)) ? [] : g.valueFields),
+			])
+		),
+	]
+	return missing.length > 0
+		? `needs ${quotedList(missing)}`
+		: "can't be applied to this data"
 }
 
 export type ReplayStep = {
@@ -340,6 +368,7 @@ export const describeReplayApplied = (plan: ReplayPlan): string[] =>
 		if (!applied) return []
 		return [
 			...(applied.reshape ? [REPLAY_RESHAPE_LABEL] : []),
+			...(applied.pivot ? [REPLAY_PIVOT_LABEL] : []),
 			...(applied.added ?? []).map((v) => quoted(v.name)),
 			...(applied.recomputed ?? []).map((v) => quoted(v.name)),
 			...(applied.removed ?? []).map((n) => `removed ${quoted(n)}`),
@@ -351,7 +380,7 @@ export const describeReplaySkipped = (plan: ReplayPlan): string[] =>
 	plan.steps.flatMap(({ skipped }) =>
 		skipped.map(
 			({ name, reason }) =>
-				`${name === REPLAY_RESHAPE_LABEL ? name : quoted(name)} (${reason})`
+				`${isReshapeLabel(name) ? name : quoted(name)} (${reason})`
 		)
 	)
 

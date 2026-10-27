@@ -16,7 +16,11 @@
  *    definitions too, so a renamed column keeps its ƒ. */
 
 import type { DerivedVariable } from "./derivedVariables"
-import { renameDerivedVariableTokens, renameReshapeFields } from "./renameField"
+import {
+	renameDerivedVariableTokens,
+	renamePivotFields,
+	renameReshapeFields,
+} from "./renameField"
 import type { VersionTransform } from "./types"
 
 /** The stand-in "filename" of a version a reshape made — what the version
@@ -47,6 +51,7 @@ export const describeVersionOrigin = (
 	if (!t) return "edited by hand"
 	const parts: string[] = []
 	if (t.reshape) parts.push("reshaped (wide → long)")
+	if (t.pivot) parts.push("reshaped (long → wide)")
 	if (t.added?.length) parts.push(`added ${quotedNames(t.added)}`)
 	if (t.recomputed?.length) parts.push(`recomputed ${quotedNames(t.recomputed)}`)
 	if (t.removed?.length) parts.push(`removed ${t.removed.map(quoted).join(", ")}`)
@@ -151,17 +156,20 @@ export const renameFieldInTransform = (
 				reshape = { ...reshape, extraGroups }
 		}
 	}
+	const pivot = t.pivot && renamePivotFields(t.pivot, oldName, newName)
 	if (
 		added === t.added &&
 		recomputed === t.recomputed &&
 		removed === t.removed &&
 		skipped === t.skipped &&
-		reshape === t.reshape
+		reshape === t.reshape &&
+		pivot === t.pivot
 	)
 		return t
 	return {
 		...t,
 		...(reshape !== undefined ? { reshape } : {}),
+		...(pivot !== undefined ? { pivot } : {}),
 		...(added !== undefined ? { added } : {}),
 		...(recomputed !== undefined ? { recomputed } : {}),
 		...(removed !== undefined ? { removed } : {}),

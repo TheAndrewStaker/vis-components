@@ -150,3 +150,34 @@ describe("a replay's skipped parts", () => {
 		expect(renameFieldInTransform(t, "Other", "X")).toBe(t)
 	})
 })
+
+describe("long → wide pivot transforms", () => {
+	const pivot = { idFields: ["store"], keyFields: ["day"], valueFields: ["sales"] }
+
+	it("tags a pivoted version", () => {
+		expect(describeVersionOrigin({ editedFrom: "v1", transform: { pivot } })).toBe(
+			"reshaped (long → wide)"
+		)
+	})
+
+	it("renames the pivot's columns, and keeps the reference when nothing matches", () => {
+		const t: VersionTransform = { pivot }
+		expect(renameFieldInTransform(t, "day", "weekday").pivot).toEqual({
+			idFields: ["store"],
+			keyFields: ["weekday"],
+			valueFields: ["sales"],
+		})
+		expect(renameFieldInTransform(t, "store", "shop").pivot?.idFields).toEqual(["shop"])
+		expect(renameFieldInTransform(t, "nothing", "x")).toBe(t)
+	})
+
+	it("reaches a second group's columns", () => {
+		const t: VersionTransform = {
+			pivot: { ...pivot, extraGroups: [{ keyFields: ["region"], valueFields: ["cost"] }] },
+		}
+		expect(renameFieldInTransform(t, "cost", "spend").pivot?.extraGroups).toEqual([
+			{ keyFields: ["region"], valueFields: ["spend"] },
+		])
+		expect(renameFieldInTransform(t, "nothing", "x")).toBe(t)
+	})
+})

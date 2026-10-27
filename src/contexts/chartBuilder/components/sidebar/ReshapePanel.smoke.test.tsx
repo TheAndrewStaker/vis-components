@@ -239,7 +239,7 @@ describe("ReshapePanel", () => {
 			variableName: "day",
 			valueName: "sales",
 		})
-		expect(utils.container.textContent).toContain("creates a new data set altogether")
+		expect(utils.container.textContent).toContain("creates a new data set version")
 		const name = utils.getByLabelText("Data set name") as HTMLInputElement
 		expect(name.value).toBe("reshape (reshaped)")
 		fireEvent.click(utils.getByRole("button", { name: "Apply reshape" }))
@@ -286,7 +286,7 @@ describe("ReshapePanel", () => {
 			[],
 			workingCopy()
 		)
-		expect(utils.container.textContent).toContain("adds a new version to this data set")
+		expect(utils.container.textContent).toContain("adds a new version of this data set")
 		expect(utils.queryByLabelText("Data set name")).toBeNull()
 		fireEvent.click(utils.getByRole("button", { name: "Apply reshape" }))
 
@@ -460,5 +460,175 @@ describe("ReshapePanel", () => {
 		expect(store.get(currentDerivedVariablesAtom)).toEqual(
 			DEFAULT_DERIVED_VARIABLES_CONFIG
 		)
+	})
+})
+
+/** The Long → wide form behind the Direction toggle: it lists the long
+ *  columns in three exclusive lists, previews the new columns, warns about
+ *  a new column taking an ID column's name, and Apply saves the wide table
+ *  as a new version with the pivot recorded. */
+describe("ReshapePanel — long → wide", () => {
+	const LONG_FIELDS: Field[] = [
+		{ name: "store", inferredType: "categorical" },
+		{ name: "day", inferredType: "categorical" },
+		{ name: "sales", inferredType: "quantitative" },
+	]
+	const LONG_ROWS = [
+		{ store: "A", day: "monday", sales: "1" },
+		{ store: "A", day: "tuesday", sales: "2" },
+		{ store: "B", day: "monday", sales: "3" },
+		{ store: "B", day: "tuesday", sales: "4" },
+	]
+	const longDataset = (rows = LONG_ROWS): Dataset =>
+		buildDatasetFixture({
+			id: ID,
+			name: "long",
+			filename: "long.csv",
+			fields: LONG_FIELDS,
+			rows,
+		})
+	const boxesFor = (utils: ReturnType<typeof mount>, name: string) =>
+		utils.getAllByRole("checkbox").filter((el) => el.parentElement?.textContent === name)
+	const toPivot = (utils: ReturnType<typeof mount>) =>
+		fireEvent.click(utils.getByRole("radio", { name: "Long → wide" }))
+
+	it("defaults to wide → long, and the toggle swaps in the split-out form", () => {
+		const utils = mount({}, true, [], longDataset())
+		expect(utils.getByRole("radio", { name: "Wide → long" }).getAttribute("aria-checked")).toBe("true")
+		expect(utils.queryByText("Split out")).toBeNull()
+		toPivot(utils)
+		expect(utils.getByText("Split out")).toBeTruthy()
+		expect(utils.getByText("Fill with")).toBeTruthy()
+		// Every column is offered in all three lists until something is checked.
+		expect(boxesFor(utils, "day")).toHaveLength(3)
+		expect(
+			(utils.getByRole("button", { name: "Apply reshape" }) as HTMLButtonElement).disabled
+		).toBe(true)
+	})
+
+	it("a column lives in one list only, and the draft previews the new columns", () => {
+		const utils = mount({}, true, [], longDataset())
+		toPivot(utils)
+		// ID: store; Split out: day; Fill with: sales.
+		fireEvent.click(boxesFor(utils, "store")[0]!)
+		expect(boxesFor(utils, "store")).toHaveLength(1)
+		fireEvent.click(boxesFor(utils, "day")[1]!)
+		expect(boxesFor(utils, "day")).toHaveLength(2)
+		fireEvent.click(boxesFor(utils, "sales")[2]!)
+		expect(boxesFor(utils, "sales")).toHaveLength(2)
+		expect(utils.getByText("New columns: monday, tuesday.")).toBeTruthy()
+		expect(utils.getByText("4 rows × 3 columns → 2 rows × 3 columns.")).toBeTruthy()
+		expect(
+			(utils.getByRole("button", { name: "Apply reshape" }) as HTMLButtonElement).disabled
+		).toBe(false)
+	})
+
+	it("warns when a new column would take an ID column's name, and counts repeated rows", () => {
+		const utils = mount(
+			{},
+			true,
+			[],
+			longDataset([
+				{ store: "A", day: "store", sales: "1" },
+				{ store: "A", day: "store", sales: "2" },
+			])
+		)
+		toPivot(utils)
+		fireEvent.click(boxesFor(utils, "store")[0]!)
+		fireEvent.click(boxesFor(utils, "day")[1]!)
+		fireEvent.click(boxesFor(utils, "sales")[2]!)
+		expect(utils.getByText('"store" is already the name of an ID column.')).toBeTruthy()
+		expect(utils.container.textContent).toContain(
+			"1 row repeats an earlier row’s ID and split-out cells; the later row wins."
+		)
+		expect(
+			(utils.getByRole("button", { name: "Apply reshape" }) as HTMLButtonElement).disabled
+		).toBe(true)
+	})
+
+	it("+ Add another group: a second Split out + Fill with pair whose columns sit beside the first's", async () => {
+		const fields: Field[] = [...LONG_FIELDS, { name: "region", inferredType: "categorical" }, { name: "cost", inferredType: "quantitative" }]
+		const rows = LONG_ROWS.map((r, i) => ({ ...r, region: i % 2 === 0 ? "north" : "south", cost: String(i * 10) }))
+		const utils = mount(
+			{},
+			true,
+			[],
+			buildDatasetFixture({ id: ID, name: "long", filename: "long.csv", fields, rows })
+		)
+		toPivot(utils)
+		fireEvent.click(boxesFor(utils, "store")[0]!)
+		fireEvent.click(boxesFor(utils, "day")[1]!)
+		fireEvent.click(boxesFor(utils, "sales")[2]!)
+		fireEvent.click(utils.getByRole("button", { name: "+ Add another group" }))
+		expect(utils.getByText("Split out (group 2)")).toBeTruthy()
+		expect(utils.getByText("Fill with (group 2)")).toBeTruthy()
+		// "day" is group 1's split-out column, so group 2 never offers it;
+		// "region" is still free in every list (ID, group 1 ×2, group 2 ×2).
+		expect(boxesFor(utils, "day")).toHaveLength(2)
+		expect(boxesFor(utils, "region")).toHaveLength(5)
+		fireEvent.click(boxesFor(utils, "region")[3]!)
+		fireEvent.click(boxesFor(utils, "cost")[4]!)
+		// Checking them in group 2 withdraws them from group 1's lists.
+		expect(boxesFor(utils, "region")).toHaveLength(2)
+		expect(utils.getByText("New columns: monday, tuesday, north, south.")).toBeTruthy()
+		expect(utils.getByText("4 rows × 5 columns → 2 rows × 5 columns.")).toBeTruthy()
+		fireEvent.click(utils.getByRole("button", { name: "Apply reshape" }))
+
+		const store = utils.store()
+		await waitFor(() => expect(store.get(currentDatasetIdAtom)).not.toBe(ID))
+		const forked = store.get(loadedDatasetsAtom)[store.get(currentDatasetIdAtom)!]!
+		expect(forked.fields.map((f) => f.name)).toEqual(["store", "monday", "tuesday", "north", "south"])
+		const wide = forked.versions[1]!
+		expect(wide.transform?.pivot).toEqual({
+			idFields: ["store"],
+			keyFields: ["day"],
+			valueFields: ["sales"],
+			extraGroups: [{ keyFields: ["region"], valueFields: ["cost"] }],
+		})
+		expect(wide.rows).toEqual([
+			{ store: "A", monday: "1", tuesday: "2", north: "0", south: "10" },
+			{ store: "B", monday: "3", tuesday: "4", north: "20", south: "30" },
+		])
+	})
+
+	it("× removes a group, and a group with nothing checked spreads nothing", () => {
+		const utils = mount({}, true, [], longDataset())
+		toPivot(utils)
+		fireEvent.click(boxesFor(utils, "day")[1]!)
+		fireEvent.click(boxesFor(utils, "sales")[2]!)
+		fireEvent.click(utils.getByRole("button", { name: "+ Add another group" }))
+		expect(utils.getByText("4 rows × 3 columns → 1 rows × 2 columns.")).toBeTruthy()
+		fireEvent.click(utils.getByRole("button", { name: "Remove group 2" }))
+		expect(utils.queryByText("Split out (group 2)")).toBeNull()
+	})
+
+	it("applies as a NEW data set with the pivot recorded, the long table kept as v1", async () => {
+		const utils = mount({}, true, [], longDataset())
+		toPivot(utils)
+		fireEvent.click(boxesFor(utils, "store")[0]!)
+		fireEvent.click(boxesFor(utils, "day")[1]!)
+		fireEvent.click(boxesFor(utils, "sales")[2]!)
+		expect((utils.getByLabelText("Data set name") as HTMLInputElement).value).toBe(
+			"long (reshaped)"
+		)
+		fireEvent.click(utils.getByRole("button", { name: "Apply reshape" }))
+
+		const store = utils.store()
+		await waitFor(() => expect(store.get(currentDatasetIdAtom)).not.toBe(ID))
+		const forked = store.get(loadedDatasetsAtom)[store.get(currentDatasetIdAtom)!]!
+		expect(forked.fields.map((f) => f.name)).toEqual(["store", "monday", "tuesday"])
+		expect(forked.versions.map((v) => v.filename)).toEqual(["long.csv", "Reshaped data"])
+		const [long, wide] = forked.versions
+		expect(long!.fields?.map((f) => f.name)).toEqual(["store", "day", "sales"])
+		expect(wide!.editedFrom).toBe(long!.id)
+		expect(wide!.transform).toEqual({
+			pivot: { idFields: ["store"], keyFields: ["day"], valueFields: ["sales"] },
+		})
+		expect(wide!.rows).toEqual([
+			{ store: "A", monday: "1", tuesday: "2" },
+			{ store: "B", monday: "3", tuesday: "4" },
+		])
+		expect(store.get(loadedDatasetsAtom)[ID]).toEqual(longDataset())
+		expect(store.get(reshapePanelOpenAtom)).toBe(false)
 	})
 })

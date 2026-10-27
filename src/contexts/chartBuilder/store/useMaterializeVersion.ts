@@ -13,6 +13,7 @@ import {
 	storedFields,
 	type Baked,
 } from "../lib/materializeTransforms"
+import type { PivotConfig } from "../lib/pivot"
 import { renameDatasetField } from "../lib/renameField"
 import { DEFAULT_RESHAPE_CONFIG, type ReshapeConfig } from "../lib/reshape"
 import type { Field, VersionTransform } from "../lib/types"
@@ -49,9 +50,12 @@ export type DerivedTarget =
 
 /** After a bake landed: the live config loses what the version now holds.
  *  A legacy variable that could NOT apply (a broken reference) stays live —
- *  its editor keeps warning about it rather than losing it silently. */
+ *  its editor keeps warning about it rather than losing it silently. A
+ *  live melt also clears when a PIVOT lands: the user reshaped the other
+ *  way instead, and the melt's columns are gone from the version. */
 const clearFolded = (set: Setter, baked: Baked, legacyVariables: DerivedVariable[]) => {
-	if (baked.reshaped) set(currentReshapeConfigAtom, DEFAULT_RESHAPE_CONFIG)
+	if (baked.reshaped || baked.pivoted)
+		set(currentReshapeConfigAtom, DEFAULT_RESHAPE_CONFIG)
 	const applied = new Set(baked.variables.map((v) => v.id))
 	const remaining = legacyVariables.filter((v) => !applied.has(v.id))
 	set(
@@ -62,38 +66,53 @@ const clearFolded = (set: Setter, baked: Baked, legacyVariables: DerivedVariable
 	)
 }
 
-/** The transform a baked version records: the reshape when it applied, and
- *  the legacy variables folded in as added columns. */
+/** The transform a baked version records: the reshape (melt or pivot) when
+ *  it applied, and the legacy variables folded in as added columns. */
 const foldedTransform = (
 	baked: Baked,
 	reshape: ReshapeConfig,
-	foldedIds: ReadonlySet<string>
+	foldedIds: ReadonlySet<string>,
+	pivot?: PivotConfig
 ): VersionTransform => {
 	const added = baked.variables.filter((v) => foldedIds.has(v.id))
 	return {
 		...(baked.reshaped ? { reshape } : {}),
+		...(baked.pivoted && pivot ? { pivot } : {}),
 		...(added.length > 0 ? { added } : {}),
 	}
 }
 
-/** The Reshape panel's Apply: melt the version shown by `draft` — together
- *  with this visual's live derived variables, if it still has any — and
- *  save the long table as a new version. */
+/** What the Reshape panel applies: a wide→long melt or a long→wide pivot. */
+export type ReshapeDraft =
+	| { kind: "melt"; config: ReshapeConfig }
+	| { kind: "pivot"; config: PivotConfig }
+
+/** The Reshape panel's Apply: reshape the version shown by `draft` — a
+ *  melt or a pivot, together with this visual's live derived variables, if
+ *  it still has any — and save the result as a new version. */
 export const useApplyReshape = () =>
 	useAtomCallback(
 		useCallback(
-			async (get, set, draft: ReshapeConfig, name: string): Promise<CommitResult> => {
+			async (get, set, draft: ReshapeDraft, name: string): Promise<CommitResult> => {
 				const raw = get(currentRawDatasetViewAtom)
 				if (!raw) return { ok: false, error: "No data set is loaded." }
 				const legacy = get(currentDerivedVariablesAtom)
+				const reshape = draft.kind === "melt" ? draft.config : DEFAULT_RESHAPE_CONFIG
+				const pivot = draft.kind === "pivot" ? draft.config : undefined
 				const baked = bakeTransforms(
 					raw,
 					get(currentFieldOverridesAtom),
-					draft,
-					legacy
+					reshape,
+					legacy,
+					pivot
 				)
-				if (!baked.reshaped)
+				if (draft.kind === "melt" && !baked.reshaped)
 					return { ok: false, error: "Check at least one Combine column." }
+				if (draft.kind === "pivot" && !baked.pivoted)
+					return {
+						ok: false,
+						error: "Check a column to split out and a column to fill with.",
+					}
 				const result = await commitDatasetVersion(
 					get,
 					set,
@@ -103,8 +122,9 @@ export const useApplyReshape = () =>
 						filename: RESHAPED_DATA_FILENAME,
 						transform: foldedTransform(
 							baked,
-							draft,
-							new Set(legacy.variables.map((v) => v.id))
+							reshape,
+							new Set(legacy.variables.map((v) => v.id)),
+							pivot
 						),
 					},
 					name

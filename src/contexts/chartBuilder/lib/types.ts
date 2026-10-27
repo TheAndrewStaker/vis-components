@@ -73,7 +73,11 @@ export type ParsedUpload = {
  * happened and the tray's ƒ marker can reopen a derived variable's
  * definition (see `lib/versionTransforms.ts`). */
 export type VersionTransform = {
+	/** A wide→long reshape (melt) — `lib/reshape.ts`. */
 	reshape?: ReshapeConfig
+	/** A long→wide reshape (pivot) — `lib/pivot.ts`. Optional and additive
+	 * (no storage version bump); a version records one or the other. */
+	pivot?: PivotConfig
 	added?: DerivedVariable[]
 	recomputed?: DerivedVariable[]
 	removed?: string[]
@@ -342,6 +346,7 @@ import type {
 	DerivedVariablesConfig,
 } from "./derivedVariables"
 import type { MapConfig } from "./mapConfig"
+import type { PivotConfig } from "./pivot"
 import type { ReshapeConfig } from "./reshape"
 
 /** The Fields panel's "Order by" picker settings for one categorical /

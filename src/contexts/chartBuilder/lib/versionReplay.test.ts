@@ -13,6 +13,7 @@ import {
 	tagged,
 } from "./versionReplay.fixtures"
 import {
+	REPLAY_PIVOT_LABEL,
 	REPLAY_RESHAPE_LABEL,
 	describeReplayApplied,
 	describeReplaySkipped,
@@ -155,5 +156,49 @@ describe("previewImport", () => {
 		expect(preview.steps).toEqual([])
 		expect(preview.plan.steps).toEqual([])
 		expect(preview.compatible).toBe(true)
+	})
+})
+
+describe("runReplayStep — long → wide pivot", () => {
+	const pivot = { idFields: ["Year"], keyFields: ["month"], valueFields: ["sales"] }
+
+	it("re-does a pivot over fresh long rows and records it", () => {
+		const fresh = [
+			{ Year: "2025", month: "Jan", sales: "10" },
+			{ Year: "2025", month: "Feb", sales: "20" },
+		]
+		const result = runReplayStep(BASE, { fields: LONG, rows: fresh }, { pivot }, {})
+		expect(result.applied).toEqual({ pivot })
+		expect(result.skipped).toEqual([])
+		expect(names(result.table.fields)).toEqual(["Year", "Jan", "Feb"])
+		expect(result.table.rows).toEqual([{ Year: "2025", Jan: "10", Feb: "20" }])
+	})
+
+	it("plans a pivot from the columns alone, and names it in the dialog lines", () => {
+		const plan = planReplay(
+			BASE,
+			[{ id: "p", filename: "Reshaped data", editedFrom: "v1", transform: { pivot } }],
+			LONG
+		)
+		expect(plan.steps[0]?.applied).toEqual({ pivot })
+		// No rows, so no minted columns yet — only the kept ID survives.
+		expect(names(plan.fields)).toEqual(["Year"])
+		expect(describeReplayApplied(plan)).toEqual([REPLAY_PIVOT_LABEL])
+	})
+
+	it("skips a pivot whose split-out column the fresh data lacks, naming the column", () => {
+		const result = runReplayStep(BASE, { fields: WIDE, rows: [] }, { pivot }, {})
+		expect(result.applied).toBeNull()
+		expect(result.skipped).toEqual([
+			{ name: REPLAY_PIVOT_LABEL, reason: "needs “month”, “sales”" },
+		])
+		const plan = planReplay(
+			BASE,
+			[{ id: "p", filename: "Reshaped data", editedFrom: "v1", transform: { pivot } }],
+			WIDE
+		)
+		expect(describeReplaySkipped(plan)).toEqual([
+			`${REPLAY_PIVOT_LABEL} (needs “month”, “sales”)`,
+		])
 	})
 })

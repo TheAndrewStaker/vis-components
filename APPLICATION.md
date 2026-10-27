@@ -280,16 +280,18 @@ table and grid, the data-set filter, and the version badge show the
 new name with no second write. There is no cascade — visuals bind by
 id.
 
-### 2.1b Reshape (wide → long)
+### 2.1b Reshape (wide → long, long → wide)
 The tool wants long data (one observation per row), but users often
 arrive with wide tables (one column per category — Monday, Tuesday,
 …). A **"Reshape"** button in the data-table tray header (visible
 whenever a dataset is loaded) shows/hides the reshape options panel
 under Data in the left menu (expanding the Data section if
-collapsed). The panel is a purple option box whose
-"Reshape (wide → long)" subheader is a standard collapsible
-subsection (chevron; open by default since the tray click should
-reveal the options). What it holds is a **draft**: nothing changes
+collapsed). The panel is a purple option box whose "Reshape"
+subheader is a standard collapsible subsection (chevron; open by
+default since the tray click should reveal the options). A
+**Direction** toggle at its top picks the form: **Wide → long** (the
+default, described first) or **Long → wide** (the inverse, further
+down). What it holds is a **draft**: nothing changes
 until **"Apply reshape"**, which melts the version shown and saves
 the long table as a **new data version** (§2.4) — the same way a hand
 edit (§2.1) or a derived variable (§2.1c) lands — then closes the
@@ -339,6 +341,62 @@ A line under the boxes reads out what Apply would save (`2 rows × 3
 columns → 4 rows × 3 columns.`); a half-configured draft (nothing to
 combine, or a name colliding with a kept ID column or the other name
 — surfaced as amber warnings) just leaves Apply disabled.
+
+**Long → wide.** The Direction toggle's other setting swaps in the
+inverse form — a pivot — for data that arrived long and wants a
+column per category. Its lists hold the columns of the version
+shown:
+
+- **ID columns** — checkboxes over every column; rows that share the
+  same ID cells become ONE output row (first-appearance order, ID
+  cells from the first such row).
+- **Split out** — checkboxes over the remaining columns; each
+  distinct value of the checked column becomes a column of its own,
+  in the order the values first appear. With two or more checked,
+  their values together name the column ("2023 Q1"); a blank cell
+  names its column "(blank)".
+- **Fill with** — checkboxes over the remaining columns; the checked
+  column's cells fill the new columns (blank where no row has that
+  ID + split-out combination; each new column's type is re-inferred
+  from its cells). With two or more checked, each new column is named
+  by its value column too ("sales 2023", "cost 2023", "sales 2024",
+  …) — the inverse of the paired groups above. Columns checked in no
+  list are left out.
+
+**More than one pair — groups.** A right-aligned **"+ Add another
+group"** link adds a second Split out + Fill with pair ("Split out
+(group 2)" / "Fill with (group 2)", × on its header removes it). The
+groups share the ID columns: each group spreads its own split-out
+values into its own columns, filled from its own value column(s), and
+every group's new columns sit side by side on the same ID rows —
+`day`/`sales` and `region`/`cost` give `monday, tuesday, north,
+south`, which is what a paired-group melt (above) comes back out of.
+A group with nothing checked in either list spreads nothing and is
+ignored; a new column two groups both make is an amber warning
+(`"monday" is made by two groups.`). Repeated rows are counted per
+group ("… ID and split-out (group 2) cells"). In the config the first
+group is the pivot's own `keyFields` / `valueFields` and the rest sit
+in `extraGroups` (optional, additive). Two or more split-out columns
+in ONE group are different: their values join into one column name
+per combination (the cross product), where two groups give two
+independent sets of columns.
+
+A column lives in one list only, as in the wide → long form. Under
+the lists the panel reads out the new columns ("New columns: 2023,
+2024, 2025." — the first six, then "… and N more") and how many rows
+repeat an earlier row's ID and split-out cells (the later row wins),
+then the same counts line. A new column that takes a kept ID column's
+name is an amber warning that disables Apply (`"2023" is already the
+name of an ID column.`), as is a column that two different split-out
+combinations both make. Apply saves the wide table exactly as the melt does
+(below), with the pivot recorded in `DatasetVersion.transform.pivot`
+instead (`lib/pivot.ts`, `pivotDataset`; the version list tags it
+"reshaped (long → wide)", a replay names it "reshape (long → wide)"
+and re-does it when the split-out and value columns are present).
+The direction is a draft choice, not stored: each form keeps its own
+draft, and the live melt an older visual carries seeds only the
+wide → long form — applying a pivot from such a visual clears that
+live melt, whose columns the pivoted version no longer has.
 
 Where the version lands follows the one rule every change to the
 data obeys (`store/commitDatasetVersion.ts`): the first change to an
@@ -680,7 +738,8 @@ lists every version newest-first with its upload timestamp and filename:
 - **Versions made from another** list with what made them after
   their filename (`describeVersionOrigin`, `lib/versionTransforms.ts`):
   a hand edit (§2.1) "Edited data · edited by hand", a reshape
-  (§2.1b) "Reshaped data · reshaped (wide → long)", a derived
+  (§2.1b) "Reshaped data · reshaped (wide → long)" / "· reshaped
+  (long → wide)", a derived
   variable (§2.1c) "Derived data · added “Trend”" / "· recomputed
   “Trend”" / "· removed “Trend”" — a reshape that folded an older
   visual's live variables in says both, and a version a replay made

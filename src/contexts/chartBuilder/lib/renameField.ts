@@ -13,6 +13,7 @@ import type {
 	DerivedVariablesConfig,
 } from "./derivedVariables"
 import type { LabelsConfig, TooltipConfig } from "./labelsConfig"
+import type { PivotConfig, PivotGroup } from "./pivot"
 import {
 	meltVariableNameOf,
 	reshapeApplies,
@@ -316,6 +317,35 @@ export const renameReshapeFields = (
 		idFields: renameInList(rc.idFields, oldName, newName) ?? rc.idFields,
 		meltFields: renameInList(rc.meltFields, oldName, newName) ?? rc.meltFields,
 		...(extraGroups !== rc.extraGroups ? { extraGroups } : {}),
+	})
+}
+
+/** Swap a column in a long→wide pivot's ID / Split-out / Value lists —
+ * every group's. Same reference when none lists the old name. The minted
+ * column names are data values, not config — they don't rename. */
+export const renamePivotFields = (
+	pc: PivotConfig,
+	oldName: string,
+	newName: string
+): PivotConfig => {
+	let extraGroups = pc.extraGroups
+	if (extraGroups) {
+		let changed = false
+		const next = extraGroups.map((g): PivotGroup => {
+			const out = patched(g, {
+				keyFields: renameInList(g.keyFields, oldName, newName) ?? g.keyFields,
+				valueFields: renameInList(g.valueFields, oldName, newName) ?? g.valueFields,
+			})
+			if (out !== g) changed = true
+			return out
+		})
+		if (changed) extraGroups = next
+	}
+	return patched(pc, {
+		idFields: renameInList(pc.idFields, oldName, newName) ?? pc.idFields,
+		keyFields: renameInList(pc.keyFields, oldName, newName) ?? pc.keyFields,
+		valueFields: renameInList(pc.valueFields, oldName, newName) ?? pc.valueFields,
+		...(extraGroups !== pc.extraGroups ? { extraGroups } : {}),
 	})
 }
 

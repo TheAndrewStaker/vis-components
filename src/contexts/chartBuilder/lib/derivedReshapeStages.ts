@@ -6,6 +6,7 @@ import {
 	referencedFields,
 	type DerivedVariablesConfig,
 } from "./derivedVariables"
+import { allPivotFields, type PivotConfig } from "./pivot"
 import { allMeltFields, mintedNames, type ReshapeConfig } from "./reshape"
 import type { DatasetView, Field } from "./types"
 
@@ -32,7 +33,11 @@ import type { DatasetView, Field } from "./types"
  * itself derived, B computes before the melt too so C can. B only SURVIVES
  * the melt if it's also checked (the melt drops unlisted columns), and an
  * unchecked B still runs after the melt as it always did — so a variable
- * can sit in both sets. `afterIds` is everything the reshape doesn't use. */
+ * can sit in both sets. `afterIds` is everything the reshape doesn't use.
+ *
+ * A long→wide `pivot` is the same shape of step (its ID, split-out and
+ * value columns are what it uses); the two never apply in one version, but
+ * both are passed so the split sees whichever one the caller runs. */
 export type DerivedReshapeStages = {
 	candidates: Array<{ id: string; name: string }>
 	beforeIds: ReadonlySet<string>
@@ -58,7 +63,8 @@ export const postMeltOnlyNames = (
 export const splitDerivedVariablesAroundReshape = (
 	wideFields: ReadonlyArray<Field>,
 	derived: DerivedVariablesConfig,
-	reshape: ReshapeConfig
+	reshape: ReshapeConfig,
+	pivot?: PivotConfig
 ): DerivedReshapeStages => {
 	if (derived.variables.length === 0) return EMPTY_STAGES
 
@@ -84,7 +90,11 @@ export const splitDerivedVariablesAroundReshape = (
 		available.add(name)
 	})
 
-	const used = new Set([...reshape.idFields, ...allMeltFields(reshape)])
+	const used = new Set([
+		...reshape.idFields,
+		...allMeltFields(reshape),
+		...(pivot ? allPivotFields(pivot) : []),
+	])
 	const usedIds = new Set(
 		candidates.filter((c) => used.has(c.name)).map((c) => c.id)
 	)

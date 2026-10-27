@@ -140,7 +140,15 @@ describe("useApplyReshape", () => {
 	it("forks imported data: the wide copy keeps its columns, the long table is v2 with the reshape recorded", async () => {
 		const { reshape, store } = setup(imported())
 		const result = await reshape(
-			{ idFields: ["city"], meltFields: ["sales", "units"], variableName: "m", valueName: "v" },
+			{
+				kind: "melt",
+				config: {
+					idFields: ["city"],
+					meltFields: ["sales", "units"],
+					variableName: "m",
+					valueName: "v",
+				},
+			},
 			"sales (reshaped)"
 		)
 		expect(result).toMatchObject({ ok: true, mode: "fork" })
@@ -163,9 +171,18 @@ describe("useApplyReshape", () => {
 
 	it("refuses a draft that doesn't reshape", async () => {
 		const { reshape, store } = setup(imported())
-		expect(await reshape(DEFAULT_RESHAPE_CONFIG, "x")).toEqual({
+		expect(await reshape({ kind: "melt", config: DEFAULT_RESHAPE_CONFIG }, "x")).toEqual({
 			ok: false,
 			error: "Check at least one Combine column.",
+		})
+		expect(
+			await reshape(
+				{ kind: "pivot", config: { idFields: [], keyFields: [], valueFields: [] } },
+				"x"
+			)
+		).toEqual({
+			ok: false,
+			error: "Check a column to split out and a column to fill with.",
 		})
 		expect(store.get(currentDatasetIdAtom)).toBe(ID)
 	})
