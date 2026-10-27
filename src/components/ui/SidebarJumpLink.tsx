@@ -1,19 +1,33 @@
 import { useStore } from "jotai"
-import { useCallback } from "react"
+import { useCallback, type ReactNode } from "react"
 
 import {
 	sidebarCollapsedAtom,
 	sidebarJumpTargetAtom,
 	type SidebarJumpTarget,
 } from "../../contexts/chartBuilder/store/atoms"
+import type { EncodingChannel } from "../../contexts/chartBuilder/lib/types"
 import { asideSectionId } from "./AsideSection"
+
+/** DOM id of an encoding row (its options disclosure), the scroll fallback
+ *  for a jump that names a `channel`. */
+export const encodingRowId = (channel: EncodingChannel): string =>
+	`encoding-row-${channel}`
+
+/** A jump into an encoding row's options panel, optionally to one of its
+ *  subsections (`jumpId`). */
+export const channelJump = (
+	channel: EncodingChannel,
+	subsection?: string
+): SidebarJumpTarget => ({ section: "Encodings", channel, subsection })
 
 /** Returns `jumpTo(target)`: un-collapses the named AsideSection and sets the
  *  transient jump target, which the `CollapsibleSubsection` with a matching
  *  `jumpId` consumes (opens + scrolls into view). If no subsection claims the
  *  target (none named, or the named one isn't rendered — e.g. its "Titles
- *  shown" box is off), the section body is scrolled into view instead after
- *  the section has had a couple of frames to mount. */
+ *  shown" box is off), the encoding row (when `channel` is named) or else the
+ *  section body is scrolled into view instead after the section has had a
+ *  couple of frames to mount. */
 export const useSidebarJump = () => {
 	const store = useStore()
 	return useCallback(
@@ -26,9 +40,11 @@ export const useSidebarJump = () => {
 			const fallback = () => {
 				if (store.get(sidebarJumpTargetAtom) !== target) return
 				store.set(sidebarJumpTargetAtom, null)
-				document
-					.getElementById(asideSectionId(target.section))
-					?.scrollIntoView?.({ block: "start", behavior: "smooth" })
+				const el =
+					(target.channel &&
+						document.getElementById(encodingRowId(target.channel))) ||
+					document.getElementById(asideSectionId(target.section))
+				el?.scrollIntoView?.({ block: "start", behavior: "smooth" })
 			}
 			if (typeof window.requestAnimationFrame === "function")
 				window.requestAnimationFrame(() =>
@@ -59,6 +75,29 @@ export const SidebarJumpLink = ({
 			className="text-vc-brand-text self-end text-sm underline hover:opacity-80 dark:text-brand-300"
 		>
 			{label}
+		</button>
+	)
+}
+
+/** The inline form of `SidebarJumpLink`, for helper prose that names another
+ *  spot in the sidebar ("Set spoke color under Color → Radar spine."): the
+ *  named path itself becomes the link. Semibold so it keeps the weight the
+ *  `<strong>` path names had. */
+export const SidebarJumpText = ({
+	target,
+	children,
+}: {
+	target: SidebarJumpTarget
+	children: ReactNode
+}) => {
+	const jumpTo = useSidebarJump()
+	return (
+		<button
+			type="button"
+			onClick={() => jumpTo(target)}
+			className="text-vc-brand-text inline font-semibold underline hover:opacity-80 dark:text-brand-300"
+		>
+			{children}
 		</button>
 	)
 }

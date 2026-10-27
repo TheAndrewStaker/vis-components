@@ -35,6 +35,7 @@ import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
 import { Segmented } from "../../../../../components/ui/Segmented"
+import { SidebarJumpText, channelJump } from "../../../../../components/ui/SidebarJumpLink"
 import { combine as c } from "../../../../../lib/cls"
 import { SpineControls, TickFormatControl, ordinalSuffix } from "./AxisOptionsPanel"
 
@@ -336,8 +337,8 @@ const RadarSpokesSection = ({
 			    off; the section header carries the dot instead. */}
 			<div className="vc-divider-group">
 				<p className="vc-help">
-					Set spoke color under <strong>Color</strong> →{" "}
-					<strong>Radar Spine</strong>.
+					Set spoke color under{" "}
+					<SidebarJumpText target={channelJump("hue", "color:spine")}>Color → Radar spine</SidebarJumpText>.
 				</p>
 				<SpineControls
 					spine={cfg.spine ?? DEFAULT_SPINE_CONFIG}

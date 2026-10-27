@@ -105,7 +105,7 @@ describe("Angle panel — radar mode", () => {
 		const q = await mount()
 		fireEvent.click(header(q, /^spokes$/i))
 		expect(q.getByLabelText("Spokes")).not.toBeNull()
-		expect(q.getByText(/Radar Spine/)).not.toBeNull()
+		expect(q.getByText(/Radar spine/)).not.toBeNull()
 	})
 
 	it("Spoke Labels holds label angle, format, label every, and distance", async () => {

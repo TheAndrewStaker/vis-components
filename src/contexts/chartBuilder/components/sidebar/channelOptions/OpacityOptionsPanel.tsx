@@ -452,7 +452,11 @@ const OpacitySlotSubsection = ({
 	const slotChanged = opacitySlotEdited(def.key, slotCfg)
 
 	return (
-		<CollapsibleSubsection title={def.label} changed={slotChanged}>
+		<CollapsibleSubsection
+			title={def.label}
+			changed={slotChanged}
+			jumpId={`opacity:${def.key}`}
+		>
 			<div className="flex flex-col gap-2">
 				{def.acceptsFieldMapping && !hideVaryBy ? (
 						<SelectInput

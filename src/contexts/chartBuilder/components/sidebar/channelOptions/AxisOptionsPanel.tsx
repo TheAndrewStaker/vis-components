@@ -52,6 +52,7 @@ import { Segmented } from "../../../../../components/ui/Segmented"
 import { AlignmentControl, FontEditor } from "../LabelsPanel"
 import { Input } from "../../../../../components/ui/Input"
 import { DateInput } from "../../../../../components/ui/DateInput"
+import { SidebarJumpText, channelJump } from "../../../../../components/ui/SidebarJumpLink"
 import { BreaksField } from "./BreaksField"
 
 type Props = {
@@ -1733,9 +1734,9 @@ const RugControls = ({
 					)}
 				</div>
 				<p className="vc-help">
-					Set the rug color under <strong>Color</strong> →{" "}
-					<strong>Rug</strong> and its opacity under the{" "}
-					<strong>Opacity</strong> → <strong>Rug</strong>.
+					Set the rug color under{" "}
+					<SidebarJumpText target={channelJump("hue", "color:rug")}>Color → Rug</SidebarJumpText> and its opacity under{" "}
+					<SidebarJumpText target={channelJump("opacity", "opacity:rug")}>Opacity → Rug</SidebarJumpText>.
 				</p>
 			</>
 		)}
@@ -1775,7 +1776,8 @@ const DensityCurveControls = ({
 		<Checkbox label="Fill under curve" checked={fill} onChange={onChangeFill} />
 		<p className="vc-help">
 			Smoothing scales the kernel bandwidth; higher is smoother. Set the curve
-			color under <strong>Color</strong> → <strong>Density curve</strong>.
+			color under{" "}
+			<SidebarJumpText target={channelJump("hue", "color:densityCurveStroke")}>Color → Density curve outline</SidebarJumpText>.
 		</p>
 	</>
 )
@@ -1947,10 +1949,11 @@ const DistributionTypeControls = ({
 						</label>
 					)}
 					<p className="vc-help">
-						Set violin / box colors under <strong>Color</strong> →{" "}
-						<strong>Violin / box fill</strong> and{" "}
-						<strong>Violin / box outline</strong>, and the border width under
-						<strong>Shape</strong> → <strong>Violin / box outline</strong>.
+						Set violin / box colors under{" "}
+						<SidebarJumpText target={channelJump("hue", "color:violinFill")}>Color → Violin / box fill</SidebarJumpText> and{" "}
+						<SidebarJumpText target={channelJump("hue", "color:violinStroke")}>Violin / box outline</SidebarJumpText>, and the
+						border width under{" "}
+						<SidebarJumpText target={channelJump("shape")}>Shape → Violin / box outline</SidebarJumpText>.
 					</p>
 				</>
 			)}
@@ -2079,11 +2082,14 @@ const RegressionControls = ({
 						)}
 					</div>
 					<p className="vc-help">
-						Style the line and band under the <strong>Color</strong> and{" "}
-						<strong>Opacity</strong> → <strong>Regression line</strong>{" "}
-						and <strong>Confidence interval</strong>; set the line&apos;s dash
-						under <strong>Pattern</strong> →{" "}
-						<strong>Regression line</strong>.
+						Style the line under{" "}
+						<SidebarJumpText target={channelJump("hue", "color:regressionStroke")}>Color → Regression line</SidebarJumpText> and{" "}
+						<SidebarJumpText target={channelJump("opacity", "opacity:regressionStroke")}>Opacity → Regression line</SidebarJumpText>,
+						the band under{" "}
+						<SidebarJumpText target={channelJump("hue", "color:regressionCiFill")}>Color → Confidence interval</SidebarJumpText> and{" "}
+						<SidebarJumpText target={channelJump("opacity", "opacity:regressionCiFill")}>Opacity → Confidence interval</SidebarJumpText>;
+						set the line&apos;s dash under{" "}
+						<SidebarJumpText target={channelJump("pattern", "pattern:regression")}>Pattern → Regression line</SidebarJumpText>.
 					</p>
 				</>
 			)}

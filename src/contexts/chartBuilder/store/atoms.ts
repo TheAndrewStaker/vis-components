@@ -126,6 +126,7 @@ import {
 	type Dataset,
 	type DatasetMeta,
 	type EmbedInstance,
+	type EncodingChannel,
 	type Encodings,
 	type FieldLevelOrderSpec,
 	type FieldType,
@@ -1000,7 +1001,14 @@ export const sidebarCollapsedAtom = persistedAtom<Record<string, boolean>>(
  * `CollapsibleSubsection` whose `jumpId` matches `subsection` opens, scrolls
  * itself into view and clears it. Never persisted. See `useSidebarJump`
  * (components/ui/SidebarJumpLink). */
-export type SidebarJumpTarget = { section: string; subsection?: string }
+/** Where a sidebar jump link lands: an AsideSection, optionally an encoding
+ *  row inside it (`channel` — the row's options disclosure opens), and
+ *  optionally a `CollapsibleSubsection` by its `jumpId`. */
+export type SidebarJumpTarget = {
+	section: string
+	channel?: EncodingChannel
+	subsection?: string
+}
 export const sidebarJumpTargetAtom = atom<SidebarJumpTarget | null>(null)
 
 /** Which library folders are collapsed. Missing id = expanded. Persisted so

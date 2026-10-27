@@ -74,6 +74,7 @@ import {
 	TickmarkControls,
 } from "./AxisOptionsPanel"
 import { Select } from "../../../../../components/ui/Select"
+import { SidebarJumpText, channelJump } from "../../../../../components/ui/SidebarJumpLink"
 
 /** Field types the line-thickness "Vary by" dropdown offers (besides the
  *  connection field itself, which is always listed): discrete variables get
@@ -934,8 +935,8 @@ export const ConnectionOptionsPanel = () => {
 						{axisStem !== "none" && (
 							<div className="vc-divider-group">
 								<p className="vc-help">
-									Set stem color under <strong>Color</strong> →{" "}
-									<strong>Stem</strong>.
+									Set stem color under{" "}
+									<SidebarJumpText target={channelJump("hue", "color:stem")}>Color → Stem</SidebarJumpText>.
 								</p>
 							</div>
 						)}

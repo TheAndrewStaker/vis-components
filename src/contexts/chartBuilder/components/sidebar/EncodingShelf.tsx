@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { channelAccepts, conflictsFor } from "../../lib/channels"
 import { effectiveType } from "../../lib/fieldType"
@@ -30,6 +30,7 @@ import {
 	currentEncodingsAtom,
 	currentFieldOverridesAtom,
 	quickStartStateAtom,
+	sidebarJumpTargetAtom,
 } from "../../store/atoms"
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
 import { useCurrentTheme } from "../../store/useCurrentTheme"
@@ -38,6 +39,7 @@ import { Disclosure } from "@headlessui/react"
 import { DisclosureChevron } from "../../../../components/ui/Chevron"
 import { LABEL_COL } from "../../../../components/ui/LabeledField"
 import { SelectInput } from "../../../../components/ui/SelectInput"
+import { encodingRowId } from "../../../../components/ui/SidebarJumpLink"
 import { ChannelOptionsPanel } from "./channelOptions/ChannelOptionsPanel"
 import { Button } from "../../../../components/ui/Button"
 
@@ -304,6 +306,9 @@ export const EncodingShelf = ({ channel }: Props) => {
 		!value &&
 		!!encodings[otherPos]?.field &&
 		configs[otherPos]?.histogram?.enabled === true
+	// The options toggle, clicked by `ChannelJumpOpener` when a sidebar jump
+	// link targets this row (headless Disclosure has no controlled `open`).
+	const toggleRef = useRef<HTMLButtonElement>(null)
 	const hasPanel =
 		!FIELD_REQUIRED_CHANNELS.has(channel) ||
 		Boolean(value) ||
@@ -441,12 +446,22 @@ export const EncodingShelf = ({ channel }: Props) => {
 	if (!hasPanel) return row
 
 	return (
-		<Disclosure as="div" className="flex flex-col gap-1">
+		<Disclosure
+			as="div"
+			id={encodingRowId(channel)}
+			className="flex flex-col gap-1"
+		>
 			{({ open }) => (
 				<>
+					<ChannelJumpOpener
+						channel={channel}
+						open={open}
+						buttonRef={toggleRef}
+					/>
 					<div className="flex items-center gap-1">
 						<div className="min-w-0 flex-1">{row}</div>
 						<Disclosure.Button
+							ref={toggleRef}
 							className="relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 hover:text-stone-900 pointer-coarse:h-9 pointer-coarse:w-9 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
 							aria-label={`Toggle options for ${ENCODING_CHANNEL_LABELS[channel]}`}
 						>
@@ -483,4 +498,31 @@ export const EncodingShelf = ({ channel }: Props) => {
 			)}
 		</Disclosure>
 	)
+}
+
+/** Opens this row's options when a sidebar jump link names its channel.
+ *  With no subsection named the row is the destination: scroll to it and
+ *  clear the target. With one named, the target is left for the matching
+ *  `CollapsibleSubsection` in the now-mounted panel to consume. */
+const ChannelJumpOpener = ({
+	channel,
+	open,
+	buttonRef,
+}: {
+	channel: EncodingChannel
+	open: boolean
+	buttonRef: React.RefObject<HTMLButtonElement | null>
+}) => {
+	const [target, setTarget] = useAtom(sidebarJumpTargetAtom)
+	const hit = target?.channel === channel ? target : null
+	useEffect(() => {
+		if (!hit) return
+		if (!open) buttonRef.current?.click()
+		if (hit.subsection) return
+		setTarget(null)
+		document
+			.getElementById(encodingRowId(channel))
+			?.scrollIntoView?.({ block: "start", behavior: "smooth" })
+	}, [hit, open, channel, buttonRef, setTarget])
+	return null
 }

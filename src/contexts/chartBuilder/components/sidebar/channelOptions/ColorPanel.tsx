@@ -45,6 +45,7 @@ import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
+import { SidebarJumpText, channelJump } from "../../../../../components/ui/SidebarJumpLink"
 
 import {
 	AreaRadarOutlinePanel,
@@ -209,8 +210,8 @@ const RegressionLineStyleControls = () => {
 				)}
 			</div>
 			<p className="vc-help">
-				Set the dash pattern under <strong>Pattern</strong> →{" "}
-				<strong>Regression line</strong>.
+				Set the dash pattern under{" "}
+				<SidebarJumpText target={channelJump("pattern", "pattern:regression")}>Pattern → Regression line</SidebarJumpText>.
 			</p>
 		</div>
 	)
@@ -444,7 +445,11 @@ const ColorSlotSubsection = ({
 	const slotChanged = colorSlotEdited(def.key, slotCfg, configs, theme)
 
 	return (
-		<CollapsibleSubsection title={def.label} changed={slotChanged || extraChanged}>
+		<CollapsibleSubsection
+			title={def.label}
+			changed={slotChanged || extraChanged}
+			jumpId={`color:${def.key}`}
+		>
 			<ColorSlotControls
 				labelPrefix={def.label}
 				slotCfg={slotCfg}

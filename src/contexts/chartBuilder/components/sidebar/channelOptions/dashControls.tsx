@@ -176,7 +176,11 @@ export const RegressionDashSubsection = () => {
 			{ ...DEFAULT_DASH_RANGE, ...base.dashRange }
 		)
 	return (
-		<CollapsibleSubsection title="Regression line" changed={changed}>
+		<CollapsibleSubsection
+			title="Regression line"
+			changed={changed}
+			jumpId="pattern:regression"
+		>
 			<div className="flex flex-col gap-1 text-sm">
 				<DashStylePicker
 					pattern={reg.lineStyle}
