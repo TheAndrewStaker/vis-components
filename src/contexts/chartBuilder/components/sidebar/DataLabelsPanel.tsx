@@ -1090,17 +1090,6 @@ export const DataLabelsPanel = () => {
 			 *  selection / overlap / position fine-tuning lives in the purple
 			 *  group below. */}
 
-			{/* Tree layouts have no position rows at all — placement comes from
-			 *  the pack / treemap / partition layout. */}
-			{isTreeMode && (
-				<p className="vc-help">
-					{isRingLabels
-						? "Labels sit on each arc that can hold them; fine-tune placement under Adjust position. "
-						: "Labels are placed by the layout (leaf centers, container rims). "}
-					Value, Color, and Size apply — Value defaults to each row&apos;s
-					name from the ID column.
-				</p>
-			)}
 			{/* Maps anchor labels to REGIONS — one Geography row replaces the
 			 *  cartesian X/Y rows. Its field joins to map regions at its own
 			 *  auto-detected level, independent of the map's region field, so
@@ -1232,7 +1221,6 @@ export const DataLabelsPanel = () => {
 					onChange={updateCfg}
 					themeDefaults={themeDefaults}
 					sizeMapped={sizeByDepth || Boolean(encodings.size.field)}
-					depthNote={sizeByDepth}
 					multiFields={styleFields}
 					titles={labelTitles}
 					splitToggle={splitToggleFor("size")}
@@ -1298,12 +1286,7 @@ export const DataLabelsPanel = () => {
 					</>
 				)}
 				{!selectionControlsApply ? null : encodings.value.multiField ? (
-					multiFields.length === 0 ? (
-						<p className="vc-help">
-							Check fields under Value to choose which labels each one
-							appears on.
-						</p>
-					) : perVariable ? (
+					multiFields.length === 0 ? null : perVariable ? (
 						multiFields.map((key) => (
 							<CollapsibleSubsection
 								key={key}
@@ -1384,10 +1367,6 @@ export const DataLabelsPanel = () => {
 										)}
 									</div>
 								</div>
-								<p className="vc-help">
-									Lines connect a label back to its region when an offset or
-									overlap avoidance moves it off the region&apos;s center.
-								</p>
 							</>
 						)}
 					</>
@@ -1592,13 +1571,7 @@ export const DataLabelsPanel = () => {
 										baseYOffset={ownOffsets.yOffset ?? merged.yOffset}
 										ruleLabel={labelTitles[name] ?? name}
 										help={
-											comboIds.has(name) ? (
-												<>
-													Compared against the same value the chart&apos;s other
-													label rules use — a combination arranges several
-													variables, so it has no single value of its own.
-												</>
-											) : (
+											comboIds.has(name) ? undefined : (
 												<>
 													Compared against each label&apos;s{" "}
 													<strong>{name}</strong> value.
@@ -1716,9 +1689,6 @@ export const DataLabelsPanel = () => {
 							options={BAR_POSITION_OPTIONS}
 							onChange={(position) => setPrimaryPlacement({ position })}
 						/>
-						<p className="vc-help">
-							Where labels sit along the bar&apos;s measure axis.
-						</p>
 						<SelectInput
 							label={isVerticalBars ? "Horizontal" : "Vertical"}
 							labelClassName={LABEL_COL}
@@ -1726,14 +1696,6 @@ export const DataLabelsPanel = () => {
 							options={barSideOptions(isVerticalBars)}
 							onChange={(side) => setPrimaryPlacement({ side })}
 						/>
-						<p className="vc-help">
-							Which side of the bar labels sit on, across its width. Beside
-							the bar, Adjust position measures from the bar&apos;s edge, so
-							the label keeps its distance when the figure resizes.
-							{isVerticalBars
-								? " Labels beside a vertical bar hang away from it, so alignment is set for you."
-								: ""}
-						</p>
 					</div>
 				)}
 				{isAreaMode && (
@@ -1755,10 +1717,6 @@ export const DataLabelsPanel = () => {
 							]}
 							onChange={(areaLabelPosition) => updateCfg({ areaLabelPosition })}
 						/>
-						<p className="vc-help">
-							Where labels sit between each layer&apos;s base and its top
-							edge. In a stacked area the base is the layer below.
-						</p>
 					</>
 				)}
 				{(primaryLabel || isPolarMode || isRingLabels) && (
@@ -1801,12 +1759,6 @@ export const DataLabelsPanel = () => {
 										)}
 									</div>
 								</div>
-								<p className="vc-help">
-									Angle rotates every label off its slice&apos;s midpoint (positive =
-									clockwise). R is the distance from each pie&apos;s center as a percent
-									of its radius — 100% is the border, lower pulls labels inside the
-									wedge, higher pushes them outside.
-								</p>
 							</>
 						)}
 						{/* Sunburst: same Angle nudge; R is RING-relative (percent across
@@ -1845,13 +1797,6 @@ export const DataLabelsPanel = () => {
 										)}
 									</div>
 								</div>
-								<p className="vc-help">
-									Angle rotates every label off its arc&apos;s midpoint (positive =
-									clockwise). R is the label&apos;s position across its ring as a
-									percent of the ring&apos;s thickness — 50% is the middle, 0% the
-									inner edge, 100% the outer edge, higher pushes labels outside the
-									ring.
-								</p>
 							</>
 						)}
 						{!primaryLabel ? null : splitEndpoints ? (
@@ -1973,7 +1918,7 @@ export const DataLabelsPanel = () => {
 			{/* Packed circles only: per-container-level choice between the
 			 *  default inside-the-rim placement and wrapping the group name
 			 *  around the OUTSIDE of the circle on an arc. */}
-			{hasContainerRimLabels && (
+			{hasContainerRimLabels && containerWrapLevels.length > 0 && (
 				<CollapsibleSubsection title="Text position" changed={textPositionChanged}>
 					<TextPositionPanel
 						cfg={merged}

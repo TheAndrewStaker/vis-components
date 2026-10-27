@@ -33,14 +33,9 @@ export const TextPositionPanel = ({
 				? [...wrapped, level].sort((a, b) => a - b)
 				: wrapped.filter((l) => l !== level),
 		})
-	if (levels.length === 0) {
-		return (
-			<p className="vc-help">
-				Labels can wrap around grouping circles once the chart has them —
-				map a categorical field to the connection channel first.
-			</p>
-		)
-	}
+	// No container levels yet (no connection mapped) — nothing to wrap; the
+	// caller hides the subsection in that state too.
+	if (levels.length === 0) return null
 	return (
 		<div className="flex flex-col gap-2">
 			<span className="vc-group-header">Wrap label around</span>
@@ -54,7 +49,7 @@ export const TextPositionPanel = ({
 			))}
 			<p className="vc-help">
 				Checked levels draw the group name on an arc around the outside of
-				the circle; unchecked levels keep it inside the top rim.
+				the circle.
 			</p>
 		</div>
 	)

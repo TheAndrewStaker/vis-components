@@ -24,7 +24,6 @@ export const SizePanel = ({
 	onChange,
 	themeDefaults,
 	sizeMapped = false,
-	depthNote = false,
 	multiFields = [],
 	titles,
 	splitToggle,
@@ -38,9 +37,6 @@ export const SizePanel = ({
 	/** True when the Size dropdown has a source (a field or the derived
 	 *  "Nesting depth") — gates the Min / Max range inputs. */
 	sizeMapped?: boolean
-	/** True when Size varies by "Nesting depth" — explains the direction
-	 *  (top level = Max), since it inverts the usual min→max reading. */
-	depthNote?: boolean
 	/** Multi-field label variables (two or more). Each gets its own Size
 	 *  input; empty in single-field mode. */
 	multiFields?: string[]
@@ -56,12 +52,6 @@ export const SizePanel = ({
 	keysFor?: (key: string) => string[]
 }) => (
 	<div className="flex flex-col gap-2">
-		{depthNote && (
-			<p className="vc-help">
-				The TOP level uses the Max size and the deepest level the Min —
-				big group titles, small leaf labels. Swap Min and Max to invert.
-			</p>
-		)}
 		{multiFields.length === 0 && (
 			<div className="flex items-center gap-2">
 				<NumberInput
@@ -124,11 +114,6 @@ export const SizePanel = ({
 						/>
 					)}
 				</div>
-				<p className="vc-help">
-					Min / Max set the pixel range for the mapped size; the{" "}
-					{multiFields.length > 0 ? "theme's" : ""} default size applies
-					to values it can&apos;t map (non-numeric).
-				</p>
 			</>
 		)}
 		{multiFields.length > 0 && (
@@ -139,9 +124,7 @@ export const SizePanel = ({
 			 *  there is a stray rule with a gap under it. Mirrors the Color
 			 *  panel's per-variable slots. */
 			<div
-				className={
-					depthNote || sizeMapped ? "vc-divider-group" : "flex flex-col gap-2"
-				}
+				className={sizeMapped ? "vc-divider-group" : "flex flex-col gap-2"}
 			>
 				{multiFields.map((name) => {
 					// Split → one row per variable, each labeled by its name;
@@ -186,11 +169,6 @@ export const SizePanel = ({
 									</div>
 								)
 							})}
-							<p className="vc-help">
-								Empty = the{" "}
-								{split ? "label's own size" : "theme's default size"}
-								{sizeMapped ? " (or its mapped size)" : ""}.
-							</p>
 						</CollapsibleSubsection>
 					)
 				})}

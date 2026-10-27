@@ -746,11 +746,9 @@ const DerivedVariableEditor = ({
 							className="font-mono"
 						/>
 						<p className="vc-help">
-							Combine variables with add (+), subtract (-), multiply (*),
+							Compute variables with add (+), subtract (-), multiply (*),
 							divide (/) and parentheses, e.g.{" "}
-							<code className="font-mono">{"({A} - {B}) * 100"}</code>. Every
-							variable you use has to be a number — text values are an error,
-							and blank cells come out blank.
+							<code className="font-mono">{"({A} - {B}) * 100"}</code>.
 						</p>
 					</div>
 				)}
@@ -959,19 +957,6 @@ const DerivedVariableEditor = ({
 							/>
 							<span aria-hidden="true" className="w-4 flex-shrink-0" />
 						</div>
-						<p className="vc-help">
-							Rules run top to bottom; the first match wins. Each side can
-							be a variable, a number, text, or a formula like{" "}
-							<code className="font-mono">{"{A} / {B}"}</code>. To combine
-							comparisons with AND / OR, pick Formula… at the end of the =
-							menu or the value list and write the whole condition:{" "}
-							<code className="font-mono">{"{A} == 1 AND {B} > 3"}</code>.
-							A blank cell matches only the blank test: = (blank) from the
-							list, or <code className="font-mono">{'""'}</code> typed in a
-							box. Outputs may include variables:{" "}
-							<code className="font-mono">{"{B}"}</code> keeps that
-							row&apos;s value of B.
-						</p>
 					</div>
 				)}
 

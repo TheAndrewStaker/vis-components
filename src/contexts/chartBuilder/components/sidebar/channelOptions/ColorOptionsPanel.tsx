@@ -523,9 +523,8 @@ export const ColorOptionsPanel = ({
 						update={update}
 					/>
 					<p className="vc-help">
-						Circles are colored by nesting level (1 = outermost) through
-						the ordinal palette — derived from the hierarchy, no extra
-						column needed.
+						Circles are colored by nesting level (1 = outermost), derived
+						from the hierarchy, no extra column needed.
 					</p>
 				</>
 			) : rootGroupActive ? (
@@ -552,7 +551,7 @@ export const ColorOptionsPanel = ({
 						update={update}
 					/>
 					<p className="vc-help">
-						Every circle takes its outermost group&apos;s color — derived
+						Every circle takes its outermost group&apos;s color, derived
 						from the hierarchy, no extra column needed. Vary Saturation,
 						Brightness, or Opacity by Nesting depth to distinguish levels.
 					</p>
@@ -1413,9 +1412,6 @@ export const QuantitativePanel = ({
 							})
 						}
 					/>
-					<div className="vc-help">
-						Editing endpoints switches to a custom diverging gradient.
-					</div>
 				</>
 			)}
 

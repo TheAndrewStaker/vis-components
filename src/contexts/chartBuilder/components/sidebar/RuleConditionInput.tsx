@@ -36,7 +36,6 @@ export const RuleConditionInput = ({
 export const RuleVariableHelp = () => (
 	<>
 		Start a rule with a variable in braces to test that variable instead,
-		e.g. <code>{"{Region} == West"}</code>; on a bar, area, or wedge every
-		row it combines must match.
+		e.g. <code>{"{Region} == West"}</code>.
 	</>
 )

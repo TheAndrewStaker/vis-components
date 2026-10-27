@@ -162,28 +162,6 @@ describe("annotation Position — Adjust by + From", () => {
 		})
 	})
 
-	it("explains the bottom-left corner in the helper line", () => {
-		mount(
-			<PointPositionSection
-				coords={{
-					...newTextAnnotation("t1"),
-					coordSystem: "pixelsBottomLeft",
-					x: -8,
-					y: -14,
-				}}
-				onChange={() => {}}
-				xAxis={AXIS}
-				yAxis={AXIS}
-				zOrder="front"
-				onZOrderChange={() => {}}
-			/>
-		)
-		expandPosition()
-		expect(screen.getByLabelText<HTMLInputElement>("Y").value).toBe("-14")
-		expect(screen.getByText(/bottom-left corner/)).toBeTruthy()
-		expect(screen.queryByText(/top-left corner/)).toBeNull()
-	})
-
 	it("shows px inputs that write as typed — +y is up by definition", () => {
 		const onChange = vi.fn()
 		mount(

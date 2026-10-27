@@ -289,11 +289,6 @@ const FillOpacityControls = ({
 						update({ kind: "categorical", overrides: rest })
 					}}
 				/>
-				<p className="vc-help">
-					{packedSource === "rootGroup"
-						? "Each circle takes its outermost group's opacity — derived from the hierarchy, no extra column needed."
-						: "One opacity per nesting level (1 = outermost). Unset levels spread evenly."}
-				</p>
 			</div>
 		)
 	}
@@ -316,10 +311,6 @@ const FillOpacityControls = ({
 						}))
 					}
 				/>
-				<p className="vc-help">
-					Each bin&apos;s opacity scales with its{" "}
-					{measureSource === "density" ? "density" : "count"}.
-				</p>
 			</div>
 		)
 	}

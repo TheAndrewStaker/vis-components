@@ -33,7 +33,7 @@ export type ColorSlotDef = {
 	 * truthfully, and "Single color" is an explicit stored choice that really
 	 * renders one color. Slots whose fall-through is just a single color must
 	 * NOT set this: there, "Single color" already describes the default. */
-	inherit?: { label: string; help: string }
+	inherit?: { label: string; help?: string }
 }
 
 const m = (...modes: ChartMode[]): ReadonlySet<ChartMode> => new Set(modes)
@@ -146,10 +146,7 @@ export const COLOR_SLOT_REGISTRY: readonly ColorSlotDef[] = [
 		// encoding when it's mapped to the category-axis field (see
 		// renderDistributionOverlays) — so the default must not claim "Single
 		// color".
-		inherit: {
-			label: "Auto",
-			help: "Matches the point colors when Color varies by the category variable; otherwise a single default color.",
-		},
+		inherit: { label: "Auto" },
 	},
 	{
 		key: "violinStroke",
@@ -158,10 +155,7 @@ export const COLOR_SLOT_REGISTRY: readonly ColorSlotDef[] = [
 		isApplicable: (_encodings, configs) => overlayOn(configs),
 		themeColor: (t) => t.distributionOverlayStroke,
 		acceptsFieldMapping: true,
-		inherit: {
-			label: "Auto",
-			help: "Matches the point colors when Color varies by the category variable; otherwise a single default color.",
-		},
+		inherit: { label: "Auto" },
 	},
 	{
 		key: "densityCurveFill",
@@ -194,10 +188,7 @@ export const COLOR_SLOT_REGISTRY: readonly ColorSlotDef[] = [
 		acceptsFieldMapping: true,
 		// Unconfigured, each per-group regression line inherits its hue group's
 		// color (see RegressionLayer) — same truth-in-labeling as the violin.
-		inherit: {
-			label: "Auto",
-			help: "Matches each Color group's color when points are grouped; otherwise a single default color.",
-		},
+		inherit: { label: "Auto" },
 	},
 	{
 		key: "regressionCiFill",
@@ -206,10 +197,7 @@ export const COLOR_SLOT_REGISTRY: readonly ColorSlotDef[] = [
 		isApplicable: (_encodings, configs) => regressionCiOn(configs),
 		themeColor: (t) => t.regressionCiFill,
 		acceptsFieldMapping: true,
-		inherit: {
-			label: "Auto",
-			help: "Matches each Color group's color when points are grouped; otherwise a single default color.",
-		},
+		inherit: { label: "Auto" },
 	},
 	{
 		key: "stem",

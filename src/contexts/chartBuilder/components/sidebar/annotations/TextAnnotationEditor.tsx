@@ -118,7 +118,6 @@ export const TextAnnotationEditor = ({
 				style={anno}
 				defaults={defaults}
 				onChange={onChange}
-				alignmentHelp="Also sets the anchor: left starts the text at x, center straddles it, right ends there."
 			/>
 
 			<PointPositionSection
@@ -127,7 +126,6 @@ export const TextAnnotationEditor = ({
 				xAxis={xAxis}
 				yAxis={yAxis}
 				disableValues={disableValues}
-				help="The label is centered on y. Align picks which side of it sits at x."
 				zOrder={anno.zOrder}
 				onZOrderChange={(zOrder) => onChange({ zOrder })}
 			/>

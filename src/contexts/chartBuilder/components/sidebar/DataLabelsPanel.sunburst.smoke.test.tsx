@@ -113,7 +113,6 @@ describe("DataLabelsPanel — sunburst fine-tuning", () => {
 		expect(sectionHeader(c, "Label selection")).toBeNull()
 		// Position rows stay hidden — the layout places labels.
 		expect(c.textContent).not.toContain("X position")
-		expect(c.textContent).toContain("fine-tune placement")
 	})
 
 	it("sunburst hides the per-series 'Which labels' select but keeps Avoid overlaps", () => {
@@ -127,7 +126,6 @@ describe("DataLabelsPanel — sunburst fine-tuning", () => {
 	it("sunburst Adjust position carries the ring-relative Angle / R pair plus X / Y", () => {
 		const c = mountPanel("sunburst")
 		expand(c, "Position and alignment")
-		expect(c.textContent).toContain("percent of the ring")
 		const inputs = [...c.querySelectorAll<HTMLInputElement>("input")]
 		// R defaults to 50 (the ring's middle), not the pie's 100 (the rim).
 		expect(inputs.some((i) => i.value === "50")).toBe(true)

@@ -149,19 +149,6 @@ describe("Pattern panel — no-field Line dash row (line chart)", () => {
 		expect(configs.connection?.defaultDashPattern).toBe("dashed")
 		expect(q.queryByLabelText("Custom dash pattern")).toBeNull()
 	})
-
-	it("a valid custom dasharray satisfies the range's pick-a-dash hint", async () => {
-		seed(LINE)
-		const q = await mount()
-		fireEvent.click(q.getByLabelText("Apply pattern to range"))
-		// No dash picked yet → the nudge shows.
-		expect(q.queryByText(/Pick a dash style above/)).not.toBeNull()
-		fireEvent.click(q.getByLabelText("Custom dash for line"))
-		fireEvent.change(q.getByLabelText("Custom dash pattern"), {
-			target: { value: "2,2" },
-		})
-		expect(q.queryByText(/Pick a dash style above/)).toBeNull()
-	})
 })
 
 describe("Pattern panel — 'Blank' range option", () => {
@@ -172,8 +159,6 @@ describe("Pattern panel — 'Blank' range option", () => {
 		fireEvent.click(q.getByLabelText("Apply pattern to range"))
 		fireEvent.click(q.getByLabelText("Line dash blank"))
 		expect(readSavedConfigs(store).connection?.defaultDashPattern).toBe("blank")
-		// Blank counts as a dash pick — the pick-a-dash nudge stays away.
-		expect(q.queryByText(/Pick a dash style above/)).toBeNull()
 	})
 
 	it("turning the range off retires a blank pick back to solid", async () => {
@@ -184,19 +169,6 @@ describe("Pattern panel — 'Blank' range option", () => {
 		fireEvent.click(q.getByLabelText("Apply pattern to range"))
 		expect(readSavedConfigs(store).connection?.defaultDashPattern).toBe("solid")
 		expect(q.queryByLabelText("Line dash blank")).toBeNull()
-	})
-
-	it("with dash gaps unfilled, a helper points at 'Fill dash gaps'", async () => {
-		seed(LINE)
-		const q = await mount()
-		fireEvent.click(q.getByLabelText("Apply pattern to range"))
-		// Auto-on without a pattern/hue collision — uncheck to leave a true gap.
-		fireEvent.click(q.getByLabelText("Fill dash gaps"))
-		fireEvent.click(q.getByLabelText("Line dash blank"))
-		expect(q.queryByText(/Blank leaves a gap/)).not.toBeNull()
-		// Filling the gaps satisfies the nudge.
-		fireEvent.click(q.getByLabelText("Fill dash gaps"))
-		expect(q.queryByText(/Blank leaves a gap/)).toBeNull()
 	})
 })
 

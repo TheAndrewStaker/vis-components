@@ -208,7 +208,7 @@ const CustomTicksControl = ({
 	</>
 )
 
-/** Bordered range-editor section: title, help copy, then one min / max
+/** Bordered range-editor section: title, then one min / max
  *  editor per entry. Serves every share mode — pass a single unlabeled
  *  entry for an overall range, or one labeled entry per row / column /
  *  panel for the per-group modes. `collapsible` folds the body under a
@@ -217,14 +217,12 @@ const CustomTicksControl = ({
  *  nested subsection is unboxed — no purple card-in-card. */
 export const AxisRangeSection = ({
 	title,
-	help,
 	entries,
 	collapsible = false,
 	isTemporal = false,
 	className,
 }: {
 	title: string
-	help: string
 	entries: AxisRangeEntry[]
 	collapsible?: boolean
 	/** Date axis: custom tick values read and print as dates. */
@@ -233,7 +231,6 @@ export const AxisRangeSection = ({
 }) => {
 	const body = (
 		<>
-			<div className="vc-help">{help}</div>
 			<div className="flex flex-col gap-2">
 				{entries.map((entry) => (
 					<div key={entry.key} className="flex flex-col gap-1 text-sm">

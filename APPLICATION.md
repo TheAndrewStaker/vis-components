@@ -1591,14 +1591,12 @@ line runs along; outside the window the line renders solid in the
 same stroke — the known-vs-forecast look (solid actuals, patterned
 forecast: pick a dash, set From to the forecast start, leave To
 blank). While the range is on with no dash picked (and no parseable
-custom value), a helper nudges the user to pick a dash style —
-alone, the range draws nothing. While the range is on, the dash row
+custom value), the range draws nothing on its own. While the range is on, the dash row
 also grows a **Blank** option (`defaultDashPattern: "blank"`): inside
 the window the line doesn't draw at all — a true gap in the line —
 unless "Fill dash gaps" is on, in which case the window is painted by
 the gap-color underlay alone (a solid run of the gap color, no
-dashes). With gaps unfilled a helper points at the "Fill dash gaps"
-checkbox. Blank only exists inside the range window: the swatch is
+dashes). Blank only exists inside the range window: the swatch is
 hidden while the range is off, turning the range off retires a stored
 blank pick back to solid, and the renderers treat a lingering blank
 with no active window as solid. A parsed custom dasharray still wins
@@ -1727,8 +1725,7 @@ inner and outer padding alike), which keeps the gap uniform across
 facet panels of different widths. Auto (stored as null, cleared via
 the empty input or reset) is the proportional 15%-of-slot gap.
 Histograms ignore it — their bars always abut — so the Length panel
-shows no gap control there, only a note that bar length is the count
-per bin. What the Length panel offers is a declared mode trait
+shows no gap control there. What the Length panel offers is a declared mode trait
 (`canvas.lengthRole`): `"mark"` (scatter — px min/max range when a
 variable is mapped, the single default length when not),
 `"measure"` (bars / areas — the variable IS the mark extent via the
@@ -2583,8 +2580,8 @@ until the user picks one.
 The layer also has these controls:
 
 In the TREE layouts (packed circles / treemap / sunburst) labels are
-placed by the layout itself, so the panel hides its position rows and
-a note says so. Value, Color, Size, and Text still apply
+placed by the layout itself, so the panel hides its position rows.
+Value, Color, Size, and Text still apply
 (see §6.2); Value defaults to each row's name. Packed circles and
 treemap draw their labels themselves, so the position / overlap /
 background fine-tuning stands down there too. The SUNBURST hands its
@@ -2722,8 +2719,8 @@ live inside the map's pan/zoom group with the labels.
 Packed circles additionally get a **Text position** subheader with one
 "Wrap label around" checkbox per CONTAINER level (top level circle,
 second level circle, … — levels come from the drawn hierarchy, the
-deepest all-leaf level excluded; with no grouping circles the panel
-shows a hint instead). A checked level draws its group names on an arc
+deepest all-leaf level excluded; with no grouping circles the
+subheader is not shown). A checked level draws its group names on an arc
 around the OUTSIDE of the circle (a `<textPath>` over an invisible
 baseline arc at the rim plus a small gap); unchecked levels keep the
 default placement inside the top rim. Arc placement is
@@ -4308,7 +4305,7 @@ The text annotation's editor leads with its **Text** box, sitting
 directly under the header outside any collapsible subsection — the
 text is the annotation, so it is never hidden behind a collapsed
 header. Its font controls follow in a **Text** subsection — **Align**
-(with a note that it also sets the anchor), then the shared font
+(which also sets the anchor), then the shared font
 editor's Family · Color · Size · Weight · Style (italic / underline,
 stored as `textItalic` / `textUnderline`; absent = off) — then Position
 (ending with the layer toggle), then one **Box** subsection: Background

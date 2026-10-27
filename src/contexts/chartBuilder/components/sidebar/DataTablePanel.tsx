@@ -80,7 +80,7 @@ export const DataTablePanel = () => {
 			{cfg.enabled && (
 				<>
 					<p className="vc-help">
-						An HTML table of the chart&apos;s data — the screen-reader
+						An HTML table of the chart&apos;s data as the screen-reader
 						alternative to the figure. Not part of image exports.
 					</p>
 					<SelectInput<DataTablePlacement>
@@ -108,7 +108,7 @@ export const DataTablePanel = () => {
 					{aggregated ? (
 						<p className="vc-help">
 							This chart type aggregates its data, so the table lists the
-							plotted values — one row per mark.
+							plotted values.
 						</p>
 					) : (
 						<SelectInput<DataTableColumns>

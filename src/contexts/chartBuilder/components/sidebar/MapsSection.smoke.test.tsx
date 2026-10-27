@@ -9,17 +9,11 @@ import { TestProvider } from "../../../../testSupport/TestProvider"
 import { installInMemoryLocalStorage } from "../../../../testSupport/localStorageShim"
 import { buildDataset as buildDatasetFixture } from "../../../../testSupport/fixtures"
 import { afterEach, describe, expect, it } from "vitest"
-import { setZctaTopologyLoader } from "../../lib/geo/zctaTopology"
 import { DEFAULT_MAP_CONFIG } from "../../lib/mapConfig"
 import { MAP_CONFIG_VERSION } from "../../lib/storage/migrations"
 import { emptyEncodings } from "../../lib/types"
 
 import { MapsSection } from "./MapsSection"
-
-/** ZCTA availability needs no stubbing: the shipped source is a served sidecar
- *  file, which vite.config.ts switches off under Vitest, so an unregistered
- *  seam IS an asset-less build and `setZctaTopologyLoader` IS an
- *  asset-bearing one. Both branches of the sidebar note are covered below. */
 
 /** Active-mode-gated toggles need the right encodings to resolve a mode:
  *  - geo-choropleth: connection mapped, NO area → "Fill regions with no data"
@@ -145,32 +139,6 @@ describe("MapsSection", () => {
 		expect(screen.getByLabelText(/Projection/i)).toBeTruthy()
 	})
 
-	it("notes that world projections are best for country maps when selected", () => {
-		seed("geographic")
-		mount()
-		// Auto (Albers USA) → no world-projection note.
-		expect(screen.queryByText(/world projections/i)).toBeNull()
-		// Selecting Mercator (a world projection) surfaces the note.
-		fireEvent.change(screen.getByLabelText(/Projection/i), {
-			target: { value: "mercator" },
-		})
-		expect(screen.getByText(/world projections/i)).toBeTruthy()
-	})
-
-	it("omits the US-tiny note when mapping countries with a world projection", () => {
-		// Countries + a world projection (mercator) is the CORRECT pairing —
-		// the "US geographies render best with Albers USA" note is misleading.
-		seed("geographic", { geographyLevel: "countries", projection: "mercator" })
-		mount()
-		expect(screen.queryByText(/world projections/i)).toBeNull()
-	})
-
-	it("omits the zcta-unavailable note for countries (implemented)", () => {
-		seed("geographic", { geographyLevel: "countries" })
-		mount()
-		expect(screen.queryByText(/isn't available in this build/i)).toBeNull()
-	})
-
 	it("shows the country-name hint for countries, not for US states", () => {
 		seed("geographic", { geographyLevel: "countries" })
 		mount()
@@ -179,49 +147,6 @@ describe("MapsSection", () => {
 		seed("geographic", { geographyLevel: "states" })
 		mount()
 		expect(screen.queryByText(/ISO codes/i)).toBeNull()
-	})
-
-	it("explains an UNSOURCED zcta level (no topology asset), but not counties", () => {
-		// An asset-less build (no sidecar file, no registered loader): the level
-		// is real but sourceless → the "isn't available" note.
-		seed("geographic", { geographyLevel: "zcta" })
-		mount()
-		expect(screen.getByText(/isn't available in this build/i)).toBeTruthy()
-		// The join hint is reserved for a USABLE zcta level.
-		expect(screen.queryByText(/ZCTAs join by 5-digit ZIP code/i)).toBeNull()
-		cleanup()
-		seed("geographic", { geographyLevel: "counties" })
-		mount()
-		expect(screen.queryByText(/isn't available in this build/i)).toBeNull()
-	})
-
-	it("shows the ZIP join hint (not the unavailable note) once a zcta source exists", () => {
-		// Registering a source the way a served build (or a host deployment)
-		// does flips the sidebar to the leading-zeros join hint, never the
-		// "can't draw" note.
-		setZctaTopologyLoader(async () => {
-			throw new Error("never loaded by this render-only test")
-		})
-		try {
-			seed("geographic", { geographyLevel: "zcta" })
-			mount()
-			expect(screen.queryByText(/isn't available in this build/i)).toBeNull()
-			expect(screen.getByText(/ZCTAs join by 5-digit ZIP code/i)).toBeTruthy()
-		} finally {
-			setZctaTopologyLoader(null)
-		}
-	})
-
-	it("shows the county-name hint for counties, not for US states", () => {
-		seed("geographic", { geographyLevel: "counties" })
-		mount()
-		expect(screen.getByText(/County names repeat across states/i)).toBeTruthy()
-		cleanup()
-		seed("geographic", { geographyLevel: "states" })
-		mount()
-		expect(
-			screen.queryByText(/County names repeat across states/i)
-		).toBeNull()
 	})
 
 	it("reveals the fill-regions-with-no-data toggle in choropleth mode, default on", () => {
@@ -365,20 +290,13 @@ describe("MapsSection", () => {
 		expect(screen.getByLabelText("No-data fill")).toBeTruthy()
 	})
 
-	// --- Point map (geo-points): X = longitude, Y = latitude. The lon/lat hint
-	// explains the axis meaning; the Show basemap toggle is shared with symbols. ---
+	// --- Point map (geo-points): the Show basemap toggle is shared with
+	// symbols. ---
 
-	it("shows the lon/lat hint and the show-basemap toggle in point-map mode", () => {
+	it("shows the show-basemap toggle in point-map mode", () => {
 		seed("geographic", {}, X_Y_ENC)
 		mount()
-		expect(screen.getByText(/X = longitude and Y = latitude/i)).toBeTruthy()
 		expect(screen.getByLabelText(/Show basemap/i)).toBeTruthy()
-	})
-
-	it("omits the lon/lat hint in choropleth mode", () => {
-		seed("geographic", {}, CHOROPLETH_ENC)
-		mount()
-		expect(screen.queryByText(/X = longitude and Y = latitude/i)).toBeNull()
 	})
 
 	// --- Outside-the-projection hint: albersUsa returns null for points

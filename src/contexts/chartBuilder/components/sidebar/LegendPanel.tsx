@@ -1246,11 +1246,6 @@ export const LegendPanel = () => {
 										}
 									/>
 								</div>
-								<p className="vc-help">
-									How the gradient bar&apos;s break labels align — against
-									each stop under a horizontal bar, within the label column
-									beside a stacked one.
-								</p>
 							</div>
 						)}
 					<FontEditor
@@ -1552,11 +1547,6 @@ export const LegendPanel = () => {
 								)}
 						</div>
 					)}
-					<p className="vc-help">
-						Color used for these legend swatches when they render alongside
-						the gradient (no hue color to inherit). Resets to the theme&apos;s
-						default.
-					</p>
 				</CollapsibleSubsection>
 			)}
 

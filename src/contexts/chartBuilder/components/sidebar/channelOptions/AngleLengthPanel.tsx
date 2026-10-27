@@ -1,6 +1,5 @@
 import { useAtom, useAtomValue } from "jotai"
 import {
-	AUTO_BAR_GAP_FRACTION,
 	DEFAULT_ANGLE,
 	DEFAULT_ANGLE_CONFIG,
 	DEFAULT_DONUT_HOLE_RADIUS,
@@ -95,13 +94,6 @@ export const AngleOptionsPanel = () => {
 				cfg={cfg}
 				themeAngle={themeAngle}
 				updateCfg={updateCfg}
-				help={
-					isRadarMode
-						? "Sweep around the dial. Defaults: 0° → 360° (full circle starting at 12 o'clock)."
-						: isPieMode
-							? "Angular sweep of the pie. Defaults to a full circle; narrow the range (e.g. -90° – 90°) to make a gauge."
-							: `Defaults: ${themeAngle.minAngle}° – ${themeAngle.maxAngle}°`
-				}
 			/>
 		)
 		// Mark-rotation angle (scatter etc.): the extent range is the only
@@ -176,19 +168,17 @@ export const AngleOptionsPanel = () => {
 	)
 }
 
-/** Min / Max sweep bounds (degrees) plus the per-mode helper line. Shared by
- *  the flat mark-rotation layout and the polar modes' "Angle Extent"
- *  subsection so the rows are identical either way. */
+/** Min / Max sweep bounds (degrees). Shared by the flat mark-rotation layout
+ *  and the polar modes' "Angle Extent" subsection so the rows are identical
+ *  either way. */
 const AngleExtentControls = ({
 	cfg,
 	themeAngle,
 	updateCfg,
-	help,
 }: {
 	cfg: AngleConfig
 	themeAngle: AngleConfig
 	updateCfg: (next: Partial<AngleConfig>) => void
-	help: string
 }) => (
 	<>
 		<div className="flex items-center gap-2">
@@ -229,7 +219,6 @@ const AngleExtentControls = ({
 				/>
 			)}
 		</div>
-		<div className="vc-help">{help}</div>
 	</>
 )
 
@@ -341,10 +330,6 @@ const RadarSpokesSection = ({
 					/>
 				)}
 			</div>
-			<p className="vc-help">
-				Quantitative / temporal angle only. Categorical angle always shows one
-				spoke per category.
-			</p>
 			{/* Spoke styling reuses the x/y axis Spine control (same labels, same
 			    ranges). The color row is dropped — spoke color lives in the Color
 			    menu's "Radar Spine" slot — and the per-line "changed" dots stay
@@ -460,10 +445,6 @@ const RadarSpokeLabelsSection = ({
 					/>
 				)}
 			</div>
-			<p className="vc-help">
-				Moves the labels away from the chart. Negative values pull them onto
-				it.
-			</p>
 		</CollapsibleSubsection>
 	)
 }
@@ -500,11 +481,6 @@ const BarGapControl = ({
 				/>
 			)}
 		</div>
-		<p className="vc-help">
-			Gap between bars in pixels — the bars split what&apos;s left, so this
-			sets bar width and gap together. Clear for the automatic gap (
-			{AUTO_BAR_GAP_FRACTION * 100}% of each category slot).
-		</p>
 	</>
 )
 
@@ -544,11 +520,13 @@ const DrawAsControl = ({
 				onChange={onChange}
 			/>
 		</div>
-		<p className="vc-help">
-			{value === "bars"
-				? "Length draws as bars; the other position variable draws as marks on the same axis — a line when Connection is mapped (a bar + line combo chart)."
-				: "Each point draws as a line segment of that length. Choose Bars for a bar chart with the other position variable as a line or points over it."}
-		</p>
+		{value === "segments" && (
+			<p className="vc-help">
+				Each point draws as a line segment of that length. Choose Bars for a
+				bar chart with the other position variable as a line or points over
+				it.
+			</p>
+		)}
 	</>
 )
 
@@ -613,6 +591,9 @@ export const LengthOptionsPanel = () => {
 	}
 
 	if (lengthRole === "measure") {
+		// A histogram (bar mode, no length field) offers neither control:
+		// render nothing rather than an empty panel.
+		if (!showDrawAs && !showBarGap) return null
 		return (
 			<div className="vc-option-panel">
 				{showDrawAs && drawAs}
@@ -630,11 +611,6 @@ export const LengthOptionsPanel = () => {
 						}
 					/>
 				)}
-				<div className="vc-help">
-					{fieldMapped
-						? "In this chart type, length comes straight from the mapped variable via the axis scale — there is no separate length range to set."
-						: "In this chart type, bar length is the count per bin, drawn on the axis scale — histogram bars abut, so there is no gap or length range to set."}
-				</div>
 			</div>
 		)
 	}

@@ -428,7 +428,6 @@ export const FacetOptionsPanel = () => {
 					{rowAxisIsContinuous && shareR === "all" && (
 						<AxisRangeSection
 							title="R axis range"
-							help="Blank = auto-fit. Set a bound to pin the shared R axis (e.g. min = 0)."
 							entries={[
 								{
 									key: "overall-r",
@@ -446,7 +445,6 @@ export const FacetOptionsPanel = () => {
 						perRowAvailable && (
 							<AxisRangeSection
 								title="R axis range per row"
-								help="Blank = auto from each row's data."
 								entries={Array.from({ length: grid.rows }, (_, r) => ({
 									key: `rrow-${r}`,
 									label: `Row ${r + 1}`,
@@ -463,7 +461,6 @@ export const FacetOptionsPanel = () => {
 						perColAvailable && (
 							<AxisRangeSection
 								title="R axis range per column"
-								help="Blank = auto from each column's data."
 								entries={Array.from({ length: grid.cols }, (_, c) => ({
 									key: `rcol-${c}`,
 									label: `Column ${c + 1}`,
@@ -482,7 +479,6 @@ export const FacetOptionsPanel = () => {
 							<AxisRangeSection
 								collapsible
 								title="R axis range per panel"
-								help="Blank = auto from each panel's data."
 								entries={values.map((v) => ({
 									key: `rpanel-${v}`,
 									label: v,
@@ -593,7 +589,6 @@ export const FacetOptionsPanel = () => {
 					{yRangeKind === "overall" && (
 						<AxisRangeSection
 							title="Y axis range"
-							help="Blank = auto-fit. Set a bound to pin the shared Y axis (e.g. min = 0)."
 							entries={[
 								{
 									key: "overall-y",
@@ -612,7 +607,6 @@ export const FacetOptionsPanel = () => {
 					{yRangeKind === "row" && (
 						<AxisRangeSection
 							title="Y axis range per row"
-							help="Blank = auto from each row's data."
 							entries={Array.from({ length: grid.rows }, (_, r) => ({
 								key: `yrow-${r}`,
 								label: `Row ${r + 1}`,
@@ -632,7 +626,6 @@ export const FacetOptionsPanel = () => {
 						<AxisRangeSection
 							collapsible
 							title="Y axis range per panel"
-							help="Blank = auto from each panel's data."
 							entries={values.map((v) => ({
 								key: `y-${v}`,
 								label: v,
@@ -703,7 +696,6 @@ export const FacetOptionsPanel = () => {
 					{xRangeKind === "overall" && (
 						<AxisRangeSection
 							title="X axis range"
-							help="Blank = auto-fit. Set a bound to pin the shared X axis (e.g. min = 0)."
 							entries={[
 								{
 									key: "overall-x",
@@ -722,7 +714,6 @@ export const FacetOptionsPanel = () => {
 					{xRangeKind === "col" && (
 						<AxisRangeSection
 							title="X axis range per column"
-							help="Blank = auto from each column's data."
 							entries={Array.from({ length: grid.cols }, (_, c) => ({
 								key: `xcol-${c}`,
 								label: `Column ${c + 1}`,
@@ -742,7 +733,6 @@ export const FacetOptionsPanel = () => {
 						<AxisRangeSection
 							collapsible
 							title="X axis range per panel"
-							help="Blank = auto from each panel's data."
 							entries={values.map((v) => ({
 								key: `x-${v}`,
 								label: v,
@@ -802,11 +792,6 @@ export const FacetOptionsPanel = () => {
 										onCommit={(next) => updateCfg({ panelHeight: next })}
 									/>
 								)}
-								<p className="vc-help">
-									Reset (or leave blank) to auto-size by Rows / Cols /
-									proportional settings. When set, the canvas grows and scrolls
-									if needed to honor the exact pixel dimensions.
-								</p>
 							</>
 						)
 					})()}

@@ -293,7 +293,6 @@ const FacetAxisSubsection = ({
 	if (axisChannel === null) return null
 
 	const axisLabel = axisMap[spec.axisLabelKey]
-	const axisLabelLower = axisLabel.toLowerCase()
 
 	// Sizing is meaningless under share="all" (every panel sees the same
 	// categories → uniform weights). When the user enables sizing while
@@ -384,14 +383,6 @@ const FacetAxisSubsection = ({
 			? cfg.panelAxisOverrides?.[ref]
 			: gridPanelAxisOverride(cfg, ref.row, ref.col)
 
-	// The help text depends on which path activated the editor: under
-	// "perGroup" it pins the group's SHARED scale; under "none" with one
-	// perpendicular panel it pins each group's single panel directly.
-	const valueRangeHelp =
-		share === "perGroup"
-			? `Blank = auto from each ${spec.noun}'s data.`
-			: "Blank = auto from each panel's data."
-
 	const displayShare = perGroupAvailable
 		? share
 		: share === "perGroup"
@@ -458,7 +449,6 @@ const FacetAxisSubsection = ({
 			{showOverallRange && (
 				<AxisRangeSection
 					title={`${axisLabel} range`}
-					help={`Blank = auto-fit. Set a bound to pin the shared ${axisLabelLower} (e.g. min = 0).`}
 					entries={[
 						{
 							key: "overall",
@@ -476,7 +466,6 @@ const FacetAxisSubsection = ({
 			{showValueOverrides && ownValues.length > 0 && (
 				<AxisRangeSection
 					title={`${axisLabel} range per ${spec.noun}`}
-					help={valueRangeHelp}
 					entries={ownValues.map((v) => ({
 						key: `${spec.valueKeyPrefix}${v}`,
 						label: v,
@@ -494,7 +483,6 @@ const FacetAxisSubsection = ({
 				<AxisRangeSection
 					collapsible
 					title={`${axisLabel} range per panel`}
-					help="Blank = auto from each panel's data."
 					entries={panelOptions.map((p) => ({
 						key: `${spec.valueKeyPrefix}panel-${p.key}`,
 						label: p.label,

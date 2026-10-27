@@ -259,9 +259,9 @@ export const CustomGlyphEditor = ({
 				</span>
 			) : (
 				<span className="vc-help">
-					Up to {MAX_TEXT_GLYPH_CHARS} characters — emoji work
-					(paste, :fire: shortcodes, or your system emoji picker).
-					Spaces count: a lone space makes a blank mark.
+					Up to {MAX_TEXT_GLYPH_CHARS} characters. To use emoji, use the
+					:emoji: shortcodes, or your system emoji picker. A space makes a
+					blank.
 				</span>
 			)}
 			{error && (
@@ -321,12 +321,6 @@ export const CustomGlyphEditor = ({
 							}}
 						/>
 					</div>
-					<p className="vc-help">
-						Shifts the characters off the data point — e.g. X of -60%
-						hangs a dash to the left of a line through the point. 100% =
-						the mark&apos;s radius; positive X moves right, positive Y
-						moves up. Set now — it can&apos;t be changed after adding.
-					</p>
 				</div>
 			)}
 		</div>

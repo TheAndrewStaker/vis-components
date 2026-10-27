@@ -135,11 +135,9 @@ export const ValuePanel = ({
 						+ Add another label
 					</button>
 					<p className="vc-help">
-						Each box is one label at every point it applies to. Put a
-						variable in braces — <code>{"{A}"}</code> on its own, or a
-						combination like <code>{"{A} ({B})"}</code>. Every label gets its
-						own sections under Color, Size and the options below, titled by
-						its variables. An empty box draws nothing.
+						Each box is one label. Put variables in braces. For example,{" "}
+						<code>{"{A}"}</code> or a combination like{" "}
+						<code>{"{A} ({B})"}</code>.
 					</p>
 				</div>
 			)}

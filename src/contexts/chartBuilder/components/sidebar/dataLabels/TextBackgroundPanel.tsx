@@ -62,7 +62,7 @@ const BackgroundControls = ({
 	resetPadX: (() => void) | null
 	resetPadY: (() => void) | null
 	resetBorderWidth: (() => void) | null
-	colorHelp: React.ReactNode
+	colorHelp?: React.ReactNode
 	toggleId?: string
 }) => {
 	// The Border toggle IS the thickness: off writes 0, on restores the last
@@ -92,7 +92,7 @@ const BackgroundControls = ({
 							onChange({ textBackgroundColor })
 						}
 					/>
-					<p className="vc-help">{colorHelp}</p>
+					{colorHelp != null && <p className="vc-help">{colorHelp}</p>}
 					<div className="flex items-center gap-2">
 						<NumberInput
 							label="Corner radius"
@@ -247,7 +247,6 @@ export const TextBackgroundPanel = ({
 							: null
 					}
 					resetBorderWidth={null}
-					colorHelp="Defaults to the visualization's background color."
 				/>
 			</div>
 		)

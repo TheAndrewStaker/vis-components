@@ -13,11 +13,7 @@ import {
 	type PatternConfig,
 } from "../../../lib/channelConfig"
 import { regressionOn } from "../../../lib/colorSlots"
-import {
-	DASH_CYCLE,
-	resolveDashGapFill,
-	sanitizeCustomDasharray,
-} from "../../../lib/dashPatterns"
+import { DASH_CYCLE, resolveDashGapFill } from "../../../lib/dashPatterns"
 import { effectiveType } from "../../../lib/fieldType"
 import {
 	isHierarchyModeId,
@@ -676,34 +672,6 @@ export const PatternOptionsPanel = () => {
 				/>
 			</div>
 		)
-		// Nudge when the range is on but no dash is picked — the range only
-		// gates where a dash applies, so on its own it draws nothing. A custom
-		// dasharray counts once it parses (mirrors the renderer's fallback).
-		const rangeNeedsDashHint = (configs.connection?.dashRange?.enabled ??
-			false) &&
-			connDefaultDash === "solid" &&
-			sanitizeCustomDasharray(
-				configs.connection?.customDashPattern ?? ""
-			) === null && (
-				<p className="vc-help">
-					Pick a dash style above — the range only sets where the dash
-					applies.
-				</p>
-			)
-		// With "Blank" picked and the gaps unfilled, the range is a true hole
-		// in the line — point at the checkbox that paints it instead.
-		const blankRangeHint = (configs.connection?.dashRange?.enabled ?? false) &&
-			connDefaultDash === "blank" &&
-			!gapFillOn &&
-			sanitizeCustomDasharray(
-				configs.connection?.customDashPattern ?? ""
-			) === null && (
-				<p className="vc-help">
-					Blank leaves a gap in the line within the range — check
-					&quot;Fill dash gaps&quot; to paint the gap in the gap color
-					instead.
-				</p>
-			)
 
 		// Ink + background swatches for the point fill pattern. In compound
 		// mode these live inside the "Point fill" subsection (alongside the
@@ -821,8 +789,6 @@ export const PatternOptionsPanel = () => {
 								 *  it applies. */}
 								{renderDefaultDashRow(null)}
 								<ConnectionDashRangeRows />
-								{rangeNeedsDashHint}
-								{blankRangeHint}
 								{gapFillRow}
 							</div>
 						</CollapsibleSubsection>
@@ -852,8 +818,6 @@ export const PatternOptionsPanel = () => {
 						<div className="px-2">
 							<ConnectionDashRangeRows />
 						</div>
-						{rangeNeedsDashHint}
-						{blankRangeHint}
 						<div className="px-2">{gapFillRow}</div>
 						{polygonSubsection}
 					</>
@@ -1250,25 +1214,17 @@ export const PatternOptionsPanel = () => {
 	return (
 		<div className="vc-option-panel">
 			<StackModeRow channel="pattern" className="px-2" />
-			{showFillRow &&
-				(hueIsMapped ? (
-					<div className="vc-help">
-						Background follows hue encoding. Adjust the pattern line/dot color
-						per category below.
-					</div>
-				) : (
-					<ColorRow
-						label="Background"
-						className="px-2"
-						value={cfg.backgroundColor}
-						onChange={(c) => updateCfg({ backgroundColor: c })}
-						onClear={() =>
-							updateCfg({ backgroundColor: theme.defaultFill })
-						}
-						clearLabel="reset"
-						placeholder={theme.defaultFill}
-					/>
-				))}
+			{showFillRow && !hueIsMapped && (
+				<ColorRow
+					label="Background"
+					className="px-2"
+					value={cfg.backgroundColor}
+					onChange={(c) => updateCfg({ backgroundColor: c })}
+					onClear={() => updateCfg({ backgroundColor: theme.defaultFill })}
+					clearLabel="reset"
+					placeholder={theme.defaultFill}
+				/>
+			)}
 			{fieldValues &&
 				fieldValues.values.length > 0 &&
 				(patternMode === "compound" ? (

@@ -116,24 +116,13 @@ const CORNER_NAMES: Record<CoordCorner, string> = {
 	bottomRight: "bottom-right",
 }
 
-/** Which way "inside the plot" points from each corner, in +x right / +y up
- *  terms. */
-const CORNER_SIGNS: Record<CoordCorner, string> = {
-	topLeft: "negative y is inside the plot",
-	topRight: "negative x or y is inside the plot",
-	bottomLeft: "negative y is below the plot",
-	bottomRight: "negative x is inside the plot, negative y is below it",
-}
-
-/** The helper line for the selected unit + corner (null for Values, and for
- *  plain bottom-left Percent — the original 0–100 reading needs none). */
+/** The helper line for the selected unit + corner (null for Values, for
+ *  every pixel unit, and for plain bottom-left Percent — the original 0–100
+ *  reading needs none). */
 export const coordHelpFor = (system: AnnotationCoordSystem): string | null => {
 	const corner = coordCornerOf(system)
-	if (corner === null || system === "percent") return null
-	const where = `from the plot's ${CORNER_NAMES[corner]} corner — x to the right, y up (${CORNER_SIGNS[corner]}).`
-	return isPixelSystem(system)
-		? `Whole pixels ${where} The spot holds still as the chart resizes.`
-		: `Percent of the plot's width / height ${where}`
+	if (corner === null || system === "percent" || isPixelSystem(system)) return null
+	return `Percent of the plot's width / height from the plot's ${CORNER_NAMES[corner]} corner.`
 }
 
 /** The coordinate fields rectangles and line segments share: four edge /
@@ -322,7 +311,6 @@ export const PointPositionSection = ({
 	xAxis,
 	yAxis,
 	disableValues,
-	help,
 	zOrder,
 	onZOrderChange,
 }: {
@@ -333,8 +321,6 @@ export const PointPositionSection = ({
 	/** Gray out "Values (data units)" on polar charts (radar / pie), which
 	 *  have no cartesian axes for the anchor to map against. */
 	disableValues?: boolean
-	/** Helper prose explaining what the anchor point means for this kind. */
-	help?: string
 } & LayerProps) => {
 	const dims = usePlotDims()
 	return (
@@ -409,7 +395,6 @@ export const PointPositionSection = ({
 					/>
 				</div>
 			)}
-			{help && <p className="vc-help">{help}</p>}
 			{coordHelpFor(coords.coordSystem) && (
 				<p className="vc-help">{coordHelpFor(coords.coordSystem)}</p>
 			)}
@@ -696,7 +681,6 @@ export const TextStyleSection = ({
 	defaults,
 	onChange,
 	placeholder,
-	alignmentHelp,
 	title = "Text",
 	showPadding = false,
 }: {
@@ -708,9 +692,6 @@ export const TextStyleSection = ({
 	 *  to leave the text box out of the subsection (the caller renders a
 	 *  `TextContentField` elsewhere) so this holds formatting only. */
 	placeholder?: string
-	/** Extra prose under the Align row — the text annotation's alignment
-	 *  also picks which edge of the box lands on the anchor point. */
-	alignmentHelp?: string
 	/** Subsection header. */
 	title?: string
 	/** Keep the Padding row at the end of this subsection. Only the
@@ -737,7 +718,6 @@ export const TextStyleSection = ({
 					onChange={(textAlign) => onChange({ textAlign })}
 				/>
 			</div>
-			{alignmentHelp && <p className="vc-help">{alignmentHelp}</p>}
 			<FontEditor
 				value={annotationTextToFont(style, defaults)}
 				onChange={(font) => onChange(fontToAnnotationText(font, defaults))}

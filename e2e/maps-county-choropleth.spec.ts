@@ -90,11 +90,6 @@ test("counties choropleth happy path: county FIPS join at the counties level", a
 		new RegExp(`\\b${rowCount} of ${rowCount} matched\\b`)
 	)
 
-	// The counties-level name hint steers users toward FIPS / qualified names.
-	await expect(
-		page.getByText(/County names repeat across states/i)
-	).toBeVisible()
-
 	// Pin fill-no-data on (the default; no-op check) -> the whole
 	// 3231-feature basemap paints.
 	await page.getByLabel(/Fill regions with no data/i).check()

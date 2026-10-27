@@ -28,7 +28,6 @@ import {
 	type ProjectionName,
 	type RegionKeyType,
 } from "../../lib/mapConfig"
-import { zctaTopologyAvailable } from "../../lib/geo/zctaTopology"
 import { PatternTile } from "../../lib/patternDefs"
 import { PATTERN_PALETTE } from "../../lib/patterns"
 import { swatchChipClass } from "./channelOptions/glyphShared"
@@ -147,7 +146,7 @@ const MatchStatus = () => {
 	if (total === 0) {
 		return (
 			<p className="vc-help">
-				Map a region field to the Connection channel to see match status.
+				Map a region field to the Connection channel to generate a map.
 			</p>
 		)
 	}
@@ -274,35 +273,6 @@ export const MapsSection = () => {
 				)
 			: geographyLevelOptions
 
-	// All four levels are implemented, but ZCTA additionally needs a boundary
-	// source: the ~33k-polygon topology is too large to inline, so it ships as
-	// an optional sidecar file that a build opts into (and that a `file://`
-	// build can't fetch at all) — see zctaTopology.ts. Without one the map can
-	// only show the loading placeholder, so explain instead of silently
-	// blanking.
-	const zctaUnavailable = effectiveLevel === "zcta" && !zctaTopologyAvailable()
-
-	// Natural Earth and Mercator are *world* projections; fitting them to the US
-	// (Alaska crosses the antimeridian, plus far-flung Pacific/Caribbean
-	// territories) balloons the bounds so the lower-48 renders tiny. Albers USA
-	// ("Auto" for US geographies) is the purpose-built US projection. For world
-	// countries those projections are CORRECT, so only surface the tiny-US note
-	// when a world projection is paired with a US geography level.
-	const isWorldProjection =
-		mapConfig.projection === "naturalEarth" ||
-		mapConfig.projection === "mercator"
-	// A focus region overrides the projection to a world one anyway and pans
-	// away from the full US, so the tiny-US note no longer applies.
-	const showUsTinyNote =
-		isWorldProjection &&
-		effectiveLevel !== "countries" &&
-		mapConfig.focusRegion === "auto"
-
-	// On a point map the x/y channels carry geographic coordinates, not
-	// arbitrary axes — spell out the convention so users map the right
-	// fields. The region-placed maps key off `connection`, not x/y.
-	const showLonLatHint = geo?.position === "lonLat"
-
 	// Point marks the projection silently drops: albersUsa returns null for
 	// anything outside the US, so world-wide dots (or joined-region centroids
 	// on the bubble map) just vanish. `useGeoResolution` explains rows that
@@ -314,15 +284,6 @@ export const MapsSection = () => {
 	// "Bosnia and Herz."), so joining by full country name often misses. Steer
 	// users toward ISO codes, which join reliably.
 	const showCountryNameHint = effectiveLevel === "countries"
-
-	// County names repeat across states ("Washington" ×31), so a bare-name
-	// join can't resolve them. Steer users toward 5-digit FIPS codes or
-	// state-qualified names, which do.
-	const showCountyNameHint = effectiveLevel === "counties"
-
-	// ZCTAs join only by their 5-digit code; the join pads numeric columns
-	// that lost their leading zeros, so say so (the classic ZIP-in-a-CSV trap).
-	const showZctaHint = effectiveLevel === "zcta" && !zctaUnavailable
 
 	return (
 		<div className="vc-option-panel">
@@ -346,19 +307,6 @@ export const MapsSection = () => {
 							onChange={(projection) => update({ projection })}
 							selectClassName="min-w-0 flex-1"
 						/>
-						{showUsTinyNote && (
-							<p className="vc-help">
-								Natural Earth and Mercator are world projections, best
-								suited to country maps. US geographies render best with
-								Albers USA (Auto) — other projections fit the US to its
-								far-flung territories and Alaska, shrinking the lower-48.
-							</p>
-						)}
-						{showLonLatHint && (
-							<p className="vc-help">
-								On point maps, X = longitude and Y = latitude.
-							</p>
-						)}
 						{outsideCount.outside > 0 && (
 							<p className="vc-help">
 								{outsideCount.outside} of {outsideCount.total}{" "}
@@ -367,7 +315,7 @@ export const MapsSection = () => {
 								the mapped area and{" "}
 								{outsideCount.outside === 1 ? "isn't" : "aren't"} shown.
 								{outsideCount.projection === "albersUsa" &&
-									" Albers USA covers only the US — choose the Natural Earth or Mercator projection to show them."}
+									" Albers USA covers only the US; choose the Natural Earth or Mercator projection to show them."}
 							</p>
 						)}
 						<SelectInput
@@ -378,12 +326,6 @@ export const MapsSection = () => {
 							onChange={(geographyLevel) => update({ geographyLevel })}
 							selectClassName="min-w-0 flex-1"
 						/>
-						{zctaUnavailable && (
-							<p className="vc-help">
-								ZIP/ZCTA boundary data isn&apos;t available in this build, so
-								this level can&apos;t draw yet.
-							</p>
-						)}
 						<SelectInput
 							label="Focus"
 							labelClassName={LABEL_COL}
@@ -394,8 +336,8 @@ export const MapsSection = () => {
 						/>
 						{mapConfig.focusRegion === "custom" ? (
 							<p className="vc-help">
-								Drag the map to pan; scroll or pinch to zoom (or Ctrl +
-								↑/↓); arrow keys also pan.{" "}
+								Drag the map or use arrow keys to pan; scroll or pinch to
+								zoom.{" "}
 								<button
 									type="button"
 									onClick={resetCustomView}
@@ -408,8 +350,7 @@ export const MapsSection = () => {
 							<p className="vc-help">
 								Centers the map on{" "}
 								{FOCUS_REGION_LABELS[mapConfig.focusRegion]}. Drag or
-								scroll to fine-tune the view. Uses a world projection
-								(Mercator if chosen, otherwise Natural Earth).
+								scroll to fine-tune the view.
 							</p>
 						) : autoFitViewport !== null ? (
 							<p className="vc-help">
@@ -428,60 +369,30 @@ export const MapsSection = () => {
 						<MatchStatus />
 						{showCountryNameHint && (
 							<p className="vc-help">
-								Country names must match our spelling exactly (e.g. &quot;Dem.
-								Rep. Congo&quot;). ISO codes (USA, FR, 840) join most reliably.
-							</p>
-						)}
-						{showCountyNameHint && (
-							<p className="vc-help">
-								County names repeat across states, so bare names like
-								&quot;Washington&quot; stay unmatched. 5-digit FIPS codes
-								(48477) join most reliably; state-qualified names
-								(&quot;Washington County, TX&quot;) also work.
-							</p>
-						)}
-						{showZctaHint && (
-							<p className="vc-help">
-								ZCTAs join by 5-digit ZIP code. Numeric columns that lost
-								leading zeros (601 for 00601) and ZIP+4 values are matched
-								automatically.
+								Country names must match exactly. ISO codes (USA, FR, 840)
+								join most reliably.
 							</p>
 						)}
 						{showBasemapToggle && (
-							<div className="flex items-start gap-2">
+							<div className="flex items-center gap-2">
 								<LabelSpacer />
-								<div className="flex min-w-0 flex-1 flex-col gap-1">
-									<Checkbox
-										label="Show basemap"
-										checked={mapConfig.showBasemap}
-										onChange={(showBasemap) =>
-											update({ showBasemap })
-										}
-									/>
-									<p className="vc-help">
-										Draw the geography outlines behind the marks.
-									</p>
-								</div>
+								<Checkbox
+									label="Show basemap"
+									checked={mapConfig.showBasemap}
+									onChange={(showBasemap) => update({ showBasemap })}
+								/>
 							</div>
 						)}
 						{showFillNoDataToggle && (
-							<div className="flex items-start gap-2">
+							<div className="flex items-center gap-2">
 								<LabelSpacer />
-								<div className="flex min-w-0 flex-1 flex-col gap-1">
-									<Checkbox
-										label="Fill regions with no data"
-										checked={mapConfig.showNoDataRegions}
-										onChange={(showNoDataRegions) =>
-											update({ showNoDataRegions })
-										}
-									/>
-									<p className="vc-help">
-										When on, regions with no data (missing from the
-										dataset, or a blank value) are filled with the
-										no-data color; when off, they aren&apos;t drawn at
-										all.
-									</p>
-								</div>
+								<Checkbox
+									label="Fill regions with no data"
+									checked={mapConfig.showNoDataRegions}
+									onChange={(showNoDataRegions) =>
+										update({ showNoDataRegions })
+									}
+								/>
 							</div>
 						)}
 						{showNoDataFillColor && (

@@ -26,8 +26,6 @@ import { seedFixtureScript, type SeedFixture } from "./seed"
  *   - toggling "Show basemap" OFF (the checkbox that appears only in
  *     geo-points / geo-symbols mode) removes the `<path>` basemap while the
  *     `<circle>` dots remain.
- *   - the lon/lat hint ("X = longitude and Y = latitude") is visible in the
- *     Maps section in this mode.
  *
  *  The fixture rows come straight from `e2e/fixtures/cities-lonlat.csv` so the
  *  CSV is the single source of truth for the data under test. */
@@ -87,12 +85,6 @@ test("dot map happy path: map X/Y lon/lat, go Geographic, points render", async 
 	// detect on). Geography level auto-resolves to states + albersUsa.
 	await page.getByRole("button", { name: "Maps" }).click()
 	await page.getByRole("radio", { name: "Geographic" }).click()
-
-	// The lon/lat hint appears only in geo-points mode — confirms the mode is
-	// active and tells the user X = longitude / Y = latitude.
-	await expect(
-		page.getByText(/X = longitude and Y = latitude/i)
-	).toBeVisible()
 
 	// Geometry (states-10m) loads async, then the renderer projects each row's
 	// [lon, lat] to one <circle>. All 10 fixture cities are continental-US, so

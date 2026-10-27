@@ -1,7 +1,6 @@
 import { useAtom, useAtomValue } from "jotai"
 import { resolveHierarchyIdField } from "../../../lib/buildHierarchy"
 import {
-	PACKED_DERIVED_LABELS,
 	PACKED_MEASURE_OPTION_VALUE,
 	hierarchyDepthLevels,
 	isHierarchyModeId,
@@ -104,14 +103,6 @@ const BRIGHTNESS_BASE = {
 	suffix: "",
 } as const
 
-/** The one sentence every saturation / brightness level editor shows: which
- *  number draws the palette color untouched, and which way the dial runs.
- *  Levels are anchored, not absolute HSL components — see `modulateColor`. */
-const anchorHelp = (channel: "saturation" | "brightness") =>
-	channel === "saturation"
-		? `${MODULATION_ANCHOR} is the palette color as-is — lower is grayer, higher is more saturated.`
-		: `${MODULATION_ANCHOR} is the palette color as-is — lower is darker, higher is lighter.`
-
 /** Distinct categories of a NON-numeric ordinal field mapped to area, in
  *  first-seen order (matching `makeAreaScale`'s ordinal spread). Returns null
  *  when the field is absent, numeric-ordinal, or not ordinal at all — those
@@ -131,23 +122,6 @@ const useAreaOrdinalCategories = (): string[] | null => {
 	if (numericOrdinal) return null
 	return [...new Set(parsed.map(String))]
 }
-
-/** Helper copy for the proportional-size note, naming each layout's own
- *  mark. Display wording only — the GATE is `canvas.areaRole ===
- *  "proportional"`, so a new proportional mode without an entry here still
- *  gets the generic line rather than a wrong panel. */
-const PROPORTIONAL_AREA_NOTE: Partial<Record<ChartMode, string>> = {
-	treemap:
-		"Rectangle areas are computed by the treemap layout, proportional to each row's value.",
-	sunburst:
-		"Arc spans are computed by the sunburst layout, proportional to each row's value.",
-	chord:
-		"Ribbon widths are computed by the chord layout, proportional to each flow's value.",
-	sankey:
-		"Link widths are computed by the sankey layout, proportional to each flow's value.",
-}
-const GENERIC_PROPORTIONAL_AREA_NOTE =
-	"Mark sizes are computed by the layout, proportional to each row's value."
 
 export const AreaOptionsPanel = () => {
 	const encodings = useAtomValue(currentEncodingsAtom)
@@ -170,16 +144,8 @@ export const AreaOptionsPanel = () => {
 	// Proportional layouts (treemap / sunburst / chord / sankey): sizes are
 	// fully layout-computed AND inherently proportional (rect area / angle
 	// span / ribbon or link width ∝ value) — neither the px range nor
-	// Scale-by applies, so the panel just says so.
-	if (modeDef.canvas.areaRole === "proportional")
-		return (
-			<div className="vc-option-panel">
-				<p className="vc-help">
-					{PROPORTIONAL_AREA_NOTE[modeDef.id as ChartMode] ??
-						GENERIC_PROPORTIONAL_AREA_NOTE}
-				</p>
-			</div>
-		)
+	// Scale-by applies, so there is nothing to show.
+	if (modeDef.canvas.areaRole === "proportional") return null
 	// A NON-numeric ordinal sizes by category RANK, not magnitude — so there's
 	// no continuous min/max range to set and no area-vs-diameter distinction
 	// (both would be no-ops). Show only the per-category size editor.
@@ -275,10 +241,6 @@ const AreaOrdinalLevels = ({ categories }: { categories: string[] }) => {
 					</div>
 				)
 			})}
-			<p className="vc-help">
-				Each category gets an evenly-spaced size ({min}–{max}px) in the order
-				it appears in the data. Edit any value to set an exact size.
-			</p>
 		</div>
 	)
 }
@@ -330,13 +292,6 @@ const ScaleByRow = () => {
 					<span className="vc-muted">{label}</span>
 				</label>
 			))}
-			<p className="vc-help">
-				Area keeps circle areas proportional to values (a doubled value
-				doubles the ink); Diameter grows the radius linearly instead, which
-				reads more dramatically when values span a narrow range. In packed
-				circles, only Area makes a group circle read as the sum of its
-				children.
-			</p>
 		</div>
 	)
 }
@@ -482,7 +437,6 @@ const ModulationSlotSubsection = ({
 				/>
 				{field === null ? (
 					<ModulationLevelControl
-						channel={channel}
 						label={label}
 						value={slotCfg?.level ?? null}
 						onChange={(level) => updateSlot({ level })}
@@ -523,9 +477,6 @@ const ModulationSlotSubsection = ({
 							onChange={(max) => setRange({ max })}
 							inputClassName="w-20"
 						/>
-						<div className="vc-help">
-							Defaults: {baseMin} – {baseMax} — {anchorHelp(channel)}
-						</div>
 						{(range.min !== baseMin || range.max !== baseMax) && (
 							<ResetLink
 								onClick={() => setRange({ min: baseMin, max: baseMax })}
@@ -614,7 +565,6 @@ const SaturationFillControls = () => {
 	if (!fieldMapped)
 		return (
 			<ModulationDefaultPanel
-				channel="saturation"
 				label="Saturation"
 				configKey="defaultSaturation"
 			/>
@@ -662,7 +612,6 @@ const BrightnessFillControls = () => {
 	if (!fieldMapped)
 		return (
 			<ModulationDefaultPanel
-				channel="brightness"
 				label="Brightness"
 				configKey="defaultBrightness"
 			/>
@@ -850,11 +799,6 @@ const ModulationCategoryList = ({
 					</div>
 				)
 			})}
-			<p className="vc-help">
-				Each category gets an evenly-spaced {label.toLowerCase()} ({min}–{max})
-				in the order it appears in the data. Edit any value to set an exact
-				level. {anchorHelp(channel)}
-			</p>
 		</>
 	)
 }
@@ -949,12 +893,6 @@ const DerivedLevelsPanel = ({
 					</div>
 				)
 			})}
-			<p className="vc-help">
-				Varying by {PACKED_DERIVED_LABELS[source].toLowerCase()}. Unset
-				values spread evenly from {min} to {max}
-				{source === "depth" ? " (outermost → deepest)" : ""}.{" "}
-				{anchorHelp(channel)}
-			</p>
 		</div>
 	)
 }
@@ -1034,15 +972,6 @@ const RangePanel = ({
 				inputClassName="w-20"
 				suffix={variant.suffix || undefined}
 			/>
-			<div className="vc-help">
-				Defaults: {variant.min}
-				{variant.suffix} – {variant.max}
-				{variant.suffix}
-				{(variant.channel === "saturation" ||
-					variant.channel === "brightness") && (
-					<> — {anchorHelp(variant.channel)}</>
-				)}
-			</div>
 			{(currentMin !== variant.min || currentMax !== variant.max) && (
 				<ResetLink
 					onClick={() => update({ min: variant.min, max: variant.max })}
@@ -1103,12 +1032,10 @@ const AreaDefaultPanel = () => {
 }
 
 const ModulationDefaultPanel = ({
-	channel,
 	label,
 	configKey,
 	header,
 }: {
-	channel: "saturation" | "brightness"
 	label: string
 	configKey: "defaultSaturation" | "defaultBrightness"
 	/** Optional row rendered at the top of the panel (the packed-circles
@@ -1120,7 +1047,6 @@ const ModulationDefaultPanel = ({
 		<div className="flex flex-col gap-2">
 			{header}
 			<ModulationLevelControl
-				channel={channel}
 				label={label}
 				value={configs[configKey] ?? null}
 				onChange={(next) =>
@@ -1135,13 +1061,11 @@ const ModulationDefaultPanel = ({
  *  OFF (`null`, no modulation) until enabled. Shared by the Fill's no-field
  *  default and every part slot (Outline / Line) with no field mapped. */
 const ModulationLevelControl = ({
-	channel,
 	label,
 	value,
 	onChange,
 	partNoun = "mark",
 }: {
-	channel: "saturation" | "brightness"
 	label: string
 	value: number | null
 	onChange: (next: number | null) => void
@@ -1175,13 +1099,13 @@ const ModulationLevelControl = ({
 					{enabled ? currentValue.toFixed(2) : "—"}
 				</span>
 			</label>
-			<div className="vc-help">
-				{!enabled
-					? `Off — ${partNoun}s use their ${colorNoun}s as-is.`
-					: atAnchor
-						? `On, at ${MODULATION_ANCHOR} — every ${partNoun}'s ${colorNoun}, unchanged. Dial away from ${MODULATION_ANCHOR} to shift it.`
-						: `Shifts every ${partNoun}'s ${label.toLowerCase()} relative to its ${colorNoun}. ${anchorHelp(channel)}`}
-			</div>
+			{(!enabled || atAnchor) && (
+				<div className="vc-help">
+					{!enabled
+						? `Off — ${partNoun}s use their ${colorNoun}s as-is.`
+						: `On, at ${MODULATION_ANCHOR} — every ${partNoun}'s ${colorNoun}, unchanged. Dial away from ${MODULATION_ANCHOR} to shift it.`}
+				</div>
+			)}
 			{enabled && !atAnchor && (
 				<ResetLink
 					ariaLabel="Reset to the palette color"

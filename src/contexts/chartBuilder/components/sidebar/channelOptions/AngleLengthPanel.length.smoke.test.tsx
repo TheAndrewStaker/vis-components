@@ -77,12 +77,11 @@ const SEGMENTS: Encodings = {
 }
 
 describe("Length panel — length variable mapped", () => {
-	it("bar mode: hides the inert Min/Max px range and explains why", async () => {
+	it("bar mode: hides the inert Min/Max px range", async () => {
 		seed(BARS)
 		const q = await mount()
 		expect(q.queryByLabelText("Min")).toBeNull()
 		expect(q.queryByLabelText("Max")).toBeNull()
-		expect(q.getByText(/axis scale/)).not.toBeNull()
 	})
 
 	it("segment mode: still offers the Min/Max px range", async () => {
@@ -138,13 +137,12 @@ const PIE: Encodings = {
 }
 
 describe("Length panel — mode trait decides, not the mapped field", () => {
-	it("histogram (bars, no length field): explains the count axis — no scatter default length, and no bar gap (bins abut)", async () => {
+	it("histogram (bars, no length field): no scatter default length, and no bar gap (bins abut)", async () => {
 		seed(HISTOGRAM, { x: { histogram: { enabled: true } } })
 		const q = await mount()
 		expect(q.queryByLabelText("Length")).toBeNull()
 		expect(q.queryByText(/line segments/)).toBeNull()
 		expect(q.queryByLabelText("Bar gap")).toBeNull()
-		expect(q.getByText(/bars abut/)).not.toBeNull()
 	})
 
 	it("categorical bars with a length field: bar gap, no px range", async () => {

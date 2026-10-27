@@ -755,20 +755,14 @@ export const AxisOptionsPanel = ({ channel }: Props) => {
 						axis={channel}
 					/>
 					{showSpineAtZero && (
-						<div className="flex flex-col gap-1">
-							<Checkbox
-								label="Set spine at 0"
-								checked={config.spineAtZero === true}
-								onChange={(on) =>
-									update({ spineAtZero: on ? true : undefined })
-								}
-								changed={ch.spineAtZero}
-							/>
-							<span className="vc-help">
-								Moves this spine to {channel === "x" ? "y" : "x"} = 0
-								instead of the edge of the plot.
-							</span>
-						</div>
+						<Checkbox
+							label="Set spine at 0"
+							checked={config.spineAtZero === true}
+							onChange={(on) =>
+								update({ spineAtZero: on ? true : undefined })
+							}
+							changed={ch.spineAtZero}
+						/>
 					)}
 				</Section>
 			)}
@@ -974,10 +968,6 @@ const HistogramSubOptions = ({
 			onChange={(binCount) => onChange({ ...histogram, binCount })}
 			inputClassName="w-20"
 		/>
-		<span className="vc-help">
-			Target bin count — edges snap to round numbers, so the actual number of
-			bins may differ.
-		</span>
 		<label className="flex items-center gap-2 text-sm">
 			<span className={LABEL_COL}>Bin labels</span>
 			<Select
@@ -1169,9 +1159,9 @@ const MirroredAxisControls = ({
 			? `“${directionLevels[0]}” draws to the left of 0, “${directionLevels[1]}” to the right. Reorder the variable's levels under Fields to swap them.`
 			: `“${directionLevels[0]}” draws below 0, “${directionLevels[1]}” above. Reorder the variable's levels under Fields to swap them.`
 		: directionOptions.length === 0
-			? "No variable has exactly two options, so nothing can be mirrored yet."
+			? "No variable has exactly two options, so nothing can be mirrored."
 			: staleChoice
-				? "This variable no longer has exactly two options — pick another."
+				? "This variable no longer has exactly two options; pick another."
 				: "Only variables with exactly two options are listed."
 	return (
 		<div className={divider ? "vc-divider-group" : "flex flex-col gap-2"}>
@@ -1184,9 +1174,8 @@ const MirroredAxisControls = ({
 				changed={changed}
 			/>
 			<span className="vc-help">
-				Splits each bar to either side of 0 by a two-option variable —
-				expenses vs. profit, or a population pyramid — while the values
-				stay positive.
+				Splits each bar to either side of 0 by a two-option variable (like
+				expenses vs. profits) while the values themselves stay positive.
 			</span>
 			{mirror.enabled && (
 				<>
@@ -1261,7 +1250,7 @@ const MirroredAxisControls = ({
 							set({ breaks: breaks.length > 0 ? breaks : undefined })
 						}
 						changed={(mirror.breaks?.length ?? 0) > 0}
-						hint="Mirrored around 0: “50, 100” pins ticks at 50 and 100 on both sides, in addition to the automatic ones above. Set Count to 0 for fully custom ticks."
+						hint="Mirrored around 0, setting ticks on both sides in addition to the automatic ones above. Set Count to 0 for fully custom ticks."
 					/>
 				</>
 			)}
@@ -1744,8 +1733,7 @@ const RugControls = ({
 					)}
 				</div>
 				<p className="vc-help">
-					Ticks are centered on the axis (length splits evenly above and
-					below). Set the rug color under <strong>Color</strong> →{" "}
+					Set the rug color under <strong>Color</strong> →{" "}
 					<strong>Rug</strong> and its opacity under the{" "}
 					<strong>Opacity</strong> → <strong>Rug</strong>.
 				</p>
@@ -1786,7 +1774,7 @@ const DensityCurveControls = ({
 		</label>
 		<Checkbox label="Fill under curve" checked={fill} onChange={onChangeFill} />
 		<p className="vc-help">
-			Smoothing scales the kernel bandwidth — higher is smoother. Set the curve
+			Smoothing scales the kernel bandwidth; higher is smoother. Set the curve
 			color under <strong>Color</strong> → <strong>Density curve</strong>.
 		</p>
 	</>

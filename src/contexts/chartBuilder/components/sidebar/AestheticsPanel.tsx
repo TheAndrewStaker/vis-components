@@ -277,13 +277,6 @@ export const AestheticsPanel = () => {
 								</div>
 							)
 						})}
-						<p className="vc-help">
-							White space between the canvas edge and the nearest content on
-							that side — the title, an axis title, the legend. Blank uses the
-							theme&apos;s default (Settings → Themes → Exporting) or, without
-							one, whatever the layout leaves — either way shown as the
-							placeholder. 0 puts the content flush against the edge.
-						</p>
 					</div>
 				)}
 				<div className="vc-divider-group">
@@ -292,14 +285,6 @@ export const AestheticsPanel = () => {
 						checked={scrollMode === "scroll"}
 						onChange={(on) => setScrollMode(on ? "scroll" : "fit")}
 					/>
-					<p className="vc-help">
-						Off: the chart shrinks to fit the available space.
-						Panels and category labels may compress when there are many of
-						them. <br></br><br></br>On: each panel keeps a ~200px minimum and each categorical
-						tick keeps a ~20px slot; the chart scrolls when these floors
-						would exceed the container. Use for many-facet grids or long
-						categorical axes.
-					</p>
 				</div>
 			</CollapsibleSubsection>
 			<CollapsibleSubsection title="Aspect ratio" changed={aspectChanged}>
@@ -355,7 +340,7 @@ export const AestheticsPanel = () => {
 					)}
 					<p className="vc-help">
 						Keeps every panel&apos;s plot area at a set width-to-height shape
-						no matter the viewport size. 1 : 1 makes the axes equal length. Faceted charts apply the
+						no matter the viewport size. 1:1 makes the axes equal length. Faceted charts apply the
 						shape to each panel. Overrides Panel spacing and sizing in
 						Facet, proportional panel weights, and
 						scroll-mode panel minimums.
@@ -423,10 +408,6 @@ export const AestheticsPanel = () => {
 							checked={axesBehindMarks}
 							onChange={setAxesBehindMarks}
 						/>
-						<p className="vc-help">
-							Off: axis spines, ticks, and labels paint over any marks
-							that cross them. On: marks paint over the axes.
-						</p>
 					</div>
 				</div>
 			</CollapsibleSubsection>
