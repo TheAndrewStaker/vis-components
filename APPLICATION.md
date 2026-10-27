@@ -1837,8 +1837,12 @@ Connection is the line/area glue. Controls:
   (`null` = auto). Ticks draw on line-mode layer edges only, never on
   filled areas. Radar polygons are closed, so caps never show there.
 - **Show points** — `all`, `none`, `first-only`, `last-only`,
-  `first-and-last`, or `every-n` with stride N. Drives marker
-  visibility along each line.
+  `first-and-last`, `every-n` with stride N, or `custom` ("Custom Nth
+  point"), which reveals a textbox of comma-separated positions along
+  each line, counting from 1 at the first point (stored structured as
+  `connection.pointIndices: number[]`). Custom adds no endpoint anchors
+  and ignores positions past a line's end. Drives marker visibility
+  along each line.
 
 Thickness, smoothing, and line cap share the panel's **Line
 properties** subsection, which is shown in line and area modes only.

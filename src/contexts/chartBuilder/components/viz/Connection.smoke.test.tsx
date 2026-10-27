@@ -165,6 +165,15 @@ describe("Connection — point sampling", () => {
 		const paths = c.querySelectorAll("path:not(.vc-line-hit)")
 		expect(paths.length).toBe(2)
 	})
+
+	it("`custom` renders only the listed 1-based positions per group (no endpoint anchors)", () => {
+		// Positions 2 and 4 exist in both 5-point groups → 2 × 2 = 4 marks.
+		const c = mount({ pointSampling: "custom", pointIndices: [2, 4] })
+		expect(c.querySelectorAll("path:not(.vc-line-hit)").length).toBe(4)
+		// A position past every line's end draws nothing.
+		const none = mount({ pointSampling: "custom", pointIndices: [9] })
+		expect(none.querySelectorAll("path:not(.vc-line-hit)").length).toBe(0)
+	})
 })
 
 describe("Connection — default fill", () => {

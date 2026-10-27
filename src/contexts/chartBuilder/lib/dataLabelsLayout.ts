@@ -3,6 +3,7 @@
  *  tested without spinning up the SVG / Jotai machinery. */
 
 import { charWidthConservativeFactor } from "./estimateMargins"
+import type { ConnectionPointSampling } from "./channelConfig"
 
 /** Approximate label bbox using a fixed width-per-character ratio — this is
  *  a heuristic, not a measured metric. For our purposes (overlap detection)
@@ -370,15 +371,32 @@ export const estimateDataLabelMargins = ({
 }
 
 /** Decide which point indices in a connection group should render markers,
- *  given the user's `pointSampling` mode and stride. Lines themselves
- *  always use every point (the polyline path is unaffected); this only
- *  filters the dots / shapes drawn AT each point. */
+ *  given the user's `pointSampling` mode, stride, and custom position
+ *  list. Lines themselves always use every point (the polyline path is
+ *  unaffected); this only filters the dots / shapes drawn AT each point.
+ *
+ *  `customIndices` are the user's 1-BASED positions along the line
+ *  (`pointIndices` in the connection config); the result is 0-based like
+ *  every other mode. Positions outside `1..count` are dropped, so a list
+ *  written for a long line still works on a shorter one. */
 export const sampleConnectionPointIndices = (
 	count: number,
-	mode: "all" | "first-only" | "last-only" | "first-and-last" | "every-n",
-	everyN: number
+	mode: ConnectionPointSampling,
+	everyN: number,
+	customIndices: readonly number[] = []
 ): number[] => {
 	if (count === 0) return []
+	if (mode === "none") return []
+	if (mode === "custom") {
+		// No endpoint anchors here — the user named exactly which points
+		// they want. Dedupe + sort so the caller sees line order.
+		const set = new Set<number>()
+		for (const n of customIndices) {
+			const idx = Math.floor(n) - 1
+			if (idx >= 0 && idx < count) set.add(idx)
+		}
+		return [...set].sort((a, b) => a - b)
+	}
 	if (count === 1) return [0]
 	if (mode === "all") return Array.from({ length: count }, (_, i) => i)
 	if (mode === "first-only") return [0]

@@ -1,4 +1,4 @@
-import { useId } from "react"
+import { Fragment, useId, useState } from "react"
 import { useAtom, useAtomValue } from "jotai"
 import {
 	DEFAULT_CATEGORICAL_HUE_CONFIG,
@@ -19,6 +19,10 @@ import {
 	type StackChannel,
 } from "../../../lib/stackMode"
 import { MIN_LINE_THICKNESS } from "../../../lib/connectionThickness"
+import {
+	formatPointIndices,
+	parsePointIndices,
+} from "../../../lib/connectionSampling"
 import {
 	HIERARCHY_ID_NONE,
 	inferHierarchyIdField,
@@ -54,6 +58,7 @@ import { orderedLevels } from "../../../lib/smartSort"
 import type { FieldType } from "../../../lib/types"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { LABEL_COL, LabelSpacer } from "../../../../../components/ui/LabeledField"
+import { Input } from "../../../../../components/ui/Input"
 import { NumberInput } from "../../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../../components/ui/SelectInput"
@@ -968,37 +973,49 @@ export const ConnectionOptionsPanel = () => {
 								["last-only", "Last point only"],
 								["first-and-last", "First and last only"],
 								["every-n", "Every Nth point (with endpoints)"],
+								["custom", "Custom Nth point"],
 							] as const
 						).map(([value, label]) => (
-							<label key={value} className="flex items-center gap-2 text-sm">
-								<input
-									type="radio"
-									name="connection-point-sampling"
-									value={value}
-									checked={cfg.pointSampling === value}
-									onChange={() => updateCfg({ pointSampling: value })}
-									className="h-3 w-3"
-								/>
-								<span className="vc-muted">
-									{label}
-								</span>
-							</label>
+							// Each option's own input sits directly under its radio, so
+							// the N box stays with "Every Nth" and the Points box with
+							// "Custom" rather than both trailing the list.
+							<Fragment key={value}>
+								<label className="flex items-center gap-2 text-sm">
+									<input
+										type="radio"
+										name="connection-point-sampling"
+										value={value}
+										checked={cfg.pointSampling === value}
+										onChange={() => updateCfg({ pointSampling: value })}
+										className="h-3 w-3"
+									/>
+									<span className="vc-muted">
+										{label}
+									</span>
+								</label>
+								{value === "every-n" && cfg.pointSampling === "every-n" && (
+									<NumberInput
+										label="N"
+										labelClassName="vc-muted"
+										value={cfg.pointEveryN}
+										min={1}
+										step={1}
+										onChange={(n) =>
+											// Same normalization as the previous raw input: fractions
+											// floor, and anything below 1 pins to 1.
+											updateCfg({ pointEveryN: Math.max(1, Math.floor(n)) })
+										}
+										inputClassName="w-16"
+									/>
+								)}
+								{value === "custom" && cfg.pointSampling === "custom" && (
+									<PointIndicesField
+										value={cfg.pointIndices ?? []}
+										onCommit={(pointIndices) => updateCfg({ pointIndices })}
+									/>
+								)}
+							</Fragment>
 						))}
-						{cfg.pointSampling === "every-n" && (
-							<NumberInput
-								label="N"
-								labelClassName="vc-muted"
-								value={cfg.pointEveryN}
-								min={1}
-								step={1}
-								onChange={(n) =>
-									// Same normalization as the previous raw input: fractions
-									// floor, and anything below 1 pins to 1.
-									updateCfg({ pointEveryN: Math.max(1, Math.floor(n)) })
-								}
-								inputClassName="w-16"
-							/>
-						)}
 					</div>
 				</CollapsibleSubsection>
 			)}
@@ -1010,6 +1027,65 @@ export const ConnectionOptionsPanel = () => {
 				</p>
 			)}
 		</div>
+	)
+}
+
+/** The "Custom Nth point" textbox: comma-separated 1-based positions
+ *  along each line. Same contract as `BreaksField`: the text is mirrored
+ *  locally so the cursor doesn't jump, the parsed list commits on blur /
+ *  Enter, and the box re-seeds when the stored list changes from outside
+ *  (undo, loading another visual) and the draft doesn't already parse to
+ *  it. */
+const PointIndicesField = ({
+	value,
+	onCommit,
+}: {
+	value: readonly number[]
+	onCommit: (indices: number[]) => void
+}) => {
+	const stored = formatPointIndices(value)
+	const [text, setText] = useState(stored)
+	// Re-seed during render (React's "adjust state on prop change" form)
+	// when the stored list changes from outside and the draft doesn't
+	// already parse to it — preserves in-progress typing.
+	const [seenStored, setSeenStored] = useState(stored)
+	if (stored !== seenStored) {
+		setSeenStored(stored)
+		if (formatPointIndices(parsePointIndices(text)) !== stored) setText(stored)
+	}
+	const commit = (next: string) => {
+		const parsed = parsePointIndices(next)
+		setText(formatPointIndices(parsed))
+		onCommit(parsed)
+	}
+	return (
+		<>
+			<label className="flex items-center gap-2 text-sm">
+				<span className={`shrink-0 vc-muted ${LABEL_COL}`}>Points</span>
+				<Input
+					type="text"
+					inputMode="numeric"
+					value={text}
+					onChange={(e) => setText(e.target.value)}
+					onBlur={() => commit(text)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") {
+							commit(text)
+							e.currentTarget.blur()
+						}
+					}}
+					placeholder="e.g. 1, 4, 7"
+					className="flex-1 font-mono"
+				/>
+			</label>
+			<div className="flex gap-2">
+				<LabelSpacer />
+				<span className="min-w-0 flex-1 vc-help">
+					Comma-separated positions along each line, counting from 1 at the
+					first point.
+				</span>
+			</div>
+		</>
 	)
 }
 

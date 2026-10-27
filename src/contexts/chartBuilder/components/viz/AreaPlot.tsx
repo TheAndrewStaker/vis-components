@@ -926,6 +926,7 @@ const buildAreas = ({
 	const pointEveryN =
 		channelConfigs.connection?.pointEveryN ??
 		DEFAULT_CONNECTION_CONFIG.pointEveryN
+	const pointIndices = channelConfigs.connection?.pointIndices ?? []
 	// Area fill = each layer's overall opacity (the Fill subheader = the opacity
 	// encoding). Outline/edge/points = the Border opacity slot. Layers are
 	// aggregated (no single row), so a field-mapped border resolves to the
@@ -1359,16 +1360,14 @@ const buildAreas = ({
 			// preference (mirrors ScatterPlot's behavior). The line
 			// itself always passes through every point regardless of
 			// sampling.
-			const sampledIndices =
-				pointSampling === "none"
-					? new Set<number>()
-					: new Set(
-							sampleConnectionPointIndices(
-								top.length,
-								pointSampling,
-								pointEveryN,
-							),
-						)
+			const sampledIndices = new Set(
+				sampleConnectionPointIndices(
+					top.length,
+					pointSampling,
+					pointEveryN,
+					pointIndices
+				)
+			)
 			const pointEls = top.flatMap(([x, y], i) => {
 				if (!sampledIndices.has(i)) return []
 				return [

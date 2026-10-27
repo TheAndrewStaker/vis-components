@@ -467,6 +467,27 @@ describe("sampleConnectionPointIndices", () => {
 		])
 	})
 
+	it("'custom' maps 1-based positions to 0-based, sorted + deduped, dropping out-of-range", () => {
+		expect(sampleConnectionPointIndices(10, "custom", 1, [7, 1, 4, 7])).toEqual([
+			0, 3, 6,
+		])
+		// No endpoint anchors: only what the user named.
+		expect(sampleConnectionPointIndices(10, "custom", 1, [3])).toEqual([2])
+		// Past the end of a shorter line → ignored; 0 and negatives too.
+		expect(sampleConnectionPointIndices(3, "custom", 1, [0, -1, 2, 5])).toEqual([
+			1,
+		])
+		expect(sampleConnectionPointIndices(3, "custom", 1, [])).toEqual([])
+		// A 1-point line shows its point only when position 1 is listed.
+		expect(sampleConnectionPointIndices(1, "custom", 1, [2])).toEqual([])
+		expect(sampleConnectionPointIndices(1, "custom", 1, [1])).toEqual([0])
+	})
+
+	it("'none' returns nothing", () => {
+		expect(sampleConnectionPointIndices(5, "none", 1)).toEqual([])
+		expect(sampleConnectionPointIndices(1, "none", 1)).toEqual([])
+	})
+
 	it("handles the 0- and 1-point edge cases without throwing", () => {
 		expect(sampleConnectionPointIndices(0, "all", 1)).toEqual([])
 		expect(sampleConnectionPointIndices(1, "all", 1)).toEqual([0])

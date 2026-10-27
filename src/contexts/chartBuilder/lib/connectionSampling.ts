@@ -41,7 +41,8 @@ export const sampleMarkersByConnection = <
 		sampling !== "first-only" &&
 		sampling !== "last-only" &&
 		sampling !== "first-and-last" &&
-		sampling !== "every-n"
+		sampling !== "every-n" &&
+		sampling !== "custom"
 	) {
 		// "all" (or any unrecognized value) → no filtering.
 		return null
@@ -69,7 +70,8 @@ export const sampleMarkersByConnection = <
 		const indices = sampleConnectionPointIndices(
 			sorted.length,
 			sampling,
-			cfg.pointEveryN ?? 1
+			cfg.pointEveryN ?? 1,
+			cfg.pointIndices ?? []
 		)
 		for (const idx of indices) {
 			const item = sorted[idx]
@@ -78,3 +80,26 @@ export const sampleMarkersByConnection = <
 	}
 	return keep
 }
+
+/** Parse the "Custom Nth point" textbox: comma- (or whitespace-)
+ *  separated 1-based positions. Anything that isn't a positive integer
+ *  is skipped — so a half-typed "1, 3," still parses to [1, 3] and the
+ *  chart keeps up with every keystroke. Duplicates collapse; order is
+ *  kept as typed so the box can be re-rendered from the stored list. */
+export const parsePointIndices = (text: string): number[] => {
+	const out: number[] = []
+	const seen = new Set<number>()
+	for (const token of text.split(/[\s,;]+/)) {
+		if (!/^\d+$/.test(token)) continue
+		const n = Number(token)
+		if (n < 1 || seen.has(n)) continue
+		seen.add(n)
+		out.push(n)
+	}
+	return out
+}
+
+/** Inverse of `parsePointIndices` for seeding the textbox from a saved
+ *  visual. */
+export const formatPointIndices = (indices: readonly number[]): string =>
+	indices.join(", ")

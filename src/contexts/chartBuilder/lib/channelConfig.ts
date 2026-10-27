@@ -1166,17 +1166,20 @@ export type ConnectionConfig = {
 	 *    named anchor points render markers — useful for "where does the
 	 *    line end up" annotations or to avoid clutter on dense lines.
 	 *  - `"every-n"`: render a marker at every `pointEveryN`-th point in
-	 *    line order, plus the first and last for endpoint anchors. */
-	pointSampling:
-		| "all"
-		| "none"
-		| "first-only"
-		| "last-only"
-		| "first-and-last"
-		| "every-n"
+	 *    line order, plus the first and last for endpoint anchors.
+	 *  - `"custom"`: render a marker at exactly the 1-based positions
+	 *    listed in `pointIndices` (in line order, per line). No endpoint
+	 *    anchors are added; positions past a line's end are ignored. */
+	pointSampling: ConnectionPointSampling
 	/** Stride for `pointSampling: "every-n"`. Ignored otherwise. Clamped
 	 * to >= 1 by the renderer. */
 	pointEveryN: number
+	/** 1-based point positions for `pointSampling: "custom"` (the user's
+	 * "Custom Nth point" list, typed comma-separated). Stored STRUCTURED
+	 * as numbers, never as the typed string. Ignored in every other
+	 * mode. Optional for back-compat with visuals saved before it existed
+	 * — absent reads as empty. */
+	pointIndices?: number[]
 	/** Per-line dash pattern overrides keyed by line group value (the
 	 * connection field's value, or the hue value in area mode). When a
 	 * key is missing the line falls back to `defaultDashPattern`. */
@@ -1324,6 +1327,17 @@ export type ConnectionConfig = {
  *  pattern to range" is enabled — as a whole-line dash it would erase the
  *  line, so outside an active range the renderers treat it as solid. */
 export type LineDashPattern = "solid" | "dashed" | "dotted" | "dash-dot" | "blank"
+/** The Connection panel's "Show points" choices. See
+ *  `ConnectionConfig.pointSampling` for what each one draws. */
+export type ConnectionPointSampling =
+	| "all"
+	| "none"
+	| "first-only"
+	| "last-only"
+	| "first-and-last"
+	| "every-n"
+	| "custom"
+
 export const DEFAULT_CONNECTION_CONFIG: ConnectionConfig = {
 	lineColors: {},
 	thickness: 2,
@@ -1337,6 +1351,7 @@ export const DEFAULT_CONNECTION_CONFIG: ConnectionConfig = {
 	strokeColor: null,
 	pointSampling: "all",
 	pointEveryN: 5,
+	pointIndices: [],
 	dashPatterns: {},
 	defaultDashPattern: "solid",
 	customDashPattern: null,
