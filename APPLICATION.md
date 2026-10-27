@@ -3227,8 +3227,16 @@ downstream of those resolvers never sees pt.
 The Labels panel covers chart title, subtitle, x-axis title, y-axis
 title, and facet/legend titles. Each title has:
 
-- A text field (auto-populated from the encoded field name on first
-  map; user overrides stick).
+- A text field. For the x- and y-axis titles the box SHOWS the chart's
+  automatic title as its real value (not a placeholder) while no title
+  is stored — the mapped variable's name (the Length variable on a
+  bar's measure axis, "Count" / "Density" on a histogram's, the R
+  variable on a radar), following a re-mapped variable live. The first
+  keystroke stores the box's text as the title. Clearing the box stores
+  an empty title (no title drawn; it does not snap back). A
+  right-aligned **Reset to variable name** link, shown only while a
+  title is stored, returns to the automatic text. Hiding a title
+  outright is the Titles shown box's job (below).
 - An alignment control (Left / Center / Right glyph buttons).
 - Font override (collapsed disclosure with family / size / color).
 - Position offset (X / Y in px) — see §6.4 for the auto-grow rule and

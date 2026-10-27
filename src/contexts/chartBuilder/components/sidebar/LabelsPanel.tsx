@@ -23,7 +23,7 @@ import {
 	type TitlesFontConfig,
 	type VerticalAlignment,
 } from "../../lib/labelsConfig"
-import { axisFieldsFor } from "../../lib/axisFields"
+import { defaultAxisTitles } from "../../lib/axisTitleDefaults"
 import { effectiveType } from "../../lib/fieldType"
 import { resolveHistogramMeasure } from "../../lib/histogramMeasure"
 import {
@@ -300,24 +300,27 @@ export const LabelsPanel = () => {
 	} else {
 		for (const ch of activeLegendChannels) legendTitleGroups.push([ch])
 	}
-	// Mirror what the chart renderers actually show as the axis title default
-	// (each renderer resolves it inline as `labels.<axis>Title ?? field`).
-	// `axisFieldsFor` reads the mode's traits: for bars/areas the measure
-	// field is on the `length` channel and lands on whichever axis the
-	// orientation puts it on, so we can't just read `encodings.x.field`
-	// blindly; an axis the mode doesn't draw resolves to no field.
-	const axisFields = axisFieldsFor(modeDef, encodings)
-	const xTitleFallback = axisFields.xField ?? ""
-	const yTitleFallback = axisFields.yField ?? ""
-	// NOTE: we intentionally do NOT auto-populate the axis-title inputs with
-	// the mapped field name. The field name is surfaced as a grayed
-	// placeholder (`placeholder={xTitleFallback}` below) so the user can still
-	// see what it is, and the renderers fall back to it when the title is
-	// `undefined`. Filling the actual input text made an empty title
-	// impossible — deleting it just re-populated. Three states now:
-	//   undefined (untouched) → renderer shows the field name
-	//   ""        (cleared)   → renderer shows no title
+	// The text the chart draws as each axis title while the user hasn't
+	// typed one (`defaultAxisTitles` mirrors every renderer's inline
+	// `labels.<axis>Title ?? field` — the Length field on a bar's measure
+	// axis, "Count" / "Density" on a histogram's, the R field on a radar).
+	// The box SHOWS that text as its real value, not a placeholder, so the
+	// title the user reads in the sidebar is the one on the figure. Three
+	// stored states:
+	//   undefined (untouched) → box and figure show the default, and follow
+	//                           a re-mapped field live
+	//   ""        (cleared)   → empty box, no title drawn
 	//   custom string         → that text.
+	// "Reset to variable name" (shown while a value is stored) returns to
+	// `undefined`; hiding the title outright is the "Titles shown" box's job.
+	const axisTitleDefaults = defaultAxisTitles(modeDef, encodings, histMeasure)
+	const xTitleFallback = axisTitleDefaults.x
+	const yTitleFallback = axisTitleDefaults.y
+	const resetAxisTitle = (key: "xAxisTitle" | "yAxisTitle") =>
+		setLabels((prev) => {
+			const { [key]: _prev, ...rest } = prev
+			return rest
+		})
 
 	const overrides = labels.fontOverrides ?? {}
 
@@ -732,13 +735,17 @@ export const LabelsPanel = () => {
 				label="X-axis title"
 				disabled={xTitleInert}
 				fontKey="xAxisTitle"
-				value={labels.xAxisTitle ?? ""}
+				value={labels.xAxisTitle ?? xTitleFallback}
 				onChange={(v) => updateText("xAxisTitle", v)}
+				onReset={
+					labels.xAxisTitle !== undefined
+						? () => resetAxisTitle("xAxisTitle")
+						: undefined
+				}
 				override={overrides.xAxisTitle}
 				onOverride={(patch) => setOverride("xAxisTitle", patch)}
 				alignment={titleAlignments.xAxisTitle}
 				onAlignment={(a) => setAlignment("xAxisTitle", a)}
-				placeholder={xTitleFallback || "field name"}
 				baseColor={secondaryInheritColor(labels.baseFont.titles)}
 				baseSize={labels.baseFont.titles.secondarySize}
 				baseFamily={secondaryInheritFamily(labels.baseFont.titles)}
@@ -757,13 +764,17 @@ export const LabelsPanel = () => {
 				label="Y-axis title"
 				disabled={yTitleInert}
 				fontKey="yAxisTitle"
-				value={labels.yAxisTitle ?? ""}
+				value={labels.yAxisTitle ?? yTitleFallback}
 				onChange={(v) => updateText("yAxisTitle", v)}
+				onReset={
+					labels.yAxisTitle !== undefined
+						? () => resetAxisTitle("yAxisTitle")
+						: undefined
+				}
 				override={overrides.yAxisTitle}
 				onOverride={(patch) => setOverride("yAxisTitle", patch)}
 				alignment={titleAlignments.yAxisTitle}
 				onAlignment={(a) => setAlignment("yAxisTitle", a)}
-				placeholder={yTitleFallback || "field name"}
 				baseColor={secondaryInheritColor(labels.baseFont.titles)}
 				baseSize={labels.baseFont.titles.secondarySize}
 				baseFamily={secondaryInheritFamily(labels.baseFont.titles)}
@@ -1064,6 +1075,10 @@ type LabelRowProps = {
 	fontKey: LabelFontKey
 	value: string
 	onChange: (v: string) => void
+	/** Returns the text to its automatic value (the axis titles' mapped
+	 *  field name). Pass it only while a value is stored — the row shows a
+	 *  right-aligned "Reset to variable name" link whenever it's given. */
+	onReset?: () => void
 	override: Partial<FontConfig> | undefined
 	onOverride: (patch: Partial<FontConfig> | null) => void
 	alignment?: LabelAlignment
@@ -1477,6 +1492,7 @@ const LabelRow = ({
 	label,
 	value,
 	onChange,
+	onReset,
 	override,
 	onOverride,
 	alignment,
@@ -1555,6 +1571,14 @@ const LabelRow = ({
 							)}
 						</Disclosure.Button>
 					</div>
+					{onReset && (
+						<ResetLink
+							label="Reset to variable name"
+							className="self-end"
+							ariaLabel={`Reset ${label} to variable name`}
+							onClick={onReset}
+						/>
+					)}
 					<Disclosure.Panel className="mt-1">
 						<LabelStyleControls
 							override={override}
