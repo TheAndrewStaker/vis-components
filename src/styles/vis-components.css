@@ -672,4 +672,40 @@
 		height: max(18rem, 65vh);
 		min-height: 0;
 	}
+
+	/* Hover tooltip box (HoverTooltip). The renderer sets the user's box
+	 * choices as the --vc-tooltip-* custom properties inline (Auto colors
+	 * leave --vc-tooltip-outline / --vc-tooltip-fill unset so the light /
+	 * dark fallbacks below apply). The PROPERTIES live here, not inline, so
+	 * the Custom CSS box — a later `.vc-tooltip { … }` rule — still wins
+	 * per property the way it always has. Opacity applies to the fill
+	 * only; text stays opaque. The shadow sits half its size below the box
+	 * and blurs by its size; size 0 = no shadow. */
+	.vc-tooltip {
+		--vc-tooltip-auto-fill: #ffffff;
+		--vc-tooltip-auto-outline: var(--color-stone-200);
+		max-width: var(--vc-tooltip-max-width, 240px);
+		border-radius: var(--vc-tooltip-radius, 6px);
+		border: 1px solid
+			var(--vc-tooltip-outline, var(--vc-tooltip-auto-outline));
+		background-color: color-mix(
+			in srgb,
+			var(--vc-tooltip-fill, var(--vc-tooltip-auto-fill))
+				calc(var(--vc-tooltip-opacity, 1) * 100%),
+			transparent
+		);
+		box-shadow: 0 calc(var(--vc-tooltip-shadow, 12px) / 2)
+			var(--vc-tooltip-shadow, 12px) 0
+			color-mix(
+				in srgb,
+				var(--vc-tooltip-shadow-color, #000000)
+					calc(var(--vc-tooltip-shadow-opacity, 0.15) * 100%),
+				transparent
+			);
+		overflow-wrap: anywhere;
+	}
+	.dark .vc-tooltip {
+		--vc-tooltip-auto-fill: var(--color-stone-800);
+		--vc-tooltip-auto-outline: var(--color-stone-700);
+	}
 }

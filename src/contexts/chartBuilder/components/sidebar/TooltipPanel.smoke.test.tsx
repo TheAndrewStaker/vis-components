@@ -9,7 +9,8 @@ import {
 import { installInMemoryLocalStorage } from "../../../../testSupport/localStorageShim"
 import { EMPTY_CHANNEL_CONFIGS } from "../../lib/channelConfig"
 import { DEFAULT_TOOLTIP_CONFIG } from "../../lib/labelsConfig"
-import { emptyEncodings, type Encodings } from "../../lib/types"
+import { LIGHT_THEME_BASE } from "../../lib/systemThemes"
+import { emptyEncodings, type Encodings, type Theme } from "../../lib/types"
 import {
 	currentChannelConfigsAtom,
 	currentDatasetIdAtom,
@@ -19,6 +20,7 @@ import {
 	currentTooltipConfigAtom,
 	loadedDatasetsAtom,
 	previewVersionIdAtom,
+	themeAtom,
 } from "../../store/atoms"
 
 import { TooltipPanel } from "./TooltipPanel"
@@ -46,9 +48,12 @@ const dataset = () =>
 		],
 	})
 
-const mount = (encodings: Encodings) => {
+const mount = (encodings: Encodings, theme?: Partial<Theme>) => {
 	installInMemoryLocalStorage()
 	const init = (snap: TestStore) => {
+		// `currentThemeIdAtom` defaults null, so `useCurrentTheme` falls back
+		// to the legacy `themeAtom` — override it to test theme defaults.
+		if (theme) snap.set(themeAtom, { ...LIGHT_THEME_BASE, ...theme })
 		snap.set(loadedDatasetsAtom, { [ID]: dataset() })
 		snap.set(currentDatasetIdAtom, ID)
 		snap.set(previewVersionIdAtom, null)
@@ -103,5 +108,75 @@ describe("TooltipPanel — show tooltips only at points", () => {
 		expect(
 			(utils.getByLabelText(/only at points/i) as HTMLInputElement).checked
 		).toBe(true)
+	})
+})
+
+describe("TooltipPanel — box", () => {
+	const scatter = (): Encodings => ({
+		...emptyEncodings(),
+		x: { field: "x" },
+		y: { field: "y" },
+	})
+
+	it("offers the box controls, in order, under the Tooltips subsection", () => {
+		const utils = mount(scatter())
+		const text = utils.container.textContent ?? ""
+		const at = (label: string) => text.indexOf(label)
+		for (const label of [
+			"Box",
+			"Max width",
+			"Corner radius",
+			"Outline color",
+			"Background color",
+			"Background opacity",
+			"Shadow size",
+			"Shadow color",
+			"Shadow opacity",
+		])
+			expect(at(label), label).toBeGreaterThan(-1)
+		expect(at("Fields shown")).toBeLessThan(at("Box"))
+		expect(at("Max width")).toBeLessThan(at("Corner radius"))
+		expect(at("Corner radius")).toBeLessThan(at("Outline color"))
+		expect(at("Outline color")).toBeLessThan(at("Background color"))
+		expect(at("Background color")).toBeLessThan(at("Background opacity"))
+		expect(at("Background opacity")).toBeLessThan(at("Shadow size"))
+		expect(at("Shadow opacity")).toBeLessThan(at("Use custom HTML template"))
+	})
+
+	it("starts at the built-in theme's box, with the colors on Auto and no reset links", () => {
+		const utils = mount(scatter())
+		expect((utils.getByLabelText("Max width") as HTMLInputElement).value).toBe("240")
+		expect((utils.getByLabelText("Corner radius") as HTMLInputElement).value).toBe("6")
+		expect((utils.getByLabelText("Background opacity") as HTMLInputElement).value).toBe("1")
+		expect((utils.getByLabelText("Shadow size") as HTMLInputElement).value).toBe("12")
+		expect(utils.getAllByPlaceholderText("Auto").length).toBe(2)
+		expect(utils.queryByLabelText(/^Reset /)).toBeNull()
+	})
+
+	it("shows the theme's values live and pins a visual entry only when it deviates", () => {
+		const utils = mount(scatter(), { tooltipMaxWidth: 400, tooltipShadowSize: 0 })
+		const width = utils.getByLabelText("Max width") as HTMLInputElement
+		expect(width.value).toBe("400")
+		// The theme turned the shadow off: its color / opacity are hidden.
+		expect(utils.queryByLabelText("Shadow color")).toBeNull()
+
+		fireEvent.change(width, { target: { value: "300" } })
+		expect((utils.getByLabelText("Max width") as HTMLInputElement).value).toBe("300")
+		expect(utils.getByLabelText("Reset max width")).toBeTruthy()
+
+		// Reset drops the entry: the theme's value shows again, no link.
+		fireEvent.click(utils.getByLabelText("Reset max width"))
+		expect((utils.getByLabelText("Max width") as HTMLInputElement).value).toBe("400")
+		expect(utils.queryByLabelText("Reset max width")).toBeNull()
+
+		// Typing the theme's own value is the same as reset.
+		fireEvent.change(utils.getByLabelText("Max width"), { target: { value: "400" } })
+		expect(utils.queryByLabelText("Reset max width")).toBeNull()
+	})
+
+	it("is absent while tooltips are off", () => {
+		const utils = mount(scatter())
+		fireEvent.click(utils.getByLabelText(/show tooltips$/i))
+		expect(utils.queryByLabelText("Max width")).toBeNull()
 	})
 })

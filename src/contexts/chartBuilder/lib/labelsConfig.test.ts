@@ -27,6 +27,8 @@ import {
 	resolveTitlePrefixFont,
 	shownLegendTitle,
 	visibleLabels,
+	hasTooltipBoxOverride,
+	resolveTooltipBox,
 } from "./labelsConfig"
 
 /** Migration regressions on this code path are silent — the user clicks
@@ -904,5 +906,44 @@ describe("visibleLabels / shownLegendTitle", () => {
 				.hiddenTitles
 		).toEqual({ subtitle: true })
 		expect("hiddenTitles" in migrateLabelsConfig(typed)).toBe(false)
+	})
+})
+
+describe("resolveTooltipBox", () => {
+	const theme = {
+		tooltipMaxWidth: 240,
+		tooltipCornerRadius: 6,
+		tooltipOutlineColor: null,
+		tooltipBackgroundColor: "#222222",
+		tooltipBackgroundOpacity: 1,
+		tooltipShadowSize: 12,
+		tooltipShadowColor: "#000000",
+		tooltipShadowOpacity: 0.15,
+	}
+
+	it("an absent entry follows the theme", () => {
+		expect(resolveTooltipBox({}, theme)).toEqual({
+			maxWidth: 240,
+			cornerRadius: 6,
+			outlineColor: null,
+			backgroundColor: "#222222",
+			backgroundOpacity: 1,
+			shadowSize: 12,
+			shadowColor: "#000000",
+			shadowOpacity: 0.15,
+		})
+		expect(hasTooltipBoxOverride({})).toBe(false)
+	})
+
+	it("a present entry pins the visual; null is an explicit Auto over a theme color", () => {
+		const box = resolveTooltipBox(
+			{ tooltipMaxWidth: 300, tooltipBackgroundColor: null, tooltipShadowSize: 0 },
+			theme
+		)
+		expect(box.maxWidth).toBe(300)
+		expect(box.backgroundColor).toBeNull()
+		expect(box.shadowSize).toBe(0)
+		expect(box.cornerRadius).toBe(6)
+		expect(hasTooltipBoxOverride({ tooltipBackgroundColor: null })).toBe(true)
 	})
 })

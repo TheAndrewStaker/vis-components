@@ -240,6 +240,16 @@ export const LIGHT_THEME_BASE: Theme = {
 	legendSwatchSize: 5,
 	legendSwatchOutlineColor: null,
 	legendSwatchOutlineWidth: 0,
+	// Tooltip box: the historical look (240px cap, rounded-md, the UI's own
+	// surface + hairline, Tailwind's shadow-lg at roughly black 15%).
+	tooltipMaxWidth: 240,
+	tooltipCornerRadius: 6,
+	tooltipOutlineColor: null,
+	tooltipBackgroundColor: null,
+	tooltipBackgroundOpacity: 1,
+	tooltipShadowSize: 12,
+	tooltipShadowColor: "#000000",
+	tooltipShadowOpacity: 0.15,
 }
 
 /** Dark companion to LIGHT_THEME_BASE — same structure on a navy chart

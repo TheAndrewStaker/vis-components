@@ -1,16 +1,29 @@
 import type { CSSProperties } from "react"
 import { createPortal } from "react-dom"
 import { useAtomValue } from "jotai"
+import { contrastRatio } from "../../lib/accessibilityCheck"
 import {
 	DEFAULT_TOOLTIP_CONFIG,
+	resolveTooltipBox,
+	type ResolvedTooltipBox,
 	type TooltipConfig,
 } from "../../lib/labelsConfig"
 import { applyTooltipFormats } from "../../lib/tooltipFormats"
 import { currentTooltipConfigAtom } from "../../store/atoms"
 import { tooltipFieldFormatsAtom } from "../../store/renderConfigs"
+import { useCurrentTheme } from "../../store/useCurrentTheme"
 
-const TOOLTIP_MAX_WIDTH = 240
 const TOOLTIP_OFFSET = 12
+
+/** Text inks for a tooltip whose background the user set: whichever of
+ * near-black / white contrasts more with the fill, so a dark box doesn't
+ * print the light UI's dark text (or vice versa). */
+const INK_DARK = "#1c1917"
+const INK_LIGHT = "#ffffff"
+const inkFor = (background: string): string =>
+	contrastRatio(INK_LIGHT, background) >= contrastRatio(INK_DARK, background)
+		? INK_LIGHT
+		: INK_DARK
 
 export type TooltipState = {
 	/** Viewport-relative pointer X (from `event.clientX`). The tooltip
@@ -61,20 +74,46 @@ const renderTemplate = (
 
 /** Compose a `position: fixed` placement that keeps the tooltip on-screen
  * regardless of which corner of the chart the user is hovering. We assume
- * the tooltip is at most `TOOLTIP_MAX_WIDTH` wide and (heuristically) ~120
- * px tall — close enough to clamp against the right/bottom edges. */
-const clampToViewport = (clientX: number, clientY: number): CSSProperties => {
+ * the tooltip is at most `maxWidth` wide and (heuristically) ~120 px tall
+ * — close enough to clamp against the right/bottom edges. */
+const clampToViewport = (
+	clientX: number,
+	clientY: number,
+	maxWidth: number
+): CSSProperties => {
 	const view =
 		typeof window === "undefined" ? { innerWidth: 0, innerHeight: 0 } : window
 	// Prefer right-of-cursor, but flip when there isn't room.
-	const fitsRight =
-		clientX + TOOLTIP_OFFSET + TOOLTIP_MAX_WIDTH < view.innerWidth
+	const fitsRight = clientX + TOOLTIP_OFFSET + maxWidth < view.innerWidth
 	const left = fitsRight
 		? clientX + TOOLTIP_OFFSET
-		: Math.max(8, clientX - TOOLTIP_OFFSET - TOOLTIP_MAX_WIDTH)
+		: Math.max(8, clientX - TOOLTIP_OFFSET - maxWidth)
 	// Prefer just-above-cursor; clamp to viewport top/bottom.
 	const top = Math.max(8, Math.min(view.innerHeight - 16, clientY - 8))
-	return { left, top, maxWidth: TOOLTIP_MAX_WIDTH }
+	return { left, top }
+}
+
+/** The resolved box (visual over theme — `resolveTooltipBox`), handed to
+ * `.vc-tooltip` (vis-components.css) as custom properties. The box
+ * PROPERTIES stay in the stylesheet so the Custom CSS rule, which comes
+ * later in the cascade, still overrides them per property. Auto colors
+ * leave their property unset so the stylesheet's light / dark fallbacks
+ * apply. */
+const boxVars = (box: ResolvedTooltipBox): Record<string, string> => {
+	const vars: Record<string, string> = {
+		"--vc-tooltip-max-width": `${box.maxWidth}px`,
+		"--vc-tooltip-radius": `${box.cornerRadius}px`,
+		"--vc-tooltip-opacity": String(box.backgroundOpacity),
+		"--vc-tooltip-shadow": `${box.shadowSize}px`,
+		"--vc-tooltip-shadow-color": box.shadowColor,
+		"--vc-tooltip-shadow-opacity": String(box.shadowOpacity),
+	}
+	if (box.outlineColor) vars["--vc-tooltip-outline"] = box.outlineColor
+	if (box.backgroundColor) {
+		vars["--vc-tooltip-fill"] = box.backgroundColor
+		vars.color = inkFor(box.backgroundColor)
+	}
+	return vars
 }
 
 /** Shared hover tooltip used by every chart renderer. Filters fields against
@@ -93,6 +132,9 @@ export const HoverTooltip = ({ state }: { state: TooltipState }) => {
 	// Applied before BOTH render paths so a custom HTML template's
 	// `{{Sales}}` reads "$1,235" like the axis does.
 	const formats = useAtomValue(tooltipFieldFormatsAtom)
+	// The box follows the LIVE theme (Settings → Themes → Tooltips) wherever
+	// the visual hasn't pinned a setting of its own.
+	const box = resolveTooltipBox(cfg, useCurrentTheme())
 	if (!cfg.enabled) return null
 
 	const fields = applyTooltipFormats(state.fields, formats)
@@ -110,8 +152,12 @@ export const HoverTooltip = ({ state }: { state: TooltipState }) => {
 	const style: CSSProperties = {
 		position: "fixed",
 		zIndex: 9999,
-		...clampToViewport(state.clientX, state.clientY),
+		...clampToViewport(state.clientX, state.clientY, box.maxWidth),
+		...boxVars(box),
 	}
+	// A set background carries its own ink (see `boxVars`); the role
+	// classes would otherwise print the UI's text color onto it.
+	const ownInk = !!box.backgroundColor
 
 	// Custom HTML AND custom CSS are OPT-IN via `useCustomHtml`. Enabling
 	// the toggle seeds empty textareas with the defaults, but the checkbox
@@ -130,7 +176,7 @@ export const HoverTooltip = ({ state }: { state: TooltipState }) => {
 				<style>{`.vc-tooltip { ${cfg.customCss} }`}</style>
 			)}
 			<div
-				className="vc-tooltip pointer-events-none rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-sm shadow-lg dark:border-stone-700 dark:bg-stone-800"
+				className="vc-tooltip pointer-events-none px-2.5 py-1.5 text-sm"
 				style={style}
 			>
 				{customHtml ? (
@@ -138,12 +184,22 @@ export const HoverTooltip = ({ state }: { state: TooltipState }) => {
 					// `renderTemplate` before interpolation, so this is safe.
 					<div dangerouslySetInnerHTML={{ __html: interpolated }} />
 				) : (
+					// Rows WRAP: the name keeps its line, the value breaks across
+					// as many lines as it needs inside the box's max width. A long
+					// cell used to truncate to "…", which hid the one thing the
+					// user hovered to read.
 					filtered.map((f) => (
-						<div key={f.name} className="flex gap-2 whitespace-nowrap">
-							<span className="vc-muted">
+						<div key={f.name} className="flex gap-2">
+							<span className={ownInk ? "shrink-0 opacity-75" : "shrink-0 vc-muted"}>
 								{f.name}:
 							</span>
-							<span className="truncate font-medium vc-text">
+							<span
+								className={
+									ownInk
+										? "min-w-0 font-medium"
+										: "min-w-0 font-medium vc-text"
+								}
+							>
 								{String(f.value ?? "")}
 							</span>
 						</div>

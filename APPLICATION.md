@@ -3769,10 +3769,37 @@ textarea for styling the container. Both textareas are visible only
 while "Use custom HTML template" is checked, and neither the template
 nor the CSS applies while it's unchecked (contents are retained,
 inert). Enabling the toggle seeds empty HTML/CSS textareas with the
-default template and default CSS so the user edits from a working
-starting point (boxes with existing content are left alone); a
-"reset" link below each box — shown only when its content differs
-from the default — restores that default.
+default template and a CSS block that spells out the tooltip box as
+the Box controls (below) currently have it, so the user edits from a
+working starting point and switching the template on changes nothing
+visible (boxes with existing content are left alone); a "reset" link
+below each box — shown only when its content differs from that seed —
+restores it.
+
+**Text wraps.** A long value breaks across as many lines as it needs
+inside the box; nothing is cut to "…". The variable name keeps its
+line, the value wraps beside it.
+
+**The Box group** (a standard group header under a divider, between
+Fields shown and the custom-HTML toggle) styles the container every
+tooltip renders in — the default field list and a custom template
+alike: **Max width** (px — what the text wraps against), **Corner
+radius** (px), **Outline color** and **Background color** (Auto
+follows the light / dark UI: a white box with a light hairline, or
+dark stone with a darker one; a set background also flips the text to
+black or white, whichever reads on it), **Background opacity** (0–1;
+the text stays opaque), and a drop shadow: **Shadow size** (px — the
+blur; the shadow sits half that far below the box; 0 = none, which
+hides the two below), **Shadow color**, **Shadow opacity** (0–1).
+Every one of these starts from the theme (Settings → Themes →
+Tooltips, §14; the built-in look is 240px, 6px, Auto / Auto, opaque,
+and a 12px black shadow at 15%). A per-visual value is stored only
+when it differs from the theme — typing the theme's own value clears
+the override — and a reset link beside a pinned control drops it so a
+later theme edit flows through again; any pinned control lights the
+subsection's dot. The box properties live in the stylesheet and the
+Custom CSS rule comes later in the cascade, so custom CSS still
+overrides any of them per property, as before.
 
 **Values inherit each variable's format.** The tooltip has no Format
 controls of its own: every value prints with the format that variable
@@ -4507,6 +4534,15 @@ Theme settings:
   override only when a visual deviates. Themes saved before these
   fields existed fall back to the historical look (rectangle, 5px, no
   outline).
+- **Tooltips** — the hover tooltip's box: max width (what its text
+  wraps against), corner radius, outline color and background color
+  (each Auto — following the app's light / dark mode — or a custom
+  color), background opacity, and the drop shadow's size, color, and
+  opacity (size 0 = no shadow). Read live: the Tooltips panel's Box
+  group (§10) shows these values and stores an override only when a
+  visual deviates. Themes saved before these fields existed fall back
+  to the historical look (240px, 6px corners, Auto colors, opaque, a
+  12px black shadow at 15%).
 - **Maps** — default stroke (line color + thickness) for the leader
   lines that connect a map's data labels back to their regions ("Draw
   leader lines" in the Data Labels panel, §6). Seeded on chart

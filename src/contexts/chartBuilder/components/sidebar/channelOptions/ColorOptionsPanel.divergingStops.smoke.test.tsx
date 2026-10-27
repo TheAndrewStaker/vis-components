@@ -75,6 +75,14 @@ const baseTheme: Theme = {
 	legendSwatchSize: 5,
 	legendSwatchOutlineColor: null,
 	legendSwatchOutlineWidth: 0,
+	tooltipMaxWidth: 240,
+	tooltipCornerRadius: 6,
+	tooltipOutlineColor: null,
+	tooltipBackgroundColor: null,
+	tooltipBackgroundOpacity: 1,
+	tooltipShadowSize: 12,
+	tooltipShadowColor: "#000000",
+	tooltipShadowOpacity: 0.15,
 }
 
 const divergingCfg: Extract<HueConfig, { kind: "quantitative" }> = {

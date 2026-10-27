@@ -827,6 +827,31 @@ export type TooltipConfig = {
 	 * transparent). Resulting opacity multiplier is `1 - hoverFadeAmount`.
 	 * `undefined` → `0.85` (matched marks stay, others drop to ~15%). */
 	hoverFadeAmount?: number
+	/** Tooltip box — the container every tooltip (default field list OR a
+	 * custom HTML template) renders in. Every field here is SPARSE against
+	 * the theme (Settings → Themes → Tooltips): an absent entry follows the
+	 * theme live, a present one pins this visual. `resolveTooltipBox` is
+	 * the one chain. Text WRAPS inside the box; `tooltipMaxWidth` (px)
+	 * caps how wide it grows before wrapping. */
+	tooltipMaxWidth?: number
+	/** Corner radius in px. */
+	tooltipCornerRadius?: number
+	/** Outline (1px border) color. `null` = Auto: a light hairline in the
+	 * light UI, a dark one in the dark UI. */
+	tooltipOutlineColor?: string | null
+	/** Background fill. `null` = Auto: white in the light UI, dark stone in
+	 * the dark UI. A set color also flips the text ink to whichever of
+	 * black / white reads on it. */
+	tooltipBackgroundColor?: string | null
+	/** Background opacity 0–1 (text stays fully opaque). */
+	tooltipBackgroundOpacity?: number
+	/** Drop-shadow size in px (the blur; the shadow also sits half that far
+	 * below the box). `0` = no shadow. */
+	tooltipShadowSize?: number
+	/** Shadow color. */
+	tooltipShadowColor?: string
+	/** Shadow opacity 0–1. */
+	tooltipShadowOpacity?: number
 }
 
 /** Default recolor (fill) color for hover highlighting — a strong gold that
@@ -858,7 +883,70 @@ export const DEFAULT_TOOLTIP_CONFIG: TooltipConfig = {
 	hoverOutlineWidth: DEFAULT_HOVER_OUTLINE_WIDTH,
 	hoverFade: true,
 	hoverFadeAmount: 0.85,
+	// No tooltip-box entries: absent = follow the theme (`resolveTooltipBox`).
 }
+
+/** The per-visual tooltip-box keys — the sparse slice of `TooltipConfig`
+ * that the Tooltips panel's Box group writes and `resolveTooltipBox` reads. */
+export const TOOLTIP_BOX_KEYS = [
+	"tooltipMaxWidth",
+	"tooltipCornerRadius",
+	"tooltipOutlineColor",
+	"tooltipBackgroundColor",
+	"tooltipBackgroundOpacity",
+	"tooltipShadowSize",
+	"tooltipShadowColor",
+	"tooltipShadowOpacity",
+] as const satisfies ReadonlyArray<keyof TooltipConfig>
+
+export type TooltipBoxKey = (typeof TOOLTIP_BOX_KEYS)[number]
+
+/** Theme defaults the tooltip box falls back to. */
+export type TooltipBoxThemeDefaults = Pick<Theme, TooltipBoxKey>
+
+/** The tooltip box as it RENDERS: every setting resolved, visual first,
+ * then theme. */
+export type ResolvedTooltipBox = {
+	maxWidth: number
+	cornerRadius: number
+	outlineColor: string | null
+	backgroundColor: string | null
+	backgroundOpacity: number
+	shadowSize: number
+	shadowColor: string
+	shadowOpacity: number
+}
+
+/** The tooltip box a visual renders with: each setting the visual pinned,
+ * else the theme's. Colors distinguish `undefined` (follow the theme) from
+ * `null` (this visual says Auto even if the theme set a color). Same chain
+ * in the renderer, the sidebar, and the Custom CSS seed. */
+export const resolveTooltipBox = (
+	cfg: Pick<TooltipConfig, TooltipBoxKey>,
+	theme: TooltipBoxThemeDefaults
+): ResolvedTooltipBox => ({
+	maxWidth: cfg.tooltipMaxWidth ?? theme.tooltipMaxWidth,
+	cornerRadius: cfg.tooltipCornerRadius ?? theme.tooltipCornerRadius,
+	outlineColor:
+		cfg.tooltipOutlineColor === undefined
+			? theme.tooltipOutlineColor
+			: cfg.tooltipOutlineColor,
+	backgroundColor:
+		cfg.tooltipBackgroundColor === undefined
+			? theme.tooltipBackgroundColor
+			: cfg.tooltipBackgroundColor,
+	backgroundOpacity:
+		cfg.tooltipBackgroundOpacity ?? theme.tooltipBackgroundOpacity,
+	shadowSize: cfg.tooltipShadowSize ?? theme.tooltipShadowSize,
+	shadowColor: cfg.tooltipShadowColor ?? theme.tooltipShadowColor,
+	shadowOpacity: cfg.tooltipShadowOpacity ?? theme.tooltipShadowOpacity,
+})
+
+/** Whether a visual pins any tooltip-box setting (lights the Tooltips
+ * subsection's "changed" dot). */
+export const hasTooltipBoxOverride = (
+	cfg: Pick<TooltipConfig, TooltipBoxKey>
+): boolean => TOOLTIP_BOX_KEYS.some((k) => cfg[k] !== undefined)
 
 // ---------------------------------------------------------------------------
 // Labels config

@@ -4,10 +4,13 @@ import {
 	DEFAULT_HOVER_OUTLINE_COLOR,
 	DEFAULT_HOVER_OUTLINE_WIDTH,
 	DEFAULT_TOOLTIP_CONFIG,
+	hasTooltipBoxOverride,
+	resolveTooltipBox,
+	type TooltipBoxKey,
 	type TooltipConfig,
 } from "../../lib/labelsConfig"
 import {
-	DEFAULT_TOOLTIP_CSS,
+	buildDefaultTooltipCss,
 	buildDefaultTooltipHtml,
 } from "../../lib/tooltipDefaults"
 import { ALL_ENCODING_CHANNELS } from "../../lib/channels"
@@ -16,19 +19,21 @@ import {
 	currentTooltipConfigAtom,
 } from "../../store/atoms"
 import { useChartModeDef } from "../../store/useChartModeDef"
+import { useCurrentTheme } from "../../store/useCurrentTheme"
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
 import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
 import { Checkbox } from "../../../../components/ui/Checkbox"
 import { ColorInput } from "../../../../components/ui/ColorInput"
-import { LABEL_COL_NESTED } from "../../../../components/ui/LabeledField"
+import { LABEL_COL, LABEL_COL_NESTED } from "../../../../components/ui/LabeledField"
 import { NumberInput } from "../../../../components/ui/NumberInput"
 import { ResetLink } from "../../../../components/ui/ResetLink"
 import { Textarea } from "../../../../components/ui/Input"
 
 /** Sidebar panel for the tooltip subsystem. Drives `TooltipConfig` —
  * enable toggle, per-field visibility (drawn from the dataset, including
- * fields not currently mapped to any encoding), and a CSS escape hatch for
- * users who want to restyle the tooltip container. */
+ * fields not currently mapped to any encoding), the tooltip box's look
+ * (max width, corner radius, outline, background, opacity), and a CSS
+ * escape hatch for users who want to restyle the container further. */
 export const TooltipPanel = () => {
 	const [cfg, setCfg] = useAtom(currentTooltipConfigAtom)
 	const dataset = useCurrentDatasetView()
@@ -45,6 +50,12 @@ export const TooltipPanel = () => {
 
 	const update = (next: Partial<TooltipConfig>) =>
 		setCfg({ ...merged, ...next })
+	/** Drop a sparse entry so the setting follows the theme again. */
+	const unset = (key: TooltipBoxKey) => {
+		const next = { ...merged }
+		delete next[key]
+		setCfg(next)
+	}
 
 	const allFields = dataset?.fields ?? []
 	// Per APPLICATION.md §10 + §15.5: the Fields-shown list always
@@ -57,6 +68,37 @@ export const TooltipPanel = () => {
 	// for symmetry and custom-template authoring.
 	const mappedFieldNames = allFields.map((f) => f.name)
 	const defaultHtml = buildDefaultTooltipHtml(mappedFieldNames)
+	// Tooltip box: the visual's entries over the theme's Tooltips sheet
+	// (`resolveTooltipBox`). Entries are SPARSE — the controls show the
+	// resolved value, write an entry only when it differs from the theme,
+	// and the reset link drops the entry so the theme flows through again.
+	const theme = useCurrentTheme()
+	const box = resolveTooltipBox(merged, theme)
+	const boxChanged = hasTooltipBoxOverride(merged)
+	const pinned = (key: TooltipBoxKey) => merged[key] !== undefined
+	/** Write a box number: the theme's own value clears the entry. */
+	const setBoxNumber = (
+		key: Extract<
+			TooltipBoxKey,
+			| "tooltipMaxWidth"
+			| "tooltipCornerRadius"
+			| "tooltipBackgroundOpacity"
+			| "tooltipShadowSize"
+			| "tooltipShadowOpacity"
+		>,
+		n: number
+	) => (n === theme[key] ? unset(key) : update({ [key]: n }))
+	/** Write a box color (`null` = Auto): the theme's own value clears it. */
+	const setBoxColor = (
+		key: Extract<
+			TooltipBoxKey,
+			"tooltipOutlineColor" | "tooltipBackgroundColor" | "tooltipShadowColor"
+		>,
+		c: string | null
+	) => (c === theme[key] ? unset(key) : update({ [key]: c }))
+	// The Custom CSS seed mirrors the box as it stands, so turning the
+	// template on changes nothing visible.
+	const defaultCss = buildDefaultTooltipCss(box)
 	// Surface any encoding-referenced field that ISN'T in the current
 	// dataset's field list. If something's mapped that isn't a column
 	// we know about (renamed column, dataset swap, etc.), it would
@@ -120,7 +162,8 @@ export const TooltipPanel = () => {
 		(merged.enabled &&
 			(merged.visibleFields.length > 0 ||
 				!!merged.useCustomHtml ||
-				!!merged.pointsOnly))
+				!!merged.pointsOnly ||
+				boxChanged))
 	const hoverChanged =
 		!hoverEnabled ||
 		!legendHighlight ||
@@ -149,8 +192,7 @@ export const TooltipPanel = () => {
 					/>
 					<p className="vc-help">
 						Between the points a line draws, the tooltip shows only that
-						line&apos;s {encodings.connection?.field} &mdash; and nothing
-						at all unless it&apos;s checked below.
+						line&apos;s {encodings.connection?.field}.
 					</p>
 				</>
 			)}
@@ -178,6 +220,163 @@ export const TooltipPanel = () => {
 			)}
 			{merged.enabled && (
 				<div className="vc-divider-group">
+					<span className="vc-group-header">Box</span>
+					<div className="flex items-center gap-2">
+						<NumberInput
+							label="Max width"
+							labelClassName={LABEL_COL}
+							value={box.maxWidth}
+							min={40}
+							step={10}
+							clamp
+							suffix="px"
+							onChange={(n) => setBoxNumber("tooltipMaxWidth", Math.max(n, 40))}
+						/>
+						{pinned("tooltipMaxWidth") && (
+							<ResetLink
+								ariaLabel="Reset max width"
+								onClick={() => unset("tooltipMaxWidth")}
+							/>
+						)}
+					</div>
+					<div className="flex items-center gap-2">
+						<NumberInput
+							label="Corner radius"
+							labelClassName={LABEL_COL}
+							value={box.cornerRadius}
+							min={0}
+							step={1}
+							clamp
+							suffix="px"
+							onChange={(n) =>
+								setBoxNumber("tooltipCornerRadius", Math.max(n, 0))
+							}
+						/>
+						{pinned("tooltipCornerRadius") && (
+							<ResetLink
+								ariaLabel="Reset corner radius"
+								onClick={() => unset("tooltipCornerRadius")}
+							/>
+						)}
+					</div>
+					<div className="flex items-center gap-2">
+						<ColorInput
+							label="Outline color"
+							labelClassName={LABEL_COL}
+							value={box.outlineColor}
+							placeholder="Auto"
+							onChange={(c) => setBoxColor("tooltipOutlineColor", c)}
+							onClear={() => setBoxColor("tooltipOutlineColor", null)}
+						/>
+						{pinned("tooltipOutlineColor") && (
+							<ResetLink
+								ariaLabel="Reset outline color"
+								onClick={() => unset("tooltipOutlineColor")}
+							/>
+						)}
+					</div>
+					<div className="flex items-center gap-2">
+						<ColorInput
+							label="Background color"
+							labelClassName={LABEL_COL}
+							value={box.backgroundColor}
+							placeholder="Auto"
+							onChange={(c) => setBoxColor("tooltipBackgroundColor", c)}
+							onClear={() => setBoxColor("tooltipBackgroundColor", null)}
+						/>
+						{pinned("tooltipBackgroundColor") && (
+							<ResetLink
+								ariaLabel="Reset background color"
+								onClick={() => unset("tooltipBackgroundColor")}
+							/>
+						)}
+					</div>
+					<div className="flex items-center gap-2">
+						<NumberInput
+							label="Background opacity"
+							labelClassName={LABEL_COL}
+							value={box.backgroundOpacity}
+							min={0}
+							max={1}
+							step={0.05}
+							clamp
+							onChange={(n) =>
+								setBoxNumber(
+									"tooltipBackgroundOpacity",
+									Math.min(Math.max(n, 0), 1)
+								)
+							}
+						/>
+						{pinned("tooltipBackgroundOpacity") && (
+							<ResetLink
+								ariaLabel="Reset background opacity"
+								onClick={() => unset("tooltipBackgroundOpacity")}
+							/>
+						)}
+					</div>
+					<div className="flex items-center gap-2">
+						<NumberInput
+							label="Shadow size"
+							labelClassName={LABEL_COL}
+							value={box.shadowSize}
+							min={0}
+							step={1}
+							clamp
+							suffix="px"
+							onChange={(n) => setBoxNumber("tooltipShadowSize", Math.max(n, 0))}
+						/>
+						{pinned("tooltipShadowSize") && (
+							<ResetLink
+								ariaLabel="Reset shadow size"
+								onClick={() => unset("tooltipShadowSize")}
+							/>
+						)}
+					</div>
+					{box.shadowSize > 0 && (
+						<>
+							<div className="flex items-center gap-2">
+								<ColorInput
+									label="Shadow color"
+									labelClassName={LABEL_COL}
+									value={box.shadowColor}
+									onChange={(c) => setBoxColor("tooltipShadowColor", c)}
+								/>
+								{pinned("tooltipShadowColor") && (
+									<ResetLink
+										ariaLabel="Reset shadow color"
+										onClick={() => unset("tooltipShadowColor")}
+									/>
+								)}
+							</div>
+							<div className="flex items-center gap-2">
+								<NumberInput
+									label="Shadow opacity"
+									labelClassName={LABEL_COL}
+									value={box.shadowOpacity}
+									min={0}
+									max={1}
+									step={0.05}
+									clamp
+									onChange={(n) =>
+										setBoxNumber(
+											"tooltipShadowOpacity",
+											Math.min(Math.max(n, 0), 1)
+										)
+									}
+								/>
+								{pinned("tooltipShadowOpacity") && (
+									<ResetLink
+										ariaLabel="Reset shadow opacity"
+										onClick={() => unset("tooltipShadowOpacity")}
+									/>
+								)}
+							</div>
+						</>
+					)}
+				</div>
+			)}
+			{merged.enabled && (
+				<div className="vc-divider-group">
 					<Checkbox
 						label="Use custom HTML template"
 						checked={!!merged.useCustomHtml}
@@ -191,7 +390,7 @@ export const TooltipPanel = () => {
 									? { customHtml: defaultHtml }
 									: {}),
 								...(on && !merged.customCss
-									? { customCss: DEFAULT_TOOLTIP_CSS }
+									? { customCss: defaultCss }
 									: {}),
 							})
 						}}
@@ -229,9 +428,9 @@ export const TooltipPanel = () => {
 							className="font-mono"
 						/>
 						<div className="flex items-start justify-between gap-2">
-							{merged.customCss !== "" && merged.customCss !== DEFAULT_TOOLTIP_CSS && (
+							{merged.customCss !== "" && merged.customCss !== defaultCss && (
 								<ResetLink
-									onClick={() => update({ customCss: DEFAULT_TOOLTIP_CSS })}
+									onClick={() => update({ customCss: defaultCss })}
 								/>
 							)}
 						</div>

@@ -840,6 +840,28 @@ export type Theme = {
 	/** Default outline width (px) around legend swatches; `0` = no outline.
 	 * Per-visual override: `LegendConfig.swatchOutlineWidths`. */
 	legendSwatchOutlineWidth: number
+	/** Settings → Themes → Tooltips: the box every hover tooltip renders in.
+	 * Per-visual overrides live in `TooltipConfig.tooltip*` (an absent entry
+	 * follows the theme; `resolveTooltipBox` in labelsConfig.ts is the one
+	 * chain the renderer, the sidebar, and the Custom CSS seed read). */
+	/** Cap on tooltip width (px) before its text wraps. */
+	tooltipMaxWidth: number
+	/** Corner radius (px). */
+	tooltipCornerRadius: number
+	/** Outline (1px border) color. `null` = Auto: follows the light / dark UI. */
+	tooltipOutlineColor: string | null
+	/** Background fill. `null` = Auto: white in the light UI, dark stone in
+	 * the dark UI. A set color also flips the text ink to black / white. */
+	tooltipBackgroundColor: string | null
+	/** Background opacity 0–1; text stays opaque. */
+	tooltipBackgroundOpacity: number
+	/** Drop-shadow size (px, the blur; it also sits the shadow half that far
+	 * below the box). `0` = no shadow. */
+	tooltipShadowSize: number
+	/** Shadow color. */
+	tooltipShadowColor: string
+	/** Shadow opacity 0–1. */
+	tooltipShadowOpacity: number
 	/** Settings → Themes → Exporting: default fixed-canvas margins (px,
 	 * sparse per side — an absent side is auto). A visual with a canvas
 	 * size inherits each side it hasn't set itself
