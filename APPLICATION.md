@@ -4768,7 +4768,13 @@ on the way through so the cost is paid once. While rows are in flight
 the canvas shows a distinct loading state and must NOT mount the plot
 SVG (the thumbnail capture pipeline reads any non-zero-sized plot SVG
 as a finished chart, so an empty one would be saved as a blank
-preview). Saves are upsert-only — the in-memory record is a subset of
+preview). Once mounted, the plot SVG carries `data-unmeasured` until
+its container has reported a size — for one frame after mount, and
+for as long as the host is hidden — because the solver has no room
+then and collapses the canvas to its chrome; every capture (the
+autosave thumbnail, the library's offscreen refresh, image export)
+refuses that frame, the autosave keeping the old picture and stamp so
+the library re-renders it instead. Saves are upsert-only — the in-memory record is a subset of
 the store, so absence never implies deletion; deleting a dataset is an
 explicit operation that removes its body, its per-version rows, and
 its index entry together. Deleting a single VERSION propagates too: a
@@ -4976,7 +4982,12 @@ one at a time, and its new picture stored without touching
 `updatedAt`. "Provably stale" means the stamp is behind the visual's
 last save (a save mid-render keeps the old picture and the old stamp),
 behind the data set's latest version, or absent altogether (saved
-before stamps existed). The card being re-rendered shows a small
+before stamps existed) — or, whatever the stamp says, the stored
+picture is far too small to be a capture of the chart (its longest
+edge under 60% of the 480px every capture scales to, or of a smaller
+fixed canvas's own longest edge): the mark of a capture taken from the
+chart's unmeasured first frame by older builds, which the offscreen
+re-render replaces once. The card being re-rendered shows a small
 spinning refresh badge over its picture, and reads "Rendering
 preview…" in place of "No preview". Each visual is attempted once per
 session per (save, data version), so one that can't render doesn't

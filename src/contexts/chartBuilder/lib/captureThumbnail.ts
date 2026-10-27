@@ -197,27 +197,33 @@ export const serializeChartSvg = (doc: Document = document): string | null => {
  *  silence. */
 export const STABLE_POLLS = 3
 
+/** PlotCanvas stamps this on the plot SVG while its container has not been
+ *  measured yet (0×0 bounds: the frame between mount and the first
+ *  ResizeObserver report, or a hidden host). The solver then has no room
+ *  to lay out in and collapses the canvas to its chrome — a ~150px box with
+ *  full-size text — which a capture must never mistake for the chart. */
+export const UNMEASURED_ATTR = "data-unmeasured"
+
+const panelSized = (panel: Element): boolean => {
+	if (panel.hasAttribute(UNMEASURED_ATTR)) return false
+	const r = panel.getBoundingClientRect()
+	return r.width > 0 && r.height > 0
+}
+
 /** True once the chart's layout is worth serializing: the capture target
- *  exists with a real size, and — for faceted charts — EVERY panel has one
- *  (the grid gets its size before the individual panels finish mounting). */
+ *  exists with a real size, was solved for a MEASURED container (see
+ *  `UNMEASURED_ATTR`), and — for faceted charts — EVERY panel has one (the
+ *  grid gets its size before the individual panels finish mounting). */
 export const chartLayoutReady = (doc: Document): boolean => {
 	const grid = doc.querySelector<HTMLElement>("[data-facet-grid]")
 	if (grid) {
 		const gridRect = grid.getBoundingClientRect()
 		if (gridRect.width === 0 || gridRect.height === 0) return false
 		const panels = [...grid.querySelectorAll<SVGSVGElement>(`#${PLOT_SVG_ID}`)]
-		return (
-			panels.length > 0 &&
-			panels.every((panel) => {
-				const r = panel.getBoundingClientRect()
-				return r.width > 0 && r.height > 0
-			})
-		)
+		return panels.length > 0 && panels.every(panelSized)
 	}
 	const svg = doc.querySelector<SVGSVGElement>(`#${PLOT_SVG_ID}`)
-	if (!svg) return false
-	const rect = svg.getBoundingClientRect()
-	return rect.width > 0 && rect.height > 0
+	return !!svg && panelSized(svg)
 }
 
 // ---------------------------------------------------------------------------
@@ -589,8 +595,11 @@ export const serializeEmbedCapture = (
 /** Longest-edge target for rasterized thumbnails. Library cards display
  *  roughly 320×240 logical px; 480 gives 1.5× headroom for hi-DPI displays
  *  while keeping each PNG under ~15KB. Thumbnails persist in IndexedDB (see
- *  storage.ts), so the ceiling is about load time, not storage quota. */
-const MAX_THUMBNAIL_DIM = 480
+ *  storage.ts), so the ceiling is about load time, not storage quota. The
+ *  capture only ever scales DOWN, so a stored thumbnail's longest edge is
+ *  exactly this unless the chart itself was smaller — which is how the
+ *  library spots a capture of a collapsed frame (`thumbnailBackfill`). */
+export const MAX_THUMBNAIL_DIM = 480
 
 /** Rasterize an SVG (provided as a data URL) into a PNG data URL via an
  *  offscreen canvas. Resolves `null` if the image fails to load, the SVG
@@ -677,7 +686,15 @@ const withoutDisplayScale = <T>(doc: Document, fn: () => T): T => {
 const captureThumbnailFromDocument = async (
 	doc: Document
 ): Promise<string | null> => {
-	const svgText = withoutDisplayScale(doc, () => serializeChartSvg(doc))
+	// Same readiness bar as the offscreen pollers. Autosave fires 800ms
+	// after an edit, which on a slow data-set load is exactly when the chart
+	// has just mounted and painted its one unmeasured frame; capturing that
+	// stored a collapsed, giant-text preview with a current stamp, which the
+	// library's refresh then trusted. Null keeps the old picture and the
+	// old stamp, so the refresh re-renders it offscreen instead.
+	const svgText = withoutDisplayScale(doc, () =>
+		chartLayoutReady(doc) ? serializeChartSvg(doc) : null
+	)
 	if (!svgText) return null
 	return thumbnailFromChartSvgText(svgText)
 }

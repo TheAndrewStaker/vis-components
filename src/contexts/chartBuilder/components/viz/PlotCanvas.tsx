@@ -902,6 +902,15 @@ export const PlotCanvas = ({
 			height={svgHeight}
 			className="block"
 			overflow="visible"
+			// The container measures 0×0 for one frame after mount (the
+			// ResizeObserver reports after the first paint) and for as long as
+			// the host is hidden; the solver then collapses the canvas to its
+			// chrome and this SVG paints full-size text in a ~150px box. The
+			// marker lets every capture (autosave thumbnail, offscreen refresh,
+			// export) refuse that frame — see `chartLayoutReady`.
+			data-unmeasured={
+				bounds.width === 0 || bounds.height === 0 ? "" : undefined
+			}
 			role="img"
 			aria-labelledby={description ? descId : undefined}
 			aria-label={description ? undefined : "Chart"}

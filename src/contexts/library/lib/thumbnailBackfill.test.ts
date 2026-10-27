@@ -15,6 +15,18 @@ import {
 
 const THUMB = "data:image/png;base64,x"
 
+/** A PNG data URL whose header declares `width`×`height` (header only —
+ *  `thumbnailIsStale` reads nothing past it). */
+const png = (width: number, height: number): string => {
+	const bytes = Buffer.alloc(32)
+	Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes, 0)
+	bytes.writeUInt32BE(13, 8)
+	bytes.write("IHDR", 12, "ascii")
+	bytes.writeUInt32BE(width, 16)
+	bytes.writeUInt32BE(height, 20)
+	return `data:image/png;base64,${bytes.toString("base64")}`
+}
+
 const mkVisual = (overrides: Partial<Visual> = {}): Visual => ({
 	id: "vis-1",
 	name: "Kinds of Cats",
@@ -113,6 +125,66 @@ describe("thumbnailIsStale", () => {
 		)
 		expect(
 			thumbnailIsStale(mkVisual({ datasetId: "ds-gone" }), datasets)
+		).toBe(false)
+	})
+
+	// Regression: an autosave used to snapshot the chart's one unmeasured
+	// frame (solver with no room → canvas collapsed to its chrome) and store
+	// a ~150px giant-text picture WITH a current stamp, so the stamp rules
+	// alone never retired it.
+	it("is stale when the picture is far too small to be a capture of the chart, whatever the stamp", () => {
+		const fresh = { thumbnailAt: 10, updatedAt: 10 }
+		expect(
+			thumbnailIsStale(mkVisual({ ...fresh, thumbnail: png(120, 189) }), datasets)
+		).toBe(true)
+		// A real capture: the longest edge is the 480px ceiling.
+		expect(
+			thumbnailIsStale(mkVisual({ ...fresh, thumbnail: png(480, 348) }), datasets)
+		).toBe(false)
+		expect(
+			thumbnailIsStale(mkVisual({ ...fresh, thumbnail: png(322, 480) }), datasets)
+		).toBe(false)
+	})
+
+	it("judges a fixed canvas against its own size, so a small canvas is not re-rendered forever", () => {
+		const fresh = { thumbnailAt: 10, updatedAt: 10 }
+		const fixed = (width: number, height: number) => ({
+			...EMPTY_CHANNEL_CONFIGS,
+			canvasSize: { enabled: true, width, height },
+		})
+		// 200×150 canvas captured at 200×150 (minus nothing): a real capture.
+		expect(
+			thumbnailIsStale(
+				mkVisual({ ...fresh, thumbnail: png(200, 150), channelConfigs: fixed(200, 150) }),
+				datasets
+			)
+		).toBe(false)
+		// A 1000×700 canvas whose picture is 150×100 was never that canvas.
+		expect(
+			thumbnailIsStale(
+				mkVisual({ ...fresh, thumbnail: png(150, 100), channelConfigs: fixed(1000, 700) }),
+				datasets
+			)
+		).toBe(true)
+		// A disabled canvas size is a fluid chart.
+		expect(
+			thumbnailIsStale(
+				mkVisual({
+					...fresh,
+					thumbnail: png(150, 100),
+					channelConfigs: { ...EMPTY_CHANNEL_CONFIGS, canvasSize: { enabled: false, width: 100, height: 100 } },
+				}),
+				datasets
+			)
+		).toBe(true)
+	})
+
+	it("does not judge a picture it cannot read", () => {
+		expect(
+			thumbnailIsStale(
+				mkVisual({ thumbnail: "https://example.test/t.png", thumbnailAt: 10, updatedAt: 10 }),
+				datasets
+			)
 		).toBe(false)
 	})
 })

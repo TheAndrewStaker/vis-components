@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest"
 
 import {
 	PLOT_SVG_ID,
+	UNMEASURED_ATTR,
+	captureThumbnail,
+	chartLayoutReady,
 	serializeChartSvg,
 	serializeEmbedCapture,
 } from "./captureThumbnail"
@@ -98,5 +101,58 @@ describe("exported accessible name", () => {
 		const nested = root.querySelector("svg")!
 		expect(nested.hasAttribute("role")).toBe(false)
 		expect(nested.hasAttribute("aria-labelledby")).toBe(false)
+	})
+})
+
+describe("chartLayoutReady", () => {
+	const sized = { left: 0, top: 0, width: 400, height: 300 }
+
+	it("accepts a sized plot SVG solved for a measured container", () => {
+		document.body.innerHTML = `<svg id="${PLOT_SVG_ID}" width="400" height="300"></svg>`
+		stubRect(document.querySelector(`#${PLOT_SVG_ID}`)!, sized)
+		expect(chartLayoutReady(document)).toBe(true)
+	})
+
+	// The frame between PlotCanvas mounting and its ResizeObserver's first
+	// report: the SVG has a real rect, but it was solved for a 0×0
+	// container and shows full-size text in a collapsed canvas.
+	it("refuses the unmeasured frame even though it has a size", () => {
+		document.body.innerHTML = `<svg id="${PLOT_SVG_ID}" width="120" height="189" ${UNMEASURED_ATTR}=""></svg>`
+		stubRect(document.querySelector(`#${PLOT_SVG_ID}`)!, sized)
+		expect(chartLayoutReady(document)).toBe(false)
+	})
+
+	it("refuses a facet grid while any panel is unmeasured", () => {
+		document.body.innerHTML = `
+			<div data-facet-grid>
+				<svg id="${PLOT_SVG_ID}" width="200" height="150"></svg>
+				<svg id="${PLOT_SVG_ID}" width="200" height="150" ${UNMEASURED_ATTR}=""></svg>
+			</div>`
+		stubRect(document.querySelector("[data-facet-grid]")!, sized)
+		for (const svg of document.querySelectorAll(`#${PLOT_SVG_ID}`)) {
+			stubRect(svg, { left: 0, top: 0, width: 200, height: 150 })
+		}
+		expect(chartLayoutReady(document)).toBe(false)
+	})
+})
+
+describe("captureThumbnail (autosave path)", () => {
+	// Regression: the autosave captured the unmeasured frame and stored a
+	// collapsed, giant-text preview with a current stamp. Null keeps the old
+	// picture and stamp, so the library's refresh re-renders it offscreen.
+	it("resolves null on the unmeasured frame instead of rasterizing it", async () => {
+		document.body.innerHTML = `<svg id="${PLOT_SVG_ID}" width="120" height="189" ${UNMEASURED_ATTR}=""></svg>`
+		stubRect(document.querySelector(`#${PLOT_SVG_ID}`)!, {
+			left: 0,
+			top: 0,
+			width: 120,
+			height: 189,
+		})
+		await expect(captureThumbnail()).resolves.toBeNull()
+	})
+
+	it("resolves null while the plot SVG has no layout rect", async () => {
+		document.body.innerHTML = `<svg id="${PLOT_SVG_ID}" width="400" height="300"></svg>`
+		await expect(captureThumbnail()).resolves.toBeNull()
 	})
 })

@@ -23,11 +23,13 @@
  * SYNCHRONOUSLY inside `abort()` (see `runSequentially`). */
 
 import {
+	MAX_THUMBNAIL_DIM,
 	STABLE_POLLS,
 	chartLayoutReady,
 	serializeChartSvg,
 	thumbnailFromChartSvgText,
 } from "../../chartBuilder/lib/captureThumbnail"
+import { pngDataUrlDimensions } from "../../chartBuilder/lib/pngDimensions"
 import {
 	restoreDraftState,
 	snapshotDraftState,
@@ -55,6 +57,36 @@ const renderSource = (
 ): DatasetLike | undefined =>
 	visual.datasetId === null ? undefined : datasets[visual.datasetId]
 
+/** A stored picture this much smaller than a capture of the chart could
+ *  be is a capture of something else. Ratio, not pixels: a legitimately
+ *  small fixed canvas captures small (margins come off its edges too),
+ *  while a collapsed frame is a fraction of ANY real chart. */
+const TRUNCATED_CAPTURE_RATIO = 0.6
+
+/** Whether the stored picture is far too small to be a capture of this
+ *  chart. Before captures refused it (see `UNMEASURED_ATTR` in
+ *  captureThumbnail.ts), an autosave could snapshot the plot SVG in the one
+ *  frame before its container was measured: the solver had no room, the
+ *  canvas collapsed to its chrome, and a ~150px box of giant clipped text
+ *  was stored WITH a current stamp. The capture never scales up, so such a
+ *  picture is a fraction of the `MAX_THUMBNAIL_DIM` longest edge every
+ *  real capture has — or, for a fixed canvas smaller than that, of the
+ *  canvas's own longest edge. Undecodable pictures (a URL, a foreign
+ *  format) are not judged: they are whatever the store holds. */
+const thumbnailLooksTruncated = (visual: Visual): boolean => {
+	if (!visual.thumbnail) return false
+	const dims = pngDataUrlDimensions(visual.thumbnail)
+	if (!dims) return false
+	const canvas = visual.channelConfigs?.canvasSize
+	const expected =
+		canvas?.enabled && canvas.width > 0 && canvas.height > 0
+			? Math.min(MAX_THUMBNAIL_DIM, Math.max(canvas.width, canvas.height))
+			: MAX_THUMBNAIL_DIM
+	return (
+		Math.max(dims.width, dims.height) < expected * TRUNCATED_CAPTURE_RATIO
+	)
+}
+
 /** Whether `visual`'s preview is missing, or provably older than what the
  *  visual draws today. The stamp (`thumbnailAt`) moves only with a capture
  *  that produced a picture, so three situations read as stale:
@@ -63,8 +95,12 @@ const renderSource = (
  *   - stamp behind the data set's latest version — new data was appended
  *     and the visual draws it, but no capture has seen it;
  *   - no stamp at all — saved before stamps existed, never verified.
- *  A visual without a renderable data set is never stale: nothing could
- *  replace its picture anyway. */
+ *  A fourth reads as stale whatever the stamp says: a picture far too small
+ *  to be a capture of the chart (`thumbnailLooksTruncated`), which an older
+ *  autosave could store from the chart's unmeasured first frame. The
+ *  offscreen re-render replaces it with a full-size one, and the stamp
+ *  moves. A visual without a renderable data set is never stale: nothing
+ *  could replace its picture anyway. */
 export const thumbnailIsStale = (
 	visual: Visual,
 	datasets: Record<string, DatasetLike>
@@ -75,7 +111,8 @@ export const thumbnailIsStale = (
 	const stamp = visual.thumbnailAt
 	if (stamp === undefined || stamp < visual.updatedAt) return true
 	const dataAt = latestVersionCreatedAt(dataset)
-	return dataAt !== undefined && stamp < dataAt
+	if (dataAt !== undefined && stamp < dataAt) return true
+	return thumbnailLooksTruncated(visual)
 }
 
 /** Visuals the bulk header button acts on: no thumbnail at all, and a data

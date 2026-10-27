@@ -124,6 +124,16 @@ describe("PlotCanvas — single-SVG renderer", () => {
 		expect(container.querySelector("svg#vc-scatter-svg")).not.toBeNull()
 	})
 
+	// happy-dom never measures, so this is the state every browser passes
+	// through for one frame after mount: the SVG is there (tests and the
+	// loading-state guards rely on that) but flagged, so no capture takes it.
+	it("flags the <svg> as unmeasured while its container has no size", () => {
+		seed({ faceted: false })
+		const { container } = mountChartCanvas()
+		const svg = container.querySelector("svg#vc-scatter-svg")
+		expect(svg?.hasAttribute("data-unmeasured")).toBe(true)
+	})
+
 	it("renders per-panel data-panel-key markers for each facet value", () => {
 		seed({ faceted: true })
 		const { container } = mountChartCanvas()
