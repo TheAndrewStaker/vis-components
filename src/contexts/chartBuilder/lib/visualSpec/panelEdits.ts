@@ -54,8 +54,9 @@ export type PanelContext = {
 export type PanelEdits = {
 	patch: SettingsPatch
 	problems: SpecProblem[]
-	/** The applied visual, finished as the panels finish it. */
-	finish: (visual: Visual) => Visual
+	/** The applied visual, finished as the panels finish it, with what
+	 *  finishing it found wrong. */
+	finish: (visual: Visual) => { visual: Visual; problems: SpecProblem[] }
 	/** An id for a new entry of the list at `path`, as the panel adding it
 	 *  makes one; undefined leaves it to the settings default. */
 	newId: (path: string) => string | undefined
@@ -131,6 +132,7 @@ export const panelEdits = (patch: SettingsPatch, ctx: PanelContext): PanelEdits 
 	const problems: SpecProblem[] = []
 	const out: Record<string, unknown> = { ...patch }
 	const finishers: Array<(v: Visual) => Visual> = []
+	const finishProblems: SpecProblem[] = []
 
 	if (isRecord(out.annotationsConfig)) {
 		out.annotationsConfig = withNewAnnotations(out.annotationsConfig, ctx.theme)
@@ -144,6 +146,17 @@ export const panelEdits = (patch: SettingsPatch, ctx: PanelContext): PanelEdits 
 	const barTotal = barTotalFieldName(ctx.fieldNames)
 	if (labels && value) {
 		const fields = Array.isArray(value.fields) && value.fields.every((f) => typeof f === "string") ? (value.fields as string[]) : undefined
+		// A field checked twice would add its `{Field}` label twice, under
+		// one id the Value panel edits and removes both by.
+		fields?.forEach((f, i) => {
+			const first = fields.indexOf(f)
+			if (first !== i) {
+				problems.push({
+					path: `${pathOf("settings", "dataLabelsEncodings", "value", "fields")}[${i}]`,
+					message: `"${named(f)}" is checked twice (fields[${first}] too); check each field once`,
+				})
+			}
+		})
 		if (fields && (value.multiField === true || (value.multiField === undefined && (value.field ?? null) === null))) {
 			out.dataLabelsEncodings = { ...labels, value: { field: null, multiField: true, ...value } }
 			const prevFields = ctx.visual.dataLabelsEncodings?.value.fields ?? []
@@ -159,14 +172,23 @@ export const panelEdits = (patch: SettingsPatch, ctx: PanelContext): PanelEdits 
 				const total = barTotal !== null && added.includes(barTotal) ? barTotal : null
 				const cfg: DataLabelsConfig = v.dataLabelsConfig ?? { ...DEFAULT_DATA_LABELS_CONFIG }
 				const sent = sentPlacement(sentConfig, total ?? "")
+				const composedLabels = [
+					...current.filter((l) => !removed.some((f) => l.template.trim() === `{${f}}`)),
+					...added.filter((f) => !current.some((l) => l.id === f)).map(composedLabelForField),
+				]
+				const ids = composedLabels.map((l) => l.id)
+				const twice = ids.find((id, i) => ids.indexOf(id) !== i)
+				if (twice !== undefined) {
+					finishProblems.push({
+						path: pathOf("settings", "dataLabelsConfig", "composedLabels"),
+						message: `the composed labels would have the id "${named(twice)}" twice; send "composedLabels" with each id once`,
+					})
+				}
 				return {
 					...v,
 					dataLabelsConfig: {
 						...cfg,
-						composedLabels: [
-							...current.filter((l) => !removed.some((f) => l.template.trim() === `{${f}}`)),
-							...added.filter((f) => !current.some((l) => l.id === f)).map(composedLabelForField),
-						],
+						composedLabels,
 						// A newly checked Bar total reads as the bar's: the last
 						// layer of each stack, outside its end, unless the patch
 						// places it itself.
@@ -263,7 +285,7 @@ export const panelEdits = (patch: SettingsPatch, ctx: PanelContext): PanelEdits 
 	return {
 		patch: out as SettingsPatch,
 		problems,
-		finish: (visual) => finishers.reduce((v, f) => f(v), visual),
+		finish: (visual) => ({ visual: finishers.reduce((v, f) => f(v), visual), problems: finishProblems }),
 		newId: (path) => {
 			const kind = path.startsWith("annotationsConfig.") ? path.slice("annotationsConfig.".length) : ""
 			return isAnnotationKind(kind) ? newAnnotationId(NEW_ANNOTATION[kind].id) : undefined

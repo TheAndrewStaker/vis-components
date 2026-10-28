@@ -115,6 +115,22 @@ describe("data labels", () => {
 		expect(errors[0]).toMatchObject({ path: "settings.dataLabelsEncodings.value.fields[1]" })
 	})
 
+	it("refuses a field checked twice, which would make two labels with one id", () => {
+		const errors = errorsOf(set(bars(), { dataLabelsEncodings: { value: { fields: ["flavor", "flavor"] } } }))
+		expect(errors).toEqual([
+			{ path: "settings.dataLabelsEncodings.value.fields[1]", message: `"flavor" is checked twice (fields[0] too); check each field once` },
+		])
+	})
+
+	it("refuses a checklist that would leave two composed labels with one id", () => {
+		const v1 = ok(set(bars(), { dataLabelsEncodings: { value: { fields: ["flavor"] } } }))
+		const twice = { ...v1, dataLabelsConfig: { ...v1.dataLabelsConfig, composedLabels: [{ id: "flavor", template: "{flavor}" }, { id: "flavor", template: "{flavor}!" }] } } as Visual
+		const errors = errorsOf(set(twice, { dataLabelsEncodings: { value: { fields: ["flavor", "muffins"] } } }))
+		expect(errors).toEqual([
+			{ path: "settings.dataLabelsConfig.composedLabels", message: expect.stringMatching(/"flavor" twice/) },
+		])
+	})
+
 	it("starts a Bar total where a total reads as the bar's", () => {
 		const v = ok(set(bars(), { dataLabelsEncodings: { value: { field: "Bar total" } } }))
 		expect(v.dataLabelsConfig).toMatchObject({ labelPoints: "last", labelPointsScope: "stack", barLabelPosition: "outside-end" })
