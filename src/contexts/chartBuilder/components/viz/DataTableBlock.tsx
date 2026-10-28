@@ -1,5 +1,15 @@
-import { useId, useMemo, useState, type CSSProperties, type ReactNode } from "react"
-import { useAtomValue } from "jotai"
+import {
+	useId,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+	type CSSProperties,
+	type KeyboardEvent,
+	type ReactNode,
+	type RefObject,
+} from "react"
+import { atom, useAtom, useAtomValue } from "jotai"
 
 import { buildDataTable, dataTableToCsv, type DataTableModel } from "../../lib/dataTable"
 import {
@@ -17,6 +27,7 @@ import { plottedRows } from "../../lib/plottedData"
 import {
 	currentDataTableConfigAtom,
 	currentEncodingsAtom,
+	currentRenderedLayoutVersionAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldOverridesAtom,
 	currentLabelsAtom,
@@ -91,11 +102,15 @@ const DataTable = ({
 	look,
 	titleText,
 	fileName,
+	forImage = false,
 }: {
 	cfg: DataTableConfig
 	look: ResolvedDataTableStyle
 	titleText: string
 	fileName: string
+	/** The image export's copy: no Show all / Download CSV links (a picture
+	 *  can't click them); a cut table says so in a plain line instead. */
+	forImage?: boolean
 }) => {
 	const view = useCurrentDatasetView()
 	const encodings = useAtomValue(currentEncodingsAtom)
@@ -125,12 +140,13 @@ const DataTable = ({
 			encodings,
 			columns: cfg.columns,
 			selectedColumns: cfg.selectedColumns,
+			hiddenPlottedColumns: cfg.plottedColumns === "select" ? cfg.hiddenPlottedColumns : [],
 			overrides,
 			fieldLevelOrders,
 			formats,
 			plotted,
 		})
-	}, [view, encodings, modeId, channelConfigs, cfg.columns, cfg.selectedColumns, overrides, fieldLevelOrders, formats])
+	}, [view, encodings, modeId, channelConfigs, cfg.columns, cfg.selectedColumns, cfg.plottedColumns, cfg.hiddenPlottedColumns, overrides, fieldLevelOrders, formats])
 	if (!model) return null
 
 	const total = model.rows.length
@@ -209,7 +225,14 @@ const DataTable = ({
 					{model.note}
 				</p>
 			)}
-			{(cuttable || cfg.showDownload) && (
+			{forImage ? (
+				cuttable && (
+					<p className="vc-data-table-note">
+						{/* One string, so the export's capture draws one <text>. */}
+						{`First ${limit.toLocaleString()} of ${total.toLocaleString()} rows`}
+					</p>
+				)
+			) : (cuttable || cfg.showDownload) && (
 				<div className="vc-data-table-actions">
 					{/* One toggle, not two buttons: it stays in place, so keyboard
 					 *  focus survives the switch either way. */}
@@ -239,41 +262,83 @@ const DataTable = ({
 	)
 }
 
-/** The optional data table under the chart (Sidebar → Data table). Renders
- *  OUTSIDE the layout solver and the fixed canvas, in the editor, the
- *  in-app embed and the published embed; never in image exports. Returns
- *  null while disabled so callers can mount it unconditionally. */
-export const DataTableBlock = ({ className }: { className?: string }) => {
-	const cfg = migrateDataTableConfig(useAtomValue(currentDataTableConfigAtom))
-	if (!cfg.enabled) return null
-	return <EnabledDataTableBlock cfg={cfg} className={className} />
-}
-
-const EnabledDataTableBlock = ({
-	cfg,
-	className,
-}: {
-	cfg: DataTableConfig
-	className?: string
-}) => {
+/** The table's resolved look and names, shared by the block under the chart
+ *  and the Data tab. */
+const useDataTableLook = (cfg: DataTableConfig) => {
 	const theme = useCurrentTheme()
 	const title = useAtomValue(currentLabelsAtom).title
 	const name = useAtomValue(currentVisualNameAtom)
 	const background = useAtomValue(renderChannelConfigsAtom).backgroundColor
-	const [open, setOpen] = useState(false)
-	const regionId = useId()
-	const titleText = cfg.title ?? defaultDataTableTitle(title, name)
 	const look = resolveDataTableStyle(cfg, theme)
 	const style: CSSProperties = {
 		...tableStyle(look),
 		...(background ? { backgroundColor: background } : {}),
 	}
+	return {
+		look,
+		style,
+		titleText: cfg.title ?? defaultDataTableTitle(title, name),
+		fileName: name || title || "chart",
+	}
+}
+
+/** Behind a button: whether the table is open. Ephemeral UI state, never
+ *  saved; shared so a fixed canvas's in-canvas View data link can open the
+ *  table in the box under the canvas. */
+export const dataTableOpenAtom = atom(false)
+
+/** The opened table's region, which the View data toggle controls. One
+ *  per document (one visual per editor or embed page). */
+const DATA_REGION_ID = "vc-data-table-region"
+
+/** The optional data table under the chart (Sidebar → Data table). Renders
+ *  OUTSIDE the layout solver and the fixed canvas, in the editor, the
+ *  in-app embed and the published embed; in an image export only when the
+ *  Export modal's Include data table asks (`ExportTableLayout`). Returns
+ *  null while disabled — or placed in a tab, which `DataTableTabs` owns —
+ *  so callers can mount it unconditionally. `underCanvas`: the box under a
+ *  fixed canvas, whose View data link sits inside the canvas
+ *  (`ChartWithDataTable inCanvas`), so behind a button it holds only the
+ *  opened table. */
+export const DataTableBlock = ({
+	className,
+	underCanvas = false,
+}: {
+	className?: string
+	underCanvas?: boolean
+}) => {
+	const cfg = migrateDataTableConfig(useAtomValue(currentDataTableConfigAtom))
+	if (!cfg.enabled || cfg.placement === "tabs") return null
+	return (
+		<EnabledDataTableBlock
+			cfg={cfg}
+			className={className}
+			underCanvas={underCanvas}
+		/>
+	)
+}
+
+const EnabledDataTableBlock = ({
+	cfg,
+	className,
+	underCanvas,
+	forImage = false,
+}: {
+	cfg: DataTableConfig
+	className?: string
+	underCanvas: boolean
+	forImage?: boolean
+}) => {
+	const { look, style, titleText, fileName } = useDataTableLook(cfg)
+	const rowRef = useRef<HTMLDivElement>(null)
+	const alignStyle = useAlignToPlotRight(rowRef)
 	const table = (
 		<DataTable
 			cfg={cfg}
 			look={look}
 			titleText={titleText}
-			fileName={name || title || "chart"}
+			fileName={fileName}
+			forImage={forImage}
 		/>
 	)
 
@@ -285,18 +350,16 @@ const EnabledDataTableBlock = ({
 		>
 			{cfg.placement === "button" ? (
 				<>
-					<button
-						type="button"
-						className="vc-data-table-button"
-						aria-expanded={open}
-						aria-controls={regionId}
-						onClick={() => setOpen((o) => !o)}
-					>
-						{open ? "Hide data" : "View data"}
-					</button>
-					<div id={regionId} hidden={!open}>
-						{open && table}
-					</div>
+					{!underCanvas && (
+						<div
+							ref={rowRef}
+							className="vc-data-table-toggle-row"
+							style={alignStyle}
+						>
+							<DataToggle />
+						</div>
+					)}
+					<DataTableRegion>{table}</DataTableRegion>
 				</>
 			) : (
 				table
@@ -305,14 +368,386 @@ const EnabledDataTableBlock = ({
 	)
 }
 
-/** The embed page's layout while a data table is on: a scrolling column —
- *  the chart first (it grows to fill whatever the table leaves, never below
- *  a readable floor), the table under it. The no-table embed keeps its
- *  original full-viewport wrapper untouched; callers pick this layout only
- *  when the table is enabled. `data-export-root` stays on the outer box. */
-export const EmbedTableLayout = ({ children }: { children: ReactNode }) => (
-	<div data-export-root className="flex h-screen w-screen flex-col overflow-y-auto">
-		<div className="vc-embed-chart-with-table">{children}</div>
-		<DataTableBlock />
-	</div>
-)
+/** The region the View data toggle opens; the table inside is built only
+ *  while open. `block`: the region is the table's own styled block (not
+ *  nested in one), so a closed table leaves no padding behind. */
+const DataTableRegion = ({
+	block,
+	children,
+}: {
+	block?: { style: CSSProperties }
+	children: ReactNode
+}) => {
+	const open = useAtomValue(dataTableOpenAtom)
+	return (
+		<div
+			id={DATA_REGION_ID}
+			hidden={!open}
+			className={block ? "vc-data-table-block" : undefined}
+			style={block?.style}
+			data-data-table={block ? true : undefined}
+		>
+			{open && children}
+		</div>
+	)
+}
+
+/** Right-aligns a link row (View data, the Chart / Data tabs) with the
+ *  figure's farthest-right plot edge — where the x axis ends, legends and
+ *  labels not counted — by setting the row's right padding. Each facet
+ *  panel stamps its plot area's right edge (`data-inner-right`, in its own
+ *  SVG coordinates); the screen CTM maps it through any zoom. Re-measured
+ *  after every layout pass and whenever the row resizes; with no panel to
+ *  measure (no chart yet) the row keeps its CSS padding. */
+const useAlignToPlotRight = (
+	rowRef: RefObject<HTMLElement | null>,
+	/** The figure the row sits under; absent = the editor's chart viewport
+	 *  (the block layouts: fixed canvas, narrow). */
+	figureRef?: RefObject<HTMLElement | null>
+) => {
+	const layoutVersion = useAtomValue(currentRenderedLayoutVersionAtom)
+	const [inset, setInset] = useState<number | null>(null)
+	useLayoutEffect(() => {
+		const row = rowRef.current
+		if (!row) return
+		const measure = () => {
+			let right = -Infinity
+			const figure = figureRef
+				? figureRef.current
+				: document.querySelector("[data-editor-chart-viewport]")
+			for (const g of figure?.querySelectorAll<SVGGraphicsElement>(
+				"[data-inner-right]"
+			) ?? []) {
+				const ctm = g.getScreenCTM()
+				const x = Number(g.getAttribute("data-inner-right"))
+				if (ctm && Number.isFinite(x)) {
+					right = Math.max(right, new DOMPoint(x, 0).matrixTransform(ctm).x)
+				}
+			}
+			const box = row.getBoundingClientRect()
+			// Screen px → the row's own px (a zoomed fixed canvas scales it).
+			const scale = row.offsetWidth > 0 ? box.width / row.offsetWidth : 0
+			setInset(
+				Number.isFinite(right) && scale > 0
+					? Math.max(0, Math.round((box.right - right) / scale))
+					: null
+			)
+		}
+		measure()
+		const ro = new ResizeObserver(measure)
+		ro.observe(row)
+		return () => ro.disconnect()
+	}, [rowRef, figureRef, layoutVersion])
+	return inset === null ? undefined : { paddingRight: inset }
+}
+
+/** The View data / Hide data toggle (placement "Behind a button"). */
+const DataToggle = () => {
+	const [open, setOpen] = useAtom(dataTableOpenAtom)
+	return (
+		<button
+			type="button"
+			className="vc-data-table-link"
+			aria-expanded={open}
+			aria-controls={DATA_REGION_ID}
+			onClick={() => setOpen((o) => !o)}
+		>
+			{open ? "Hide data" : "View data"}
+		</button>
+	)
+}
+
+/** The figure plus the table under it, for a scroll container that IS the
+ *  chart's viewport (the editor's chart host, the embed page). Behind a
+ *  button, the figure fills the viewport less a slim View data row at its
+ *  bottom right, so the link shows without scrolling; the opened table
+ *  follows below it. Below the chart, the table simply follows. In a tab
+ *  (`DataTableTabs` owns that) or off: the figure alone.
+ *
+ *  `inCanvas`: inside a fixed canvas, which clips — only the View data row
+ *  goes in; the table (either placement) is the editor's box under the
+ *  canvas (`DataTableBlock underCanvas`). */
+export const ChartWithDataTable = ({
+	inCanvas = false,
+	children,
+}: {
+	inCanvas?: boolean
+	children: ReactNode
+}) => {
+	const cfg = migrateDataTableConfig(useAtomValue(currentDataTableConfigAtom))
+	if (!cfg.enabled || cfg.placement === "tabs") return <>{children}</>
+	if (cfg.placement === "below") {
+		if (inCanvas) return <>{children}</>
+		return (
+			<>
+				{children}
+				<DataTableBlock />
+			</>
+		)
+	}
+	return (
+		<FittedDataToggle cfg={cfg} tableBelow={!inCanvas}>
+			{children}
+		</FittedDataToggle>
+	)
+}
+
+const FittedDataToggle = ({
+	cfg,
+	tableBelow,
+	children,
+}: {
+	cfg: DataTableConfig
+	tableBelow: boolean
+	children: ReactNode
+}) => {
+	const { look, style, titleText, fileName } = useDataTableLook(cfg)
+	const figureRef = useRef<HTMLDivElement>(null)
+	const rowRef = useRef<HTMLDivElement>(null)
+	const alignStyle = useAlignToPlotRight(rowRef, figureRef)
+	return (
+		<>
+			<div className="flex h-full flex-col">
+				<div ref={figureRef} className="flex min-h-0 flex-1 flex-col">
+					{children}
+				</div>
+				<div
+					ref={rowRef}
+					className="vc-data-table-toggle-row px-4 py-1"
+					style={{ ...style, ...alignStyle }}
+				>
+					<DataToggle />
+				</div>
+			</div>
+			{tableBelow && (
+				<DataTableRegion block={{ style }}>
+					<DataTable
+						cfg={cfg}
+						look={look}
+						titleText={titleText}
+						fileName={fileName}
+					/>
+				</DataTableRegion>
+			)}
+		</>
+	)
+}
+
+type DataTab = "chart" | "data"
+const DATA_TABS: { id: DataTab; label: string }[] = [
+	{ id: "chart", label: "Chart" },
+	{ id: "data", label: "Data" },
+]
+
+/** Placement "In a tab": wraps the figure in Chart / Data tabs at its
+ *  bottom right, where the View data link sits behind a button.
+ *  Renders the children untouched otherwise, so callers wrap
+ *  unconditionally. `className` lays the wrapper out in its parent; the
+ *  children sit in a flex column that fills what the strip leaves.
+ *
+ *  The Data panel COVERS the chart rather than replacing it: the chart
+ *  stays mounted and measured underneath (visibility: hidden, which also
+ *  takes it out of the accessibility tree), so switching back never
+ *  re-solves the layout and an embed keeps its size. */
+export const DataTableTabs = ({
+	className,
+	children,
+}: {
+	className?: string
+	children: ReactNode
+}) => {
+	const cfg = migrateDataTableConfig(useAtomValue(currentDataTableConfigAtom))
+	if (!cfg.enabled || cfg.placement !== "tabs") return <>{children}</>
+	return (
+		<EnabledDataTableTabs cfg={cfg} className={className}>
+			{children}
+		</EnabledDataTableTabs>
+	)
+}
+
+const EnabledDataTableTabs = ({
+	cfg,
+	className,
+	children,
+}: {
+	cfg: DataTableConfig
+	className?: string
+	children: ReactNode
+}) => {
+	const { look, style, titleText, fileName } = useDataTableLook(cfg)
+	const [tab, setTab] = useState<DataTab>("chart")
+	const baseId = useId()
+	const figureRef = useRef<HTMLDivElement>(null)
+	const rowRef = useRef<HTMLDivElement>(null)
+	const alignStyle = useAlignToPlotRight(rowRef, figureRef)
+	const tabId = (t: DataTab) => `${baseId}-${t}-tab`
+	const panelId = (t: DataTab) => `${baseId}-${t}-panel`
+
+	// WAI-ARIA tabs with automatic activation: arrows / Home / End move
+	// selection and focus together; only the selected tab is in tab order.
+	const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+		const i = DATA_TABS.findIndex((t) => t.id === tab)
+		const next =
+			e.key === "ArrowRight"
+				? (i + 1) % DATA_TABS.length
+				: e.key === "ArrowLeft"
+					? (i - 1 + DATA_TABS.length) % DATA_TABS.length
+					: e.key === "Home"
+						? 0
+						: e.key === "End"
+							? DATA_TABS.length - 1
+							: null
+		if (next === null) return
+		e.preventDefault()
+		const id = DATA_TABS[next].id
+		setTab(id)
+		document.getElementById(tabId(id))?.focus()
+	}
+
+	return (
+		<div className={`flex flex-col${className ? ` ${className}` : ""}`}>
+			<div className="relative flex min-h-0 flex-1 flex-col">
+				<div
+					ref={figureRef}
+					role="tabpanel"
+					id={panelId("chart")}
+					aria-labelledby={tabId("chart")}
+					className="flex min-h-0 flex-1 flex-col"
+					style={tab === "chart" ? undefined : { visibility: "hidden" }}
+				>
+					{children}
+				</div>
+				{/* Built only while open, like the table behind a button. */}
+				{tab === "data" && (
+					<div
+						role="tabpanel"
+						id={panelId("data")}
+						aria-labelledby={tabId("data")}
+						className="vc-data-table-block vc-data-table-tab-panel"
+						style={style}
+						data-data-table
+					>
+						<DataTable
+							cfg={cfg}
+							look={look}
+							titleText={titleText}
+							fileName={fileName}
+						/>
+					</div>
+				)}
+			</div>
+			<div
+				ref={rowRef}
+				role="tablist"
+				aria-label="View as"
+				className="vc-data-table-tablist"
+				style={{ ...style, ...alignStyle }}
+			>
+				{DATA_TABS.map((t) => (
+					<button
+						key={t.id}
+						type="button"
+						role="tab"
+						id={tabId(t.id)}
+						aria-selected={tab === t.id}
+						aria-controls={panelId(t.id)}
+						tabIndex={tab === t.id ? 0 : -1}
+						className="vc-data-table-link vc-data-table-tab"
+						onClick={() => setTab(t.id)}
+						onKeyDown={onKeyDown}
+					>
+						{t.label}
+					</button>
+				))}
+			</div>
+		</div>
+	)
+}
+
+/** The embed page's layout while a data table is on. Below the chart: a
+ *  scrolling column — the chart first (it grows to fill whatever the table
+ *  leaves, never below a readable floor), the table under it. Behind a
+ *  button: the chart fills the viewport down to the View data row, the
+ *  opened table scrolls in below. In a tab: the full-viewport wrapper with
+ *  the tab strip on top. The no-table
+ *  embed keeps its original full-viewport wrapper untouched; callers pick
+ *  this layout only when the table is enabled. `data-export-root` stays on
+ *  the outer box. */
+export const EmbedTableLayout = ({ children }: { children: ReactNode }) => {
+	const cfg = migrateDataTableConfig(useAtomValue(currentDataTableConfigAtom))
+	if (cfg.placement === "tabs") {
+		return (
+			<div data-export-root className="h-screen w-screen">
+				<DataTableTabs className="h-full">{children}</DataTableTabs>
+			</div>
+		)
+	}
+	if (cfg.placement === "button") {
+		return (
+			<div data-export-root className="h-screen w-screen overflow-y-auto">
+				<ChartWithDataTable>{children}</ChartWithDataTable>
+			</div>
+		)
+	}
+	return (
+		<div data-export-root className="flex h-screen w-screen flex-col overflow-y-auto">
+			<div className="vc-embed-chart-with-table">{children}</div>
+			<DataTableBlock />
+		</div>
+	)
+}
+
+/** Posted by `ExportTableLayout` to the Export modal: the table's height in
+ *  px, so the modal grows the preview iframe by exactly that much. */
+export const EXPORT_TABLE_HEIGHT_MESSAGE = "vc-export-table-height"
+
+/** The image export's layout (`table=image`, Export modal → Include data
+ *  table). The chart gets the iframe's height less the table's; the table
+ *  sits under it as a static "Below the chart" block whatever the
+ *  placement — no View data link, no tabs, no Show all / Download CSV.
+ *  The table's height is posted to the parent, which grows the iframe by
+ *  it, so the chart settles at the requested export size with the table
+ *  added beneath. The chart's background fills the whole root, so the
+ *  capture's full-bleed background covers both. */
+export const ExportTableLayout = ({ children }: { children: ReactNode }) => {
+	const cfg = migrateDataTableConfig(useAtomValue(currentDataTableConfigAtom))
+	const background = useAtomValue(renderChannelConfigsAtom).backgroundColor
+	const tableRef = useRef<HTMLDivElement>(null)
+	const [tableHeight, setTableHeight] = useState(0)
+	useLayoutEffect(() => {
+		const el = tableRef.current
+		if (!el) return
+		const measure = () => {
+			const height = Math.ceil(el.getBoundingClientRect().height)
+			setTableHeight(height)
+			if (window.parent !== window) {
+				window.parent.postMessage(
+					{ type: EXPORT_TABLE_HEIGHT_MESSAGE, height },
+					window.location.origin
+				)
+			}
+		}
+		measure()
+		const ro = new ResizeObserver(measure)
+		ro.observe(el)
+		return () => ro.disconnect()
+	}, [])
+	return (
+		<div
+			data-export-root
+			className="h-screen w-screen overflow-hidden"
+			style={background ? { backgroundColor: background } : undefined}
+		>
+			<div style={{ height: `max(0px, calc(100vh - ${tableHeight}px))` }}>
+				{children}
+			</div>
+			<div ref={tableRef}>
+				<EnabledDataTableBlock
+					cfg={{ ...cfg, placement: "below" }}
+					underCanvas={false}
+					forImage
+				/>
+			</div>
+		</div>
+	)
+}

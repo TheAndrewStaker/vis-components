@@ -451,7 +451,8 @@ export type Visual = {
 	 * captions existed; falls back to DEFAULT_CAPTION_CONFIG on load. */
 	captionConfig?: CaptionConfig
 	/** Per-visual data table — an optional HTML table rendered under the
-	 * chart (editor, in-app embed, published embed; never image exports).
+	 * chart (editor, in-app embed, published embed; image exports only when
+	 * the Export modal's "Include data table" is checked).
 	 * Optional for back-compat: absent reads as the disabled default via
 	 * `migrateDataTableConfig`, so no storage version bump. */
 	dataTableConfig?: DataTableConfig

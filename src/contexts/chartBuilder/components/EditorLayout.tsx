@@ -16,6 +16,7 @@ import { useEditorHistory } from "../store/editorHistory"
 import { RailTab } from "../../../components/ui/RailTab"
 import { useNarrowLayout } from "../../../lib/useMediaQuery"
 import { resolveCanvasZoom } from "../lib/canvasZoom"
+import { migrateDataTableConfig } from "../lib/dataTableConfig"
 
 import { DataDrawer } from "./drawer/DataDrawer"
 import { DerivedVariableModal } from "./drawer/DerivedVariableModal"
@@ -24,7 +25,12 @@ import { CanvasZoomControls } from "./CanvasZoomControls"
 import { SaveBar } from "./SaveBar"
 import { Sidebar } from "./sidebar/Sidebar"
 import { ChartCanvas } from "./viz/ChartCanvas"
-import { DataTableBlock } from "./viz/DataTableBlock"
+import {
+	ChartWithDataTable,
+	DataTableBlock,
+	DataTableTabs,
+	dataTableOpenAtom,
+} from "./viz/DataTableBlock"
 import { AccessibilityCheckOverlay } from "./accessibility/AccessibilityCheckPanel"
 import { useEnsureCurrentDatasetLoaded } from "../store/useCurrentDatasetView"
 import { SIDEBAR_MIN_WIDTH } from "../lib/storage"
@@ -117,8 +123,17 @@ export const EditorLayout = () => {
 	const blackAndWhite = useAtomValue(blackAndWhiteModeAtom)
 	const canvasSizeCfg = useAtomValue(currentChannelConfigsAtom).canvasSize
 	// The data table (Sidebar → Data table) renders under the figure inside
-	// the scroll region — outside the zoomed canvas frame and the solver.
-	const dataTableOn = useAtomValue(currentDataTableConfigAtom)?.enabled === true
+	// the scroll region — outside the zoomed canvas frame and the solver. In
+	// a tab it instead wraps the chart viewport (DataTableTabs) — or, with a
+	// fixed canvas, the chart inside the canvas. A fixed canvas's box under
+	// it shows the table below the chart, or the opened table behind the
+	// button (whose View data link sits inside the canvas).
+	const dataTableCfg = migrateDataTableConfig(useAtomValue(currentDataTableConfigAtom))
+	const dataTableOpen = useAtomValue(dataTableOpenAtom)
+	const dataTableUnderCanvas =
+		dataTableCfg.enabled &&
+		(dataTableCfg.placement === "below" ||
+			(dataTableCfg.placement === "button" && dataTableOpen))
 	const publishedFrame = useAtomValue(currentVisualPublishedAtom)
 		? ` ${PUBLISHED_FRAME_CLASS}`
 		: ""
@@ -324,7 +339,7 @@ export const EditorLayout = () => {
 									style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
 								>
 									<div
-										className={`flex min-h-full w-max min-w-full p-6${dataTableOn ? " flex-col" : ""}`}
+										className={`flex min-h-full w-max min-w-full p-6${dataTableUnderCanvas ? " flex-col" : ""}`}
 									>
 										{/* Outer box takes the SCALED footprint so centering
 										 *  and scrolling see the shrunken size; the inner
@@ -335,7 +350,7 @@ export const EditorLayout = () => {
 											// still true-size (transforms don't change layout),
 											// and without clipping it would widen the `w-max`
 											// wrapper and make the host scroll into blank space.
-											className={`${dataTableOn ? "mx-auto" : "m-auto"} shrink-0 overflow-hidden`}
+											className={`${dataTableUnderCanvas ? "mx-auto" : "m-auto"} shrink-0 overflow-hidden`}
 											style={{
 												width: fixedCanvas.width * fixedScale,
 												height: fixedCanvas.height * fixedScale,
@@ -352,18 +367,22 @@ export const EditorLayout = () => {
 													transformOrigin: "top left",
 												}}
 											>
-												<ChartCanvas />
+												<DataTableTabs className="h-full">
+													<ChartWithDataTable inCanvas>
+														<ChartCanvas />
+													</ChartWithDataTable>
+												</DataTableTabs>
 											</div>
 										</div>
 										{/* Under the white canvas, at its displayed width —
 										 *  not scaled with it (the zoom is display-only for
 										 *  the figure; the table stays readable). */}
-										{dataTableOn && (
+										{dataTableUnderCanvas && (
 											<div
 												className="mx-auto mt-4 shrink-0 bg-white shadow-md"
 												style={{ width: fixedCanvas.width * fixedScale }}
 											>
-												<DataTableBlock />
+												<DataTableBlock underCanvas />
 											</div>
 										)}
 									</div>
@@ -374,42 +393,47 @@ export const EditorLayout = () => {
 									onChange={setCanvasZoom}
 								/>
 							</div>
-						) : fluid ? (
-							<div
-								ref={setChartHost}
-								className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto${publishedFrame}`}
-								style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
-							>
-								{/* Footprint box: the scaled size, clipping the true-size
-								 *  layout box so only the host's vertical scroll sees it. */}
-								<div
-									className="overflow-hidden"
-									style={{ height: fluid.footprintHeight }}
-								>
-									<div
-										data-editor-chart-viewport
-										style={{
-											width: fluid.layoutWidth,
-											height: fluid.layoutHeight,
-											transform: `scale(${fluid.scale})`,
-											transformOrigin: "top left",
-										}}
-									>
-										<ChartCanvas />
-									</div>
-								</div>
-								<DataTableBlock />
-							</div>
 						) : (
-							<div
-								ref={setChartHost}
-								data-editor-chart-viewport
-								className={`min-h-0 flex-1 overflow-auto${publishedFrame}`}
-								style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
-							>
-								<ChartCanvas />
-								<DataTableBlock />
-							</div>
+							<DataTableTabs className="min-h-0 flex-1">
+								{fluid ? (
+									<div
+										ref={setChartHost}
+										className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto${publishedFrame}`}
+										style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
+									>
+										{/* Footprint box: the scaled size, clipping the true-size
+										 *  layout box so only the host's vertical scroll sees it. */}
+										<div
+											className="overflow-hidden"
+											style={{ height: fluid.footprintHeight }}
+										>
+											<div
+												data-editor-chart-viewport
+												style={{
+													width: fluid.layoutWidth,
+													height: fluid.layoutHeight,
+													transform: `scale(${fluid.scale})`,
+													transformOrigin: "top left",
+												}}
+											>
+												<ChartCanvas />
+											</div>
+										</div>
+										<DataTableBlock />
+									</div>
+								) : (
+									<div
+										ref={setChartHost}
+										data-editor-chart-viewport
+										className={`min-h-0 flex-1 overflow-auto${publishedFrame}`}
+										style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
+									>
+										<ChartWithDataTable>
+											<ChartCanvas />
+										</ChartWithDataTable>
+									</div>
+								)}
+							</DataTableTabs>
 						)}
 					</ErrorBoundary>
 					<ErrorBoundary>

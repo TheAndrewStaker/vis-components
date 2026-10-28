@@ -776,6 +776,28 @@ describe("visuals v9 -> v10: data-table style defaults start following the theme
 	})
 })
 
+describe("visuals v10 -> v11: data-table Max rows defaults to 10", () => {
+	const upgrade = visualsMigrations[10]!
+
+	it("fills the backfilled null, keeps a set count and visuals without a table", () => {
+		const bare = { id: "c" }
+		const [a, b, c] = upgrade([
+			{ id: "a", dataTableConfig: { enabled: true, maxRows: null } },
+			{ id: "b", dataTableConfig: { maxRows: 25 } },
+			bare,
+		]) as Array<{ dataTableConfig?: Record<string, unknown> }>
+		expect(a!.dataTableConfig).toEqual({ enabled: true, maxRows: 10 })
+		expect(b!.dataTableConfig).toEqual({ maxRows: 25 })
+		expect(c).toBe(bare)
+		expect(upgrade("nope")).toBe("nope")
+	})
+
+	it("dataTable v2 -> v3 runs the same step over the draft slice", () => {
+		expect(dataTableMigrations[2]!({ maxRows: null })).toEqual({ maxRows: 10 })
+		expect(dataTableMigrations[2]!(null)).toBeNull()
+	})
+})
+
 describe("CONTENT_MIGRATIONS", () => {
 	// Migration N upgrades vN to vN+1, so reaching `currentVersion` needs
 	// exactly that many steps. This is the guard against the failure mode the

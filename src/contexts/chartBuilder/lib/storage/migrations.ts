@@ -28,7 +28,7 @@ import type { Migration } from "./versioning"
  *   v0 = pre-versioning (unwrapped JSON; no `_v` field). Existing user
  *        data lives here, so the v0→v1 migration must be tolerant of
  *        the existing on-disk shape. */
-export const VISUALS_VERSION = 10
+export const VISUALS_VERSION = 11
 export const DATASETS_VERSION = 1
 export const CHANNEL_CONFIGS_VERSION = 5
 export const LABELS_VERSION = 1
@@ -48,7 +48,7 @@ export const CAPTION_VERSION = 1
 export const MAP_CONFIG_VERSION = 8
 export const RESHAPE_CONFIG_VERSION = 1
 export const DERIVED_VARIABLES_VERSION = 1
-export const DATA_TABLE_VERSION = 2
+export const DATA_TABLE_VERSION = 3
 export const ACCESSIBILITY_VERSION = 1
 export const USER_FONTS_VERSION = 1
 
@@ -420,7 +420,29 @@ export const visualsMigrations: Migration[] = [
 			return { ...vis, dataTableConfig: migrateDataTableConfigV1ToV2(vis.dataTableConfig) }
 		})
 	},
+	// v10 -> v11: the data table's Max rows defaults to 10 — see
+	// `fillDataTableMaxRowsV2ToV3`.
+	(raw) => {
+		if (!Array.isArray(raw)) return raw
+		return raw.map((v) => {
+			if (typeof v !== "object" || !v) return v
+			const vis = v as Record<string, unknown>
+			if (!("dataTableConfig" in vis)) return v
+			return { ...vis, dataTableConfig: fillDataTableMaxRowsV2ToV3(vis.dataTableConfig) }
+		})
+	},
 ]
+
+/** One data-table config, v2 → v3. Max rows defaulted to null (every
+ *  row) and every save stored that default, so a stored null is the
+ *  backfill, not a choice: it becomes the new default, 10. Clearing the
+ *  box at v3+ stores null again and is never re-filled. Shared by the
+ *  visuals chain and the draft slice. */
+const fillDataTableMaxRowsV2ToV3 = (raw: unknown): unknown => {
+	if (typeof raw !== "object" || !raw) return raw
+	const cfg = raw as Record<string, unknown>
+	return cfg.maxRows === null ? { ...cfg, maxRows: 10 } : raw
+}
 
 /** One data-table config, v1 → v2.
  *  - Header bold, striped rows and number alignment were plain values
@@ -823,6 +845,8 @@ export const dataTableMigrations: Migration[] = [
 	...identityMigrations,
 	// v1 -> v2: the visuals v9→v10 step, for the draft slice.
 	(raw) => migrateDataTableConfigV1ToV2(raw),
+	// v2 -> v3: the visuals v10→v11 step, for the draft slice.
+	(raw) => fillDataTableMaxRowsV2ToV3(raw),
 ]
 export const accessibilityMigrations = identityMigrations
 export const dataLabelsEncodingsMigrations = identityMigrations

@@ -56,6 +56,58 @@ describe("serializeEmbedCapture", () => {
 	})
 })
 
+describe("serializeEmbedCapture: included data table", () => {
+	it("redraws the table's text and paints a bottom-only border as an edge, not an outline", () => {
+		document.body.innerHTML = `
+			<div data-export-root>
+				<svg id="${PLOT_SVG_ID}" width="400" height="300"></svg>
+				<div data-data-table>
+					<table><tbody><tr>
+						<td style="border-bottom: 2px solid rgb(10, 20, 30)">East</td>
+					</tr></tbody></table>
+				</div>
+			</div>`
+		const root = document.querySelector<HTMLElement>("[data-export-root]")!
+		stubRect(root, { left: 0, top: 0, width: 400, height: 340 })
+		stubRect(root.querySelector(`#${PLOT_SVG_ID}`)!, {
+			left: 0,
+			top: 0,
+			width: 400,
+			height: 300,
+		})
+		const cell = root.querySelector("td")!
+		stubRect(cell, { left: 16, top: 310, width: 80, height: 20 })
+		const realCreateRange = document.createRange.bind(document)
+		Object.defineProperty(document, "createRange", {
+			value: () => {
+				const range = realCreateRange()
+				Object.defineProperty(range, "getBoundingClientRect", {
+					value: () => new DOMRect(20, 312, 30, 16),
+				})
+				return range
+			},
+			configurable: true,
+		})
+
+		let out: string | null
+		try {
+			out = serializeEmbedCapture(document)
+		} finally {
+			Object.defineProperty(document, "createRange", {
+				value: realCreateRange,
+				configurable: true,
+			})
+		}
+		expect(out).not.toBeNull()
+		expect(out).toContain(">East</text>")
+		// One 2px rule along the cell's bottom edge, no stroked outline.
+		expect(out).toMatch(
+			/<rect x="16" y="328" width="80" height="2" fill="rgb\(10, 20, 30\)"/
+		)
+		expect(out).not.toContain('stroke="rgb(10, 20, 30)"')
+	})
+})
+
 describe("exported accessible name", () => {
 	const live = `
 		<svg id="${PLOT_SVG_ID}" width="400" height="300" role="img"

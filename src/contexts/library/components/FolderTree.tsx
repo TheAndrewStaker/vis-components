@@ -1017,6 +1017,9 @@ export const FolderTree = ({
 	})
 
 	const rootFolders = orderedSiblings(folders, null)
+	const unfiledVisuals = visuals
+		.filter((v) => v.folderId === null)
+		.sort((a, b) => a.name.localeCompare(b.name))
 
 	const createFolder = (parentId: string | null) => {
 		setFolders((prev) => {
@@ -1101,7 +1104,7 @@ export const FolderTree = ({
 			 *  is reachable by URL (`?folder=unfiled`). */}
 			{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- background shortcut, see above */}
 			<div
-				className="flex-1 overflow-y-auto px-1 py-1"
+				className="flex flex-1 cursor-pointer flex-col overflow-y-auto px-1 py-1"
 				data-testid="folder-tree-body"
 				onClick={(e) => {
 					if (e.target === e.currentTarget) onSelect(UNFILED_FOLDER_ID)
@@ -1157,11 +1160,19 @@ export const FolderTree = ({
 				{/* Visuals not assigned to any folder. Render flat below the
 				 *  folder tree (no indent) so they're discoverable from the
 				 *  same panel — otherwise an "in the root" visual lives only
-				 *  behind the "All visualizations" filter. */}
-				{visuals
-					.filter((v) => v.folderId === null)
-					.sort((a, b) => a.name.localeCompare(b.name))
-					.map((v) => (
+				 *  behind the "All visualizations" filter. The top margin sets
+				 *  them apart from the folder list (which ends on the pinned
+				 *  stock shelf). The block stretches over the panel's leftover
+				 *  space and tints on hover, so the whole "not in a folder"
+				 *  area reads as one click target (same shortcut as above). */}
+				{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- background shortcut, see above */}
+				<div
+					className="mt-3 min-h-8 shrink-0 grow rounded hover:bg-stone-100 dark:hover:bg-stone-800"
+					onClick={(e) => {
+						if (e.target === e.currentTarget) onSelect(UNFILED_FOLDER_ID)
+					}}
+				>
+					{unfiledVisuals.map((v) => (
 						<VisualTreeItem
 							key={v.id}
 							visual={v}
@@ -1173,6 +1184,7 @@ export const FolderTree = ({
 							dropHandlers={rootContents.dropHandlers}
 						/>
 					))}
+				</div>
 			</div>
 		</div>
 	)

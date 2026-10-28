@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render } from "@testing-library/react"
+import type { ReactNode } from "react"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { buildDataset } from "../../../../testSupport/fixtures"
@@ -25,13 +26,21 @@ import {
 	previewVersionIdAtom,
 } from "../../store/atoms"
 
-import { DataTableBlock } from "./DataTableBlock"
+import {
+	ChartWithDataTable,
+	DataTableBlock,
+	DataTableTabs,
+	ExportTableLayout,
+} from "./DataTableBlock"
 
 afterEach(cleanup)
 
 const ID = "ds-data-table"
 
-const mount = (cfg: Partial<DataTableConfig>) => {
+const mount = (
+	cfg: Partial<DataTableConfig>,
+	ui: ReactNode = <DataTableBlock />
+) => {
 	installInMemoryLocalStorage()
 	const init = (s: TestStore) => {
 		s.set(
@@ -70,9 +79,7 @@ const mount = (cfg: Partial<DataTableConfig>) => {
 		s.set(currentDataTableConfigAtom, { ...DEFAULT_DATA_TABLE_CONFIG, ...cfg })
 	}
 	return render(
-		<TestProvider initializeState={init}>
-			<DataTableBlock />
-		</TestProvider>
+		<TestProvider initializeState={init}>{ui}</TestProvider>
 	)
 }
 
@@ -182,5 +189,82 @@ describe("DataTableBlock", () => {
 		expect(hide.getAttribute("aria-expanded")).toBe("true")
 		expect(region?.hidden).toBe(false)
 		expect(utils.getByRole("table")).toBeTruthy()
+	})
+
+	it("in a tab: the block under the chart stays empty", () => {
+		const utils = mount({ enabled: true, placement: "tabs" })
+		expect(utils.container.innerHTML).toBe("")
+	})
+
+	it("in a tab: Chart / Data tabs over a chart that stays mounted", () => {
+		const utils = mount(
+			{ enabled: true, placement: "tabs" },
+			<DataTableTabs>
+				<div data-testid="chart">chart</div>
+			</DataTableTabs>
+		)
+		const chartTab = utils.getByRole("tab", { name: "Chart" })
+		const dataTab = utils.getByRole("tab", { name: "Data" })
+		expect(chartTab.getAttribute("aria-selected")).toBe("true")
+		expect(dataTab.tabIndex).toBe(-1)
+		expect(utils.queryByRole("table")).toBeNull()
+
+		fireEvent.click(dataTab)
+		expect(dataTab.getAttribute("aria-selected")).toBe("true")
+		expect(utils.getByRole("table")).toBeTruthy()
+		const panel = document.getElementById(dataTab.getAttribute("aria-controls") ?? "")
+		expect(panel?.getAttribute("role")).toBe("tabpanel")
+		// The chart is hidden, not unmounted, so its layout survives.
+		const chart = utils.getByTestId("chart")
+		expect((chart.parentElement as HTMLElement).style.visibility).toBe("hidden")
+
+		// Arrow keys move selection with focus (automatic activation).
+		fireEvent.keyDown(dataTab, { key: "ArrowRight" })
+		expect(chartTab.getAttribute("aria-selected")).toBe("true")
+		expect(document.activeElement).toBe(chartTab)
+		expect(utils.queryByRole("table")).toBeNull()
+	})
+
+	it("other placements leave the wrapped chart untouched", () => {
+		const utils = mount(
+			{ enabled: true, placement: "below" },
+			<DataTableTabs>
+				<div data-testid="chart">chart</div>
+			</DataTableTabs>
+		)
+		expect(utils.queryByRole("tablist")).toBeNull()
+		expect(utils.getByTestId("chart").parentElement).toBe(utils.container)
+	})
+
+	it("behind a button, around the figure: View data row under the chart, table after it", () => {
+		const utils = mount(
+			{ enabled: true, placement: "button" },
+			<ChartWithDataTable>
+				<div data-testid="chart">chart</div>
+			</ChartWithDataTable>
+		)
+		const button = utils.getByRole("button", { name: "View data" })
+		const chartBox = utils.getByTestId("chart").parentElement?.parentElement
+		// The toggle shares the figure's full-height box; the table doesn't.
+		expect(chartBox?.contains(button)).toBe(true)
+		fireEvent.click(button)
+		const table = utils.getByRole("table")
+		expect(chartBox?.contains(table)).toBe(false)
+		expect(utils.getByRole("button", { name: "Hide data" })).toBeTruthy()
+	})
+
+	it("image export: a static table under the chart, whatever the placement — no links, a cut says so", () => {
+		const utils = mount(
+			{ enabled: true, placement: "tabs", maxRows: 2, showDownload: true },
+			<ExportTableLayout>
+				<div data-testid="chart" />
+			</ExportTableLayout>
+		)
+		const root = utils.container.querySelector("[data-export-root]")
+		expect(root?.contains(utils.getByTestId("chart"))).toBe(true)
+		expect(utils.getAllByRole("row")).toHaveLength(3) // header + 2
+		expect(utils.queryByRole("tab")).toBeNull()
+		expect(utils.queryByRole("button")).toBeNull()
+		expect(utils.getByText("First 2 of 3 rows")).toBeTruthy()
 	})
 })

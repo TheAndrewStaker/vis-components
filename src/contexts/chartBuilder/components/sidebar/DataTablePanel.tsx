@@ -18,6 +18,7 @@ import {
 	resolveDataTableStyle,
 	themeDataTableStyle,
 	type DataTableColumns,
+	type DataTablePlottedColumns,
 	type DataTableConfig,
 	type DataTablePlacement,
 	type DataTableTextAlign,
@@ -236,19 +237,11 @@ export const DataTablePanel = () => {
 			getType: (name) => effectiveType(view, name, overrides),
 		})
 	const fieldLevelOrders = useAtomValue(currentFieldLevelOrdersAtom)
-	// The table's columns, for the per-column alignment list — the same
-	// function the table builds them with (aggregated tables list their
-	// computed columns: "sales (sum)", "Count", …). Rows are only computed
-	// when the chart aggregates, and only while the table is on.
-	const tableColumns = useMemo(() => {
-		if (!view || !cfg.enabled) return []
-		return dataTableColumns({
-			view,
-			encodings,
-			columns: cfg.columns,
-			selectedColumns: cfg.selectedColumns,
-			overrides,
-			plotted: aggregated
+	// What the chart plots, when it aggregates — every computed column,
+	// hidden or not, for the "Columns" checkboxes. Only while the table is on.
+	const plotted = useMemo(
+		() =>
+			view && cfg.enabled && aggregated
 				? plottedRows({
 						view,
 						encodings,
@@ -258,8 +251,23 @@ export const DataTablePanel = () => {
 						levelOrders: fieldLevelOrders,
 					})
 				: undefined,
+		[view, cfg.enabled, aggregated, encodings, modeId, channelConfigs, overrides, fieldLevelOrders]
+	)
+	// The table's columns, for the per-column alignment list — the same
+	// function the table builds them with (aggregated tables list their
+	// computed columns: "sales (sum)", "Count", …).
+	const tableColumns = useMemo(() => {
+		if (!view || !cfg.enabled) return []
+		return dataTableColumns({
+			view,
+			encodings,
+			columns: cfg.columns,
+			selectedColumns: cfg.selectedColumns,
+			hiddenPlottedColumns: cfg.plottedColumns === "select" ? cfg.hiddenPlottedColumns : [],
+			overrides,
+			plotted,
 		})
-	}, [view, cfg.enabled, cfg.columns, cfg.selectedColumns, encodings, overrides, aggregated, modeId, channelConfigs, fieldLevelOrders])
+	}, [view, cfg.enabled, cfg.columns, cfg.selectedColumns, cfg.plottedColumns, cfg.hiddenPlottedColumns, encodings, overrides, plotted])
 
 	const update = (next: Partial<DataTableConfig>) => setCfg({ ...cfg, ...next })
 	/** "Select variables": what the table shows right now (the checked
@@ -276,6 +284,15 @@ export const DataTablePanel = () => {
 			: []
 		if (next.length > 0) update({ selectedColumns: next })
 	}
+	/** Aggregated tables: show / hide one computed column. Names no longer
+	 *  computed drop out of the stored list as a side effect. */
+	const plottedNames = plotted?.aggregated ? plotted.columns.map((c) => c.name) : []
+	const togglePlottedColumn = (name: string, on: boolean) =>
+		update({
+			hiddenPlottedColumns: plottedNames.filter((n) =>
+				n === name ? !on : !shownNames.has(n)
+			),
+		})
 	const look = resolveDataTableStyle(cfg, theme)
 	const themeLook = themeDataTableStyle(theme)
 	/** Sparse write: the theme's own value clears the override. */
@@ -316,6 +333,7 @@ export const DataTablePanel = () => {
 		keys.some((k) =>
 			k === "columnAlign"
 				? Object.keys(cfg.columnAlign).length > 0
+
 				: cfg[k] !== DEFAULT_DATA_TABLE_CONFIG[k]
 		)
 	/** The reset handler for a theme-backed key, or null while it follows
@@ -337,23 +355,20 @@ export const DataTablePanel = () => {
 	return (
 		<div className="vc-option-panel">
 			<Checkbox
-				label="Show a data table under the chart"
+				label="Show a data table"
 				checked={cfg.enabled}
 				onChange={(enabled) => update({ enabled })}
 			/>
 
 			{cfg.enabled && (
 				<>
-					<p className="vc-help">
-						An HTML table of the chart&apos;s data as the screen-reader
-						alternative to the figure. Not part of image exports.
-					</p>
 					<CollapsibleSubsection
 						title="Table properties"
 						defaultOpen
 						changed={changed(
 							"placement",
 							"columns",
+							"plottedColumns",
 							"maxRows",
 							"showDownload"
 						)}
@@ -365,15 +380,50 @@ export const DataTablePanel = () => {
 							options={[
 								{ value: "below", label: "Below the chart" },
 								{ value: "button", label: "Behind a button" },
+								{ value: "tabs", label: "In a tab" },
 							]}
 							onChange={(placement) => update({ placement })}
 							selectClassName="flex-1"
 						/>
 						{aggregated ? (
-							<p className="vc-help">
-								This chart type aggregates its data, so the table lists the
-								plotted values.
-							</p>
+							<>
+								<p className="vc-help">
+									This chart type aggregates its data, so the table lists the
+									plotted values.
+								</p>
+								<SelectInput<DataTablePlottedColumns>
+									label="Columns"
+									labelClassName={LABEL_COL}
+									value={cfg.plottedColumns}
+									options={[
+										{ value: "all", label: "All columns" },
+										{ value: "select", label: "Select columns" },
+									]}
+									onChange={(plottedColumns) => update({ plottedColumns })}
+									selectClassName="flex-1"
+								/>
+								{cfg.plottedColumns === "select" && (
+									<fieldset className="flex flex-col gap-1">
+										<legend className="sr-only">Columns to show</legend>
+										{plottedNames.map((name) => {
+											const checked = shownNames.has(name)
+											return (
+												<div key={name} className="flex items-center gap-2">
+													<LabelSpacer />
+													<Checkbox
+														label={name}
+														checked={checked}
+														// The last one can't go: an empty table
+														// describes nothing.
+														disabled={checked && shownNames.size === 1}
+														onChange={(on) => togglePlottedColumn(name, on)}
+													/>
+												</div>
+											)
+										})}
+									</fieldset>
+								)}
+							</>
 						) : (
 							<>
 								<SelectInput<DataTableColumns>

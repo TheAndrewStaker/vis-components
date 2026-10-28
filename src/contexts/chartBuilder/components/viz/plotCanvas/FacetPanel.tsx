@@ -243,6 +243,10 @@ export const FacetPanel = ({
 		<g
 			data-panel={p.key}
 			data-panel-key={p.key}
+			// The plot area's right edge (where the x axis ends), in this
+			// group's coordinates: the data table's View data / Chart · Data
+			// links right-align to it (DataTableBlock).
+			data-inner-right={p.inner.x + p.inner.width}
 			data-x-scale-rows={xScaleRowCount}
 			data-y-scale-rows={yScaleRowCount}
 		>

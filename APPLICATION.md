@@ -278,8 +278,8 @@ creates silently. The only refusal left is an upload whose hash
 matches an existing same-named data set (a probable byte-identical
 re-upload) that the store couldn't load to confirm — storing it would
 be the very copy dedupe exists to prevent. The bound data set's name
-in the summary line is a click-to-edit rename control (the same
-hover-pencil affordance as a field name in the Fields panel): Enter
+in the summary line is a click-to-edit rename control (a pencil
+appears on hover): Enter
 or blur commits, Escape or an emptied box cancels, and a colliding
 draft shows the same warning inline without blocking. The rename
 writes the body through `mutateDatasetBodyAtom` with a refreshed
@@ -633,7 +633,7 @@ deleted or retyped, the scope level is gone from newer data) shows as
 unset rather than as a dangling selection.
 
 **Renaming a variable** — clicking a field's name in the Fields panel
-(a pencil appears on hover) opens an inline editor; Enter/blur commits,
+(a pencil sits beside it) opens an inline editor; Enter/blur commits,
 Escape cancels. Committing an EMPTIED box is clear-to-default: a renamed
 variable reverts to its original uploaded column name (a full
 rename-back, configs included — `originalFieldName` reads
@@ -3936,19 +3936,41 @@ default, so saved visuals keep the old behavior.
 ## 10b. Data table
 
 A **Data table** section in the sidebar, right after Caption, adds an
-optional HTML `<table>` of the chart's data UNDER the figure. It is the
+optional HTML `<table>` of the chart's data (under the figure, or in a
+tab beside it). It is the
 non-visual alternative to the chart — a screen reader reads a real table
 with a caption and column headers — and lets sighted embed viewers read
-exact values. The top toggle, **Show a data table under the chart**, is
+exact values. The top toggle, **Show a data table**, is
 off by default; every other control is hidden while it is off.
 Below the toggle the controls sit in collapsible subsections: **Table
 properties** (open by default — the list below up to Download link),
 **Title**, **Caption**, **Header**, **Table text** and **Rows**.
 
 - **Placement** — *Below the chart* renders the table always; *Behind a
-  button* renders a **View data** / **Hide data** button under the chart
-  that toggles it (a real `<button>` with `aria-expanded` and
-  `aria-controls`; the table is not built until it is first opened).
+  button* renders a **View data** / **Hide data** link at the bottom
+  right of the figure that toggles it (a real `<button>` with
+  `aria-expanded` and `aria-controls`; the table is not built until it
+  is first opened). Where the chart fills its viewport (the editor's
+  chart area, the embed) the figure shrinks by the link's slim row, so
+  the link shows without scrolling; the opened table follows below.
+  The link (and the tabs below) ends flush with the figure's
+  farthest-right plot edge — where the x axis ends — not counting
+  legends or labels; re-measured after every layout pass. With a fixed
+  canvas size the link sits INSIDE the canvas, at its bottom right (the
+  chart gives up the row's height), and the opened table shows in the
+  box under the canvas;
+  *In a tab* puts **Chart** / **Data** tabs at the bottom right of the
+  figure, where the View data link sits — text
+  links like View data, the selected one with a solid underline and the
+  header weight, in the table's font and colors — starting on Chart. The Data tab COVERS
+  the chart's box (the table scrolls inside it) rather than replacing
+  it: the chart stays mounted and laid out underneath, hidden, so
+  switching back never re-solves the layout and an embed keeps its
+  size. In the editor the tabs sit at the bottom right of the whole
+  chart viewport — or, with a fixed canvas size, inside the canvas, the
+  Data tab filling the canvas (zoomed with it). The
+  tabs follow the WAI-ARIA tabs pattern (arrow keys / Home / End move
+  between them; the table is built when the Data tab is first opened).
 - **Columns** — *Encoded variables only* (the default), *All
   variables*, or *Select variables*. Select variables shows a checkbox
   for every variable in the data set (the main table, after reshape and
@@ -3966,7 +3988,11 @@ properties** (open by default — the list below up to Download link),
   saturation, brightness, opacity, shape, pattern, connection, legacy
   text), facets last. A field mapped twice is listed once. With nothing
   mapped the table lists every column.
-- **Max rows** — empty = all rows. When set, the first N rows show with
+- **Max rows** — 10 by default; cleared = all rows. (Visuals saved
+  before the default changed stored an empty box as the old default, so
+  a one-time migration fills those with 10; clearing it now sticks.)
+  When set, the
+  first N rows show with
   a **Show all N rows** link; once expanded it reads **Show first N
   rows** and collapses back (one toggle in place, so keyboard focus
   stays on it). With no limit set the table still renders at most 1,000
@@ -4077,9 +4103,18 @@ last columns); bin edges and hexagon lattices come from all rows, as
 on the default shared axes. Under an aggregated table a one-line note
 says what a row is ("Values are sums per bar; the underlying data has
 N rows."), in the table's own text color, a step smaller, and tied to
-the table with `aria-describedby`. **Columns** has nothing to choose
-there (an aggregate has no other variables), so the sidebar hides it
-behind a one-line explanation. A density curve (single variable) and a
+the table with `aria-describedby`. The **Columns** picker (encoded /
+all / select variables) has nothing to choose there (an aggregate has
+no other variables), so the sidebar replaces it with a one-line
+explanation and its own **Columns** picker: **All columns** (the
+default) or **Select columns**, which lists a checkbox per computed
+column ("region", "sales (sum)", **Count**, …) — uncheck one to leave it
+out of the table and its CSV. The last checked box can't be unchecked.
+This choice is kept apart from the row table's picker, so switching
+chart types changes neither. Unchecked columns are stored as a
+hide-list by header (kept while on All columns, so switching back
+restores them), so a column the chart starts
+computing later (after a remap) shows until unchecked. A density curve (single variable) and a
 regression line are curves COMPUTED from the rows, not lists of
 values — those charts keep the row table, with a note saying so.
 
@@ -4111,10 +4146,22 @@ never the legend part. Without a table the embed page is unchanged.
 visual, so the table config travels with it; a visual published before
 the table existed has no config, which reads as off.
 
-**Not in image exports.** PNG / JPEG / SVG / PDF exports serialize the
-chart SVG, and the export preview (and the library's thumbnail refresh)
-load the embed page with `table=off`, so an image is the chart alone at
-the requested size.
+**In image exports only on request.** By default an image export is the
+chart alone at the requested size: the export preview (and the library's
+thumbnail refresh) load the embed page with `table=off`. While the
+visual has a table on, Export image offers an **Include data table**
+checkbox (off by default, not saved). Checked, the preview loads the
+embed with `table=image`: the chart at the requested size and, under
+it, the table as a static "Below the chart" block whatever its
+placement — no View data link or tabs, no Show all / Download CSV links;
+a table cut at Max rows (or the 1,000-row safety window) ends with
+"First N of M rows". The embed posts the table's height to the modal,
+which grows the preview by that much, so the image is the chart's size
+plus the table's height (the size readout says "plus the data table";
+a height drag still sizes the chart). The capture redraws the HTML
+table as SVG the same DOM-walk way it redraws the HTML legend — boxes,
+row stripes, rules and text from their live layout rects — so it reads
+in PNG / JPEG / PDF and in the SVG download alike.
 
 Saved per visual (`dataTableConfig`, `lib/dataTableConfig.ts`), covered
 by undo. The field is optional: a visual saved before it existed loads
@@ -5153,7 +5200,8 @@ the embed inherits the size the user sees (fixed fallbacks when a
 piece can't be measured). The snippets are editable textareas: hand
 edits survive until an option that rebuilds the snippet changes.
 When the visual has a data table (§10b) it renders under the chart in
-the embed (in the chart part of a split embed). Copying a snippet
+the embed (in the chart part of a split embed), or as the embed's Data
+tab when placed in a tab. Copying a snippet
 records an embed instance, which is what lets live
 embeds follow later version uploads; the library's Data set column shows
 each instance's pinned version and when its snippet was last exported.
@@ -5177,6 +5225,9 @@ defaults measured off the viewport.
 
 **Export image** renders the chart in a preview iframe and saves
 it as **PNG**, **JPEG**, **SVG**, or **PDF**:
+
+- **Include data table** — shown only while the visual has a data
+  table on; adds the table under the chart (§10b).
 
 - **Save as** — the Save button opens the browser's own Save-as
   dialog where the browser has one (File System Access API: Chrome,

@@ -52,7 +52,7 @@ describe("DataTablePanel", () => {
 	it("shows only the master toggle while the table is off", () => {
 		const utils = mount()
 		const toggle = utils.getByLabelText(
-			"Show a data table under the chart"
+			"Show a data table"
 		) as HTMLInputElement
 		expect(toggle.checked).toBe(false)
 		expect(utils.queryByLabelText("Placement")).toBeNull()
@@ -71,7 +71,7 @@ describe("DataTablePanel", () => {
 
 	it("reveals every option once enabled, and writes through", () => {
 		const utils = mount()
-		fireEvent.click(utils.getByLabelText("Show a data table under the chart"))
+		fireEvent.click(utils.getByLabelText("Show a data table"))
 		expect(utils.store.get(currentDataTableConfigAtom).enabled).toBe(true)
 		for (const label of ["Placement", "Columns", "Max rows"])
 			expect(utils.getByLabelText(label)).toBeTruthy()
@@ -316,11 +316,13 @@ describe("DataTablePanel", () => {
 		expect(box("notes").disabled).toBe(true)
 	})
 
-	it("hides Columns (inert) on a chart type that aggregates, with a note why", () => {
+	it("offers All / Select columns over the computed columns on an aggregating chart", () => {
 		installInMemoryLocalStorage()
+		const captured: { store?: TestStore } = {}
 		const utils = render(
 			<TestProvider
 				initializeState={(s) => {
+					captured.store = s
 					s.set(loadedDatasetsAtom, {
 						ds: buildDataset({
 							id: "ds",
@@ -345,7 +347,21 @@ describe("DataTablePanel", () => {
 				<DataTablePanel />
 			</TestProvider>
 		)
-		expect(utils.queryByLabelText("Columns")).toBeNull()
 		expect(utils.getByText(/aggregates its data/)).toBeTruthy()
+		const picker = utils.getByLabelText("Columns") as HTMLSelectElement
+		expect([...picker.options].map((o) => o.text)).toEqual(["All columns", "Select columns"])
+		expect(utils.queryByRole("checkbox", { name: "region" })).toBeNull()
+
+		fireEvent.change(picker, { target: { value: "select" } })
+		const boxes = utils.getAllByRole("checkbox", { checked: true }) as HTMLInputElement[]
+		const names = boxes.map((b) => b.labels?.[0]?.textContent ?? "")
+		const computed = names.find((n) => n !== "region" && n.includes("sales"))
+		expect(computed).toBeTruthy()
+		fireEvent.click(utils.getByLabelText(computed!))
+		expect(captured.store!.get(currentDataTableConfigAtom)).toMatchObject({
+			plottedColumns: "select",
+			hiddenPlottedColumns: [computed],
+		})
+		expect((utils.getByLabelText(computed!) as HTMLInputElement).checked).toBe(false)
 	})
 })

@@ -5,8 +5,9 @@
 // An optional HTML <table> rendered UNDER the chart — the non-visual
 // alternative to the figure for screen-reader users, and a way for sighted
 // embed viewers to read exact values. It lives outside the layout solver and
-// outside the fixed canvas size, and it is never part of an image export
-// (those serialize the chart SVG). See APPLICATION.md "Data table".
+// outside the fixed canvas size. An image export carries it only when the
+// Export modal's "Include data table" is checked (the capture redraws the
+// HTML table as SVG under the chart). See APPLICATION.md "Data table".
 //
 // Every styling field is nullable: `null` = follow the current theme's
 // Data tables defaults (`Theme.dataTable*`, Settings → Themes → Data
@@ -18,13 +19,18 @@
 import type { FieldType, Theme } from "./types"
 
 /** "below" renders the table always; "button" renders a View data / Hide
- *  data toggle button under the chart that reveals it. */
-export type DataTablePlacement = "below" | "button"
+ *  data toggle button under the chart that reveals it; "tabs" puts a Chart
+ *  / Data tab strip above the figure, the Data tab covering the chart's box. */
+export type DataTablePlacement = "below" | "button" | "tabs"
 
 /** "encoded" = only the fields mapped to an encoding (x, y, the remaining
  *  channels, facets last); "all" = every column of the view; "select" =
  *  the variables checked in `selectedColumns`, in the view's order. */
 export type DataTableColumns = "encoded" | "all" | "select"
+
+/** An aggregating chart's table: every computed column, or only those
+ *  not unchecked in `hiddenPlottedColumns`. */
+export type DataTablePlottedColumns = "all" | "select"
 
 /** Number-column alignment. Picked with the shared AlignmentControl (the
  *  app's one text-alignment picker), so center is offered too. */
@@ -46,7 +52,16 @@ export type DataTableConfig = {
 	/** The variables a "select" table shows, by (current) name. Unused by
 	 *  the other modes, but kept so switching back restores the picks. */
 	selectedColumns: string[]
-	/** Rows shown before a "Show all N rows" button. Null = every row. */
+	/** "Columns" on an aggregating chart. Kept apart from `columns` so
+	 *  switching chart types doesn't flip the other picker. */
+	plottedColumns: DataTablePlottedColumns
+	/** The "select" plotted table's unchecked columns ("sales (sum)",
+	 *  "Count", …), by header. A hide-list, so a column the chart starts
+	 *  computing later shows until unchecked. Unused by "all" (but kept,
+	 *  so switching back restores the picks) and by row tables. */
+	hiddenPlottedColumns: string[]
+	/** Rows shown before a "Show all N rows" button. Null = every row (the
+	 *  box cleared); absent on intake = the default, 10. */
 	maxRows: number | null
 	/** A "Download CSV" link under the table. */
 	showDownload: boolean
@@ -107,7 +122,9 @@ export const DEFAULT_DATA_TABLE_CONFIG: DataTableConfig = {
 	caption: null,
 	columns: "encoded",
 	selectedColumns: [],
-	maxRows: null,
+	plottedColumns: "all",
+	hiddenPlottedColumns: [],
+	maxRows: 10,
 	showDownload: true,
 	fontFamily: null,
 	fontSize: null,
@@ -180,21 +197,29 @@ const text = (v: unknown): string | null =>
  *  existed), a partial object, and wrong-typed values — each falls back to
  *  its default. A styling field that is absent or wrong-typed reads as
  *  null (follow the theme). Idempotent. */
+const stringSet = (v: unknown): string[] =>
+	Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string"))] : []
+
 export const migrateDataTableConfig = (raw: unknown): DataTableConfig => {
 	if (!isRecord(raw)) return { ...DEFAULT_DATA_TABLE_CONFIG }
 	const d = DEFAULT_DATA_TABLE_CONFIG
 	const maxRows = positive(raw.maxRows)
 	return {
 		enabled: bool(raw.enabled, d.enabled),
-		placement: raw.placement === "button" ? "button" : "below",
+		placement:
+			raw.placement === "button" || raw.placement === "tabs"
+				? raw.placement
+				: "below",
 		title: text(raw.title),
 		caption: text(raw.caption),
 		columns:
 			raw.columns === "all" || raw.columns === "select" ? raw.columns : "encoded",
-		selectedColumns: Array.isArray(raw.selectedColumns)
-			? [...new Set(raw.selectedColumns.filter((v): v is string => typeof v === "string"))]
-			: [],
-		maxRows: maxRows === null ? null : Math.round(maxRows),
+		selectedColumns: stringSet(raw.selectedColumns),
+		plottedColumns: raw.plottedColumns === "select" ? "select" : "all",
+		hiddenPlottedColumns: stringSet(raw.hiddenPlottedColumns),
+		// An explicit null is a cleared box ("All"); absent or bad = default.
+		maxRows:
+			raw.maxRows === null ? null : maxRows === null ? d.maxRows : Math.round(maxRows),
 		showDownload: bool(raw.showDownload, d.showDownload),
 		fontFamily: str(raw.fontFamily),
 		fontSize: positive(raw.fontSize),

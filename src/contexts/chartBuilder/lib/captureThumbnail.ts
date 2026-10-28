@@ -297,14 +297,18 @@ export const parseLinearGradient = (bgImage: string): ParsedGradient | null => {
 	return { coords, stops }
 }
 
-/** Recreate the HTML legend as SVG primitives appended to `wrapper`:
- * inline swatch <svg>s are cloned wholesale (their pattern defs are
- * self-contained), colored/bordered boxes become <rect>s, CSS gradient
+const BORDER_SIDES = ["top", "right", "bottom", "left"] as const
+
+/** Recreate an HTML subtree — the legend, or the data table an export
+ * includes — as SVG primitives appended to `wrapper`: inline swatch <svg>s
+ * are cloned wholesale (their pattern defs are self-contained),
+ * colored/bordered boxes become <rect>s (a border on only some sides —
+ * the table's row rules — becomes an edge <rect> per side), CSS gradient
  * ramp bars become <linearGradient> fills, and text nodes become <text>
  * positioned by their live layout rects. A DOM-walk (vs. foreignObject)
  * because Safari can't rasterize foreignObject HTML onto a canvas. */
-const appendLegendCapture = (
-	legendRoot: HTMLElement,
+const appendHtmlCapture = (
+	htmlRoot: HTMLElement,
 	wrapper: SVGSVGElement,
 	origin: { left: number; top: number },
 	doc: Document
@@ -332,44 +336,72 @@ const appendLegendCapture = (
 				? parseLinearGradient(style.backgroundImage)
 				: null
 		const hasBg = isVisibleColor(style.backgroundColor)
-		const borderWidth = Number.parseFloat(style.borderTopWidth) || 0
-		const hasBorder =
-			borderWidth > 0 &&
-			style.borderTopStyle !== "none" &&
-			isVisibleColor(style.borderTopColor)
-		if (!gradient && !hasBg && !hasBorder) return
-		const rect = doc.createElementNS(SVG_NS, "rect")
-		rect.setAttribute("x", String(r.left - origin.left))
-		rect.setAttribute("y", String(r.top - origin.top))
-		rect.setAttribute("width", String(r.width))
-		rect.setAttribute("height", String(r.height))
-		const radius = Number.parseFloat(style.borderTopLeftRadius) || 0
-		if (radius > 0) rect.setAttribute("rx", String(radius))
-		if (gradient) {
-			const id = `vc-export-legend-grad-${gradientSeq++}`
-			const grad = doc.createElementNS(SVG_NS, "linearGradient")
-			grad.setAttribute("id", id)
-			grad.setAttribute("x1", gradient.coords.x1)
-			grad.setAttribute("y1", gradient.coords.y1)
-			grad.setAttribute("x2", gradient.coords.x2)
-			grad.setAttribute("y2", gradient.coords.y2)
-			for (const s of gradient.stops) {
-				const stop = doc.createElementNS(SVG_NS, "stop")
-				stop.setAttribute("offset", String(s.offset))
-				stop.setAttribute("stop-color", s.color)
-				grad.append(stop)
+		const borders = BORDER_SIDES.map((side) => {
+			const width =
+				Number.parseFloat(style.getPropertyValue(`border-${side}-width`)) || 0
+			const color = style.getPropertyValue(`border-${side}-color`)
+			return width > 0 &&
+				style.getPropertyValue(`border-${side}-style`) !== "none" &&
+				isVisibleColor(color)
+				? { side, width, color }
+				: null
+		})
+		// The same border all round strokes the box itself (rounded corners
+		// kept); a border on only some sides — the data table's row rules —
+		// paints each of those sides as its own edge rect instead.
+		const [first] = borders
+		const uniform =
+			first !== null &&
+			borders.every((b) => b?.width === first.width && b.color === first.color)
+		const edges = uniform ? [] : borders.filter((b) => b !== null)
+		if (gradient || hasBg || uniform) {
+			const rect = doc.createElementNS(SVG_NS, "rect")
+			rect.setAttribute("x", String(r.left - origin.left))
+			rect.setAttribute("y", String(r.top - origin.top))
+			rect.setAttribute("width", String(r.width))
+			rect.setAttribute("height", String(r.height))
+			const radius = Number.parseFloat(style.borderTopLeftRadius) || 0
+			if (radius > 0) rect.setAttribute("rx", String(radius))
+			if (gradient) {
+				const id = `vc-export-legend-grad-${gradientSeq++}`
+				const grad = doc.createElementNS(SVG_NS, "linearGradient")
+				grad.setAttribute("id", id)
+				grad.setAttribute("x1", gradient.coords.x1)
+				grad.setAttribute("y1", gradient.coords.y1)
+				grad.setAttribute("x2", gradient.coords.x2)
+				grad.setAttribute("y2", gradient.coords.y2)
+				for (const s of gradient.stops) {
+					const stop = doc.createElementNS(SVG_NS, "stop")
+					stop.setAttribute("offset", String(s.offset))
+					stop.setAttribute("stop-color", s.color)
+					grad.append(stop)
+				}
+				ensureDefs().append(grad)
+				rect.setAttribute("fill", `url(#${id})`)
+			} else {
+				rect.setAttribute("fill", hasBg ? style.backgroundColor : "none")
 			}
-			ensureDefs().append(grad)
-			rect.setAttribute("fill", `url(#${id})`)
-		} else {
-			rect.setAttribute("fill", hasBg ? style.backgroundColor : "none")
+			if (uniform) {
+				rect.setAttribute("stroke", first.color)
+				rect.setAttribute("stroke-width", String(first.width))
+			}
+			if (opacity < 1) rect.setAttribute("opacity", String(opacity))
+			wrapper.append(rect)
 		}
-		if (hasBorder) {
-			rect.setAttribute("stroke", style.borderTopColor)
-			rect.setAttribute("stroke-width", String(borderWidth))
+		// After the fill, so a rule sits on top of its own cell's background.
+		for (const edge of edges) {
+			const line = doc.createElementNS(SVG_NS, "rect")
+			const horizontal = edge.side === "top" || edge.side === "bottom"
+			const x = edge.side === "right" ? r.right - edge.width : r.left
+			const y = edge.side === "bottom" ? r.bottom - edge.width : r.top
+			line.setAttribute("x", String(x - origin.left))
+			line.setAttribute("y", String(y - origin.top))
+			line.setAttribute("width", String(horizontal ? r.width : edge.width))
+			line.setAttribute("height", String(horizontal ? edge.width : r.height))
+			line.setAttribute("fill", edge.color)
+			if (opacity < 1) line.setAttribute("opacity", String(opacity))
+			wrapper.append(line)
 		}
-		if (opacity < 1) rect.setAttribute("opacity", String(opacity))
-		wrapper.append(rect)
 	}
 
 	// A text node that WRAPS (fixed-width legends let labels flow onto extra
@@ -501,7 +533,7 @@ const appendLegendCapture = (
 			}
 		}
 	}
-	walk(legendRoot, 1)
+	walk(htmlRoot, 1)
 }
 
 /** Compose the full embed page — chart panels, facet titles/labels, AND the
@@ -567,7 +599,14 @@ export const serializeEmbedCapture = (
 	for (const legend of root.querySelectorAll<HTMLElement>(
 		"[data-legend-root]"
 	)) {
-		appendLegendCapture(legend, wrapper, origin, doc)
+		appendHtmlCapture(legend, wrapper, origin, doc)
+	}
+	// The data table under the chart — present only when the Export modal's
+	// "Include data table" loaded the embed with `table=image`.
+	for (const table of root.querySelectorAll<HTMLElement>(
+		"[data-data-table]"
+	)) {
+		appendHtmlCapture(table, wrapper, origin, doc)
 	}
 
 	if (opts.portable) {

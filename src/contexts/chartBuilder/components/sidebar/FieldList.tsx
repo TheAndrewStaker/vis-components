@@ -262,7 +262,7 @@ export const FieldList = () => {
 }
 
 /** Click-to-edit rename control for one dataset field. The whole name is the
- * click target (a pencil appears on hover as the affordance cue); Enter/blur
+ * click target (a pencil beside it is the affordance cue); Enter/blur
  * commits, Escape cancels. Committing an EMPTIED box is clear-to-default:
  * a renamed field reverts to its original (upload) column name — a full
  * rename-back, configs and all — and a never-renamed field just closes the
@@ -327,7 +327,7 @@ const FieldNameEditor = ({ field }: { field: Field }) => {
 					width={11}
 					height={11}
 					aria-hidden
-					className="flex-shrink-0 opacity-0 group-hover:opacity-100 vc-muted"
+					className="flex-shrink-0 vc-muted"
 				>
 					<path
 						d="M11.7 1.6l2.7 2.7-9.2 9.2-3.4.7.7-3.4 9.2-9.2z"
@@ -438,7 +438,7 @@ const DerivedFieldName = ({ field }: { field: Field }) => {
 					width={11}
 					height={11}
 					aria-hidden
-					className="flex-shrink-0 opacity-0 group-hover:opacity-100 vc-muted"
+					className="flex-shrink-0 vc-muted"
 				>
 					<path
 						d="M11.7 1.6l2.7 2.7-9.2 9.2-3.4.7.7-3.4 9.2-9.2z"

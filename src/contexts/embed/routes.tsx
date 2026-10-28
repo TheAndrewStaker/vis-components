@@ -12,15 +12,17 @@ export type EmbedSearch = {
 	/** `table=off` suppresses the data table (Sidebar → Data table). The
 	 * app's own capture iframes — the Export modal and the library's
 	 * thumbnail refresh — pass it, so an image export keeps the requested
-	 * size and stays the chart alone. */
-	table?: "off"
+	 * size and stays the chart alone. `table=image` is the Export modal's
+	 * "Include data table": the chart at the iframe's height less the
+	 * table's, the table under it as a static block (`ExportTableLayout`). */
+	table?: "off" | "image"
 }
 
 const validateSearch = (raw: Record<string, unknown>): EmbedSearch => {
 	const out: EmbedSearch = {}
 	if (typeof raw.v === "string" && raw.v.length > 0) out.v = raw.v
 	if (raw.part === "chart" || raw.part === "legend") out.part = raw.part
-	if (raw.table === "off") out.table = "off"
+	if (raw.table === "off" || raw.table === "image") out.table = raw.table
 	return out
 }
 

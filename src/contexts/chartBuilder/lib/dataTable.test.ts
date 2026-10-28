@@ -172,6 +172,36 @@ describe("buildDataTable", () => {
 		expect(t.rows.map((r) => r.cells[0]?.text)).toEqual(["L", "M", "S"])
 	})
 
+	it("leaves out an aggregated table's hidden columns, never all of them", () => {
+		const plotted = {
+			aggregated: true as const,
+			columns: [
+				{ name: "region", type: "categorical" as const, formatField: "region" },
+				{ name: "sales (sum)", type: "quantitative" as const, formatField: "sales" },
+				{ name: "Count", type: "quantitative" as const, formatField: null, format: ",d" },
+			],
+			rows: [
+				["West", 1200.5, 2],
+				["East", 300, 1],
+			],
+			note: "",
+		}
+		const t = build(enc({ x: "region", length: "sales" }), {
+			plotted,
+			hiddenPlottedColumns: ["Count"],
+		})
+		expect(t.columns.map((c) => c.name)).toEqual(["region", "sales (sum)"])
+		expect(t.rows.map((r) => r.cells.map((c) => c.raw))).toEqual([
+			["West", "1200.5"],
+			["East", "300"],
+		])
+		const all = build(enc({ x: "region", length: "sales" }), {
+			plotted,
+			hiddenPlottedColumns: ["region", "sales (sum)", "Count"],
+		})
+		expect(all.columns).toHaveLength(3)
+	})
+
 	it("respects a type override", () => {
 		const t = build(enc({ x: "share" }), { overrides: { share: "categorical" } })
 		expect(t.columns[0]?.numeric).toBe(false)
@@ -191,6 +221,12 @@ describe("migrateDataTableConfig", () => {
 	it("defaults an absent config (visuals saved before the table)", () => {
 		expect(migrateDataTableConfig(undefined)).toEqual(DEFAULT_DATA_TABLE_CONFIG)
 		expect(DEFAULT_DATA_TABLE_CONFIG.enabled).toBe(false)
+	})
+
+	it("keeps each placement", () => {
+		for (const placement of ["below", "button", "tabs"] as const) {
+			expect(migrateDataTableConfig({ placement }).placement).toBe(placement)
+		}
 	})
 
 	it("fills a partial config and drops wrong-typed values", () => {
@@ -222,9 +258,20 @@ describe("migrateDataTableConfig", () => {
 	})
 
 	it("is idempotent", () => {
-		const once = migrateDataTableConfig({ enabled: true, maxRows: 25.4, caption: "x" })
+		const once = migrateDataTableConfig({
+			enabled: true,
+			maxRows: 25.4,
+			caption: "x",
+			hiddenPlottedColumns: ["Count", 3, "Count"],
+		})
+		expect(once.hiddenPlottedColumns).toEqual(["Count"])
 		expect(migrateDataTableConfig(once)).toEqual(once)
 		expect(once.maxRows).toBe(25)
+	})
+
+	it("defaults Max rows to 10, keeping a cleared box as every row", () => {
+		expect(migrateDataTableConfig({}).maxRows).toBe(10)
+		expect(migrateDataTableConfig({ maxRows: null }).maxRows).toBeNull()
 	})
 })
 

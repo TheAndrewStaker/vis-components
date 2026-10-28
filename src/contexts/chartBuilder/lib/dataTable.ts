@@ -163,16 +163,29 @@ const orderRows = (
 	})
 }
 
+/** Indices of the aggregated columns the table keeps. Hiding every one
+ *  is ignored — an empty table describes nothing. */
+const keptPlottedColumns = (
+	columns: readonly { name: string }[],
+	hidden: readonly string[] = []
+): number[] => {
+	const all = columns.map((_, i) => i)
+	const kept = all.filter((i) => !hidden.includes(columns[i]?.name ?? ""))
+	return kept.length > 0 ? kept : all
+}
+
 type ColumnArgs = {
 	view: DatasetView
 	encodings: Partial<Encodings>
 	columns: DataTableColumns
 	/** The "select" mode's checked variables. */
 	selectedColumns?: readonly string[]
+	/** Aggregated tables only: computed columns left out, by header. */
+	hiddenPlottedColumns?: readonly string[]
 	overrides: Record<string, FieldType>
 	/** `plottedRows(...)` for the current chart. Aggregated → the table is
-	 *  its columns + rows (the "Columns" option doesn't apply: an aggregate
-	 *  has no other variables to add). Absent / not aggregated → view rows. */
+	 *  its columns + rows, less `hiddenPlottedColumns` (the "Columns" option
+	 *  doesn't apply: an aggregate has no other variables to add). Absent / not aggregated → view rows. */
 	plotted?: PlottedData
 }
 
@@ -182,11 +195,10 @@ type ColumnArgs = {
 export const dataTableColumns = (args: ColumnArgs): DataTableColumn[] => {
 	const { view, encodings, overrides, plotted } = args
 	if (plotted?.aggregated)
-		return plotted.columns.map((c) => ({
-			name: c.name,
-			type: c.type,
-			numeric: c.type === "quantitative",
-		}))
+		return keptPlottedColumns(plotted.columns, args.hiddenPlottedColumns).flatMap((ci) => {
+			const c = plotted.columns[ci]
+			return c ? [{ name: c.name, type: c.type, numeric: c.type === "quantitative" }] : []
+		})
 	return dataTableColumnNames(
 		view,
 		encodings,
@@ -210,6 +222,7 @@ export const buildDataTable = (
 	const hinted = hintedFormats(view)
 	const columns = dataTableColumns(args)
 	if (plotted?.aggregated) {
+		const kept = keptPlottedColumns(plotted.columns, args.hiddenPlottedColumns)
 		// Aggregate columns inherit their MEASURE's format; Count / Share
 		// fall back to their fixed integer / percent format.
 		const specs = plotted.columns.map((c) =>
@@ -221,7 +234,8 @@ export const buildDataTable = (
 			columns,
 			rows: plotted.rows.map((cells, index): DataTableRow => ({
 				index,
-				cells: cells.map((v, ci) => {
+				cells: kept.map((ci) => {
+					const v = cells[ci] ?? null
 					const raw = v === null ? "" : String(v)
 					return { raw, text: raw === "" ? "" : formatTooltipValue(v, specs[ci]) }
 				}),

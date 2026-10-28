@@ -25,14 +25,17 @@ import type { ExportUnit } from "../lib/storage"
 import { getStorageAdapter } from "../lib/storage/registry"
 import {
 	currentChannelConfigsAtom,
+	currentDataTableConfigAtom,
 	embedInstancesAtom,
 	exportSizesAtom,
 	exportUnitAtom,
 	visualsAtom,
 } from "../store/atoms"
+import { migrateDataTableConfig } from "../lib/dataTableConfig"
 import { usePublishEmbed, useUnpublishEmbed } from "../store/publishEmbed"
 import { useCurrentDatasetView } from "../store/useCurrentDatasetView"
 import { useEffectiveGeographyLevel } from "../store/useEffectiveGeographyLevel"
+import { EXPORT_TABLE_HEIGHT_MESSAGE } from "./viz/DataTableBlock"
 
 import { Button } from "../../../components/ui/Button"
 import { Modal } from "../../../components/ui/Modal"
@@ -177,6 +180,16 @@ export const ExportModal = ({ open, onClose, visualId }: Props) => {
 	const canvasSizeCfg = useAtomValue(currentChannelConfigsAtom).canvasSize
 	const fixedCanvas = canvasSizeCfg?.enabled ? canvasSizeCfg : null
 	const setUnit = useSetAtom(exportUnitAtom)
+	// "Include data table" (offered only while the visual has a table on):
+	// the image is the chart at the chosen size with the table added below,
+	// so the preview grows by the table's height, which the embed reports.
+	const hasDataTable = migrateDataTableConfig(
+		useAtomValue(currentDataTableConfigAtom)
+	).enabled
+	const [includeTableChoice, setIncludeTable] = useState(false)
+	const includeTable = hasDataTable && includeTableChoice
+	const [tableHeight, setTableHeight] = useState(0)
+	const extraHeight = includeTable ? tableHeight : 0
 
 	useEffect(() => {
 		if (aspectLocked) ratioRef.current = width / height
@@ -250,7 +263,11 @@ export const ExportModal = ({ open, onClose, visualId }: Props) => {
 	const anchorOffset = Math.max(0, (slotWidth - ANCHOR_WIDTH) / 2)
 	const availW = Math.max(240, slotWidth - anchorOffset - PREVIEW_CHROME_X)
 	const availH = Math.max(160, viewport.h - PREVIEW_CHROME_Y)
-	const previewScale = Math.min(1, availW / width, availH / height)
+	const previewScale = Math.min(
+		1,
+		availW / width,
+		availH / (height + extraHeight)
+	)
 
 	return (
 		// Both tabs use the same pinned top-left slot layout, so switching tabs
@@ -299,6 +316,15 @@ export const ExportModal = ({ open, onClose, visualId }: Props) => {
 						onHeightChange={onHeightChange}
 						onAspectLockedChange={setAspectLocked}
 						previewScale={previewScale}
+						hasDataTable={hasDataTable}
+						includeTable={includeTable}
+						onIncludeTableChange={(on) => {
+							setIncludeTable(on)
+							// The preview reloads; its table reports a fresh height.
+							setTableHeight(0)
+						}}
+						tableHeight={extraHeight}
+						onTableHeight={setTableHeight}
 					/>
 				)}
 			</div>
@@ -754,16 +780,28 @@ const ExportTab = ({
 	onHeightChange,
 	onAspectLockedChange,
 	previewScale,
+	hasDataTable,
+	includeTable,
+	onIncludeTableChange,
+	tableHeight,
+	onTableHeight,
 }: {
 	visualId: string
 	onClose: () => void
 	width: number
+	/** The CHART's height; an included table adds `tableHeight` below it. */
 	height: number
 	aspectLocked: boolean
 	onWidthChange: (v: number) => void
 	onHeightChange: (v: number) => void
 	onAspectLockedChange: (v: boolean) => void
 	previewScale: number
+	hasDataTable: boolean
+	includeTable: boolean
+	onIncludeTableChange: (v: boolean) => void
+	/** The included table's height in px (0 when not included). */
+	tableHeight: number
+	onTableHeight: (v: number) => void
 }) => {
 	const view = useCurrentDatasetView()
 	const setExportSizes = useSetAtom(exportSizesAtom)
@@ -779,19 +817,43 @@ const ExportTab = ({
 	const [error, setError] = useState<string | null>(null)
 	const iframeRef = useRef<HTMLIFrameElement>(null)
 
+	// The whole image: the chart, plus the data table under it if included.
+	const imageHeight = height + tableHeight
 	// SVG is vector — resolution doesn't apply.
 	const rasterized = format !== "svg"
-	const effectiveRatio = clampPixelRatio(width, height, pixelRatio)
+	const effectiveRatio = clampPixelRatio(width, imageHeight, pixelRatio)
 
 	const previewUrl = useMemo(() => {
 		const origin = typeof window === "undefined" ? "" : window.location.origin
 		const params = new URLSearchParams()
 		if (view) params.set("v", view.versionId)
-		// An image export is the chart alone at the requested size — the
-		// data table (HTML under the chart) would take room from it.
-		params.set("table", "off")
+		// Without the table, the image is the chart alone at the requested
+		// size. With it (`table=image`), the embed lays the table out under
+		// the chart and reports its height, and the iframe grows by that
+		// much so the chart keeps the requested size.
+		params.set("table", includeTable ? "image" : "off")
 		return `${origin}/embed/${visualId}?${params.toString()}`
-	}, [visualId, view])
+	}, [visualId, view, includeTable])
+
+	useEffect(() => {
+		if (!includeTable) return
+		const onMessage = (e: MessageEvent<unknown>) => {
+			if (e.source !== iframeRef.current?.contentWindow) return
+			const data = e.data
+			if (
+				typeof data === "object" &&
+				data !== null &&
+				"type" in data &&
+				data.type === EXPORT_TABLE_HEIGHT_MESSAGE &&
+				"height" in data &&
+				typeof data.height === "number"
+			) {
+				onTableHeight(data.height)
+			}
+		}
+		window.addEventListener("message", onMessage)
+		return () => window.removeEventListener("message", onMessage)
+	}, [includeTable, onTableHeight])
 
 	const onDownload = async () => {
 		setError(null)
@@ -832,11 +894,11 @@ const ExportTab = ({
 							type: fileType.mimeType,
 						})
 					: format === "pdf"
-						? await generatePdf(svgText, width, height, effectiveRatio)
+						? await generatePdf(svgText, width, imageHeight, effectiveRatio)
 						: await rasterizeSvg(
 								svgText,
 								width,
-								height,
+								imageHeight,
 								effectiveRatio,
 								format
 							)
@@ -945,6 +1007,18 @@ const ExportTab = ({
 					</label>
 				)}
 			</div>
+			{/* Its own row, under Width — tucked up to the controls (the
+			    column's gap-4 would read as a separate group). */}
+			{hasDataTable && (
+				<label className="-mt-2 flex w-fit items-center gap-2 text-sm">
+					<input
+						type="checkbox"
+						checked={includeTable}
+						onChange={(e) => onIncludeTableChange(e.target.checked)}
+					/>
+					<span className="vc-muted">Include data table</span>
+				</label>
+			)}
 
 			{error && (
 				<div className="rounded-sm bg-red-50 px-2 py-1 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300">
@@ -955,13 +1029,14 @@ const ExportTab = ({
 			<div className="flex flex-col gap-2">
 				<span className="text-sm vc-muted">
 					Preview ({pxToUnit(width, unit)} × {pxToUnit(height, unit)}
-					{unit === "px" ? "" : ` ${unit}`})
+					{unit === "px" ? "" : ` ${unit}`}
+					{includeTable && ", plus the data table"})
 					{(format === "png" || format === "jpeg") &&
-						(effectiveRatio > 1 || unit !== "px") && (
+						(effectiveRatio > 1 || unit !== "px" || includeTable) && (
 							<span className="vc-faint">
 								{" "}
 								— exports at {Math.round(width * effectiveRatio)} ×{" "}
-								{Math.round(height * effectiveRatio)} px
+								{Math.round(imageHeight * effectiveRatio)} px
 								{/* The file is DPI-stamped, so physical-size consumers
 								    (PowerPoint, Word) insert it at the chosen in/cm. */}
 								{unit !== "px" && ` (${Math.round(96 * effectiveRatio)} dpi)`}
@@ -985,14 +1060,14 @@ const ExportTab = ({
 						className="relative"
 						style={{
 							width: width * previewScale,
-							height: height * previewScale,
+							height: imageHeight * previewScale,
 						}}
 					>
 						<iframe
 							ref={iframeRef}
 							src={previewUrl}
 							width={width}
-							height={height}
+							height={imageHeight}
 							title="Export preview"
 							className="block bg-white shadow-sm dark:bg-stone-900"
 							style={{
@@ -1000,13 +1075,17 @@ const ExportTab = ({
 								transformOrigin: "top left",
 							}}
 						/>
+						{/* The handles frame the whole image; a height drag resizes
+						    the chart (the table's height is its own). */}
 						<ResizeHandles
 							width={width}
-							height={height}
+							height={imageHeight}
 							previewScale={previewScale}
 							aspectLocked={aspectLocked}
 							onWidthChange={onWidthChange}
-							onHeightChange={onHeightChange}
+							onHeightChange={(v) =>
+								onHeightChange(Math.max(MIN_EXPORT_DIM, v - tableHeight))
+							}
 						/>
 					</div>
 				</div>

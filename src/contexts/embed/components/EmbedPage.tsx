@@ -16,7 +16,10 @@ import {
 	ChartCanvas,
 } from "../../chartBuilder/components/viz/ChartCanvas"
 import { Legend } from "../../chartBuilder/components/viz/Legend"
-import { EmbedTableLayout } from "../../chartBuilder/components/viz/DataTableBlock"
+import {
+	EmbedTableLayout,
+	ExportTableLayout,
+} from "../../chartBuilder/components/viz/DataTableBlock"
 import { useEnsureCurrentDatasetLoaded } from "../../chartBuilder/store/useCurrentDatasetView"
 import { useDocumentTitle } from "../../../lib/documentTitle"
 
@@ -34,7 +37,8 @@ export const EmbedPage = () => {
 	const requestedVersionId = search.v ?? null
 	const part = search.part ?? null
 	// The data table rides with the chart (full page or the chart part of a
-	// split embed), never the legend part; capture iframes switch it off.
+	// split embed), never the legend part; capture iframes switch it off,
+	// or (`table=image`) ask for the export's static copy under the chart.
 	const dataTableOn =
 		useAtomValue(currentDataTableConfigAtom)?.enabled === true &&
 		part !== "legend" &&
@@ -143,6 +147,9 @@ export const EmbedPage = () => {
 		) : (
 			<ChartCanvas />
 		)
+	if (dataTableOn && search.table === "image") {
+		return <ExportTableLayout>{body}</ExportTableLayout>
+	}
 	if (dataTableOn) return <EmbedTableLayout>{body}</EmbedTableLayout>
 	// data-export-root marks the capture boundary for image exports — the
 	// Export modal serializes everything inside it (chart + legend).
