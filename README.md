@@ -140,12 +140,45 @@ edited, exported and embedded like any other. It has no preview image until
 it is saved from the editor or "Regenerate previews" renders one.
 `PUT /api/visuals/<id>` is unchanged.
 
+### Editing a visual with a chart spec
+
+`PATCH /api/visuals/<id>` changes a stored visual by the spec keys the body
+names and nothing else: `{"title": "…"}` changes the title, and every other
+setting, including ones made by hand in the editor, stays as it was. The keys
+are the create keys except `datasetId`, `variation` and `themeId`; a channel
+set to `null` is unmapped and an axis bound set to `null` is cleared. Edits
+are checked like a create, against the visual's data as the editor shows it
+(its reshape and derived variables included).
+
+```
+curl -X PATCH https://charts.example.com/api/visuals/vs-… \
+  -H 'content-type: application/json' -H 'if-match: 1760000000000' \
+  -d '{"title":"Sales by month, 2026","encodings":{"hue":null}}'
+```
+
+`If-Match` is required and carries the `updatedAt` the caller last read:
+without it the edit answers **428**, `*` answers **400**, and a visual
+changed since (or by another write while the edit runs) answers **412**,
+changing nothing. A saved edit answers **200** `{id, visual, warnings,
+editorUrl, undo}`; `?dryRun=1` answers `{visual, warnings}` and writes
+nothing. **404** for an unknown visual, **409** for one in the trash. The
+preview image is cleared. An editor tab already open on the visual still
+holds the old version, and its next save replaces the edit.
+
+`undo` is the visual as it was, with the content version it was stored at.
+`POST /api/visuals/<id>/restore` with that `undo` as the body, unchanged,
+and `If-Match` carrying the `updatedAt` the edit answered, puts it back:
+**200** `{id, updatedAt, editorUrl}`; **412** when the visual changed after
+the edit; **409** for a visual in the trash or an `undo` from another content
+version; **428** without `If-Match`; **400** for a body that isn't a whole
+`undo` for this visual.
+
 `GET /api/chart-spec` lists what a spec can say: the channels (with the field
 types each takes and the channels it can't be mapped with), the field types,
 the families with the channels each variation fills, and the themes as
-`{id, name, default}`, the keys a spec takes (`spec`, each with what it says),
-and the `features` this server serves. All of it is read from the tables the
-editor uses.
+`{id, name, default}`, the keys a spec takes (`spec`, each with what it says)
+and the ones an edit takes (`editKeys`), and the `features` this server
+serves. All of it is read from the tables the editor uses.
 
 ## Verifying changes
 

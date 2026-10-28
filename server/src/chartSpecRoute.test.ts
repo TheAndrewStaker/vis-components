@@ -266,7 +266,7 @@ describe("GET /api/chart-spec", () => {
 		}
 		expect(Object.keys(body.spec)).toEqual(expect.arrayContaining(["datasetId", "encodings", "axes"]))
 		expect(body.spec.encodings).toMatch(/Channel → field name/)
-		expect(body.features).toEqual(["create"])
+		expect(body.features).toEqual(["create", "edit", "restore"])
 		expect(body.channels.map((c) => c.channel)).toContain("hue")
 		expect(body.channels.map((c) => c.channel)).not.toContain("text")
 		expect(body.channels.find((c) => c.channel === "r")?.conflictsWith).toEqual(
@@ -284,5 +284,149 @@ describe("GET /api/chart-spec", () => {
 		})
 		expect(body.themes.filter((t) => t.default).map((t) => t.id)).toEqual([SYSTEM_LIGHT_THEME.id])
 		expect((await fetch(`${base}/api/chart-spec`, { method: "POST" })).status).toBe(405)
+	})
+})
+
+/** A PATCH; If-Match defaults to the visual's current updatedAt. */
+const patch = async (base: string, id: string, edit: unknown, headers?: Record<string, string>, query = "") =>
+	fetch(`${base}/api/visuals/${id}${query}`, {
+		method: "PATCH",
+		headers: headers ?? { "if-match": String((await visuals(base)).find((v) => v.id === id)?.updatedAt ?? 0) },
+		body: typeof edit === "string" ? edit : JSON.stringify(edit),
+	})
+
+const restore = (base: string, id: string, undo: unknown, updatedAt?: number, headers = {}) =>
+	fetch(`${base}/api/visuals/${id}/restore`, {
+		method: "POST",
+		headers: { ...(updatedAt === undefined ? {} : { "if-match": String(updatedAt) }), ...headers },
+		body: JSON.stringify(undo),
+	})
+
+/** A created chart, as GET returns it. */
+const created = async (base: string): Promise<Visual> => {
+	await seedDataset(base, CAFE)
+	const res = await post(base, cafe({ title: "Muffins" }))
+	expect(res.status).toBe(201)
+	return ((await res.json()) as { visual: Visual }).visual
+}
+
+type Edited = { visual: Visual; undo: { visualsVersion: number; visual: Visual } }
+
+describe("PATCH /api/visuals/<id>", () => {
+	it("applies an edit that GET then returns, and answers its undo", async () => {
+		const base = await start()
+		const v0 = await created(base)
+		const res = await patch(base, v0.id, { title: "Muffins sold", encodings: { hue: null } })
+		expect(res.status).toBe(200)
+		const body = (await res.json()) as Edited
+		expect(body.visual.labelsConfig.title).toBe("Muffins sold")
+		expect(body.visual.encodings.hue).toEqual({ field: null })
+		expect(body.visual.updatedAt).toBeGreaterThan(v0.updatedAt ?? 0)
+		// The stored body holds no thumbnail; GET adds it back as null.
+		expect(body.undo.visualsVersion).toBe(VISUALS_VERSION)
+		expect({ ...body.undo.visual, thumbnail: null }).toEqual(v0)
+		expect(await visuals(base)).toEqual([body.visual])
+	})
+
+	it("refuses a stale, missing or * If-Match, changing nothing", async () => {
+		const base = await start()
+		const v0 = await created(base)
+		expect((await patch(base, v0.id, { title: "x" }, { "if-match": "1" })).status).toBe(412)
+		expect((await patch(base, v0.id, { title: "x" }, {})).status).toBe(428)
+		expect((await patch(base, v0.id, { title: "x" }, { "if-match": "*" })).status).toBe(400)
+		expect((await patch(base, v0.id, { title: "x" }, { "if-match": `W/"${v0.updatedAt}"` })).status).toBe(200)
+		const res = await patch(base, v0.id, { title: "y" }, { "if-match": String(v0.updatedAt) })
+		expect(res.status).toBe(412)
+		expect((await visuals(base))[0]?.labelsConfig.title).toBe("x")
+	})
+
+	it("checks without saving on ?dryRun=1, and lists every problem", async () => {
+		const base = await start()
+		const v0 = await created(base)
+		const dry = await patch(base, v0.id, { title: "x" }, undefined, "?dryRun=1")
+		expect(dry.status).toBe(200)
+		const bad = await patch(base, v0.id, { datasetId: "ds-x", encodings: { x: "Month" } })
+		expect(bad.status).toBe(400)
+		expect(await errorPaths(bad)).toEqual(["datasetId", "encodings.x"])
+		expect(await errorPaths(await patch(base, v0.id, {}))).toEqual([""])
+		expect(await errorPaths(await patch(base, v0.id, "{nope"))).toEqual([""])
+		expect(await visuals(base)).toEqual([v0])
+	})
+
+	it("answers 404 for an unknown visual, 400 for a bad id and 409 for a trashed one", async () => {
+		const base = await start()
+		const v0 = await created(base)
+		expect((await patch(base, "vs-nope", { title: "x" }, { "if-match": "0" })).status).toBe(404)
+		expect((await patch(base, "bad%20id", { title: "x" }, { "if-match": "0" })).status).toBe(400)
+		await put(base, `/api/visuals/${v0.id}`, { ...v0, deletedAt: 1 })
+		expect((await patch(base, v0.id, { title: "x" })).status).toBe(409)
+	})
+
+	it("clears the stale thumbnail", async () => {
+		const base = await start()
+		const v0 = await created(base)
+		await put(base, `/api/visuals/${v0.id}`, { ...v0, thumbnail: "data:image/png;base64,AAAA" })
+		expect((await patch(base, v0.id, { title: "x" })).status).toBe(200)
+		expect((await visuals(base))[0]?.thumbnail).toBeNull()
+	})
+})
+
+describe("POST /api/visuals/<id>/restore", () => {
+	const edit = async (base: string) => {
+		const v0 = await created(base)
+		const body = (await (await patch(base, v0.id, { title: "Changed" })).json()) as Edited
+		return { v0, ...body }
+	}
+
+	it("puts back the visual the edit replaced, under a new updatedAt", async () => {
+		const base = await start()
+		const { v0, visual, undo } = await edit(base)
+		const res = await restore(base, v0.id, undo, visual.updatedAt)
+		expect(res.status).toBe(200)
+		const { updatedAt } = (await res.json()) as { updatedAt: number }
+		expect(updatedAt).toBeGreaterThan(visual.updatedAt ?? 0)
+		expect(await visuals(base)).toEqual([{ ...v0, updatedAt }])
+	})
+
+	it("refuses when the visual changed after the edit, and keeps the change", async () => {
+		const base = await start()
+		const { v0, undo } = await edit(base)
+		expect((await patch(base, v0.id, { title: "Later" })).status).toBe(200)
+		expect((await restore(base, v0.id, undo, v0.updatedAt)).status).toBe(412)
+		expect((await visuals(base))[0]?.labelsConfig.title).toBe("Later")
+	})
+
+	it("refuses an undo from another version, another visual, a partial one, or without If-Match", async () => {
+		const base = await start()
+		const { v0, visual, undo } = await edit(base)
+		expect((await restore(base, v0.id, { ...undo, visualsVersion: 1 }, visual.updatedAt)).status).toBe(409)
+		expect((await restore(base, v0.id, { ...undo, visual: { ...v0, id: "vs-other" } }, visual.updatedAt)).status).toBe(400)
+		expect((await restore(base, v0.id, { ...undo, visual: { id: v0.id } }, visual.updatedAt)).status).toBe(400)
+		expect((await restore(base, v0.id, undo)).status).toBe(428)
+		expect((await visuals(base))[0]?.labelsConfig.title).toBe("Changed")
+	})
+})
+
+describe("Saved by on edits and undos", () => {
+	const jane = { id: "jane@example.com", name: "Jane Doe" }
+	const nancy = { id: "nancy@example.com", name: "Nancy Organ" }
+	const as = (user: typeof jane | null): Record<string, string> =>
+		user ? { "x-test-user": JSON.stringify(user) } : {}
+
+	it("stamps the requester, or keeps the stored saver when anonymous", async () => {
+		const base = await start(undefined, (req) => {
+			const raw = req.headers["x-test-user"]
+			return typeof raw === "string" ? (JSON.parse(raw) as never) : null
+		})
+		await seedDataset(base, CAFE)
+		const v0 = ((await (await post(base, cafe(), "", as(jane))).json()) as { visual: Visual }).visual
+		const editAs = async (v: Visual, user: typeof jane | null) =>
+			(await (await patch(base, v.id, { title: "x" }, { "if-match": String(v.updatedAt), ...as(user) })).json()) as Edited
+		const byNancy = await editAs(v0, nancy)
+		expect(byNancy.visual.updatedBy).toEqual(nancy)
+		const anonymous = await editAs(byNancy.visual, null)
+		expect(anonymous.visual.updatedBy).toEqual(nancy)
+		expect((await restore(base, v0.id, anonymous.undo, anonymous.visual.updatedAt, as(jane))).status).toBe(200)
+		expect((await visuals(base))[0]?.updatedBy).toEqual(jane)
 	})
 })
