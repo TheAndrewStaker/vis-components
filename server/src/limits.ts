@@ -39,3 +39,8 @@ export const EMBED_BODY_CAP_BYTES = 640 * 1024 * 1024
  *  is generous headroom for that while still bounding what one request can
  *  park in the public dir. */
 export const EMBED_IMAGE_BODY_CAP_BYTES = 32 * 1024 * 1024
+
+/** Cap on a chart-spec body (POST /api/visuals). A spec names fields and a
+ *  few settings, so even a long one is a few KB; the cap keeps a malformed
+ *  or hostile body from costing the shared server seconds of checking. */
+export const SPEC_BODY_CAP_BYTES = 64 * 1024
