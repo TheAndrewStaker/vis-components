@@ -130,6 +130,10 @@ runs every check and answers with the visual it would save, writing nothing.
   body) and a suggestion when a name is close to a real one, up to 30.
 - **409** when stored visuals, themes or data sets are at another content
   version than this server; **413** past the body cap.
+- **415** for a body not sent as `content-type: application/json`, and
+  **403** for a request whose `Origin` is another site, so a page elsewhere
+  can't create charts with a visitor's session. A request with no `Origin`
+  (a script, the MCP) is accepted.
 
 The saved visual is an ordinary one: it opens in the editor and can be
 edited, exported and embedded like any other. It has no preview image until
