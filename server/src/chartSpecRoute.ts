@@ -8,7 +8,8 @@
  *  `{errors: [{path, message}]}`; every other failure keeps the server's
  *  `{error}` shape (HttpError). PATCH /api/visuals/<id> edits one the same
  *  way and POST /api/visuals/<id>/restore undoes that edit. GET
- *  /api/chart-spec lists what a spec can say. */
+ *  /api/visuals/<id> reads one with its ETag. GET /api/chart-spec lists
+ *  what a spec can say. */
 
 import { createHash } from "node:crypto"
 import type { IncomingMessage, ServerResponse } from "node:http"
@@ -60,7 +61,7 @@ import { JSON_BODY_CAP_BYTES, SPEC_BODY_CAP_BYTES } from "./limits.js"
 
 /** What this server's chart-spec routes do, listed by GET /api/chart-spec
  *  so a client can tell which of them it serves. */
-export const CHART_SPEC_FEATURES = ["create", "edit", "restore"] as const
+export const CHART_SPEC_FEATURES = ["create", "edit", "restore", "read"] as const
 
 /** Same row the client's settings adapter reads: which theme seeds new
  *  visualizations on this server. */
@@ -428,6 +429,21 @@ export const editVisualFromSpec = async (
 	)
 }
 
+/** GET /api/visuals/<id>: the stored visual without its preview image (as
+ *  the collection's `?thumbnails=0` answers it) and its ETag, the one an
+ *  edit or restore takes as If-Match. An unknown or trashed visual answers
+ *  404, like one deleted. */
+const readVisual = (res: ServerResponse, db: DatabaseSync, id: string): void => {
+	const stored = readVisualBody(db, id)
+	if (stored === undefined) throw new HttpError(404, "Not found")
+	const visual = parseJson(stored) as Visual | undefined
+	if (!visual || typeof visual !== "object" || visual.id !== id) {
+		throw new HttpError(500, "The stored visual isn't readable")
+	}
+	if (isTrashed(visual)) throw new HttpError(404, "Not found")
+	sendJson(res, 200, stored, { etag: visualEtag(visual) })
+}
+
 const isRecord = (v: unknown): boolean => typeof v === "object" && v !== null && !Array.isArray(v)
 
 /** The first required Visual key `visual` lacks or holds the wrong kind of
@@ -502,9 +518,9 @@ export const restoreVisual = async (
 }
 
 /** The chart-spec routes, dispatched before the generic collection routes:
- *  GET /api/chart-spec, POST /api/visuals, PATCH /api/visuals/<id> and
- *  POST /api/visuals/<id>/restore. False when the request is none of
- *  these. */
+ *  GET /api/chart-spec, POST /api/visuals, GET and PATCH
+ *  /api/visuals/<id> and POST /api/visuals/<id>/restore. False when the
+ *  request is none of these. */
 export const handleChartSpec = async (
 	req: IncomingMessage,
 	res: ServerResponse,
@@ -539,6 +555,11 @@ export const handleChartSpec = async (
 	const query = new URLSearchParams(route.query)
 	if (!id && method === "POST") {
 		await createVisualFromSpec(req, res, db, config, query, deps.mintVisualId, user)
+		return true
+	}
+	if (id && method === "GET" && rest.length === 0) {
+		if (!isSafeId(id)) throw new HttpError(400, "Invalid id")
+		readVisual(res, db, id)
 		return true
 	}
 	const restore = method === "POST" && rest.length === 1 && rest[0] === "restore"
