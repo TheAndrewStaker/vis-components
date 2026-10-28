@@ -627,12 +627,16 @@ export const createDatasetFromRows = async (
 	if (datasetSizeIssue(denseFloor) === "reject") {
 		throw new HttpError(413, datasetRejectMessage(denseFloor))
 	}
+	// Own properties only: a column named toString or constructor must not
+	// read the function every object inherits.
 	const text = records.map((r) =>
-		Object.fromEntries(columns.map((c) => [c, r[c] == null ? "" : String(r[c])]))
+		Object.fromEntries(columns.map((c) => [c, !Object.hasOwn(r, c) || r[c] == null ? "" : String(r[c])]))
 	)
 	const fields: Field[] = columns.map((c) => ({
 		name: c,
-		inferredType: (named[c] as FieldType | undefined) ?? inferFieldType(text.map((r) => r[c] ?? "")),
+		inferredType: Object.hasOwn(named, c)
+			? (named[c] as FieldType)
+			: inferFieldType(text.map((r) => r[c] ?? "")),
 	}))
 	const now = Date.now()
 	const version = {

@@ -549,6 +549,24 @@ describe("POST /api/datasets", () => {
 		expect(chart.status).toBe(201)
 	})
 
+	it("reads only a column's own cells and types, even for a column named toString", async () => {
+		const base = await start()
+		const res = await create(base, {
+			name: "Odd names",
+			rows: [{ toString: "A", constructor: "B" }, { other: 2 }],
+			types: { other: "categorical" },
+		})
+		expect(res.status).toBe(201)
+		const made = (await res.json()) as { id: string; fields: Array<{ name: string; type: string }> }
+		expect(made.fields).toEqual([
+			{ name: "toString", type: "categorical" },
+			{ name: "constructor", type: "categorical" },
+			{ name: "other", type: "categorical" },
+		])
+		const body = (await (await fetch(`${base}/api/datasets/${made.id}`)).json()) as Dataset
+		expect(body.versions[0]?.rows[1]).toEqual({ toString: "", constructor: "", other: "2" })
+	})
+
 	it("reports every problem with its path and stores nothing", async () => {
 		const base = await start()
 		const res = await create(base, { name: " ", rows: [{ a: 1 }, "x", { b: { deep: 1 } }], types: [] })
