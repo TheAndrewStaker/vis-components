@@ -152,14 +152,20 @@ are checked like a create, against the visual's data as the editor shows it
 
 ```
 curl -X PATCH https://charts.example.com/api/visuals/vs-… \
-  -H 'content-type: application/json' -H 'if-match: 1760000000000' \
+  -H 'content-type: application/json' -H 'if-match: "kq3C…"' \
   -d '{"title":"Sales by month, 2026","encodings":{"hue":null}}'
 ```
 
-`If-Match` is required and carries the `updatedAt` the caller last read:
-without it the edit answers **428**, `*` answers **400**, and a visual
-changed since (or by another write while the edit runs) answers **412**,
-changing nothing. A saved edit answers **200** `{id, visual, warnings,
+`If-Match` is required and carries the visual's ETag as the caller last
+read it: without it the edit answers **428**, `*` answers **400**, and a
+visual changed since (or by another write while the edit runs) answers
+**412**, changing nothing. The ETag is a SHA-256 (base64url, quoted) of the
+visual's JSON with its keys sorted and `updatedAt`, `updatedBy`,
+`thumbnail` and `thumbnailAt` left out, so a save that changes only when or
+by whom it was saved, or its preview image (as opening it in the editor
+does), keeps the ETag. Create, edit and restore answer it in an `ETag`
+header; a visual read from `GET /api/visuals` hashes the same way
+(`visualEtag` in `server/src/chartSpecRoute.ts`). A saved edit answers **200** `{id, visual, warnings,
 editorUrl, undo}`; `?dryRun=1` answers `{visual, warnings}` and writes
 nothing. **404** for an unknown visual, **409** for one in the trash. The
 preview image is cleared. An editor tab already open on the visual still
@@ -167,9 +173,9 @@ holds the old version, and its next save replaces the edit.
 
 `undo` is the visual as it was, with the content version it was stored at.
 `POST /api/visuals/<id>/restore` with that `undo` as the body, unchanged,
-and `If-Match` carrying the `updatedAt` the edit answered, puts it back:
-**200** `{id, updatedAt, editorUrl}`; **412** when the visual changed after
-the edit; **409** for a visual in the trash or an `undo` from another content
+and `If-Match` carrying the ETag the edit answered, puts it back:
+**200** `{id, updatedAt, editorUrl}` and its new `ETag`; **412** when the
+visual changed after the edit (a new preview alone doesn't count); **409** for a visual in the trash or an `undo` from another content
 version; **428** without `If-Match`; **400** for a body that isn't a whole
 `undo` for this visual.
 

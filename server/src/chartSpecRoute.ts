@@ -10,6 +10,7 @@
  *  way and POST /api/visuals/<id>/restore undoes that edit. GET
  *  /api/chart-spec lists what a spec can say. */
 
+import { createHash } from "node:crypto"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { DatabaseSync } from "node:sqlite"
 import { gunzipSync } from "node:zlib"
@@ -237,15 +238,41 @@ const storedVisual = (db: DatabaseSync, id: string): { stored: string; visual: V
 	return { stored, visual }
 }
 
-/** The `updatedAt` an If-Match header carries, quotes and W/ dropped. */
-const ifMatch = (req: IncomingMessage, missing: string): string => {
+/** Keys a save rewrites without changing the chart: when it was saved and
+ *  by whom, and the preview image and when that was captured. Opening a
+ *  chart in the editor writes all four and nothing else. */
+const BOOKKEEPING_KEYS = new Set(["updatedAt", "updatedBy", "thumbnail", "thumbnailAt"])
+
+/** JSON with every object's keys sorted, so equal values hash equally
+ *  whatever order they were written in. */
+const canonicalJson = (value: unknown): string =>
+	JSON.stringify(value, (_key, v: unknown) =>
+		typeof v === "object" && v !== null && !Array.isArray(v)
+			? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+			: v
+	)
+
+/** A visual's ETag: a hash of what it draws, its bookkeeping keys left
+ *  out, so a save that changes only those keeps the stamp and any other
+ *  change moves it. PATCH and restore take it as If-Match. */
+export const visualEtag = (visual: object): string => {
+	const content = Object.fromEntries(
+		Object.entries(visual).filter(([key]) => !BOOKKEEPING_KEYS.has(key))
+	)
+	return `"${createHash("sha256").update(canonicalJson(content)).digest("base64url")}"`
+}
+
+/** Refuse unless `If-Match` names `visual`'s ETag (quotes and W/
+ *  ignored). */
+const assertIfMatch = (req: IncomingMessage, visual: Visual, missing: string, stale: string): void => {
 	const raw = req.headers["if-match"]
 	if (raw === undefined) throw new HttpError(428, missing)
-	const wanted = String(raw).replace(/^W\//, "").replace(/"/g, "").trim()
+	const unquote = (tag: string): string => tag.trim().replace(/^W\//, "").replace(/"/g, "")
+	const wanted = unquote(String(raw))
 	if (wanted === "*") {
-		throw new HttpError(400, "If-Match must be the visual's updatedAt as last read, not *")
+		throw new HttpError(400, "If-Match must be the visual's ETag as last read, not *")
 	}
-	return wanted
+	if (wanted !== unquote(visualEtag(visual))) throw new HttpError(412, stale)
 }
 
 /** `?dryRun`: "1"/"true" checks only, "0"/"false"/absent saves. */
@@ -327,7 +354,8 @@ export const createVisualFromSpec = async (
 			visual,
 			warnings,
 			editorUrl: `${config.baseUrl}/editor/${visual.id}`,
-		})
+		}),
+		{ etag: visualEtag(visual) }
 	)
 }
 
@@ -338,7 +366,7 @@ type UndoEnvelope = { visualsVersion: number; visual: Visual }
 
 /** PATCH /api/visuals/<id>: apply a chart edit (the spec keys it names,
  *  nothing else) to a stored visual, checked like a create. `If-Match`
- *  (required) carries the `updatedAt` the caller last read; a visual
+ *  (required) carries the ETag the caller last read; a visual whose chart
  *  changed since, or changed while this request ran, answers 412 and is
  *  left alone. A trashed visual answers 409. `?dryRun=1` answers with the
  *  edited visual and writes nothing. A saved edit also answers `undo`: the
@@ -360,16 +388,12 @@ export const editVisualFromSpec = async (
 	}
 	assertStampsCurrent(db)
 	const { stored, visual } = storedVisual(db, id)
-	const wanted = ifMatch(
+	assertIfMatch(
 		req,
-		"Send If-Match with the visual's updatedAt as last read, so an edit can't replace newer work"
+		visual,
+		"Send If-Match with the visual's ETag as last read, so an edit can't replace newer work",
+		"This visual changed since it was read; read it again"
 	)
-	if (wanted !== String(visual.updatedAt)) {
-		throw new HttpError(
-			412,
-			`This visual changed since it was read (updatedAt ${String(visual.updatedAt)}, expected ${wanted}); read it again`
-		)
-	}
 
 	const themes = loadThemes(db)
 	const theme = themes.find((t) => t.id === visual.themeId) ?? defaultTheme(db, themes)
@@ -399,7 +423,8 @@ export const editVisualFromSpec = async (
 			warnings,
 			editorUrl: `${config.baseUrl}/editor/${id}`,
 			undo: { visualsVersion: VISUALS_VERSION, visual } satisfies UndoEnvelope,
-		})
+		}),
+		{ etag: visualEtag(edited) }
 	)
 }
 
@@ -414,8 +439,10 @@ const missingVisualKey = (visual: Record<string, unknown>): string | undefined =
 }
 
 /** POST /api/visuals/<id>/restore: put back the visual an edit replaced,
- *  from the `undo` that edit answered. `If-Match` carries the `updatedAt`
- *  the edit answered; a visual changed since answers 412 and is left alone.
+ *  from the `undo` that edit answered. `If-Match` carries the ETag the
+ *  edit answered; a visual whose chart changed since answers 412 and is
+ *  left alone, while a save that changed only bookkeeping (an editor
+ *  opening it) does not stand in the way.
  *  An `undo` from another content version answers 409. */
 export const restoreVisual = async (
 	req: IncomingMessage,
@@ -450,13 +477,12 @@ export const restoreVisual = async (
 		)
 	}
 	const { stored, visual: current } = storedVisual(db, id)
-	const wanted = ifMatch(req, "Send If-Match with the updatedAt the edit answered")
-	if (wanted !== String(current.updatedAt)) {
-		throw new HttpError(
-			412,
-			`This visual changed after that edit (updatedAt ${String(current.updatedAt)}, expected ${wanted}); undoing it would erase the newer change`
-		)
-	}
+	assertIfMatch(
+		req,
+		current,
+		"Send If-Match with the ETag the edit answered",
+		"This visual changed after that edit; undoing it would erase the newer change"
+	)
 	const updatedAt = Math.max(Date.now(), (current.updatedAt ?? 0) + 1)
 	const restored = stampedBy(
 		structuredVisual({ ...before, updatedAt, thumbnail: null }),
@@ -469,7 +495,8 @@ export const restoreVisual = async (
 	return sendJson(
 		res,
 		200,
-		JSON.stringify({ id, updatedAt, editorUrl: `${config.baseUrl}/editor/${id}` })
+		JSON.stringify({ id, updatedAt, editorUrl: `${config.baseUrl}/editor/${id}` }),
+		{ etag: visualEtag(restored) }
 	)
 }
 

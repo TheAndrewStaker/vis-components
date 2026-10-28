@@ -12,6 +12,7 @@ import { SYSTEM_DARK_THEME, SYSTEM_LIGHT_THEME } from "../../src/contexts/chartB
 import type { Dataset, Visual } from "../../src/contexts/chartBuilder/lib/types"
 import { hydrateVisual } from "../../src/contexts/chartBuilder/lib/visualDefaults"
 import { CAFE } from "../../src/testSupport/chartSpecFixtures"
+import { visualEtag } from "./chartSpecRoute.js"
 import { openDb } from "./db.js"
 import type { IdentifyUser } from "./identity.js"
 import { SPEC_BODY_CAP_BYTES } from "./limits.js"
@@ -287,18 +288,24 @@ describe("GET /api/chart-spec", () => {
 	})
 })
 
-/** A PATCH; If-Match defaults to the visual's current updatedAt. */
+/** The ETag of visual `id` as GET returns it. */
+const etagOf = async (base: string, id: string): Promise<string> => {
+	const v = (await visuals(base)).find((x) => x.id === id)
+	return v ? visualEtag(v) : '"none"'
+}
+
+/** A PATCH; If-Match defaults to the visual's current ETag. */
 const patch = async (base: string, id: string, edit: unknown, headers?: Record<string, string>, query = "") =>
 	fetch(`${base}/api/visuals/${id}${query}`, {
 		method: "PATCH",
-		headers: headers ?? { "if-match": String((await visuals(base)).find((v) => v.id === id)?.updatedAt ?? 0) },
+		headers: headers ?? { "if-match": await etagOf(base, id) },
 		body: typeof edit === "string" ? edit : JSON.stringify(edit),
 	})
 
-const restore = (base: string, id: string, undo: unknown, updatedAt?: number, headers = {}) =>
+const restore = (base: string, id: string, undo: unknown, etag?: string | null, headers = {}) =>
 	fetch(`${base}/api/visuals/${id}/restore`, {
 		method: "POST",
-		headers: { ...(updatedAt === undefined ? {} : { "if-match": String(updatedAt) }), ...headers },
+		headers: { ...(etag == null ? {} : { "if-match": etag }), ...headers },
 		body: JSON.stringify(undo),
 	})
 
@@ -322,6 +329,8 @@ describe("PATCH /api/visuals/<id>", () => {
 		expect(body.visual.labelsConfig.title).toBe("Muffins sold")
 		expect(body.visual.encodings.hue).toEqual({ field: null })
 		expect(body.visual.updatedAt).toBeGreaterThan(v0.updatedAt ?? 0)
+		expect(res.headers.get("etag")).toBe(visualEtag(body.visual))
+		expect(res.headers.get("etag")).not.toBe(visualEtag(v0))
 		// The stored body holds no thumbnail; GET adds it back as null.
 		expect(body.undo.visualsVersion).toBe(VISUALS_VERSION)
 		expect({ ...body.undo.visual, thumbnail: null }).toEqual(v0)
@@ -331,13 +340,29 @@ describe("PATCH /api/visuals/<id>", () => {
 	it("refuses a stale, missing or * If-Match, changing nothing", async () => {
 		const base = await start()
 		const v0 = await created(base)
-		expect((await patch(base, v0.id, { title: "x" }, { "if-match": "1" })).status).toBe(412)
+		const etag = visualEtag(v0)
+		expect((await patch(base, v0.id, { title: "x" }, { "if-match": String(v0.updatedAt) })).status).toBe(412)
 		expect((await patch(base, v0.id, { title: "x" }, {})).status).toBe(428)
 		expect((await patch(base, v0.id, { title: "x" }, { "if-match": "*" })).status).toBe(400)
-		expect((await patch(base, v0.id, { title: "x" }, { "if-match": `W/"${v0.updatedAt}"` })).status).toBe(200)
-		const res = await patch(base, v0.id, { title: "y" }, { "if-match": String(v0.updatedAt) })
+		expect((await patch(base, v0.id, { title: "x" }, { "if-match": `W/${etag}` })).status).toBe(200)
+		const res = await patch(base, v0.id, { title: "y" }, { "if-match": etag })
 		expect(res.status).toBe(412)
 		expect((await visuals(base))[0]?.labelsConfig.title).toBe("x")
+	})
+
+	it("stamps what the chart draws, not when or by whom it was saved", async () => {
+		const base = await start()
+		const v0 = await created(base)
+		const res = await post(base, cafe({ title: "Muffins" }))
+		expect(res.headers.get("etag")).toBe(visualEtag(((await res.json()) as { visual: Visual }).visual))
+		const etag = visualEtag(v0)
+		// An editor opening the chart: a new preview and save stamps, keys in another order.
+		const viewed = { ...v0, thumbnail: "data:image/png;base64,AAAA", thumbnailAt: 2, updatedAt: v0.updatedAt + 5 }
+		await put(base, `/api/visuals/${v0.id}`, Object.fromEntries(Object.entries(viewed).reverse()))
+		expect(await etagOf(base, v0.id)).toBe(etag)
+		await put(base, `/api/visuals/${v0.id}`, { ...viewed, name: "Renamed" })
+		expect(await etagOf(base, v0.id)).not.toBe(etag)
+		expect((await patch(base, v0.id, { title: "x" }, { "if-match": etag })).status).toBe(412)
 	})
 
 	it("checks without saving on ?dryRun=1, and lists every problem", async () => {
@@ -374,34 +399,48 @@ describe("PATCH /api/visuals/<id>", () => {
 describe("POST /api/visuals/<id>/restore", () => {
 	const edit = async (base: string) => {
 		const v0 = await created(base)
-		const body = (await (await patch(base, v0.id, { title: "Changed" })).json()) as Edited
-		return { v0, ...body }
+		const res = await patch(base, v0.id, { title: "Changed" })
+		const body = (await res.json()) as Edited
+		return { v0, ...body, etag: res.headers.get("etag") }
 	}
 
 	it("puts back the visual the edit replaced, under a new updatedAt", async () => {
 		const base = await start()
-		const { v0, visual, undo } = await edit(base)
-		const res = await restore(base, v0.id, undo, visual.updatedAt)
+		const { v0, visual, undo, etag } = await edit(base)
+		const res = await restore(base, v0.id, undo, etag)
 		expect(res.status).toBe(200)
 		const { updatedAt } = (await res.json()) as { updatedAt: number }
 		expect(updatedAt).toBeGreaterThan(visual.updatedAt ?? 0)
 		expect(await visuals(base)).toEqual([{ ...v0, updatedAt }])
+		expect(res.headers.get("etag")).toBe(visualEtag(v0))
+	})
+
+	it("still undoes after an editor saves a new preview of the edited chart", async () => {
+		const base = await start()
+		const { v0, visual, undo, etag } = await edit(base)
+		const viewed = { ...visual, thumbnail: "data:image/png;base64,AAAA", thumbnailAt: 9, updatedAt: visual.updatedAt + 5 }
+		await put(base, `/api/visuals/${v0.id}`, viewed)
+		const res = await restore(base, v0.id, undo, etag)
+		expect(res.status).toBe(200)
+		expect((await visuals(base))[0]?.labelsConfig.title).toBe("Muffins")
 	})
 
 	it("refuses when the visual changed after the edit, and keeps the change", async () => {
 		const base = await start()
-		const { v0, undo } = await edit(base)
+		const { v0, visual, undo, etag } = await edit(base)
+		await put(base, `/api/visuals/${v0.id}`, { ...visual, labelsConfig: { ...visual.labelsConfig, subtitle: "Later" } })
+		expect((await restore(base, v0.id, undo, etag)).status).toBe(412)
 		expect((await patch(base, v0.id, { title: "Later" })).status).toBe(200)
-		expect((await restore(base, v0.id, undo, v0.updatedAt)).status).toBe(412)
+		expect((await restore(base, v0.id, undo, etag)).status).toBe(412)
 		expect((await visuals(base))[0]?.labelsConfig.title).toBe("Later")
 	})
 
 	it("refuses an undo from another version, another visual, a partial one, or without If-Match", async () => {
 		const base = await start()
-		const { v0, visual, undo } = await edit(base)
-		expect((await restore(base, v0.id, { ...undo, visualsVersion: 1 }, visual.updatedAt)).status).toBe(409)
-		expect((await restore(base, v0.id, { ...undo, visual: { ...v0, id: "vs-other" } }, visual.updatedAt)).status).toBe(400)
-		expect((await restore(base, v0.id, { ...undo, visual: { id: v0.id } }, visual.updatedAt)).status).toBe(400)
+		const { v0, undo, etag } = await edit(base)
+		expect((await restore(base, v0.id, { ...undo, visualsVersion: 1 }, etag)).status).toBe(409)
+		expect((await restore(base, v0.id, { ...undo, visual: { ...v0, id: "vs-other" } }, etag)).status).toBe(400)
+		expect((await restore(base, v0.id, { ...undo, visual: { id: v0.id } }, etag)).status).toBe(400)
 		expect((await restore(base, v0.id, undo)).status).toBe(428)
 		expect((await visuals(base))[0]?.labelsConfig.title).toBe("Changed")
 	})
@@ -421,12 +460,12 @@ describe("Saved by on edits and undos", () => {
 		await seedDataset(base, CAFE)
 		const v0 = ((await (await post(base, cafe(), "", as(jane))).json()) as { visual: Visual }).visual
 		const editAs = async (v: Visual, user: typeof jane | null) =>
-			(await (await patch(base, v.id, { title: "x" }, { "if-match": String(v.updatedAt), ...as(user) })).json()) as Edited
+			(await (await patch(base, v.id, { title: "x" }, { "if-match": visualEtag(v), ...as(user) })).json()) as Edited
 		const byNancy = await editAs(v0, nancy)
 		expect(byNancy.visual.updatedBy).toEqual(nancy)
 		const anonymous = await editAs(byNancy.visual, null)
 		expect(anonymous.visual.updatedBy).toEqual(nancy)
-		expect((await restore(base, v0.id, anonymous.undo, anonymous.visual.updatedAt, as(jane))).status).toBe(200)
+		expect((await restore(base, v0.id, anonymous.undo, visualEtag(anonymous.visual), as(jane))).status).toBe(200)
 		expect((await visuals(base))[0]?.updatedBy).toEqual(jane)
 	})
 })
