@@ -118,6 +118,7 @@ curl -X POST https://charts.example.com/api/visuals \
 | `axes` | Optional `{x, y}`, each `{title, min, max, format}`. Bounds apply to a quantitative or measure axis (numbers) or a temporal axis (`"2020"`, `"2020-03"` or `"2020-01-01"`, read as local midnight as the date boxes do, or epoch ms); `format` is what the axis Format box takes. |
 | `stack` | Optional `"stack"`, `"group"` or `"overlay"`; needs a categorical `hue`. |
 | `themeId` | Optional theme, by id or by name (case, spaces and punctuation ignored); the server's default theme otherwise. |
+| `settings` | Optional. Anything else the editor stores, by the names it stores it under (see below). |
 
 The body is at most 64 KB (`SPEC_BODY_CAP_BYTES`). `?dryRun=1` (or `true`)
 runs every check and answers with the visual it would save, writing nothing.
@@ -182,6 +183,46 @@ visual changed after the edit (a new preview alone doesn't count); **409** for a
 version; **428** without `If-Match`; **400** for a body that isn't a whole
 `undo` for this visual; **415** and **403** as for a create.
 
+### Settings by their stored names
+
+`settings` sets what the spec has no key of its own for, by the names the
+editor stores it under, on a create or an edit:
+
+```
+{"settings": {
+  "legendConfig": {"position": "top"},
+  "channelConfigs": {"facet": {"panelAxisOverrides": {"West": {"yMax": 100000}}}},
+  "labelsConfig": {"hiddenTitles": {"legend:hue": true}}
+}}
+```
+
+The slices it may write are the keys of `Visual` (lib/types.ts) except the
+chart's identity, what a save stamps and what spec keys set
+(`NOT_SETTINGS` in `tooling/setting-catalog.js`), so a slice added to
+`Visual` is settable with nothing else to change. The patch is deep-merged
+last, after the spec's own keys; a list replaces the stored one, so send the
+whole list. An entry of a list keyed by `id` (annotations, composed labels)
+keeps an id the chart already has; a new entry leaves `id` out and gets one,
+and an id twice in one list is refused.
+
+Every key and value is checked against the declared types, read from
+`lib/types.ts` with the TypeScript checker at build time (the
+`virtual:setting-catalog` module): a key the type doesn't declare is refused
+with the closest real name, a value of the wrong type or outside its allowed
+words is refused, and a map keyed by data (`Record<string, …>`: levels,
+panels, fields) takes any key with the declared value type. Values are also
+judged by name: colors must be CSS colors, `…Field` settings a field of the
+data, opacities 0 to 1, counts whole numbers in range. A value the chart
+already stores passes as it is, so a chart read back and sent whole isn't
+refused for a field a later data version dropped.
+
+`GET /api/chart-spec/settings` lists every setting a patch can name as
+`{path, type, values?, doc}` rows, the doc being the type's own comment;
+`*` in a path stands for any key of a map keyed by data and `[]` for a
+list's entries. With `?visualId=<id>` the rows carry that visual's values,
+and each of its entries of a map keyed by data gets a row of its own, with
+the catalog path it falls under as `setting`.
+
 ### Creating a dataset from rows
 
 `POST /api/datasets` with `{name, rows, types?}` stores rows as a new
@@ -207,8 +248,9 @@ stored.
 types each takes and the channels it can't be mapped with), the field types,
 the families with the channels each variation fills, and the themes as
 `{id, name, default}`, the keys a spec takes (`spec`, each with what it says)
-and the ones an edit takes (`editKeys`), and the `features` this server
-serves. All of it is read from the tables the editor uses.
+and the ones an edit takes (`editKeys`), the slices a `settings` patch
+may write (`settingsSlices`), and the `features` this server serves. All
+of it is read from the tables the editor uses.
 
 ## Verifying changes
 

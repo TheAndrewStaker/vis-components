@@ -16,6 +16,7 @@ import {
 	type SpecChannel,
 } from "./chartSpec"
 import { FAMILY_MODES, OPTIONAL_CHANNELS } from "./composeVisual"
+import { SETTINGS_SLICES } from "./settings"
 
 export type ChartVocabulary = {
 	/** The keys a spec takes, each with what it says. */
@@ -45,6 +46,9 @@ export type ChartVocabulary = {
 	/** Families the editor draws that a spec can't make yet. */
 	editorOnlyFamilies: readonly QuickStartChartType[]
 	fieldTypes: readonly FieldType[]
+	/** The slices a `settings` patch may write: the keys of `Visual` that
+	 *  aren't the chart's identity or a spec key of their own. */
+	settingsSlices: readonly string[]
 }
 
 export const chartVocabulary = (): ChartVocabulary => ({
@@ -75,4 +79,5 @@ export const chartVocabulary = (): ChartVocabulary => ({
 	})),
 	editorOnlyFamilies: DEFERRED_FAMILIES,
 	fieldTypes: ["quantitative", "categorical", "temporal", "ordinal"],
+	settingsSlices: SETTINGS_SLICES,
 })

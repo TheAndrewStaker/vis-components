@@ -265,10 +265,13 @@ describe("GET /api/chart-spec", () => {
 			themes: Array<{ id: string; default: boolean }>
 			spec: Record<string, string>
 			features: string[]
+			settingsSlices: string[]
 		}
 		expect(Object.keys(body.spec)).toEqual(expect.arrayContaining(["datasetId", "encodings", "axes"]))
 		expect(body.spec.encodings).toMatch(/Channel → field name/)
-		expect(body.features).toEqual(["create", "edit", "restore", "read", "datasets"])
+		expect(body.features).toEqual(["create", "edit", "restore", "read", "datasets", "settings"])
+		expect(body.settingsSlices).toEqual(expect.arrayContaining(["channelConfigs", "annotationsConfig", "accessibilityConfig"]))
+		expect(body.settingsSlices).not.toContain("encodings")
 		expect(body.channels.map((c) => c.channel)).toContain("hue")
 		expect(body.channels.map((c) => c.channel)).not.toContain("text")
 		expect(body.channels.find((c) => c.channel === "r")?.conflictsWith).toEqual(
@@ -286,6 +289,35 @@ describe("GET /api/chart-spec", () => {
 		})
 		expect(body.themes.filter((t) => t.default).map((t) => t.id)).toEqual([SYSTEM_LIGHT_THEME.id])
 		expect((await fetch(`${base}/api/chart-spec`, { method: "POST" })).status).toBe(405)
+	})
+})
+
+describe("GET /api/chart-spec/settings", () => {
+	type Row = { path: string; setting?: string; type: string; doc?: string; value?: unknown }
+	const rowsOf = async (res: Response) => ((await res.json()) as { settings: Row[] }).settings
+
+	it("lists every setting with its type and doc, and a visual's values when asked", async () => {
+		const base = await start()
+		const all = await rowsOf(await fetch(`${base}/api/chart-spec/settings`))
+		expect(all.find((r) => r.path === "channelConfigs.facet.panelAxisOverrides.*.yMax")?.type).toMatch(/number/)
+		expect(all.find((r) => r.path === "accessibilityConfig.description")?.doc).toBeTruthy()
+
+		await seedDataset(base, CAFE)
+		const res = await post(base, cafe({ settings: { channelConfigs: { hue: { colors: { Bran: "#123456" } } } } }))
+		expect(res.status).toBe(201)
+		const { id } = (await res.json()) as { id: string }
+		const own = await rowsOf(await fetch(`${base}/api/chart-spec/settings?visualId=${id}`))
+		expect(own.find((r) => r.path === "channelConfigs.hue.colors.Bran")).toMatchObject({
+			setting: "channelConfigs.hue.colors.*",
+			value: "#123456",
+		})
+	})
+
+	it("answers 404 for an unknown visual and 405 for anything but GET", async () => {
+		const base = await start()
+		expect((await fetch(`${base}/api/chart-spec/settings?visualId=vs-nope`)).status).toBe(404)
+		expect((await fetch(`${base}/api/chart-spec/settings?visualId=../x`)).status).toBe(404)
+		expect((await fetch(`${base}/api/chart-spec/settings`, { method: "POST" })).status).toBe(405)
 	})
 })
 
