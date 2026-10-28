@@ -9,7 +9,8 @@
  *  `{error}` shape (HttpError). PATCH /api/visuals/<id> edits one the same
  *  way and POST /api/visuals/<id>/restore undoes that edit. GET
  *  /api/visuals/<id> reads one with its ETag. GET /api/chart-spec lists
- *  what a spec can say. */
+ *  what a spec can say, and GET /api/chart-spec/settings every setting a
+ *  `settings` patch can name. */
 
 import { createHash } from "node:crypto"
 import type { IncomingMessage, ServerResponse } from "node:http"
@@ -43,7 +44,7 @@ import type {
 	SavedTheme,
 	Visual,
 } from "../../src/contexts/chartBuilder/lib/types"
-import { newVisualId } from "../../src/contexts/chartBuilder/lib/visualDefaults"
+import { hydrateVisual, newVisualId } from "../../src/contexts/chartBuilder/lib/visualDefaults"
 import { isTrashed } from "../../src/contexts/chartBuilder/lib/visualTrash"
 import {
 	MAX_PROBLEMS,
@@ -56,6 +57,7 @@ import {
 	structuredVisual,
 	type ComposeContext,
 } from "../../src/contexts/chartBuilder/lib/visualSpec/composeVisual"
+import { settingRows } from "../../src/contexts/chartBuilder/lib/visualSpec/settings"
 import { chartVocabulary } from "../../src/contexts/chartBuilder/lib/visualSpec/vocabulary"
 import type { ServerConfig } from "./config.js"
 import {
@@ -85,7 +87,7 @@ import { JSON_BODY_CAP_BYTES, SPEC_BODY_CAP_BYTES } from "./limits.js"
 
 /** What this server's chart-spec routes do, listed by GET /api/chart-spec
  *  so a client can tell which of them it serves. */
-export const CHART_SPEC_FEATURES = ["create", "edit", "restore", "read", "datasets"] as const
+export const CHART_SPEC_FEATURES = ["create", "edit", "restore", "read", "datasets", "settings"] as const
 
 /** Same row the client's settings adapter reads: which theme seeds new
  *  visualizations on this server. */
@@ -319,6 +321,23 @@ const readDryRun = (res: ServerResponse, query: URLSearchParams): boolean | unde
 		return undefined
 	}
 	return raw !== null && DRY_RUN_VALUES[raw] === true
+}
+
+/** GET /api/chart-spec/settings: every setting a `settings` patch can
+ *  name, read from the `Visual` type, as `{path, type, values?, doc?}`
+ *  rows (settings.ts `settingRows`). With `?visualId=` the rows carry that
+ *  visual's values, and its entries of maps keyed by data get rows of
+ *  their own. */
+export const listSettings = (res: ServerResponse, db: DatabaseSync, query: URLSearchParams): void => {
+	const visualId = query.get("visualId")
+	let visual: Visual | undefined
+	if (visualId !== null) {
+		const stored = isSafeId(visualId) ? readVisualBody(db, visualId) : undefined
+		const parsed = stored === undefined ? undefined : (parseJson(stored) as Visual | undefined)
+		if (!parsed || typeof parsed !== "object" || parsed.id !== visualId) throw new HttpError(404, "Not found")
+		visual = hydrateVisual(structuredVisual(parsed))
+	}
+	sendJson(res, 200, JSON.stringify({ settings: settingRows(visual) }))
 }
 
 export const createVisualFromSpec = async (
@@ -693,9 +712,9 @@ export const createDatasetFromRows = async (
 }
 
 /** The chart-spec routes, dispatched before the generic collection routes:
- *  GET /api/chart-spec, POST /api/visuals, GET and PATCH
- *  /api/visuals/<id>, POST /api/visuals/<id>/restore and POST
- *  /api/datasets. False when the request is none of these. */
+ *  GET /api/chart-spec, GET /api/chart-spec/settings, POST /api/visuals,
+ *  GET and PATCH /api/visuals/<id>, POST /api/visuals/<id>/restore and
+ *  POST /api/datasets. False when the request is none of these. */
 export const handleChartSpec = async (
 	req: IncomingMessage,
 	res: ServerResponse,
@@ -709,6 +728,11 @@ export const handleChartSpec = async (
 ): Promise<boolean> => {
 	const { config, db } = deps
 	const { method, collection, id, rest } = route
+	if (collection === "chart-spec" && id === "settings" && rest.length === 0) {
+		if (method !== "GET") throw new HttpError(405, "Method not allowed")
+		listSettings(res, db, new URLSearchParams(route.query))
+		return true
+	}
 	if (collection === "chart-spec" && !id) {
 		if (method !== "GET") throw new HttpError(405, "Method not allowed")
 		const themes = loadThemes(db)
