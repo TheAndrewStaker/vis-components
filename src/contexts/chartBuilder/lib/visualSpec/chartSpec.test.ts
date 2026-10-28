@@ -122,3 +122,29 @@ describe("readChartSpec", () => {
 		expect(errorsOf({ ...valid(), [long]: 1 })[0]?.message.length).toBeLessThan(100)
 	})
 })
+
+describe("readChartSpec, edit mode", () => {
+	const edit = (input: unknown) => readChartSpec(input, "edit")
+
+	it("takes any subset of the keys, null unmapping a channel or clearing a bound", () => {
+		expect(edit({ title: "New" })).toEqual({ draft: { encodings: {}, title: "New" }, errors: [] })
+		expect(edit({ encodings: { hue: null, x: "month" }, axes: { y: { min: null } } }).draft).toEqual({
+			encodings: { hue: null, x: "month" },
+			axes: { y: { min: null } },
+		})
+	})
+
+	it("refuses an empty edit and the keys only a new chart takes", () => {
+		expect(edit({}).errors.map((e) => e.path)).toEqual([""])
+		expect(edit({ datasetId: "ds-x", variation: "Bubble", themeId: "Light" }).errors.map((e) => e.path)).toEqual([
+			"datasetId",
+			"variation",
+			"themeId",
+		])
+	})
+
+	it("refuses null where a create needs a value", () => {
+		expect(paths({ ...valid(), encodings: { x: null } })).toEqual(["encodings.x"])
+		expect(paths({ ...valid(), axes: { y: { min: null } } })).toEqual(["axes.y.min"])
+	})
+})

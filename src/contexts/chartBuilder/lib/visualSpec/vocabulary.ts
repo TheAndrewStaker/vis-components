@@ -9,6 +9,7 @@ import { QUICK_START_VARIATIONS, type QuickStartChartType } from "../quickStartV
 import type { EncodingChannel, FieldType } from "../types"
 import {
 	DEFERRED_FAMILIES,
+	EDIT_KEYS,
 	SPEC_CHANNELS,
 	SPEC_FAMILIES,
 	SPEC_KEYS,
@@ -19,6 +20,9 @@ import { FAMILY_MODES, OPTIONAL_CHANNELS } from "./composeVisual"
 export type ChartVocabulary = {
 	/** The keys a spec takes, each with what it says. */
 	spec: Readonly<Record<string, string>>
+	/** The spec keys an edit takes; in an edit a channel set to null is
+	 *  unmapped and an axis bound set to null is cleared. */
+	editKeys: readonly string[]
 	channels: Array<{
 		channel: SpecChannel
 		label: string
@@ -45,6 +49,7 @@ export type ChartVocabulary = {
 
 export const chartVocabulary = (): ChartVocabulary => ({
 	spec: SPEC_KEYS,
+	editKeys: EDIT_KEYS,
 	channels: SPEC_CHANNELS.map((channel) => ({
 		channel,
 		label: CHANNELS[channel].label,

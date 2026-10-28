@@ -14,7 +14,7 @@ import { configsFromTheme, labelsFromTheme } from "../themeConfig"
 import { ALL_ENCODING_CHANNELS, type Visual } from "../types"
 import { hydrateVisual } from "../visualDefaults"
 import { MAX_PROBLEMS } from "./chartSpec"
-import { composeChartSpec } from "./composeVisual"
+import { composeChartEdit, composeChartSpec } from "./composeVisual"
 
 const DATASETS = [CAFE, DATES]
 
@@ -246,5 +246,68 @@ describe("composeChartSpec, refused", () => {
 		const junk = Object.fromEntries(Array.from({ length: 100 }, (_, i) => [`k${i}`, 0]))
 		const result = compose(cafe(junk))
 		expect(result.ok ? [] : result.errors).toHaveLength(MAX_PROBLEMS + 1)
+	})
+})
+
+describe("composeChartEdit", () => {
+	const ctx = { ...contextFor(DATASETS, CAFE.id), now: 1_700_000_000_500 }
+	const base = () => ({ ...composed(cafe({ title: "Muffins", axes: { y: { min: 0 } } })), updatedBy: { id: "jane", name: "Jane" } })
+	const edited = (visual: Visual, edit: unknown): Visual => {
+		const result = composeChartEdit(visual, edit, ctx)
+		if (!result.ok) throw new Error(result.errors.map((e) => `${e.path}: ${e.message}`).join("; "))
+		return result.visual
+	}
+	const editPaths = (visual: Visual, edit: unknown) => {
+		const result = composeChartEdit(visual, edit, ctx)
+		return result.ok ? [] : result.errors.map((e) => e.path).sort()
+	}
+
+	it("changes only what the edit names", () => {
+		const v0 = base()
+		const v1 = edited(v0, { title: "Muffins sold" })
+		expect(v1).toEqual({
+			...v0,
+			labelsConfig: { ...v0.labelsConfig, title: "Muffins sold" },
+			updatedAt: ctx.now,
+		})
+	})
+
+	it("unmaps a channel with null and maps a new one", () => {
+		const v1 = edited(base(), { encodings: { hue: null, facet: "flavor" } })
+		expect(v1.encodings.hue).toEqual({ field: null })
+		expect(v1.encodings.facet).toEqual({ field: "flavor" })
+		expect(v1.encodings.x).toEqual({ field: "month" })
+		expect(editPaths(base(), { encodings: { x: null, length: null, hue: null } })).toEqual(["encodings"])
+	})
+
+	it("swaps the hue config when the hue field changes kind, keeping the old one", () => {
+		const v0 = base()
+		const v1 = edited(v0, { encodings: { x: "month", y: "flavor", length: null, hue: "coffees" } })
+		expect(v1.channelConfigs.hue).toEqual(buildQuantHueConfigFromTheme(themeOf(THEME)))
+		expect(v1.channelConfigs.hueCategoricalStash).toEqual(v0.channelConfigs.hue)
+		expect(edited(v0, { stack: "group" }).channelConfigs.hue?.stackMode).toBe("group")
+	})
+
+	it("clears a bound with null and refuses one crossing the bound already set", () => {
+		expect(edited(base(), { axes: { y: { min: null } } }).channelConfigs.y?.min).toBeUndefined()
+		const result = composeChartEdit(base(), { axes: { y: { max: -1 } } }, ctx)
+		expect(result.ok ? [] : result.errors).toEqual([
+			{ path: "axes.y.max", message: `"max" (-1) must be above "min" (0), which the chart already has` },
+		])
+	})
+
+	it("checks fields against the data as the editor shows it, reshape included", () => {
+		const reshaped: Visual = {
+			...base(),
+			reshapeConfig: { idFields: ["month", "flavor"], meltFields: ["muffins", "coffees"], variableName: "item", valueName: "sold" },
+		}
+		expect(edited(reshaped, { encodings: { length: "sold", hue: "item" } }).encodings.length).toEqual({ field: "sold" })
+		expect(editPaths(base(), { encodings: { length: "sold" } })).toEqual(["encodings.length"])
+	})
+
+	it("refuses a family the chart doesn't make and a dataset that is gone", () => {
+		expect(editPaths(base(), { family: "pie" })).toEqual(["family"])
+		const result = composeChartEdit(base(), { title: "x" }, { ...ctx, dataset: null })
+		expect(result.ok ? [] : result.errors.map((e) => e.path)).toEqual([""])
 	})
 })
