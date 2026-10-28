@@ -199,8 +199,9 @@ curl -X POST https://charts.example.com/api/datasets \
 It answers **201** `{id, name, rowCount, fields}`; **400** `{errors}` with
 every problem and its path; **409** when a dataset of that name exists or
 stored data sets are at another content version; **413** past the upload size
-limit, checked before sparse rows are filled out. The library lists the
-dataset only once all of it is stored.
+limit, checked before sparse rows are filled out; **415** and **403** as
+for a chart create. The library lists the dataset only once all of it is
+stored.
 
 `GET /api/chart-spec` lists what a spec can say: the channels (with the field
 types each takes and the channels it can't be mapped with), the field types,
