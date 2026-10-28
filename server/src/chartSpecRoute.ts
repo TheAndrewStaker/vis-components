@@ -6,8 +6,9 @@
  *  the thumbnail split a PUT uses, insert-only. `?dryRun=1` answers with
  *  the visual and writes nothing. Spec problems answer 400 with
  *  `{errors: [{path, message}]}`; every other failure keeps the server's
- *  `{error}` shape (HttpError). GET /api/chart-spec lists what a spec can
- *  say. */
+ *  `{error}` shape (HttpError). PATCH /api/visuals/<id> edits one the same
+ *  way and POST /api/visuals/<id>/restore undoes that edit. GET
+ *  /api/chart-spec lists what a spec can say. */
 
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { DatabaseSync } from "node:sqlite"
@@ -30,24 +31,35 @@ import type {
 	DatasetMeta,
 	Folder,
 	SavedTheme,
+	Visual,
 } from "../../src/contexts/chartBuilder/lib/types"
 import { newVisualId } from "../../src/contexts/chartBuilder/lib/visualDefaults"
+import { isTrashed } from "../../src/contexts/chartBuilder/lib/visualTrash"
 import type { SpecProblem } from "../../src/contexts/chartBuilder/lib/visualSpec/chartSpec"
 import {
+	composeChartEdit,
 	composeChartSpec,
+	structuredVisual,
 	type ComposeContext,
 } from "../../src/contexts/chartBuilder/lib/visualSpec/composeVisual"
 import { chartVocabulary } from "../../src/contexts/chartBuilder/lib/visualSpec/vocabulary"
 import type { ServerConfig } from "./config.js"
 import { isSafeId, readDatasetFile, readDatasetVersionFile } from "./datasetFiles.js"
-import { insertVisual, listContentVersions, listRows, readDatasetMeta } from "./db.js"
+import {
+	insertVisual,
+	listContentVersions,
+	listRows,
+	readDatasetMeta,
+	readVisualBody,
+	replaceVisualIfUnchanged,
+} from "./db.js"
 import { assertJsonWrite, HttpError, readBody, sendJson } from "./http.js"
-import { requestUser, type AppUser, type IdentifyUser } from "./identity.js"
-import { SPEC_BODY_CAP_BYTES } from "./limits.js"
+import { requestUser, sanitizeUser, type AppUser, type IdentifyUser } from "./identity.js"
+import { JSON_BODY_CAP_BYTES, SPEC_BODY_CAP_BYTES } from "./limits.js"
 
 /** What this server's chart-spec routes do, listed by GET /api/chart-spec
  *  so a client can tell which of them it serves. */
-export const CHART_SPEC_FEATURES = ["create"] as const
+export const CHART_SPEC_FEATURES = ["create", "edit", "restore"] as const
 
 /** Same row the client's settings adapter reads: which theme seeds new
  *  visualizations on this server. */
@@ -173,6 +185,69 @@ const assertStampsCurrent = (db: DatabaseSync): void => {
 const specErrors = (res: ServerResponse, errors: SpecProblem[]): void =>
 	sendJson(res, 400, JSON.stringify({ errors }))
 
+/** The dataset, or undefined once a 400 is sent for rows that can't be
+ *  loaded. */
+const loadDatasetOrRefuse = async (
+	res: ServerResponse,
+	db: DatabaseSync,
+	dataDir: string,
+	datasetId: unknown,
+	path: string
+): Promise<ComposeContext["dataset"] | undefined> => {
+	try {
+		return await loadDataset(db, dataDir, datasetId)
+	} catch (e) {
+		if (!(e instanceof RowsMissing)) throw e
+		specErrors(res, [
+			{
+				path,
+				message:
+					"this dataset's rows can't be loaded (its data file is missing), so it can't be charted; upload the data again",
+			},
+		])
+		return undefined
+	}
+}
+
+/** A chart-spec write is a save, so `updatedBy` is the requesting user
+ *  from the host's `identify`, or for an anonymous request the stored
+ *  saver kept as it was. */
+const stampedBy = <T extends { updatedBy?: AppUser }>(
+	visual: T,
+	user: AppUser | null,
+	storedUpdatedBy: unknown
+): T => {
+	const { updatedBy: _dropped, ...rest } = visual
+	const keep = user ?? sanitizeUser(storedUpdatedBy)
+	return (keep ? { ...rest, updatedBy: keep } : rest) as T
+}
+
+/** The stored visual `id`, refusing a missing (404), unreadable (500) or
+ *  trashed (409) one. */
+const storedVisual = (db: DatabaseSync, id: string): { stored: string; visual: Visual } => {
+	const stored = readVisualBody(db, id)
+	if (stored === undefined) throw new HttpError(404, "Not found")
+	const visual = parseJson(stored) as Visual | undefined
+	if (!visual || typeof visual !== "object" || visual.id !== id) {
+		throw new HttpError(500, "The stored visual isn't readable")
+	}
+	if (isTrashed(visual)) {
+		throw new HttpError(409, "This visual is in the trash; restore it before editing")
+	}
+	return { stored, visual }
+}
+
+/** The `updatedAt` an If-Match header carries, quotes and W/ dropped. */
+const ifMatch = (req: IncomingMessage, missing: string): string => {
+	const raw = req.headers["if-match"]
+	if (raw === undefined) throw new HttpError(428, missing)
+	const wanted = String(raw).replace(/^W\//, "").replace(/"/g, "").trim()
+	if (wanted === "*") {
+		throw new HttpError(400, "If-Match must be the visual's updatedAt as last read, not *")
+	}
+	return wanted
+}
+
 /** `?dryRun`: "1"/"true" checks only, "0"/"false"/absent saves. */
 const DRY_RUN_VALUES: Record<string, boolean> = {
 	"1": true,
@@ -218,19 +293,8 @@ export const createVisualFromSpec = async (
 	const themes = loadThemes(db)
 	const theme =
 		typeof spec.themeId === "string" ? themeNamed(themes, spec.themeId) : defaultTheme(db, themes)
-	let dataset: ComposeContext["dataset"]
-	try {
-		dataset = await loadDataset(db, config.dataDir, spec.datasetId)
-	} catch (e) {
-		if (!(e instanceof RowsMissing)) throw e
-		return specErrors(res, [
-			{
-				path: "datasetId",
-				message:
-					"this dataset's rows can't be loaded (its data file is missing), so it can't be charted; upload the data again",
-			},
-		])
-	}
+	const dataset = await loadDatasetOrRefuse(res, db, config.dataDir, spec.datasetId, "datasetId")
+	if (dataset === undefined) return
 	// A theme named by name is stored by id.
 	const byName = theme && spec.themeId !== undefined && spec.themeId !== theme.id
 	const result = composeChartSpec(byName ? { ...spec, themeId: theme.id } : input, {
@@ -245,8 +309,7 @@ export const createVisualFromSpec = async (
 	if (!result.ok) return specErrors(res, result.errors)
 
 	const { warnings } = result
-	// A spec write is a save, so it names its saver as an editor save does.
-	let visual = user ? { ...result.visual, updatedBy: user } : result.visual
+	let visual = stampedBy(result.visual, user, undefined)
 	if (dryRun) return sendJson(res, 200, JSON.stringify({ visual, warnings }))
 	// Insert-only: a minted id that is somehow taken gets one fresh retry,
 	// never an overwrite.
@@ -268,9 +331,152 @@ export const createVisualFromSpec = async (
 	)
 }
 
+/** What PATCH hands back for undoing it: the visual as it was before the
+ *  edit, and the visuals content version it was stored at. Callers keep it
+ *  and send it back unchanged. */
+type UndoEnvelope = { visualsVersion: number; visual: Visual }
+
+/** PATCH /api/visuals/<id>: apply a chart edit (the spec keys it names,
+ *  nothing else) to a stored visual, checked like a create. `If-Match`
+ *  (required) carries the `updatedAt` the caller last read; a visual
+ *  changed since, or changed while this request ran, answers 412 and is
+ *  left alone. A trashed visual answers 409. `?dryRun=1` answers with the
+ *  edited visual and writes nothing. A saved edit also answers `undo`: the
+ *  visual as it was, for POST /api/visuals/<id>/restore. */
+export const editVisualFromSpec = async (
+	req: IncomingMessage,
+	res: ServerResponse,
+	db: DatabaseSync,
+	config: ServerConfig,
+	id: string,
+	query: URLSearchParams,
+	user: AppUser | null = null
+): Promise<void> => {
+	const dryRun = readDryRun(res, query)
+	if (dryRun === undefined) return
+	const input = parseJson((await readBody(req, SPEC_BODY_CAP_BYTES)).toString("utf-8"))
+	if (input === undefined) {
+		return specErrors(res, [{ path: "", message: "the body must be valid JSON" }])
+	}
+	assertStampsCurrent(db)
+	const { stored, visual } = storedVisual(db, id)
+	const wanted = ifMatch(
+		req,
+		"Send If-Match with the visual's updatedAt as last read, so an edit can't replace newer work"
+	)
+	if (wanted !== String(visual.updatedAt)) {
+		throw new HttpError(
+			412,
+			`This visual changed since it was read (updatedAt ${String(visual.updatedAt)}, expected ${wanted}); read it again`
+		)
+	}
+
+	const themes = loadThemes(db)
+	const theme = themes.find((t) => t.id === visual.themeId) ?? defaultTheme(db, themes)
+	const dataset = await loadDatasetOrRefuse(res, db, config.dataDir, visual.datasetId, "")
+	if (dataset === undefined) return
+	const result = composeChartEdit(visual, input, {
+		dataset,
+		folders: loadFolders(db),
+		theme: themeOf(theme),
+		themeId: visual.themeId ?? null,
+		now: Math.max(Date.now(), (visual.updatedAt ?? 0) + 1),
+	})
+	if (!result.ok) return specErrors(res, result.errors)
+	const { warnings } = result
+	// The preview no longer shows the chart.
+	const edited = { ...stampedBy(result.visual, user, visual.updatedBy), thumbnail: null }
+	if (dryRun) return sendJson(res, 200, JSON.stringify({ visual: edited, warnings }))
+	if (!replaceVisualIfUnchanged(db, id, stored, JSON.stringify(edited))) {
+		throw new HttpError(412, "This visual changed while the edit ran; read it again")
+	}
+	return sendJson(
+		res,
+		200,
+		JSON.stringify({
+			id,
+			visual: edited,
+			warnings,
+			editorUrl: `${config.baseUrl}/editor/${id}`,
+			undo: { visualsVersion: VISUALS_VERSION, visual } satisfies UndoEnvelope,
+		})
+	)
+}
+
+const isRecord = (v: unknown): boolean => typeof v === "object" && v !== null && !Array.isArray(v)
+
+/** The first required Visual key `visual` lacks or holds the wrong kind of
+ *  value in, or undefined when it has them all. */
+const missingVisualKey = (visual: Record<string, unknown>): string | undefined => {
+	if (typeof visual.name !== "string") return "name"
+	if (visual.datasetId !== null && typeof visual.datasetId !== "string") return "datasetId"
+	return ["encodings", "channelConfigs", "labelsConfig"].find((key) => !isRecord(visual[key]))
+}
+
+/** POST /api/visuals/<id>/restore: put back the visual an edit replaced,
+ *  from the `undo` that edit answered. `If-Match` carries the `updatedAt`
+ *  the edit answered; a visual changed since answers 412 and is left alone.
+ *  An `undo` from another content version answers 409. */
+export const restoreVisual = async (
+	req: IncomingMessage,
+	res: ServerResponse,
+	db: DatabaseSync,
+	config: ServerConfig,
+	id: string,
+	user: AppUser | null = null
+): Promise<void> => {
+	const input = parseJson((await readBody(req, JSON_BODY_CAP_BYTES)).toString("utf-8")) as
+		| Partial<UndoEnvelope>
+		| undefined
+	const before = input?.visual
+	if (typeof input?.visualsVersion !== "number" || typeof before !== "object" || before === null) {
+		throw new HttpError(400, "Send the `undo` the edit answered: {visualsVersion, visual}")
+	}
+	if (before.id !== id) {
+		throw new HttpError(400, `This undo is for visual "${String(before.id)}", not "${id}"`)
+	}
+	const missing = missingVisualKey(before as Record<string, unknown>)
+	if (missing !== undefined) {
+		throw new HttpError(
+			400,
+			`This undo's visual has no valid "${missing}"; send the \`undo\` the edit answered, unchanged`
+		)
+	}
+	assertStampsCurrent(db)
+	if (input.visualsVersion !== VISUALS_VERSION) {
+		throw new HttpError(
+			409,
+			`This undo was saved at visuals content version ${input.visualsVersion}; this server writes ${VISUALS_VERSION}`
+		)
+	}
+	const { stored, visual: current } = storedVisual(db, id)
+	const wanted = ifMatch(req, "Send If-Match with the updatedAt the edit answered")
+	if (wanted !== String(current.updatedAt)) {
+		throw new HttpError(
+			412,
+			`This visual changed after that edit (updatedAt ${String(current.updatedAt)}, expected ${wanted}); undoing it would erase the newer change`
+		)
+	}
+	const updatedAt = Math.max(Date.now(), (current.updatedAt ?? 0) + 1)
+	const restored = stampedBy(
+		structuredVisual({ ...before, updatedAt, thumbnail: null }),
+		user,
+		current.updatedBy
+	)
+	if (!replaceVisualIfUnchanged(db, id, stored, JSON.stringify(restored))) {
+		throw new HttpError(412, "This visual changed while the undo ran; read it again")
+	}
+	return sendJson(
+		res,
+		200,
+		JSON.stringify({ id, updatedAt, editorUrl: `${config.baseUrl}/editor/${id}` })
+	)
+}
+
 /** The chart-spec routes, dispatched before the generic collection routes:
- *  GET /api/chart-spec and POST /api/visuals. False when the request is
- *  neither. */
+ *  GET /api/chart-spec, POST /api/visuals, PATCH /api/visuals/<id> and
+ *  POST /api/visuals/<id>/restore. False when the request is none of
+ *  these. */
 export const handleChartSpec = async (
 	req: IncomingMessage,
 	res: ServerResponse,
@@ -280,11 +486,12 @@ export const handleChartSpec = async (
 		mintVisualId?: () => string
 		identify?: IdentifyUser
 	},
-	route: { method: string; collection: string; id?: string; query: string }
+	route: { method: string; collection: string; id?: string; rest: string[]; query: string }
 ): Promise<boolean> => {
 	const { config, db } = deps
-	if (route.collection === "chart-spec" && !route.id) {
-		if (route.method !== "GET") throw new HttpError(405, "Method not allowed")
+	const { method, collection, id, rest } = route
+	if (collection === "chart-spec" && !id) {
+		if (method !== "GET") throw new HttpError(405, "Method not allowed")
 		const themes = loadThemes(db)
 		const fallback = defaultTheme(db, themes)
 		const themeList = themes.map((t) => ({
@@ -299,11 +506,17 @@ export const handleChartSpec = async (
 			}))
 		return true
 	}
-	if (route.collection === "visuals" && !route.id && route.method === "POST") {
-		const user = requestUser(deps.identify, req)
-		const query = new URLSearchParams(route.query)
+	if (collection !== "visuals") return false
+	const user = requestUser(deps.identify, req)
+	const query = new URLSearchParams(route.query)
+	if (!id && method === "POST") {
 		await createVisualFromSpec(req, res, db, config, query, deps.mintVisualId, user)
 		return true
 	}
-	return false
+	const restore = method === "POST" && rest.length === 1 && rest[0] === "restore"
+	if (!id || !(restore || (method === "PATCH" && rest.length === 0))) return false
+	if (!isSafeId(id)) throw new HttpError(400, "Invalid id")
+	if (restore) await restoreVisual(req, res, db, config, id, user)
+	else await editVisualFromSpec(req, res, db, config, id, query, user)
+	return true
 }
