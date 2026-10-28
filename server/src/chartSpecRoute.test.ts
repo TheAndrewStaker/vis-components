@@ -305,7 +305,7 @@ const patch = async (base: string, id: string, edit: unknown, headers?: Record<s
 const restore = (base: string, id: string, undo: unknown, etag?: string | null, headers = {}) =>
 	fetch(`${base}/api/visuals/${id}/restore`, {
 		method: "POST",
-		headers: { ...(etag == null ? {} : { "if-match": etag }), ...headers },
+		headers: { "content-type": "application/json", ...(etag == null ? {} : { "if-match": etag }), ...headers },
 		body: JSON.stringify(undo),
 	})
 
@@ -442,6 +442,8 @@ describe("POST /api/visuals/<id>/restore", () => {
 		expect((await restore(base, v0.id, { ...undo, visual: { ...v0, id: "vs-other" } }, etag)).status).toBe(400)
 		expect((await restore(base, v0.id, { ...undo, visual: { id: v0.id } }, etag)).status).toBe(400)
 		expect((await restore(base, v0.id, undo)).status).toBe(428)
+		expect((await restore(base, v0.id, undo, etag, { "content-type": "text/plain" })).status).toBe(415)
+		expect((await restore(base, v0.id, undo, etag, { origin: "https://evil.example.com" })).status).toBe(403)
 		expect((await visuals(base))[0]?.labelsConfig.title).toBe("Changed")
 	})
 })

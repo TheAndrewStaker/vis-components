@@ -452,6 +452,7 @@ export const restoreVisual = async (
 	id: string,
 	user: AppUser | null = null
 ): Promise<void> => {
+	assertJsonWrite(req, new URL(config.baseUrl).origin)
 	const input = parseJson((await readBody(req, JSON_BODY_CAP_BYTES)).toString("utf-8")) as
 		| Partial<UndoEnvelope>
 		| undefined
