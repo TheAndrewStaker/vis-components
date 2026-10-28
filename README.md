@@ -205,6 +205,20 @@ whole list. An entry of a list keyed by `id` (annotations, composed labels)
 keeps an id the chart already has; a new entry leaves `id` out and gets one,
 and an id twice in one list is refused.
 
+Where an editor panel does more than store a value, a patch gets the
+same: a new annotation (an entry of `annotationsConfig.texts`,
+`rectangles`, `lineSegments` or `circles` without an `id`) starts as the
+Annotations panel's Add makes it, styled by the chart's theme and named
+"Text 1", "Text 2"…, then takes what the patch says, so
+`{"texts": [{"text": "Peak", "x": 0.9, "y": 0.1}]}` is a whole annotation.
+`dataLabelsEncodings.value` with `field` labels by that field, and with
+`fields` by several, the composed labels following the checklist as in the
+Data Labels panel. `fieldLevelOrderSpecs.<field>` (`{by: "alphabetical"}`
+or `{by: "field", byField, scopeField?, scopeLevel?, decreasing?}`) computes
+`fieldLevelOrders.<field>` as the Fields panel's Order-by picker does; an
+order set by hand in `fieldLevelOrders` clears the field's Order-by choice,
+as the panel's arrows do. Sending both keeps both as sent.
+
 Every key and value is checked against the declared types, read from
 `lib/types.ts` with the TypeScript checker at build time (the
 `virtual:setting-catalog` module): a key the type doesn't declare is refused
