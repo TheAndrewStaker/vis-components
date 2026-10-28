@@ -8,6 +8,7 @@ import {
 } from "../lib/templates/buildTemplateBody"
 import { mergeTemplateUpdate } from "../lib/templates/mergeTemplateUpdate"
 import type { Visual } from "../lib/types"
+import { newVisualId } from "../lib/visualDefaults"
 import { isTemplate } from "../lib/visualTrash"
 
 import {
@@ -18,7 +19,6 @@ import {
 } from "./atoms"
 import {
 	assembleDraftVisual,
-	newVisualId,
 	resolveNewVisualFolder,
 } from "./saveVisual"
 import { currentDatasetViewAtom } from "./useCurrentDatasetView"
