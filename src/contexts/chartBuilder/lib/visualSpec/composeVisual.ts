@@ -242,6 +242,15 @@ const compose = (
 				`a "${spec.family}" chart is ${list(modes)}; these encodings make a "${mode.id}" chart`
 			)
 		}
+		// A density curve is drawn only along one axis with the other empty.
+		const curve = variant?.distributionOverlay
+		const across = curve?.axis === "x" ? "y" : "x"
+		if (curve?.mode === "density" && fields[across] !== undefined) {
+			problem(
+				pathOf("encodings", across),
+				`a density curve is drawn along "${curve.axis}" alone, so "${across}" must be left out`
+			)
+		}
 		for (const axis of ["x", "y"] as const) {
 			const field = fields[axis]
 			const type = field ? typeOf(field) : null
@@ -393,14 +402,13 @@ const familyNeeds = (
 	return `a "${family}" chart needs ${fewest.join(", ")} (the chart-spec vocabulary lists its variations)`
 }
 
-/** A variation's settings, minus the field choices the spec already made
- *  and the stack mode, which only the spec sets. */
+/** A variation's settings, minus the field choices the spec already made.
+ *  Its stack mode stays the default a spec's `stack` overrides. */
 const knobsOf = (
 	v: QuickStartVariation,
 	fields: Partial<Record<SpecChannel, string>>
 ): Omit<QuickStartVariation, "name" | "channels"> => {
 	const { name: _name, channels: _channels, allowOpportunisticHue: _hue, ...knobs } = v
-	delete knobs.stackMode
 	if (fields.connection !== undefined) delete knobs.connectionFrom
 	if (fields.hue !== undefined) {
 		delete knobs.hueFrom
