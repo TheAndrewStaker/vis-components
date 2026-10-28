@@ -1,8 +1,0 @@
-#!/bin/sh
-# Bump package.json's version once per PR/branch (see scripts/bump-version.mjs).
-# Installed via `git config core.hooksPath .githooks`.
-# Skip with VIS_SKIP_BUMP=1 (e.g. when amending a commit that already bumped).
-if [ -n "$VIS_SKIP_BUMP" ]; then exit 0; fi
-cd "$(git rev-parse --show-toplevel)" || exit 1
-node scripts/bump-version.mjs || exit 1
-git add package.json
