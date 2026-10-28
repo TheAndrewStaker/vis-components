@@ -177,7 +177,7 @@ and `If-Match` carrying the ETag the edit answered, puts it back:
 **200** `{id, updatedAt, editorUrl}` and its new `ETag`; **412** when the
 visual changed after the edit (a new preview alone doesn't count); **409** for a visual in the trash or an `undo` from another content
 version; **428** without `If-Match`; **400** for a body that isn't a whole
-`undo` for this visual.
+`undo` for this visual; **415** and **403** as for a create.
 
 `GET /api/chart-spec` lists what a spec can say: the channels (with the field
 types each takes and the channels it can't be mapped with), the field types,
