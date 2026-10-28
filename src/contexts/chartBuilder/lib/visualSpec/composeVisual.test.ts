@@ -105,6 +105,28 @@ describe("composeChartSpec", () => {
 		expect(tile.channelConfigs.hue).toEqual(buildQuantHueConfigFromTheme(themeOf(THEME)))
 	})
 
+	it("keeps a named variation's stack mode unless the spec sets one", () => {
+		const grouped = cafe({ family: "bar", variation: "Vertical grouped bars" })
+		expect(composed(grouped).channelConfigs.hue?.stackMode).toBe("group")
+		expect(composed({ ...grouped, stack: "stack" }).channelConfigs.hue?.stackMode).toBe("stack")
+		const overlay = composed(
+			cafe({
+				family: "area",
+				variation: "Overlay area",
+				encodings: { x: "month", length: "muffins", connection: "flavor", hue: "flavor" },
+			})
+		)
+		expect(overlay.channelConfigs.hue?.stackMode).toBe("overlay")
+	})
+
+	it("refuses a density curve with the other axis mapped", () => {
+		const density = (encodings: Record<string, string>) => cafe({ family: "density", encodings })
+		expect(composed(density({ x: "muffins" })).channelConfigs.x?.distributionOverlay?.showDensityCurve).toBe(true)
+		const result = compose(density({ x: "muffins", y: "coffees" }))
+		expect(result.ok ? [] : result.errors.map((e) => e.path)).toEqual(["encodings.y"])
+		expect(result.ok ? "" : result.errors[0]?.message).toMatch(/density curve .*"y" must be left out/)
+	})
+
 	it("takes a family's best-fitting variation, or the one named", () => {
 		const line = composed(cafe({ family: "line", encodings: { x: "month", y: "muffins", connection: "flavor" } }))
 		expect(line.channelConfigs.connection?.fill).toBe("line")
