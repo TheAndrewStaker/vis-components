@@ -14,9 +14,15 @@
 import { createHash } from "node:crypto"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { DatabaseSync } from "node:sqlite"
-import { gunzipSync } from "node:zlib"
+import { gunzipSync, gzipSync } from "node:zlib"
 
+import { datasetContentHash } from "../../src/contexts/chartBuilder/lib/datasetDedupe"
+import {
+	datasetRejectMessage,
+	datasetSizeIssue,
+} from "../../src/contexts/chartBuilder/lib/datasetLimits"
 import { datasetMetaFrom, isDatasetMeta } from "../../src/contexts/chartBuilder/lib/datasetMeta"
+import { inferFieldType } from "../../src/contexts/chartBuilder/lib/inferFieldType"
 import {
 	DATASETS_VERSION,
 	THEMES_VERSION,
@@ -31,13 +37,19 @@ import {
 import type {
 	Dataset,
 	DatasetMeta,
+	Field,
+	FieldType,
 	Folder,
 	SavedTheme,
 	Visual,
 } from "../../src/contexts/chartBuilder/lib/types"
 import { newVisualId } from "../../src/contexts/chartBuilder/lib/visualDefaults"
 import { isTrashed } from "../../src/contexts/chartBuilder/lib/visualTrash"
-import type { SpecProblem } from "../../src/contexts/chartBuilder/lib/visualSpec/chartSpec"
+import {
+	MAX_PROBLEMS,
+	pathOf,
+	type SpecProblem,
+} from "../../src/contexts/chartBuilder/lib/visualSpec/chartSpec"
 import {
 	composeChartEdit,
 	composeChartSpec,
@@ -46,14 +58,26 @@ import {
 } from "../../src/contexts/chartBuilder/lib/visualSpec/composeVisual"
 import { chartVocabulary } from "../../src/contexts/chartBuilder/lib/visualSpec/vocabulary"
 import type { ServerConfig } from "./config.js"
-import { isSafeId, readDatasetFile, readDatasetVersionFile } from "./datasetFiles.js"
+import {
+	deleteDatasetFile,
+	deleteDatasetVersionFile,
+	isSafeId,
+	readDatasetFile,
+	readDatasetVersionFile,
+	writeDatasetFile,
+	writeDatasetVersionFile,
+} from "./datasetFiles.js"
 import {
 	insertVisual,
 	listContentVersions,
+	listDatasetMeta,
 	listRows,
 	readDatasetMeta,
 	readVisualBody,
 	replaceVisualIfUnchanged,
+	upsertDatasetMeta,
+	upsertDatasetRow,
+	upsertDatasetVersionRow,
 } from "./db.js"
 import { assertJsonWrite, HttpError, readBody, sendJson } from "./http.js"
 import { requestUser, sanitizeUser, type AppUser, type IdentifyUser } from "./identity.js"
@@ -61,7 +85,7 @@ import { JSON_BODY_CAP_BYTES, SPEC_BODY_CAP_BYTES } from "./limits.js"
 
 /** What this server's chart-spec routes do, listed by GET /api/chart-spec
  *  so a client can tell which of them it serves. */
-export const CHART_SPEC_FEATURES = ["create", "edit", "restore", "read"] as const
+export const CHART_SPEC_FEATURES = ["create", "edit", "restore", "read", "datasets"] as const
 
 /** Same row the client's settings adapter reads: which theme seeds new
  *  visualizations on this server. */
@@ -170,9 +194,10 @@ const loadFolders = (db: DatabaseSync): Folder[] =>
 		.map(({ body }) => parseJson(body) as Folder | undefined)
 		.filter((f): f is Folder => typeof f?.id === "string")
 
-const assertStampsCurrent = (db: DatabaseSync): void => {
+const assertStampsCurrent = (db: DatabaseSync, only?: keyof typeof READ_VERSIONS): void => {
 	const stamps = listContentVersions(db)
 	for (const [collection, version] of Object.entries(READ_VERSIONS)) {
+		if (only && collection !== only) continue
 		const stored = stamps[collection]
 		if (stored === undefined || stored === version) continue
 		throw new HttpError(
@@ -517,10 +542,155 @@ export const restoreVisual = async (
 	)
 }
 
+const newDatasetId = () =>
+	`ds-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+
+const newDatasetVersionId = () =>
+	`dv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+
+/** Problems with a `{name, rows, types?}` body, at most MAX_PROBLEMS. */
+const rowsBodyProblems = (name: unknown, rows: unknown, types: unknown): SpecProblem[] => {
+	const errors: SpecProblem[] = []
+	if (typeof name !== "string" || name.trim() === "") {
+		errors.push({ path: "name", message: "name must be a non-blank string" })
+	}
+	if (!Array.isArray(rows) || rows.length === 0) {
+		errors.push({ path: "rows", message: "rows must be a non-empty array of objects" })
+	} else {
+		for (const [i, row] of rows.entries()) {
+			if (errors.length >= MAX_PROBLEMS) break
+			if (typeof row !== "object" || row === null || Array.isArray(row)) {
+				errors.push({ path: `rows[${i}]`, message: "each row must be an object" })
+				continue
+			}
+			for (const [column, value] of Object.entries(row)) {
+				if (value === null || ["string", "number", "boolean"].includes(typeof value)) continue
+				// "rows[0].x", or rows[0]["a b"] for a name that isn't an identifier.
+				errors.push({
+					path: `rows[${i}]${pathOf("r", column).slice(1)}`,
+					message: "values must be text, numbers, true/false or null",
+				})
+			}
+		}
+	}
+	if (types !== undefined && (typeof types !== "object" || types === null || Array.isArray(types))) {
+		errors.push({ path: "types", message: "types must map column names to field types" })
+	}
+	return errors.slice(0, MAX_PROBLEMS)
+}
+
+/** POST /api/datasets: a new dataset from rows, as `{name, rows, types?}`.
+ *  Values are stored as text and each column's type is inferred as an
+ *  upload infers it, unless `types` names it. A name already in the
+ *  library answers 409. The files are written first and the index rows in
+ *  one transaction, so the library lists the dataset whole or not at all.
+ *  Problems answer 400 with `{errors: [{path, message}]}`. */
+export const createDatasetFromRows = async (
+	req: IncomingMessage,
+	res: ServerResponse,
+	db: DatabaseSync,
+	config: ServerConfig
+): Promise<void> => {
+	const input = parseJson((await readBody(req, JSON_BODY_CAP_BYTES)).toString("utf-8"))
+	if (typeof input !== "object" || input === null || Array.isArray(input)) {
+		return specErrors(res, [{ path: "", message: "the body must be a JSON object" }])
+	}
+	const { name, rows, types } = input as { name?: unknown; rows?: unknown; types?: unknown }
+	const errors = rowsBodyProblems(name, rows, types)
+	if (errors.length > 0) return specErrors(res, errors)
+
+	const records = rows as Array<Record<string, string | number | boolean | null>>
+	const columns = [...new Set(records.flatMap((r) => Object.keys(r)))]
+	const named = (types ?? {}) as Record<string, unknown>
+	const fieldTypes = chartVocabulary().fieldTypes
+	for (const [column, type] of Object.entries(named)) {
+		if (!columns.includes(column)) {
+			errors.push({ path: pathOf("types", column), message: `no column "${column}" in the rows` })
+		} else if (!fieldTypes.includes(type as FieldType)) {
+			errors.push({ path: pathOf("types", column), message: `must be one of ${fieldTypes.join(", ")}` })
+		}
+	}
+	if (errors.length > 0) return specErrors(res, errors.slice(0, MAX_PROBLEMS))
+
+	const datasetName = (name as string).trim()
+	const taken = listDatasetMeta(db).some(({ meta }) => {
+		const stored = meta === null ? undefined : (parseJson(meta) as { name?: unknown } | undefined)
+		return typeof stored?.name === "string" && stored.name.toLowerCase() === datasetName.toLowerCase()
+	})
+	if (taken) throw new HttpError(409, `A dataset named "${datasetName}" already exists`)
+
+	// Every row is stored with every column, each at least `"column":"",`:
+	// a floor on the stored size, checked before the rows are filled out.
+	const denseFloor =
+		records.length * columns.reduce((sum, c) => sum + Buffer.byteLength(JSON.stringify(c)) + 4, 0)
+	if (datasetSizeIssue(denseFloor) === "reject") {
+		throw new HttpError(413, datasetRejectMessage(denseFloor))
+	}
+	const text = records.map((r) =>
+		Object.fromEntries(columns.map((c) => [c, r[c] == null ? "" : String(r[c])]))
+	)
+	const fields: Field[] = columns.map((c) => ({
+		name: c,
+		inferredType: (named[c] as FieldType | undefined) ?? inferFieldType(text.map((r) => r[c] ?? "")),
+	}))
+	const now = Date.now()
+	const version = {
+		id: newDatasetVersionId(),
+		filename: `${datasetName}.json`,
+		rows: text,
+		createdAt: now,
+	}
+	const dataset: Dataset = {
+		id: newDatasetId(),
+		name: datasetName,
+		fields,
+		versions: [version],
+		latestVersionId: version.id,
+		createdAt: now,
+		contentHash: datasetContentHash({ name: datasetName, fields, versions: [version] }),
+	}
+	const bodyJson = JSON.stringify(dataset)
+	if (datasetSizeIssue(Buffer.byteLength(bodyJson)) === "reject") {
+		throw new HttpError(413, datasetRejectMessage(Buffer.byteLength(bodyJson)))
+	}
+	const body = gzipSync(bodyJson)
+	const versionBody = gzipSync(JSON.stringify({ id: version.id, rows: text }))
+	assertStampsCurrent(db, "datasets")
+	await writeDatasetFile(config.dataDir, dataset.id, body)
+	await writeDatasetVersionFile(config.dataDir, dataset.id, version.id, versionBody)
+	try {
+		assertStampsCurrent(db, "datasets")
+		db.exec("BEGIN")
+		try {
+			upsertDatasetRow(db, dataset.id, body.length)
+			upsertDatasetVersionRow(db, dataset.id, version.id, versionBody.length)
+			upsertDatasetMeta(db, dataset.id, JSON.stringify(datasetMetaFrom(dataset)))
+			db.exec("COMMIT")
+		} catch (error) {
+			db.exec("ROLLBACK")
+			throw error
+		}
+	} catch (error) {
+		await deleteDatasetFile(config.dataDir, dataset.id)
+		await deleteDatasetVersionFile(config.dataDir, dataset.id, version.id)
+		throw error
+	}
+	return sendJson(
+		res,
+		201,
+		JSON.stringify({
+			id: dataset.id,
+			name: dataset.name,
+			rowCount: text.length,
+			fields: fields.map((f) => ({ name: f.name, type: f.inferredType })),
+		})
+	)
+}
+
 /** The chart-spec routes, dispatched before the generic collection routes:
  *  GET /api/chart-spec, POST /api/visuals, GET and PATCH
- *  /api/visuals/<id> and POST /api/visuals/<id>/restore. False when the
- *  request is none of these. */
+ *  /api/visuals/<id>, POST /api/visuals/<id>/restore and POST
+ *  /api/datasets. False when the request is none of these. */
 export const handleChartSpec = async (
 	req: IncomingMessage,
 	res: ServerResponse,
@@ -548,6 +718,10 @@ export const handleChartSpec = async (
 				themes: themeList,
 				features: CHART_SPEC_FEATURES,
 			}))
+		return true
+	}
+	if (collection === "datasets" && !id && method === "POST") {
+		await createDatasetFromRows(req, res, db, config)
 		return true
 	}
 	if (collection !== "visuals") return false

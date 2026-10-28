@@ -4,15 +4,16 @@ import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { datasetMetaFrom } from "../../src/contexts/chartBuilder/lib/datasetMeta"
-import { VISUALS_VERSION } from "../../src/contexts/chartBuilder/lib/storage/migrations"
+import { DATASETS_VERSION, VISUALS_VERSION } from "../../src/contexts/chartBuilder/lib/storage/migrations"
 import { SYSTEM_DARK_THEME, SYSTEM_LIGHT_THEME } from "../../src/contexts/chartBuilder/lib/systemThemes"
-import type { Dataset, Visual } from "../../src/contexts/chartBuilder/lib/types"
+import type { Dataset, DatasetMeta, Visual } from "../../src/contexts/chartBuilder/lib/types"
 import { hydrateVisual } from "../../src/contexts/chartBuilder/lib/visualDefaults"
 import { CAFE } from "../../src/testSupport/chartSpecFixtures"
 import { visualEtag } from "./chartSpecRoute.js"
+import * as dbModule from "./db.js"
 import { openDb } from "./db.js"
 import type { IdentifyUser } from "./identity.js"
 import { SPEC_BODY_CAP_BYTES } from "./limits.js"
@@ -267,7 +268,7 @@ describe("GET /api/chart-spec", () => {
 		}
 		expect(Object.keys(body.spec)).toEqual(expect.arrayContaining(["datasetId", "encodings", "axes"]))
 		expect(body.spec.encodings).toMatch(/Channel → field name/)
-		expect(body.features).toEqual(["create", "edit", "restore", "read"])
+		expect(body.features).toEqual(["create", "edit", "restore", "read", "datasets"])
 		expect(body.channels.map((c) => c.channel)).toContain("hue")
 		expect(body.channels.map((c) => c.channel)).not.toContain("text")
 		expect(body.channels.find((c) => c.channel === "r")?.conflictsWith).toEqual(
@@ -498,5 +499,98 @@ describe("Saved by on edits and undos", () => {
 		expect(anonymous.visual.updatedBy).toEqual(nancy)
 		expect((await restore(base, v0.id, anonymous.undo, visualEtag(anonymous.visual), as(jane))).status).toBe(200)
 		expect((await visuals(base))[0]?.updatedBy).toEqual(jane)
+	})
+})
+
+describe("POST /api/datasets", () => {
+	const create = (base: string, body: unknown) =>
+		fetch(`${base}/api/datasets`, { method: "POST", body: JSON.stringify(body) })
+	const index = async (base: string) =>
+		(await (await fetch(`${base}/api/datasets?view=index`)).json()) as Record<string, DatasetMeta | null>
+
+	it("stores rows as text, infers types as an upload does, and lists the dataset whole", async () => {
+		const base = await start()
+		const res = await create(base, {
+			name: "Visits",
+			rows: [
+				{ when: "2026-01-05T10:00:00Z", count: "1e3", site: "North", open: true },
+				{ when: "2026-02-01T00:00:00Z", count: 25, site: null, open: false },
+			],
+			types: { site: "categorical" },
+		})
+		expect(res.status).toBe(201)
+		const made = (await res.json()) as { id: string; rowCount: number; fields: Array<{ name: string; type: string }> }
+		expect(made.rowCount).toBe(2)
+		expect(made.fields).toEqual([
+			{ name: "when", type: "temporal" },
+			{ name: "count", type: "quantitative" },
+			{ name: "site", type: "categorical" },
+			{ name: "open", type: "categorical" },
+		])
+		const meta = (await index(base))[made.id]
+		expect(meta?.name).toBe("Visits")
+		expect(meta?.contentHash).toEqual(expect.any(String))
+		expect(meta?.versions).toEqual([expect.objectContaining({ id: meta?.latestVersionId, rowCount: 2 })])
+		const body = (await (await fetch(`${base}/api/datasets/${made.id}`)).json()) as Dataset
+		expect(body.versions[0]?.rows[1]).toEqual({ when: "2026-02-01T00:00:00Z", count: "25", site: "", open: "false" })
+		const version = await fetch(`${base}/api/datasets/${made.id}/versions/${meta?.latestVersionId}`)
+		expect(version.status).toBe(200)
+	})
+
+	it("makes a dataset a chart spec can use", async () => {
+		const base = await start()
+		const res = await create(base, { name: "Muffins", rows: [{ month: "Jan", muffins: 3 }, { month: "Feb", muffins: 5 }] })
+		const { id } = (await res.json()) as { id: string }
+		const chart = await post(base, { datasetId: id, folderId: null, encodings: { x: "month", length: "muffins" } })
+		expect(chart.status).toBe(201)
+	})
+
+	it("reports every problem with its path and stores nothing", async () => {
+		const base = await start()
+		const res = await create(base, { name: " ", rows: [{ a: 1 }, "x", { b: { deep: 1 } }], types: [] })
+		expect(res.status).toBe(400)
+		const { errors } = (await res.json()) as { errors: Array<{ path: string }> }
+		expect(errors.map((e) => e.path)).toEqual(["name", "rows[1]", "rows[2].b", "types"])
+		const typed = await create(base, { name: "T", rows: [{ a: 1 }], types: { b: "quantitative", a: "money" } })
+		expect(((await typed.json()) as { errors: Array<{ path: string }> }).errors.map((e) => e.path)).toEqual(["types.b", "types.a"])
+		expect(await index(base)).toEqual({})
+	})
+
+	it("refuses sparse rows whose filled-out size passes the limit, before filling them out", async () => {
+		const base = await start()
+		const rows = Array.from({ length: 4000 }, (_, i) => ({ [`c${i}`]: 1 }))
+		const res = await create(base, { name: "Sparse", rows })
+		expect(res.status).toBe(413)
+		expect(((await res.json()) as { error: string }).error).toContain("limit")
+		expect(await index(base)).toEqual({})
+	})
+
+	it("refuses a name already in the library", async () => {
+		const base = await start()
+		expect((await create(base, { name: "Visits", rows: [{ a: 1 }] })).status).toBe(201)
+		expect((await create(base, { name: " visits ", rows: [{ a: 2 }] })).status).toBe(409)
+		expect(Object.keys(await index(base))).toHaveLength(1)
+	})
+
+	it("lists nothing when publishing fails part way", async () => {
+		const base = await start()
+		const spy = vi.spyOn(dbModule, "upsertDatasetMeta").mockImplementationOnce(() => {
+			throw new Error("disk full")
+		})
+		expect((await create(base, { name: "Visits", rows: [{ a: 1 }] })).status).toBe(500)
+		spy.mockRestore()
+		expect(await index(base)).toEqual({})
+		expect(readdirSync(dataDir)).toEqual([])
+	})
+
+	it("takes rows while visuals await migration, and refuses before writing when datasets do", async () => {
+		const base = await start()
+		await put(base, "/api/content-versions/visuals", { v: VISUALS_VERSION - 1 })
+		expect((await create(base, { name: "Visits", rows: [{ a: 1 }] })).status).toBe(201)
+		await put(base, "/api/content-versions/datasets", { v: DATASETS_VERSION + 1 })
+		const refused = await create(base, { name: "More", rows: [{ a: 1 }] })
+		expect(refused.status).toBe(409)
+		expect(Object.keys(await index(base))).toHaveLength(1)
+		expect(readdirSync(dataDir)).toHaveLength(2)
 	})
 })
