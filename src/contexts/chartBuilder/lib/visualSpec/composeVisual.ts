@@ -537,12 +537,12 @@ const compose = (
 		const { edits, problems } = settingsFor(visual)
 		if (problems.length > 0) return { ok: false, errors: capProblems(problems) }
 		const applied = applySettings(visual, edits.patch, edits.newId)
-		const seeded = edits.finish(seedPickedSlots(applied, edits.patch, typeOf, ctx.theme))
-		const patched = completeSettings(seeded, edits.patch, (value, bare) =>
+		const finished = edits.finish(seedPickedSlots(applied, edits.patch, typeOf, ctx.theme))
+		const patched = completeSettings(finished.visual, edits.patch, (value, bare) =>
 			isHueConfig(bare) ? completeHue(value, ctx.theme) : value
 		)
-		const unshaped = shapeProblems(edits.patch, visual, patched)
-		if (unshaped.length > 0) return { ok: false, errors: capProblems(unshaped) }
+		const unfinished = [...finished.problems, ...shapeProblems(edits.patch, visual, patched)]
+		if (unfinished.length > 0) return { ok: false, errors: capProblems(unfinished) }
 		return { ok: true, visual: structuredVisual(patched), warnings: [] }
 	}
 	return { ok: true, visual: structuredVisual(visual), warnings: [] }
