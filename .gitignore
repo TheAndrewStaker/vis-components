@@ -33,6 +33,9 @@ public/geo/zcta-*.json
 # wins only when this override is absent (see src/main.tsx).
 src/seed/examples.local.json
 
+# Scratch storage for `pnpm embed:dev` (local embed-publishing loop)
+.embed-dev/
+
 # Environment files — anyone wiring up their own backend keeps secrets here
 .env
 .env.*

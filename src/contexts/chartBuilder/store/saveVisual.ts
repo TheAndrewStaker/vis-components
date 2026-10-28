@@ -60,6 +60,7 @@ import {
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldLevelOrderSpecsAtom,
+	currentFieldOrderAtom,
 	currentFieldOverridesAtom,
 	currentLabelsAtom,
 	currentLegendConfigAtom,
@@ -108,6 +109,7 @@ export const useSaveVisual = () => {
 			const themeId = get(currentThemeIdAtom)
 			const fieldLevelOrders = get(currentFieldLevelOrdersAtom)
 			const fieldLevelOrderSpecs = get(currentFieldLevelOrderSpecsAtom)
+			const fieldOrder = get(currentFieldOrderAtom)
 			const annotationsConfig = get(currentAnnotationsAtom)
 			const captionConfig = get(currentCaptionConfigAtom)
 			const dataTableConfig = get(currentDataTableConfigAtom)
@@ -174,6 +176,7 @@ export const useSaveVisual = () => {
 			themeId: themeId ?? undefined,
 			fieldLevelOrders: { ...fieldLevelOrders },
 			fieldLevelOrderSpecs: { ...fieldLevelOrderSpecs },
+			...(fieldOrder.length > 0 ? { fieldOrder: [...fieldOrder] } : {}),
 			annotationsConfig: {
 				rectangles: [...annotationsConfig.rectangles],
 				circles: [...(annotationsConfig.circles ?? [])],
@@ -328,6 +331,9 @@ export const useLoadVisual = () => {
 			// undefined; the panel then shows an unset picker over an order it
 			// can't explain, exactly as it always did.
 			set(currentFieldLevelOrderSpecsAtom, visual.fieldLevelOrderSpecs ?? {})
+			// The column order — added after drag reorder moved from the data set
+			// to the visual. Absent = the data set's own order.
+			set(currentFieldOrderAtom, visual.fieldOrder ?? [])
 			// Per-visual annotations — added after first release. Older visuals
 			// (and any saved before this field was bound into the save cycle)
 			// leave it undefined; fall back to an empty annotation set so a prior
@@ -416,6 +422,7 @@ export const useResetVisual = () => {
 			set(currentDataLabelsConfigAtom, dataLabelsConfigFromTheme(defaultTheme))
 			set(currentFieldLevelOrdersAtom, {})
 			set(currentFieldLevelOrderSpecsAtom, {})
+			set(currentFieldOrderAtom, [])
 			set(currentAnnotationsAtom, DEFAULT_ANNOTATIONS_CONFIG)
 			set(currentCaptionConfigAtom, captionConfigFromTheme(defaultTheme))
 			set(currentDataTableConfigAtom, DEFAULT_DATA_TABLE_CONFIG)

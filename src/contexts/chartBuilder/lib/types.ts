@@ -437,6 +437,10 @@ export type Visual = {
 	 * by hand (arrows, drag, reverse, reset). Optional for back-compat with
 	 * visuals saved before the picker remembered anything. */
 	fieldLevelOrderSpecs?: Record<string, FieldLevelOrderSpec>
+	/** The visual's column order (Fields panel / data tray drag), by name —
+	 * applied last in the view chain, so it covers reshape and derived
+	 * columns too. Optional: absent = the data set's own order. */
+	fieldOrder?: string[]
 	/** Per-visual rectangle annotations (shaded regions / highlight boxes
 	 * overlaid on the plot). Optional for back-compat with visuals saved
 	 * before annotations existed — falls back to DEFAULT_ANNOTATIONS_CONFIG

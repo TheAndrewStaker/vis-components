@@ -1,7 +1,7 @@
 {
 	"name": "vis-components",
 	"type": "module",
-	"version": "1.27.0",
+	"version": "1.28.0",
 	"private": true,
 	"description": "Embeddable, data-centric visualization components",
 	"license": "SEE LICENSE IN LICENSE",
@@ -15,6 +15,7 @@
 	},
 	"scripts": {
 		"dev": "vite",
+		"embed:dev": "node scripts/embed-dev.mjs",
 		"typecheck": "tsc --noEmit && tsc -p server/tsconfig.check.json",
 		"lint": "eslint .",
 		"notices": "node tooling/generate-third-party-notices.js",

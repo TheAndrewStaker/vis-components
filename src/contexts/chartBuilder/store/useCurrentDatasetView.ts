@@ -10,6 +10,7 @@ import {
 	type DerivedVariable,
 } from "../lib/derivedVariables"
 import { applyCellConversions } from "../lib/materializeTransforms"
+import { applyFieldOrder } from "../lib/reorderFields"
 import { applyReshapeToView } from "../lib/reshape"
 import {
 	resolveDatasetView,
@@ -28,6 +29,7 @@ import {
 	loadedVersionRowsAtom,
 	versionRowsKey,
 	currentDerivedVariablesAtom,
+	currentFieldOrderAtom,
 	currentFieldOverridesAtom,
 	currentReshapeConfigAtom,
 	loadedDatasetsAtom,
@@ -168,14 +170,18 @@ export const preDerivedDatasetViewAtom = atom((get): DatasetView | undefined =>
  * those fields with the "percent" / "dollar" format hint), then the
  * per-visual derived variables appended as computed columns (those the
  * reshape doesn't use — the ones it uses were computed wide, upstream of
- * the melt). A derived atom rather than a per-component derive so the view
+ * the melt), then the visual's own column order (`currentFieldOrderAtom`)
+ * over the lot. A derived atom rather than a per-component derive so the view
  * (and its `fields`/`rows` arrays) keeps a stable identity between store
  * updates — memos and effects may key on it safely. */
 export const currentDatasetViewAtom = atom((get): DatasetView | undefined =>
-	applyDerivedVariablesToView(
-		get(preDerivedDatasetViewAtom),
-		get(currentDerivedVariablesAtom),
-		get(derivedReshapeStagesAtom).afterIds
+	applyFieldOrder(
+		applyDerivedVariablesToView(
+			get(preDerivedDatasetViewAtom),
+			get(currentDerivedVariablesAtom),
+			get(derivedReshapeStagesAtom).afterIds
+		),
+		get(currentFieldOrderAtom)
 	)
 )
 

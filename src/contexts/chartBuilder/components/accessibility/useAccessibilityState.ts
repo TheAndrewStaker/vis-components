@@ -58,7 +58,7 @@ export type AccessibilityState = {
 	dataLabelsMapped: boolean
 	tooltipsEnabled: boolean
 	marks: {
-		lowOpacity: { value: number; source: string } | null
+		lowOpacity: { value: number } | null
 		lineThicknessPx: number | null
 		dataOutlineWidthPx: number | null
 	}
@@ -239,7 +239,7 @@ export const useAccessibilityState = (): AccessibilityState | null => {
 			marks: {
 				lowOpacity:
 					opacity !== null && opacity < 0.4
-						? { value: opacity, source: "Mark opacity is" }
+						? { value: opacity }
 						: null,
 				lineThicknessPx: thicknesses.length > 0 ? Math.min(...thicknesses) : null,
 				dataOutlineWidthPx: encodings.outlineHue?.field

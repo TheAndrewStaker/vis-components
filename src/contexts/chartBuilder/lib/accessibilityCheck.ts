@@ -444,9 +444,8 @@ export type AccessibilityInput = {
 	dataLabelsShown: boolean
 	tooltipsEnabled: boolean
 	marks: {
-		/** Lowest resolved mark opacity, with a short phrase saying where
-		 *  it comes from ("Opacity is 30%"). Null when ≥ the floor. */
-		lowOpacity: { value: number; source: string } | null
+		/** Lowest resolved mark opacity. Null when ≥ the floor. */
+		lowOpacity: { value: number } | null
 		/** Thinnest line carrying data (px), when lines are drawn. */
 		lineThicknessPx: number | null
 		/** Mark outline width (px), only when the outline encodes data. */
@@ -476,8 +475,6 @@ export const FAINT_OPACITY = 0.4
 export const THIN_STROKE_PX = 1
 const PX_TO_PT = 0.75
 
-const fmtRatio = (r: number): string => `${(Math.floor(r * 10) / 10).toFixed(1)}:1`
-const fmtPt = (pt: number): string => `${Math.round(pt * 10) / 10}pt`
 const plural = (n: number, one: string, many = `${one}s`) =>
 	n === 1 ? one : many
 const quote = (s: string): string => {
@@ -509,13 +506,8 @@ export type ContrastModel = {
 	isLarge: (fontSizePx: number, bold: boolean) => boolean
 	/** The least contrast a level asks of (large) text. */
 	required: (level: ContrastLevel, large: boolean) => number
-	/** A measured value for display, floored so a near miss never reads as
-	 *  a pass. */
-	format: (value: number) => string
 	/** A level as the card names it ("AA", "Lc 60"). */
 	levelLabel: (level: ContrastLevel) => string
-	/** The clause after the measured value in a finding. */
-	requirement: (level: ContrastLevel, need: number, large: boolean) => string
 }
 
 const fmtLc = (lc: number): string => `Lc ${Math.floor(lc)}`
@@ -526,57 +518,38 @@ export const CONTRAST_MODELS: Record<ContrastAlgorithm, ContrastModel> = {
 		measure: (text, bg) => Math.abs(apcaContrast(text, bg)),
 		isLarge: isLargeTextApca,
 		required: requiredContrastApca,
-		format: fmtLc,
 		levelLabel: (level) => fmtLc(requiredContrastApca(level, false)),
-		requirement: (_level, need, large) =>
-			`at least Lc ${need} is needed${large ? " for large text" : ""}`,
 	},
 	wcag2: {
 		name: "WCAG 2",
 		measure: contrastRatio,
 		isLarge: (fontSizePx, bold) => isLargeText(fontSizePx * PX_TO_PT, bold),
 		required: requiredContrast,
-		format: fmtRatio,
 		levelLabel: (level) => level,
-		requirement: (level, need, large) =>
-			`${level} needs ${need}:1${large ? " for large text" : ""}`,
 	},
 }
 
-const VISION_NAME: Record<"normal" | VisionType, string> = {
-	normal: "anyone",
-	protanopia: "people with protanopia (red-blind)",
-	deuteranopia: "people with deuteranopia (green-blind)",
-	tritanopia: "people with tritanopia (blue-blind)",
-}
-
-const listVisions = (vs: ReadonlyArray<"normal" | VisionType>): string => {
-	const names = vs.map((v) => VISION_NAME[v])
-	if (names.length <= 1) return names[0] ?? ""
-	return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`
-}
-
 const ROLE_FIX: Record<TextRole, string> = {
-	"tick label": "Change the tick label color under the axis options (or in the theme).",
+	"tick label": "Change the tick label color under the axis options.",
 	"data label":
 		"Change the data label color, or give the labels a background, under Data labels.",
 	annotation: "Change the annotation's text color, or its box fill.",
-	caption: "Change the caption color under Titles (or in the theme).",
-	title: "Change the title color under Titles (or in the theme).",
-	"legend text": "Change the legend text color under Legend (or in the theme).",
-	"facet title": "Change the facet title color under Titles (or in the theme).",
-	text: "Change this text's color in the sidebar (or in the theme).",
+	caption: "Change the caption color under Titles.",
+	title: "Change the title color under Titles.",
+	"legend text": "Change the legend text color under Legend.",
+	"facet title": "Change the facet title color under Titles.",
+	text: "Change this text's color in the sidebar.",
 }
 
 const ROLE_SIZE_FIX: Record<TextRole, string> = {
-	"tick label": "Raise the tick label size under the axis options (or in the theme).",
+	"tick label": "Raise the tick label size under the axis options.",
 	"data label": "Raise the data label size under Data labels.",
 	annotation: "Raise the annotation's font size.",
 	caption: "Raise the caption size under Titles.",
 	title: "Raise the title size under Titles.",
 	"legend text": "Raise the legend text size under Legend.",
 	"facet title": "Raise the facet title size under Titles.",
-	text: "Raise this text's size in the sidebar (or in the theme).",
+	text: "Raise this text's size in the sidebar.",
 }
 
 const effectiveBackground = (layers: BackgroundLayer[]): string | null => {
@@ -605,8 +578,8 @@ const roleNoun = (role: TextRole, n: number): string =>
 const hasMeasurableGlyphs = (s: string): boolean => /[\p{L}\p{N}]/u.test(s)
 
 /** Rule 1 — text contrast, measured with `model`, grouped by role,
- *  background and requirement so twelve failing tick labels make one
- *  finding (quoting the worst value) with twelve targets. */
+ *  background and level so twelve failing tick labels make one finding
+ *  (quoting the worst offender) with twelve targets. */
 const textContrastFindings = (
 	texts: TextSample[],
 	level: ContrastLevel,
@@ -617,9 +590,7 @@ const textContrastFindings = (
 		bgLabel: string
 		/** The group's lowest contrast, in the model's unit. */
 		value: number
-		need: number
 		aaaOnly: boolean
-		large: boolean
 		items: TextSample[]
 	}
 	const groups = new Map<string, Group>()
@@ -630,22 +601,15 @@ const textContrastFindings = (
 		const fg = compositeOver(t.color, t.alpha, bg)
 		const value = model.measure(fg, bg)
 		const large = model.isLarge(t.fontSizePx, t.bold)
-		const needAA = model.required("AA", large)
-		const needAAA = model.required("AAA", large)
-		let need: number
 		let aaaOnly: boolean
-		if (value < needAA) {
-			need = level === "AA" ? needAA : needAAA
-			aaaOnly = false
-		} else if (level === "AAA" && value < needAAA) {
-			need = needAAA
-			aaaOnly = true
-		} else continue
+		if (value < model.required("AA", large)) aaaOnly = false
+		else if (level === "AAA" && value < model.required("AAA", large)) aaaOnly = true
+		else continue
 		const bgLabel = t.background[0]?.label ?? "its background"
-		const key = [t.role, bgLabel, need, aaaOnly, large].join("\u0000")
+		const key = [t.role, bgLabel, aaaOnly].join("\u0000")
 		const g = groups.get(key)
 		if (!g) {
-			groups.set(key, { role: t.role, bgLabel, value, need, aaaOnly, large, items: [t] })
+			groups.set(key, { role: t.role, bgLabel, value, aaaOnly, items: [t] })
 		} else {
 			g.items.push(t)
 			// Lead with the worst offender.
@@ -658,18 +622,17 @@ const textContrastFindings = (
 	return [...groups.values()].map((g, n) => {
 		const count = g.items.length
 		const worst = quote(g.items[0]?.text ?? "")
-		const shown = model.format(g.value)
 		const who =
 			count === 1
-				? `The ${g.role} ${worst} is ${shown}`
-				: `${count} ${roleNoun(g.role, count)} are as low as ${shown} (${worst})`
+				? `The ${g.role} ${worst} is`
+				: `${count} ${roleNoun(g.role, count)} are`
 		// "the mark behind it" → "… behind them" for a group.
 		const against = count === 1 ? g.bgLabel : g.bgLabel.replace(/\bit$/, "them").replace(/^its /, "their ")
 		return {
 			id: `text-contrast-${n}`,
 			rule: "text-contrast",
 			level: g.aaaOnly ? "fail-aaa" : "fail",
-			message: `${who} against ${against}; ${model.requirement(level, g.need, g.large)}.`,
+			message: `${who} too low contrast against ${against}`,
 			suggestion: ROLE_FIX[g.role],
 			targets: g.items.map(textTarget),
 		}
@@ -678,15 +641,16 @@ const textContrastFindings = (
 
 /** Rule 5 — small text. */
 const smallTextFindings = (texts: TextSample[]): AccessibilityFinding[] => {
-	const groups = new Map<string, { role: TextRole; pt: number; items: TextSample[] }>()
+	const groups = new Map<string, { role: TextRole; fail: boolean; items: TextSample[] }>()
 	for (const t of texts) {
 		if (!t.text.trim() || t.fontSizePx <= 0) continue
 		const pt = t.fontSizePx * PX_TO_PT
 		if (pt >= SMALL_TEXT_ADVISORY_PT) continue
-		const key = `${t.role}\u0000${fmtPt(pt)}`
+		const fail = pt < SMALL_TEXT_FAIL_PT
+		const key = `${t.role}\u0000${fail}`
 		const g = groups.get(key)
 		if (g) g.items.push(t)
-		else groups.set(key, { role: t.role, pt, items: [t] })
+		else groups.set(key, { role: t.role, fail, items: [t] })
 	}
 	return [...groups.values()].map((g, n) => {
 		const count = g.items.length
@@ -694,12 +658,11 @@ const smallTextFindings = (texts: TextSample[]): AccessibilityFinding[] => {
 			count === 1
 				? `The ${g.role} ${quote(g.items[0]?.text ?? "")} is`
 				: `${count} ${roleNoun(g.role, count)} are`
-		const fail = g.pt < SMALL_TEXT_FAIL_PT
 		return {
 			id: `small-text-${n}`,
 			rule: "small-text",
-			level: fail ? "fail" : "advisory",
-			message: `${who} ${fmtPt(g.pt)}, smaller than the ${fail ? SMALL_TEXT_FAIL_PT : SMALL_TEXT_ADVISORY_PT}pt ${fail ? "minimum for legible chart text" : "most readers can comfortably read"}.`,
+			level: g.fail ? "fail" : "advisory",
+			message: `${who} too small`,
 			suggestion: ROLE_SIZE_FIX[g.role],
 			targets: g.items.map(textTarget),
 		}
@@ -726,8 +689,8 @@ const paletteFindings = (
 			rule: "palette-distinguishable",
 			level: "advisory",
 			message: asIs
-				? `The ${hue.field} colors for ${quote(a.value)} and ${quote(b.value)} are too similar for anyone to tell apart reliably.`
-				: `The ${hue.field} colors for ${quote(a.value)} and ${quote(b.value)} look alike to ${listVisions(p.visions)}.`,
+				? `The ${hue.field} colors for ${quote(a.value)} and ${quote(b.value)} are too similar`
+				: `The ${hue.field} colors for ${quote(a.value)} and ${quote(b.value)} aren't colorblind friendly`,
 			suggestion:
 				"Pick a more distinct color for one of them in the Color options, or also map the field to Pattern or Shape.",
 			targets: [...a.targets, ...b.targets],
@@ -740,7 +703,7 @@ const paletteFindings = (
 			id: "palette-more",
 			rule: "palette-distinguishable",
 			level: "advisory",
-			message: `${rest} more ${plural(rest, "pair")} of ${hue.field} colors are hard to tell apart under color-vision deficiency.`,
+			message: `${rest} more ${plural(rest, "pair")} of ${hue.field} colors aren't colorblind friendly`,
 			suggestion:
 				"With this many levels, color alone can't stay distinct; consider fewer levels, Pattern or Shape, or direct data labels.",
 			targets: hue.targets,
@@ -811,7 +774,7 @@ const colorOnlyFindings = (input: AccessibilityInput): AccessibilityFinding[] =>
 			id: "color-only",
 			rule: "color-only",
 			level: "advisory",
-			message: `Color is the only thing that tells the ${hue.levels.length} ${hue.field} levels apart in the plot.`,
+			message: `Color is the only thing that tells the ${hue.levels.length} ${hue.field} levels apart`,
 			suggestion:
 				"Also map the field to Pattern or Shape, or label the marks directly with data labels.",
 			targets: hue.targets,
@@ -829,9 +792,8 @@ const redGreenFindings = (input: AccessibilityInput): AccessibilityFinding[] => 
 			id: "red-green-ramp",
 			rule: "red-green-ramp",
 			level: "advisory",
-			message: `The ${hue.field} color scale runs from red to green, whose ends look alike to people with red-green color blindness.`,
-			suggestion:
-				"Use a palette that runs light-to-dark or blue-to-orange, or make sure the ends also differ clearly in lightness.",
+			message: `The ${hue.field} color scale isn't colorblind friendly`,
+			suggestion: "Use a palette that runs light-to-dark.",
 			targets: hue.targets,
 		},
 	]
@@ -845,8 +807,8 @@ const faintMarkFindings = (input: AccessibilityInput): AccessibilityFinding[] =>
 			id: "faint-opacity",
 			rule: "faint-marks",
 			level: "advisory",
-			message: `${lowOpacity.source} ${Math.round(lowOpacity.value * 100)}%, so those marks may be too faint to see against the background.`,
-			suggestion: `Keep data marks at ${Math.round(FAINT_OPACITY * 100)}% opacity or more (Opacity in the sidebar).`,
+			message: "Some marks may be too faint to see",
+			suggestion: `Keep data marks at ${Math.round(FAINT_OPACITY * 100)}% opacity or more.`,
 			targets: input.plotTargets,
 		})
 	}
@@ -855,7 +817,7 @@ const faintMarkFindings = (input: AccessibilityInput): AccessibilityFinding[] =>
 			id: "thin-lines",
 			rule: "faint-marks",
 			level: "advisory",
-			message: `Data lines are drawn ${lineThicknessPx}px thick, thinner than 1px, which low-vision readers may lose.`,
+			message: "Data lines are too thin for low vision readers",
 			suggestion: "Raise the line thickness to at least 1px in the line options.",
 			targets: input.plotTargets,
 		})
@@ -865,7 +827,7 @@ const faintMarkFindings = (input: AccessibilityInput): AccessibilityFinding[] =>
 			id: "thin-outlines",
 			rule: "faint-marks",
 			level: "advisory",
-			message: `Mark outlines carry the outline-color variable but are only ${dataOutlineWidthPx}px wide, too thin to read their color.`,
+			message: "Mark outlines vary by color but are too thin for low vision readers",
 			suggestion: "Raise the outline width to at least 1px in the Shape options.",
 			targets: input.plotTargets,
 		})
@@ -881,7 +843,7 @@ const hoverOnlyFindings = (input: AccessibilityInput): AccessibilityFinding[] =>
 					rule: "hover-only",
 					level: "advisory",
 					message:
-						"Exact values are only shown in hover tooltips, which keyboard and screen-reader users can't reach.",
+						"Exact values are only shown in hover tooltips, which keyboard and screen-reader users can't reach",
 					suggestion:
 						"Show the key values as data labels, or share the data table alongside the chart.",
 					targets: input.plotTargets,
@@ -901,12 +863,12 @@ const titleFindings = (input: AccessibilityInput): AccessibilityFinding[] => {
 			level: "advisory",
 			message:
 				state === "hidden"
-					? `The ${name} axis title is hidden, so readers have to guess what the ${name} axis measures.`
-					: `The ${name} axis has no title, so readers have to guess what it measures.`,
+					? `The ${name} axis title is hidden`
+					: `The ${name} axis has no title`,
 			suggestion:
 				state === "hidden"
-					? `Re-check the ${name} axis title under Titles → Titles shown, unless the chart's title already says it.`
-					: `Type ${axis === "x" ? "an" : "a"} ${name} axis title under Titles, unless the chart's title already says it.`,
+					? `Re-check the ${name} axis title under Titles → Titles shown.`
+					: `Type ${axis === "x" ? "an" : "a"} ${name} axis title under Titles.`,
 			targets: input.axisTitleTargets[axis].length
 				? input.axisTitleTargets[axis]
 				: input.plotTargets,
@@ -920,12 +882,12 @@ const titleFindings = (input: AccessibilityInput): AccessibilityFinding[] => {
 			level: "advisory",
 			message:
 				l.title === "hidden"
-					? `The legend for ${l.field} has its title hidden, so readers can't tell what its entries stand for.`
-					: `The legend for ${l.field} has no title, so readers can't tell what its entries stand for.`,
+					? `The legend for ${l.field} has its title hidden`
+					: `The legend for ${l.field} has no title`,
 			suggestion:
 				l.title === "hidden"
 					? "Re-check its title under Titles → Titles shown."
-					: "Type a legend title under Legend, or clear it to show the field name.",
+					: "Type a legend title under Legend.",
 			targets: input.legendTargets,
 		})
 	})
@@ -951,10 +913,12 @@ const descriptionFindings = (
 				level: "fail",
 				message:
 					text === ""
-						? "The chart has no screen-reader description, so screen-reader users can't tell what it shows."
-						: `The screen-reader description is only the visual's name (${quote(text)}), so screen-reader users can't tell what the chart shows.`,
+						? "The chart has no screen-reader description"
+						: `The screen-reader description is only the visual's name (${quote(text)}), so screen-reader users can't tell what the chart shows`,
 				suggestion:
-					"Write a description under Accessibility, or give the chart a title under Titles.",
+					text === ""
+						? "Write a description under Accessibility, or give the chart a title under Titles."
+						: "Write a description under Accessibility, or give the chart a title.",
 				targets: input.plotTargets,
 			},
 		]
@@ -966,7 +930,7 @@ const descriptionFindings = (
 				rule: "description",
 				level: "advisory",
 				message:
-					"The screen-reader description is the chart title; write a sentence that states the takeaway, under Accessibility.",
+					"The screen-reader description is the chart title; write a sentence that states the takeaway, under Accessibility",
 				targets: input.plotTargets,
 			},
 		]

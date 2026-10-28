@@ -362,6 +362,7 @@ export type FieldNameConfigs = {
 	fieldTypeOverrides: Record<string, FieldType>
 	fieldLevelOrders?: Record<string, string[]>
 	fieldLevelOrderSpecs?: Record<string, FieldLevelOrderSpec>
+	fieldOrder?: string[]
 	channelConfigs: ChannelConfigs
 	labelsConfig?: LabelsConfig
 	dataLabelsConfig?: DataLabelsConfig
@@ -632,6 +633,7 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 			newName
 		) as Record<string, FieldType>,
 		fieldLevelOrders: renameKey(state.fieldLevelOrders, oldName, newName),
+		fieldOrder: renameInList(state.fieldOrder, oldName, newName) ?? state.fieldOrder,
 		fieldLevelOrderSpecs: renameOrderSpecs(
 			state.fieldLevelOrderSpecs,
 			oldName,

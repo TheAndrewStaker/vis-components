@@ -37,6 +37,7 @@ import {
 	loadCurrentDerivedVariables,
 	loadCurrentFieldLevelOrders,
 	loadCurrentFieldLevelOrderSpecs,
+	loadCurrentFieldOrder,
 	loadCurrentFieldOverrides,
 	loadCurrentLabels,
 	loadCurrentLegend,
@@ -76,6 +77,7 @@ import {
 	saveCurrentEncodings,
 	saveCurrentFieldLevelOrders,
 	saveCurrentFieldLevelOrderSpecs,
+	saveCurrentFieldOrder,
 	saveCurrentFieldOverrides,
 	saveCurrentLabels,
 	saveCurrentLegend,
@@ -956,6 +958,16 @@ export const currentFieldLevelOrdersAtom = persistedAtom<
 export const currentFieldLevelOrderSpecsAtom = persistedAtom<
 	Record<string, FieldLevelOrderSpec>
 >(loadCurrentFieldLevelOrderSpecs, saveCurrentFieldLevelOrderSpecs)
+
+/** The visual's column order, by name: the Fields panel's and the data
+ * tray's drag reorder. Applied as the LAST stage of the view chain
+ * (`currentDatasetViewAtom`), so it places the reshape's minted columns and
+ * live derived columns too; a column it doesn't name keeps its place after
+ * the ones it does. Empty = the data set's own order. */
+export const currentFieldOrderAtom = persistedAtom<string[]>(
+	loadCurrentFieldOrder,
+	saveCurrentFieldOrder
+)
 
 export const drawerHeightAtom = persistedAtom<number>(
 	loadDrawerHeight,

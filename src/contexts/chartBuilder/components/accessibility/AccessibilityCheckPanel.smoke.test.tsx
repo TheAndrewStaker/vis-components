@@ -91,36 +91,6 @@ describe("AccessibilityCheckCard", () => {
 		expect(screen.getByText("No accessibility issues found at Lc 75.")).toBeTruthy()
 	})
 
-	it("minimizes to its heading bar with an aria-expanded toggle", () => {
-		const onToggleCollapsed = vi.fn()
-		const findings = [finding("a", "fail", "Low contrast")]
-		const { rerender } = renderCard(findings, { onToggleCollapsed })
-		const toggle = screen.getByRole("button", { name: "Show findings" })
-		expect(toggle.getAttribute("aria-expanded")).toBe("true")
-		expect(screen.getByText("Low contrast")).toBeTruthy()
-		fireEvent.click(toggle)
-		expect(onToggleCollapsed).toHaveBeenCalled()
-		rerender(
-			<AccessibilityCheckCard
-				findings={findings}
-				level="AA"
-				algorithm="wcag2"
-				onLevelChange={noop}
-				onRecheck={noop}
-				onHighlight={noop}
-				onToggleCollapsed={onToggleCollapsed}
-				collapsed
-			/>
-		)
-		expect(
-			screen.getByRole("button", { name: "Show findings" }).getAttribute("aria-expanded")
-		).toBe("false")
-		// The heading (and its count) stays; the list, level and Re-check go.
-		expect(screen.getByRole("region", { name: "Accessibility check — 1 finding" })).toBeTruthy()
-		expect(screen.queryByText("Low contrast")).toBeNull()
-		expect(screen.queryByRole("button", { name: "Re-check" })).toBeNull()
-	})
-
 	it("highlights on hover and focus, clears on leave, re-checks on demand", () => {
 		const onHighlight = vi.fn()
 		const onRecheck = vi.fn()

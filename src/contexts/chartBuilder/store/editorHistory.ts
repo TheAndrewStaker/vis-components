@@ -24,6 +24,7 @@ import {
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldLevelOrderSpecsAtom,
+	currentFieldOrderAtom,
 	currentFieldOverridesAtom,
 	currentLabelsAtom,
 	currentLegendConfigAtom,
@@ -39,7 +40,7 @@ import {
  *
  * The draft is ~20 independent atoms and every change autosaves 800 ms
  * later, so there is no "unsaved" state to fall back to; undo is a history
- * of whole-draft snapshots instead. A snapshot is the 19 editable pieces of
+ * of whole-draft snapshots instead. A snapshot is the 20 editable pieces of
  * a visual (everything `useSaveVisual` writes into the blob), held by
  * reference — the atoms' own objects, no copying. Undo writes a snapshot
  * back through the same atoms, and autosave then persists it like any edit.
@@ -64,6 +65,7 @@ const DRAFT_ATOMS = {
 	dataLabelsConfig: currentDataLabelsConfigAtom,
 	fieldLevelOrders: currentFieldLevelOrdersAtom,
 	fieldLevelOrderSpecs: currentFieldLevelOrderSpecsAtom,
+	fieldOrder: currentFieldOrderAtom,
 	annotationsConfig: currentAnnotationsAtom,
 	captionConfig: currentCaptionConfigAtom,
 	dataTableConfig: currentDataTableConfigAtom,

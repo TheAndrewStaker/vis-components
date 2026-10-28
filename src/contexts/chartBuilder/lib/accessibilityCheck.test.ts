@@ -160,12 +160,13 @@ describe("isRedGreenRamp", () => {
 })
 
 describe("evaluateAccessibility", () => {
-	it("fails #777 on white at AA, with the ratio in the message", () => {
+	it("fails #777 on white at AA", () => {
 		const [f] = evaluateAccessibility(input({ texts: [text()] }), "AA", "wcag2")
 		expect(f?.rule).toBe("text-contrast")
 		expect(f?.level).toBe("fail")
-		expect(f?.message).toContain("4.4:1")
-		expect(f?.message).toContain("AA needs 4.5:1")
+		expect(f?.message).toBe(
+			"The data label “Label” is too low contrast against the chart background"
+		)
 		expect(f?.suggestion).toMatch(/Data labels/)
 	})
 	it("lets large text pass at 3:1", () => {
@@ -181,9 +182,10 @@ describe("evaluateAccessibility", () => {
 		expect(evaluateAccessibility(input({ texts: [t, u] }), "AA", "wcag2")).toEqual([])
 	})
 	it("composites the text and translucent layers before measuring", () => {
-		// Black text at 30% on white reads as #b3b3b3 — 2.07:1, shown floored so a near-miss never reads as a pass.
+		// Black text at 30% on white reads as #b3b3b3 — 2.07:1, a fail
+		// (opaque black would pass).
 		const faint = text({ color: "#000000", alpha: 0.3 })
-		expect(evaluateAccessibility(input({ texts: [faint] }), "AA", "wcag2")[0]?.message).toContain("2.0:1")
+		expect(evaluateAccessibility(input({ texts: [faint] }), "AA", "wcag2")[0]?.level).toBe("fail")
 		// White text on a 50% black layer over white: #808080 bg → 3.9:1.
 		const onLayer = text({
 			color: "#ffffff",
@@ -199,10 +201,12 @@ describe("evaluateAccessibility", () => {
 		const texts = [text({ id: "a", role: "tick label" }), text({ id: "b", role: "tick label" })]
 		const out = evaluateAccessibility(input({ texts }), "AA", "wcag2")
 		expect(out).toHaveLength(1)
-		expect(out[0]?.message).toMatch(/^2 tick labels are as low as 4\.4:1/)
+		expect(out[0]?.message).toBe(
+			"2 tick labels are too low contrast against the chart background"
+		)
 		expect(out[0]?.targets.map((t) => t.id)).toEqual(["a", "b"])
 	})
-	it("leads a group with its worst ratio and skips emoji-only text", () => {
+	it("leads a group with its worst offender and skips emoji-only text", () => {
 		const texts = [
 			text({ id: "a", text: "Mid", color: "#999999" }),
 			text({ id: "b", text: "Worst", color: "#bbbbbb" }),
@@ -210,7 +214,6 @@ describe("evaluateAccessibility", () => {
 		]
 		const [f, ...rest] = evaluateAccessibility(input({ texts }), "AA", "wcag2")
 		expect(rest).toEqual([])
-		expect(f?.message).toContain("“Worst”")
 		expect(f?.targets.map((t) => t.id)).toEqual(["b", "a"])
 	})
 	it("skips text whose background couldn't be resolved", () => {
@@ -225,7 +228,7 @@ describe("evaluateAccessibility", () => {
 			["small-text", "fail"],
 			["small-text", "advisory"],
 		])
-		expect(out[0]?.message).toContain("6pt")
+		expect(out[0]?.message).toBe("The data label “Label” is too small")
 	})
 	it("orders fails, then AAA-only fails, then advisories", () => {
 		const out = evaluateAccessibility(
@@ -249,12 +252,12 @@ describe("evaluateAccessibility", () => {
 		...over,
 	})
 
-	it("names the two levels and the vision type for confusable colors", () => {
+	it("names the two levels of confusable colors", () => {
 		const out = evaluateAccessibility(input({ hue: hue(["#d62728", "#2ca02c"]) }), "AA", "wcag2")
 		const f = out.find((x) => x.rule === "palette-distinguishable")
 		expect(f?.message).toContain("“L0”")
 		expect(f?.message).toContain("“L1”")
-		expect(f?.message).toContain("deuteranopia")
+		expect(f?.message).toContain("colorblind friendly")
 	})
 	it("skips palette checks for gradient color", () => {
 		const out = evaluateAccessibility(
@@ -301,7 +304,7 @@ describe("evaluateAccessibility", () => {
 		const out = evaluateAccessibility(
 			input({
 				marks: {
-					lowOpacity: { value: 0.3, source: "Opacity is" },
+					lowOpacity: { value: 0.3 },
 					lineThicknessPx: 0.5,
 					dataOutlineWidthPx: 0.5,
 				},
@@ -310,7 +313,6 @@ describe("evaluateAccessibility", () => {
 			"wcag2"
 		)
 		expect(out.map((f) => f.id)).toEqual(["faint-opacity", "thin-lines", "thin-outlines"])
-		expect(out[0]?.message).toContain("30%")
 	})
 	it("flags hover-only values unless data labels show", () => {
 		expect(evaluateAccessibility(input({ tooltipsEnabled: true }), "AA", "wcag2")[0]?.rule).toBe("hover-only")
@@ -328,8 +330,9 @@ describe("evaluateAccessibility", () => {
 			"wcag2"
 		)
 		expect(out.map((f) => f.id)).toEqual(["axis-title-x", "axis-title-y", "legend-title-0"])
-		expect(out[0]?.message).toContain("hidden")
-		expect(out[1]?.message).toContain("no title")
+		expect(out[0]?.message).toBe("The X axis title is hidden")
+		expect(out[1]?.message).toBe("The Y axis has no title")
+		expect(out[2]?.message).toBe("The legend for Region has its title hidden")
 	})
 	it("is silent on a clean chart", () => {
 		expect(
@@ -343,20 +346,16 @@ describe("evaluateAccessibility", () => {
 })
 
 describe("evaluateAccessibility under APCA", () => {
-	it("fails #999 on white at Lc 60, with the Lc in the message", () => {
+	it("fails #999 on white at Lc 60", () => {
 		const [f] = evaluateAccessibility(input({ texts: [text({ color: "#999999" })] }), "AA", "apca")
 		expect(f?.rule).toBe("text-contrast")
 		expect(f?.level).toBe("fail")
-		expect(f?.message).toBe(
-			"The data label “Label” is Lc 54 against the chart background; at least Lc 60 is needed."
-		)
 	})
 	it("passes #888 on white at Lc 60 but lists it as Lc 75-only at the stricter level", () => {
 		const t = text({ color: "#888888" }) // Lc 63
 		expect(evaluateAccessibility(input({ texts: [t] }), "AA", "apca")).toEqual([])
 		const [f] = evaluateAccessibility(input({ texts: [t] }), "AAA", "apca")
 		expect(f?.level).toBe("fail-aaa")
-		expect(f?.message).toContain("at least Lc 75 is needed")
 	})
 	it("uses APCA's own large-text sizes: Lc 45 from 36px, or 24px bold", () => {
 		const faint = { color: "#aaaaaa" } // Lc 45.8
@@ -364,10 +363,9 @@ describe("evaluateAccessibility under APCA", () => {
 			evaluateAccessibility(input({ texts: [text({ ...faint, ...over })] }), level, "apca")
 		expect(at({ fontSizePx: 36 }, "AA")).toEqual([])
 		expect(at({ fontSizePx: 24, bold: true }, "AA")).toEqual([])
-		expect(at({ fontSizePx: 24 }, "AA")[0]?.message).toContain("at least Lc 60 is needed.")
-		expect(at({ fontSizePx: 36 }, "AAA")[0]?.message).toContain(
-			"at least Lc 60 is needed for large text."
-		)
+		expect(at({ fontSizePx: 24 }, "AA")[0]?.level).toBe("fail")
+		// Large text clears Lc 45 but misses the stricter Lc 60.
+		expect(at({ fontSizePx: 36 }, "AAA")[0]?.level).toBe("fail-aaa")
 	})
 	it("judges light-on-dark text by the magnitude of its negative Lc", () => {
 		const t = text({
@@ -375,8 +373,8 @@ describe("evaluateAccessibility under APCA", () => {
 			background: [{ color: "#808080", alpha: 1, label: "its bar" }],
 		}) // Lc −72
 		expect(evaluateAccessibility(input({ texts: [t] }), "AA", "apca")).toEqual([])
-		expect(evaluateAccessibility(input({ texts: [t] }), "AAA", "apca")[0]?.message).toContain(
-			"is Lc 72 against its bar"
+		expect(evaluateAccessibility(input({ texts: [t] }), "AAA", "apca")[0]?.level).toBe(
+			"fail-aaa"
 		)
 	})
 })
@@ -447,7 +445,7 @@ describe("rule 9 — description", () => {
 		expect(out).toHaveLength(1)
 		expect(out[0]?.level).toBe("advisory")
 		expect(out[0]?.message).toBe(
-			"The screen-reader description is the chart title; write a sentence that states the takeaway, under Accessibility."
+			"The screen-reader description is the chart title; write a sentence that states the takeaway, under Accessibility"
 		)
 	})
 

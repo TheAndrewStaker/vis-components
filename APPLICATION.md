@@ -657,18 +657,19 @@ per-value overrides, facet settings, pinned orders).
 
 **Reordering variables** — a field row in the Fields panel drags by its
 ⠿ handle, and a column header in the data tray drags as a whole; the
-drop gap is marked while the drag is on. Column order, like a name, is
-a property of the DATASET (`Dataset.fields`, `store/useReorderField.ts`
-→ `lib/reorderFields.ts`): the data tray, the Fields panel, the Edit
-dialog and every visual bound to the data set follow it, and every
-version that keeps a column list of its own is put in the same order,
-so previewing an older version shows its columns as arranged (a column
-only that version has keeps its place after the ordered ones). Rows
-are never rewritten — they are keyed by name — and no visual config
-stores a column position, so nothing else changes. Only the data set's
-own fields drag: with a reshape applied (the rows shown aren't that
-list) and for an older visual's live derived columns there is no
-handle. The Edit dialog's grid does NOT reorder columns.
+drop gap is marked while the drag is on. Column order is a property of
+the VISUAL (`Visual.fieldOrder`, `currentFieldOrderAtom`,
+`store/useReorderField.ts` → `lib/reorderFields.ts`): a list of names
+applied as the LAST stage of the view chain, after the reshape and the
+derived variables, so EVERY column the table shows drags — a reshape's
+minted columns and live derived columns included, reshape applied or
+not. A drop writes the whole order as shown; a column the list doesn't
+name (one added later) keeps its place after the ones it does, and a
+name no longer in the table is ignored. Renaming a column renames it in
+the list. Other visuals on the same data set keep their own order, the
+data set itself is not rewritten, and the Edit dialog's grid follows
+the data set's stored order, not a visual's. The order is saved with
+the visual and covered by undo.
 
 ### 2.3 Visuals (save/load)
 A "visual" is a named snapshot of: chart name, the dataset (and the
@@ -4140,15 +4141,15 @@ top-right of the chart viewport (below the zoom pill when a fixed canvas
 size shows one), over the figure but under the narrow-layout menu sheet
 and every modal. It lists what about the RENDERED chart may be
 inaccessible. While it has findings the header button carries a red count
-badge (`aria-hidden`; the same count is in the card's heading).
+badge (`aria-hidden`; the same count is in the card's screen-reader
+heading).
 
-- **Heading** "Accessibility check — N findings": the card is a labelled
-  region and keyboard-focusable. The × button turns the check off. The
-  chevron beside it (a button with `aria-expanded`, "Minimize" /
-  "Expand") collapses the card to that heading bar so it stops covering
-  the figure; the check keeps running underneath, so the count and the
-  header badge stay current and expanding shows the list at once.
-  Collapsed is UI-only and resets each time the check is turned on.
+- **Top row**, no visible title: the model name and Level radio on the
+  left; Re-check and × on the right. It never wraps — the card grows past
+  its 320px base width to fit it. The card is a region named
+  "Accessibility check — N findings" by a screen-reader-only heading, and
+  keyboard-focusable. The × button turns the check off. There is no
+  minimize control.
 - **Narrow layouts:** while the menu sheet is open the card and its
   highlights are hidden (not discarded) and come back when it closes.
 - **Level** radio (`accessibilityCheckLevelAtom`, starts at the lower
@@ -4157,13 +4158,18 @@ badge (`aria-hidden`; the same count is in the card's heading).
   Lc 75** under APCA. The model's name sits beside the radio; the model
   itself is the Settings → Accessibility preference (below).
 - **Findings**, grouped **Fails** → **Fails at AAA only** / **Fails at
-  Lc 75 only** (stricter level only) → **Advisories**. Each is a button: the message says what, where and
-  how far off; the line under it says how to fix it. Hovering or focusing
+  Lc 75 only** (stricter level only) → **Advisories**. Each is a button: the message says what is wrong and
+  where, in short plain words (no measured values — the highlight and the
+  fix carry the detail), medium weight with no closing period; the line under
+  it says how to fix it, as a full sentence. Group headings are brand
+  purple; each row's dot is red (Fail), amber (stricter level only) or
+  light purple (Advisory). Hovering or focusing
   a row outlines its targets on the chart (brand dashed boxes drawn in a
   layer beside the chart, `aria-hidden`); clicking also scrolls the first
   target into view. Similar offenders are grouped into one row (e.g.
-  "7 data labels are as low as 1.9:1 (“30”) against the bar or tile
-  behind them") that outlines all of them, quoting the worst one.
+  "7 data labels are too low contrast against the bar or tile behind
+  them") that outlines all of them; a single offender is quoted by its
+  text.
 - **Re-check** re-reads the chart now. It also re-checks on its own:
   any change inside the chart viewport restarts a 400ms quiet-period
   timer (the layout solver re-renders several times per edit; checking
@@ -4210,22 +4216,20 @@ settings page in another tab.
      text" sizes), the guideline's minimum for content text; the
      stricter level adds the Lc 15 it suggests where readability
      matters: Lc 75 (Lc 60 large). APCA's font-size lookup table is NOT
-     applied beyond that large-text cutoff — rule 5 covers size. Shown
-     floored to a whole Lc.
+     applied beyond that large-text cutoff — rule 5 covers size.
    - **WCAG 2** — the 2.x luminance ratio; AA needs 4.5:1 (3:1 for
-     large text: ≥ 18pt, or ≥ 14pt bold), AAA 7:1 (4.5:1 large). Shown
-     floored to one decimal.
-   Either way a near miss never reads as a pass, and at the stricter
+     large text: ≥ 18pt, or ≥ 14pt bold), AAA 7:1 (4.5:1 large).
+   Failing texts group by kind, background and level. At the stricter
    level text that passes the lower one is listed as "Fails at AAA
    only" / "Fails at Lc 75 only". Skipped: text over a gradient or
    pattern fill (background unknown), emoji-only text (glyphs ignore
    their fill), invisible text.
 2. **Palette distinguishability — Advisory.** The categorical / ordinal
    color levels actually in use (from the color scale, not the whole
-   theme palette): any pair within CIEDE2000 ΔE 10 as-is ("too similar
-   for anyone") or under a protanopia / deuteranopia / tritanopia
-   simulation (Machado 2009, severity 1) names the two levels and the
-   vision types. Six pairs are listed, closest first; the rest fold into
+   theme palette): any pair within CIEDE2000 ΔE 10 as-is ("are too
+   similar") or under a protanopia / deuteranopia / tritanopia
+   simulation (Machado 2009, severity 1; "aren't colorblind friendly")
+   names the two levels. Six pairs are listed, closest first; the rest fold into
    one "N more pairs" row. Skipped for gradient (quantitative) color.
 3. **Color is the only cue — Advisory.** Color maps a categorical /
    ordinal field and nothing else tells its levels apart: not Shape or
@@ -4246,7 +4250,8 @@ settings page in another tab.
    Stoplight presets, RdYlGn), which red-green color-blind readers see
    as the same muddy hue.
 5. **Small text — Advisory under 9pt, Fail under 7pt.** Resolved size in
-   points (the UI's unit: px × ¾), grouped by kind of text.
+   points (the UI's unit: px × ¾), grouped by kind of text and level;
+   worded "is too small" without the size.
 6. **Faint or thin marks — Advisory.** Mark opacity under 40% (the
    overall Opacity, when no field is mapped to opacity); line thickness
    under 1px on a cartesian chart that draws lines from Connection; mark

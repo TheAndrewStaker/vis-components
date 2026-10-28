@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { buildDataset } from "../../../testSupport/fixtures"
 import {
+	applyFieldOrder,
 	moveNameBefore,
-	reorderDatasetFields,
 	reorderFieldsByNames,
 } from "./reorderFields"
-import type { Field } from "./types"
+import type { DatasetView, Field } from "./types"
 
 const f = (name: string): Field => ({ name, inferredType: "categorical" })
 
@@ -45,24 +44,19 @@ describe("reorderFieldsByNames", () => {
 	})
 })
 
-describe("reorderDatasetFields", () => {
-	it("reorders the data set's list and each version's own list, leaving rows alone", () => {
-		const rows = [{ a: "1", b: "2", old: "0" }]
-		const dataset = buildDataset({
-			fields: [f("a"), f("b")],
-			versions: [
-				{ id: "v1", filename: "x.csv", rows, createdAt: 0, fields: [f("old"), f("a"), f("b")] },
-				{ id: "v2", filename: "y.csv", rows, createdAt: 1 },
-			],
-		})
-		const next = reorderDatasetFields(dataset, ["b", "a"])
-		expect(next.fields.map((g) => g.name)).toEqual(["b", "a"])
-		expect(next.versions[0]!.fields!.map((g) => g.name)).toEqual(["b", "a", "old"])
-		expect(next.versions[1]!.fields).toBeUndefined()
-		expect(next.versions[0]!.rows).toBe(rows)
+describe("applyFieldOrder", () => {
+	const view = (names: string[]): DatasetView =>
+		({ fields: names.map(f), rows: [] }) as unknown as DatasetView
+	it("puts the view's columns in the visual's order, unnamed ones after", () => {
+		const v = view(["a", "b", "measure", "value"])
+		const next = applyFieldOrder(v, ["value", "a"])
+		expect(next.fields.map((g) => g.name)).toEqual(["value", "a", "b", "measure"])
+		expect(next.rows).toBe(v.rows)
 	})
-	it("is the same data set when the order already holds", () => {
-		const dataset = buildDataset({ fields: [f("a"), f("b")] })
-		expect(reorderDatasetFields(dataset, ["a", "b"])).toBe(dataset)
+	it("is the same view with no order, or when the order already holds", () => {
+		const v = view(["a", "b"])
+		expect(applyFieldOrder(v, [])).toBe(v)
+		expect(applyFieldOrder(v, ["a", "b"])).toBe(v)
+		expect(applyFieldOrder(undefined, ["a"])).toBeUndefined()
 	})
 })

@@ -1,10 +1,10 @@
-/** Column order is a property of the DATA SET, like a field's name: the
- *  Fields panel and the data tray reorder `Dataset.fields` by drag, and
- *  every version that keeps a column list of its own follows the same
- *  order, so previewing an older version shows its columns the way the
- *  user arranged them. Rows are never touched — they are keyed by name. */
+/** Column order is a property of the VISUAL: the Fields panel and the data
+ *  tray reorder by drag into `Visual.fieldOrder`, a list of names applied
+ *  as the last stage of the view chain — so it places every column the
+ *  table shows, a reshape's minted columns and live derived columns
+ *  included. Rows are never touched — they are keyed by name. */
 
-import type { Dataset, Field } from "./types"
+import type { DatasetView, Field } from "./types"
 
 /** `names` with `name` moved so that it sits just before `before` (at the
  *  end when `before` is null). Same reference when nothing moves, or when
@@ -38,17 +38,14 @@ export const reorderFieldsByNames = (
 	return ranked.every((x, i) => x.f === fields[i]) ? fields : ranked.map((x) => x.f)
 }
 
-/** The data set's columns, and every version's own list, in the order
- *  `names` gives. Same reference when nothing changes. */
-export const reorderDatasetFields = (dataset: Dataset, names: readonly string[]): Dataset => {
-	const fields = reorderFieldsByNames(dataset.fields, names)
-	let changed = fields !== dataset.fields
-	const versions = dataset.versions.map((v) => {
-		if (!v.fields) return v
-		const own = reorderFieldsByNames(v.fields, names)
-		if (own === v.fields) return v
-		changed = true
-		return { ...v, fields: own }
-	})
-	return changed ? { ...dataset, fields, versions } : dataset
+/** `view` with its columns in the order `names` gives (see
+ *  {@link reorderFieldsByNames}). Same reference when the order already
+ *  holds, so the view keeps its identity for a visual that never reordered. */
+export const applyFieldOrder = <V extends DatasetView | undefined>(
+	view: V,
+	names: readonly string[]
+): V => {
+	if (!view || names.length === 0) return view
+	const fields = reorderFieldsByNames(view.fields, names)
+	return fields === view.fields ? view : { ...view, fields }
 }

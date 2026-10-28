@@ -37,6 +37,7 @@ const baseState = (): Required<FieldNameConfigs> => ({
 	fieldTypeOverrides: {},
 	fieldLevelOrders: {},
 	fieldLevelOrderSpecs: {},
+	fieldOrder: [],
 	channelConfigs: {},
 	labelsConfig: DEFAULT_LABELS_CONFIG,
 	dataLabelsConfig: DEFAULT_DATA_LABELS_CONFIG,
@@ -172,6 +173,13 @@ describe("renameFieldInConfigs — standard (view-field) rewrite", () => {
 			revenue: ["1", "2"],
 			region: ["b", "a"],
 		})
+	})
+
+	it("renames the field in the visual's column order", () => {
+		const state = baseState()
+		state.fieldOrder = ["region", "sales"]
+		const next = renameFieldInConfigs(state, fields, "sales", "revenue")
+		expect(next.fieldOrder).toEqual(["region", "revenue"])
 	})
 
 	it("follows the field into the Order-by picker memories", () => {

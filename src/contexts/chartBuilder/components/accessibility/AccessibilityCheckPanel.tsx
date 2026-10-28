@@ -117,7 +117,7 @@ const findingCountLabel = (n: number): string =>
 const LEVEL_DOT: Record<FindingLevel, string> = {
 	fail: "bg-red-600",
 	"fail-aaa": "bg-amber-500",
-	advisory: "bg-stone-400",
+	advisory: "bg-brand-300",
 }
 
 /** The card itself — presentational, so it renders in tests without a
@@ -131,8 +131,6 @@ export const AccessibilityCheckCard = ({
 	onHighlight,
 	onSelect,
 	onClose,
-	collapsed = false,
-	onToggleCollapsed,
 	pending,
 	className,
 }: {
@@ -148,17 +146,11 @@ export const AccessibilityCheckCard = ({
 	/** A row was clicked: bring its targets into view. */
 	onSelect?: (id: string) => void
 	onClose?: () => void
-	/** Minimized to the heading bar so the card stops covering the figure.
-	 *  UI-only; the findings stay collected underneath. */
-	collapsed?: boolean
-	/** Shows the minimize / expand control when given. */
-	onToggleCollapsed?: () => void
 	/** The chart hasn't settled yet — nothing checked so far. */
 	pending?: boolean
 	className?: string
 }) => {
 	const headingId = useId()
-	const bodyId = useId()
 	const model = CONTRAST_MODELS[algorithm]
 	return (
 		<section
@@ -168,53 +160,12 @@ export const AccessibilityCheckCard = ({
 			tabIndex={0}
 			className={`flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-lg dark:border-stone-700 dark:bg-stone-900 ${className ?? ""}`}
 		>
-			<div className="flex items-start justify-between gap-2">
-				<h2 id={headingId} className="text-sm vc-heading">
-					Accessibility check — {findingCountLabel(findings.length)}
-				</h2>
-				<div className="flex shrink-0 items-center gap-0.5">
-				{onToggleCollapsed && (
-					<button
-						type="button"
-						onClick={onToggleCollapsed}
-						aria-expanded={!collapsed}
-						aria-controls={bodyId}
-						aria-label="Show findings"
-						title={collapsed ? "Expand" : "Minimize"}
-						className="-mt-0.5 flex h-6 w-6 items-center justify-center rounded hover:bg-stone-100 dark:hover:bg-stone-800 vc-muted"
-					>
-						<svg
-							viewBox="0 0 12 12"
-							width={12}
-							height={12}
-							aria-hidden="true"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth={1.6}
-							strokeLinecap="round"
-							strokeLinejoin="round"
-						>
-							<path d={collapsed ? "M3 4.5l3 3 3-3" : "M3 7.5l3-3 3 3"} />
-						</svg>
-					</button>
-				)}
-				{onClose && (
-					<button
-						type="button"
-						onClick={onClose}
-						aria-label="Close accessibility check"
-						title="Close accessibility check"
-						className="-mt-0.5 rounded px-1 text-lg leading-none hover:bg-stone-100 dark:hover:bg-stone-800 vc-muted"
-					>
-						×
-					</button>
-				)}
-				</div>
-			</div>
-			<div id={bodyId} hidden={collapsed} className="flex flex-col gap-3">
-			{!collapsed && (
-			<>
-			<div className="flex items-center justify-between gap-2">
+			{/* Screen-reader name for the region; the card shows no title. */}
+			<h2 id={headingId} className="sr-only">
+				Accessibility check — {findingCountLabel(findings.length)}
+			</h2>
+			{/* Never wraps: the card grows to fit this row (min-w-min below). */}
+			<div className="flex items-center justify-between gap-2 whitespace-nowrap">
 				<div className="flex items-center gap-2">
 					{/* Reads as the radio group's visible legend — the size and
 					 *  muting a RadioGroup legend gets — so the baselines line up. */}
@@ -233,9 +184,22 @@ export const AccessibilityCheckCard = ({
 						onChange={onLevelChange}
 					/>
 				</div>
-				<Button compact onClick={onRecheck}>
+				<div className="flex shrink-0 items-center gap-0.5">
+				<Button compact onClick={onRecheck} className="mr-1">
 					Re-check
 				</Button>
+				{onClose && (
+					<button
+						type="button"
+						onClick={onClose}
+						aria-label="Close accessibility check"
+						title="Close accessibility check"
+						className="rounded px-1 text-lg leading-none hover:bg-stone-100 dark:hover:bg-stone-800 vc-muted"
+					>
+						×
+					</button>
+				)}
+				</div>
 			</div>
 			{pending ? (
 				<p className="text-sm vc-muted">Waiting for the chart to finish drawing…</p>
@@ -249,7 +213,7 @@ export const AccessibilityCheckCard = ({
 					if (items.length === 0) return null
 					return (
 						<div key={groupLevel} className="flex flex-col gap-1">
-							<h3 className="text-xs font-medium tracking-wide uppercase vc-muted">
+							<h3 className="text-xs font-semibold tracking-wide uppercase text-vc-section-header">
 								{title} ({items.length})
 							</h3>
 							<ul className="flex flex-col gap-0.5">
@@ -263,14 +227,14 @@ export const AccessibilityCheckCard = ({
 											onFocus={() => onHighlight(f.id)}
 											onBlur={() => onHighlight(null)}
 											onClick={() => onSelect?.(f.id)}
-											className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-stone-100 dark:hover:bg-stone-800"
+											className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-brand-50 dark:hover:bg-brand-900/30"
 										>
 											<span
 												aria-hidden="true"
 												className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${LEVEL_DOT[f.level]}`}
 											/>
 											<span className="flex flex-col gap-0.5">
-												<span className="text-sm vc-text">{f.message}</span>
+												<span className="text-sm font-medium vc-text">{f.message}</span>
 												{f.suggestion && (
 													<span className="text-xs vc-muted">{f.suggestion}</span>
 												)}
@@ -283,9 +247,6 @@ export const AccessibilityCheckCard = ({
 					)
 				})
 			)}
-			</>
-			)}
-			</div>
 		</section>
 	)
 }
@@ -352,9 +313,6 @@ const AccessibilityCheckRunner = ({ hidden }: { hidden: boolean }) => {
 	const layerRef = useRef<HTMLDivElement | null>(null)
 	const [dom, setDom] = useState<CollectedDom | null>(null)
 	const [highlightId, setHighlightId] = useState<string | null>(null)
-	// Minimized to the heading bar (UI-only, resets with the check). The
-	// collection keeps running, so expanding shows the list at once.
-	const [collapsed, setCollapsed] = useState(false)
 	// The chart's scroll host, relative to the column this layer fills: the
 	// card and highlights stay over the chart, never over the data tray.
 	const [hostBox, setHostBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null)
@@ -489,7 +447,7 @@ const AccessibilityCheckRunner = ({ hidden }: { hidden: boolean }) => {
 				))}
 			</div>
 			<AccessibilityCheckCard
-				className={`pointer-events-auto absolute right-3 w-80 max-w-[calc(100%-1.5rem)] overflow-y-auto ${
+				className={`pointer-events-auto absolute right-3 w-80 min-w-min max-w-[calc(100%-1.5rem)] overflow-y-auto ${
 					fixedCanvas ? "top-14 max-h-[calc(100%-4.5rem)]" : "top-3 max-h-[calc(100%-1.5rem)]"
 				}`}
 				findings={findings}
@@ -500,11 +458,6 @@ const AccessibilityCheckRunner = ({ hidden }: { hidden: boolean }) => {
 				onHighlight={setHighlightId}
 				onSelect={onSelect}
 				onClose={() => setOn(false)}
-				collapsed={collapsed}
-				onToggleCollapsed={() => {
-					setHighlightId(null)
-					setCollapsed((c) => !c)
-				}}
 				pending={dom === null}
 			/>
 		</div>

@@ -20,7 +20,6 @@ import {
 import { originalFieldName } from "../../lib/renameField"
 import {
 	materializedDerivedAtom,
-	reshapeAppliedAtom,
 	useCurrentDatasetView,
 } from "../../store/useCurrentDatasetView"
 import {
@@ -80,24 +79,20 @@ export const FieldList = () => {
 			(f) => f.name
 		)
 	)
-	// Drag a row by its handle to reorder the data set's columns (the tray
-	// follows). Dataset fields only — a reshape's minted columns and an
-	// older visual's live derived columns have no place in that list — and
-	// not while a reshape is applied, when the rows shown aren't that list.
+	// Drag a row by its handle to reorder the table's columns (the tray
+	// follows). The order is the visual's own, applied last in the view
+	// chain, so every row drags — a reshape's minted columns and live
+	// derived columns included.
 	const reorderField = useReorderField()
-	const reshapeApplied = useAtomValue(reshapeAppliedAtom)
 	const viewFields = dataset?.fields ?? []
-	const canReorder = !reshapeApplied && datasetFieldNames.size > 1
-	const canDrag = (name: string) => canReorder && datasetFieldNames.has(name)
+	const canReorder = viewFields.length > 1
 	const dnd = useDragReorder({
 		axis: "y",
 		count: viewFields.length,
 		onMove: (from, slot) => {
 			const moved = viewFields[from]
-			if (!moved || !canDrag(moved.name)) return
-			const before =
-				viewFields.slice(slot).find((f) => datasetFieldNames.has(f.name))?.name ?? null
-			void reorderField(moved.name, before)
+			if (!moved) return
+			reorderField(moved.name, viewFields[slot]?.name ?? null)
 		},
 	})
 
@@ -121,7 +116,6 @@ export const FieldList = () => {
 		<ul className="flex flex-col gap-1">
 			{dataset.fields.map((field, i) => {
 				const effective = overrides[field.name] ?? field.inferredType
-				const draggable = canDrag(field.name)
 				const last = i === dataset.fields.length - 1
 				const reorderable =
 					effective === "categorical" || effective === "ordinal"
@@ -149,7 +143,7 @@ export const FieldList = () => {
 							{({ open }) => (
 								<>
 									<div className="flex items-center justify-between gap-2">
-										{draggable && (
+										{canReorder && (
 											<span
 												{...dnd.sourceProps(i, field.name)}
 												aria-hidden

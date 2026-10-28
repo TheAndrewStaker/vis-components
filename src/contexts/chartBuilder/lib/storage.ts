@@ -85,9 +85,11 @@ import {
 	ENCODINGS_VERSION,
 	fieldLevelOrdersMigrations,
 	fieldLevelOrderSpecsMigrations,
+	fieldOrderMigrations,
 	fieldOverridesMigrations,
 	FIELD_LEVEL_ORDERS_VERSION,
 	FIELD_LEVEL_ORDER_SPECS_VERSION,
+	FIELD_ORDER_VERSION,
 	FIELD_OVERRIDES_VERSION,
 	labelsMigrations,
 	LABELS_VERSION,
@@ -179,6 +181,7 @@ const KEY_CURRENT_FIELD_OVERRIDES = "vis-components:currentFieldOverrides"
 const KEY_CURRENT_FIELD_LEVEL_ORDERS = "vis-components:currentFieldLevelOrders"
 const KEY_CURRENT_FIELD_LEVEL_ORDER_SPECS =
 	"vis-components:currentFieldLevelOrderSpecs"
+const KEY_CURRENT_FIELD_ORDER = "vis-components:currentFieldOrder"
 const KEY_CURRENT_CHANNEL_CONFIGS = "vis-components:currentChannelConfigs"
 const KEY_CURRENT_MAP_CONFIG = "vis-components:currentMapConfig"
 const KEY_CURRENT_RESHAPE_CONFIG = "vis-components:currentReshapeConfig"
@@ -1326,6 +1329,21 @@ export const saveCurrentFieldLevelOrderSpecs = (
 		data: v,
 	})
 
+/** The visual's column order, by name (see `Visual.fieldOrder`). */
+export const loadCurrentFieldOrder = (): string[] =>
+	loadVersioned<string[]>({
+		key: KEY_CURRENT_FIELD_ORDER,
+		currentVersion: FIELD_ORDER_VERSION,
+		migrations: fieldOrderMigrations,
+		fallback: [],
+	})
+export const saveCurrentFieldOrder = (v: string[]): void =>
+	saveVersioned({
+		key: KEY_CURRENT_FIELD_ORDER,
+		currentVersion: FIELD_ORDER_VERSION,
+		data: v,
+	})
+
 export const loadCurrentChannelConfigs = (): ChannelConfigs =>
 	loadVersioned<ChannelConfigs>({
 		key: KEY_CURRENT_CHANNEL_CONFIGS,
@@ -1549,6 +1567,7 @@ const DRAFT_STATE_KEYS = [
 	KEY_CURRENT_FIELD_OVERRIDES,
 	KEY_CURRENT_FIELD_LEVEL_ORDERS,
 	KEY_CURRENT_FIELD_LEVEL_ORDER_SPECS,
+	KEY_CURRENT_FIELD_ORDER,
 	KEY_CURRENT_CHANNEL_CONFIGS,
 	KEY_CURRENT_MAP_CONFIG,
 	KEY_CURRENT_RESHAPE_CONFIG,

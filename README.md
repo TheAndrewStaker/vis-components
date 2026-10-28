@@ -31,6 +31,11 @@ To develop against a running self-host server instead of browser-local
 storage, point the dev server's `/api` proxy at it:
 `VIS_DEV_API=http://localhost:<port> pnpm dev`.
 
+To test embed publishing without a real server, `pnpm embed:dev` starts a
+scratch self-host server, the static server for published files, the
+embed-runtime watch build, and the editor on http://localhost:3010 in server
+mode — all on gitignored `.embed-dev/` storage; Ctrl-C stops them together.
+
 Run this way (or served as static files), everything you make is stored in
 your own browser (localStorage + IndexedDB) — private to that browser, no
 server required.
@@ -94,6 +99,7 @@ pnpm test:coverage # same suite with the CI coverage floor enforced
 pnpm test:e2e    # Playwright end-to-end suite (~12 min; starts its own server)
 pnpm build       # typecheck + production bundle + self-host server
 pnpm build:static # typecheck + production bundle only (browser-local mode)
+pnpm embed:dev   # local embed-publishing loop (scratch server + static publish server + editor on :3010)
 pnpm preview     # serve the production bundle locally (dev-grade, not for deployment)
 ```
 

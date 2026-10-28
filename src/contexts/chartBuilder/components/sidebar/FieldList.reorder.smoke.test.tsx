@@ -6,6 +6,7 @@ import { TestProvider, type TestStore } from "../../../../testSupport/TestProvid
 import type { Field } from "../../lib/types"
 import {
 	currentDatasetIdAtom,
+	currentFieldOrderAtom,
 	currentReshapeConfigAtom,
 	loadedDatasetsAtom,
 	previewVersionIdAtom,
@@ -13,8 +14,9 @@ import {
 
 import { FieldList } from "./FieldList"
 
-/** Dragging a field row by its handle reorders the DATA SET's columns; the
- *  handle is absent while a reshape is applied. */
+/** Dragging a field row by its handle reorders the VISUAL's columns
+ *  (`currentFieldOrderAtom`); every row has a handle, a reshape's minted
+ *  columns included. */
 
 afterEach(cleanup)
 
@@ -97,22 +99,23 @@ const dragTo = (source: HTMLElement, target: HTMLElement, half: "top" | "bottom"
 }
 
 describe("FieldList — drag a field row to reorder", () => {
-	it("moves the field in the data set's column list", async () => {
+	it("moves the field in the visual's order, leaving the data set alone", async () => {
 		mount()
 		expect(names()).toEqual(["region", "year", "sales"])
 		dragTo(handleOf("sales"), rows()[0]!, "top")
 		await waitFor(() => expect(names()).toEqual(["sales", "region", "year"]))
+		expect(store.get(currentFieldOrderAtom)).toEqual(["sales", "region", "year"])
 		expect(store.get(loadedDatasetsAtom)[ID]!.fields.map((f) => f.name)).toEqual([
-			"sales",
 			"region",
 			"year",
+			"sales",
 		])
 		// Bottom half of the last row: to the end.
 		dragTo(handleOf("sales"), rows()[2]!, "bottom")
 		await waitFor(() => expect(names()).toEqual(["region", "year", "sales"]))
 	})
 
-	it("has no drag handle while a reshape is applied", () => {
+	it("drags every row while a reshape is applied, minted ones included", async () => {
 		mount((s) =>
 			s.set(currentReshapeConfigAtom, {
 				idFields: ["region"],
@@ -121,6 +124,8 @@ describe("FieldList — drag a field row to reorder", () => {
 				valueName: "value",
 			})
 		)
-		expect(document.querySelector("[title='Drag to reorder']")).toBeNull()
+		expect(names()).toEqual(["region", "measure", "value"])
+		dragTo(handleOf("value"), rows()[0]!, "top")
+		await waitFor(() => expect(names()).toEqual(["value", "region", "measure"]))
 	})
 })

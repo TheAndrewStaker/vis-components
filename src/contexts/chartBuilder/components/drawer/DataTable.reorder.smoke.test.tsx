@@ -6,14 +6,16 @@ import { TestProvider, type TestStore } from "../../../../testSupport/TestProvid
 import type { Dataset, Field } from "../../lib/types"
 import {
 	currentDatasetIdAtom,
+	currentFieldOrderAtom,
 	currentReshapeConfigAtom,
 	loadedDatasetsAtom,
 } from "../../store/atoms"
 
 import { DataTable } from "./DataTable"
 
-/** Dragging a column header reorders the DATA SET's columns (every version's
- *  own list included), and the drag is off while a reshape is applied. */
+/** Dragging a column header reorders the VISUAL's columns
+ *  (`currentFieldOrderAtom`) — the data set is untouched — and every
+ *  column drags, a reshape's minted columns included. */
 
 afterEach(cleanup)
 
@@ -107,16 +109,18 @@ const drag = (source: HTMLElement, target: HTMLElement, half: "left" | "right") 
 }
 
 describe("DataTable — drag a column header to reorder", () => {
-	it("moves the column in the data set and in an older version's own list", async () => {
+	it("moves the column in the visual's order, leaving the data set alone", async () => {
 		mount()
 		expect(headers()).toEqual(["city", "sales", "units"])
 		drag(headerOf("units"), headerOf("city"), "left")
 		await new Promise((r) => setTimeout(r, 0))
 		expect(headers()).toEqual(["units", "city", "sales"])
-		const d = store.get(loadedDatasetsAtom)[ID]!
-		expect(d.fields.map((f) => f.name)).toEqual(["units", "city", "sales"])
-		expect(d.versions[0]!.fields!.map((f) => f.name)).toEqual(["units", "city", "sales", "old"])
-		expect(d.versions[0]!.rows).toBe(ROWS)
+		expect(store.get(currentFieldOrderAtom)).toEqual(["units", "city", "sales"])
+		expect(store.get(loadedDatasetsAtom)[ID]!.fields.map((f) => f.name)).toEqual([
+			"city",
+			"sales",
+			"units",
+		])
 
 		// Onto the right half of the last column: to the end.
 		drag(headerOf("units"), headerOf("sales"), "right")
@@ -131,7 +135,7 @@ describe("DataTable — drag a column header to reorder", () => {
 		expect(headers()).toEqual(["city", "sales", "units"])
 	})
 
-	it("does not drag while a reshape is applied", () => {
+	it("drags every column while a reshape is applied, minted ones included", async () => {
 		mount((s) =>
 			s.set(currentReshapeConfigAtom, {
 				idFields: ["city"],
@@ -140,6 +144,10 @@ describe("DataTable — drag a column header to reorder", () => {
 				valueName: "value",
 			})
 		)
-		expect(document.querySelector("thead th[draggable=true]")).toBeNull()
+		expect(headers()).toEqual(["city", "measure", "value"])
+		drag(headerOf("value"), headerOf("city"), "left")
+		await new Promise((r) => setTimeout(r, 0))
+		expect(headers()).toEqual(["value", "city", "measure"])
+		expect(store.get(currentFieldOrderAtom)).toEqual(["value", "city", "measure"])
 	})
 })

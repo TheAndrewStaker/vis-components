@@ -14,6 +14,7 @@ import {
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
 	currentFieldLevelOrderSpecsAtom,
+	currentFieldOrderAtom,
 	currentFieldOverridesAtom,
 	currentLabelsAtom,
 	currentLegendConfigAtom,
@@ -57,6 +58,7 @@ export const useAutoSave = () => {
 	// image exports (which render the SAVED visual) kept the old order.
 	const fieldLevelOrders = useAtomValue(currentFieldLevelOrdersAtom)
 	const fieldLevelOrderSpecs = useAtomValue(currentFieldLevelOrderSpecsAtom)
+	const fieldOrder = useAtomValue(currentFieldOrderAtom)
 	const name = useAtomValue(currentVisualNameAtom)
 	const annotations = useAtomValue(currentAnnotationsAtom)
 	const caption = useAtomValue(currentCaptionConfigAtom)
@@ -98,6 +100,7 @@ export const useAutoSave = () => {
 		overrides,
 		fieldLevelOrders,
 		fieldLevelOrderSpecs,
+		fieldOrder,
 		name,
 		annotations,
 		caption,
