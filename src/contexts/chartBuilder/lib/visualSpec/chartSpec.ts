@@ -58,6 +58,9 @@ export type ChartSpec = {
 	axes?: { x?: AxisSpec; y?: AxisSpec }
 	stack?: StackMode
 	themeId?: string
+	/** Settings by the names the editor stores them under, deep-merged
+	 *  last (see settings.ts). */
+	settings?: Record<string, unknown>
 }
 
 /** One problem with a spec: where (`encodings.x`, `axes.y.min`; "" for the
@@ -88,6 +91,8 @@ export const SPEC_KEYS: Readonly<Record<keyof ChartSpec, string>> = {
 	axes: "{x, y}, each {title, min, max, format}.",
 	stack: "\"stack\", \"group\" or \"overlay\" for the hue levels.",
 	themeId: "A theme by id or name; the server's default otherwise.",
+	settings:
+		"Anything else the editor stores, by its stored name: {slice: {setting: value}}, deep-merged last; lists replace. GET /api/chart-spec/settings lists every setting.",
 }
 
 const TOP_LEVEL_KEYS = Object.keys(SPEC_KEYS)
@@ -406,6 +411,14 @@ export const readChartSpec = (
 	if (input.stack !== undefined) {
 		if (isOneOf(STACK_MODES, input.stack)) draft.stack = input.stack
 		else problem("stack", `"stack" must be one of ${quoted(STACK_MODES)}`)
+	}
+
+	if (input.settings !== undefined) {
+		if (isRecord(input.settings) && Object.keys(input.settings).length > 0) {
+			draft.settings = input.settings
+		} else {
+			problem("settings", `"settings" must be a non-empty object, e.g. {"legendConfig": {"position": "top"}}`)
+		}
 	}
 
 	return { draft, errors }
