@@ -2,15 +2,30 @@
  *  new visual in the editor starts from (`newVisualDraft`), takes its hue
  *  config the way a quick-start scaffold does (`scaffoldVariation`), and
  *  only then gets the spec's own choices layered on top, so every slice the
- *  renderer reads is present and themed. */
+ *  renderer reads is present and themed. An edit starts from the stored
+ *  visual as the editor opens it (`hydrateVisual`) instead. */
 
 import { channelAccepts, channelsConflict } from "../channels"
 import { getChartModeDef, type ChartMode } from "../chartMode"
 import { isBarModeId } from "../chartModes/families"
-import { DEFAULT_AXIS_CONFIG, type AxisConfig } from "../channelConfig"
+import {
+	DEFAULT_AXIS_CONFIG,
+	DEFAULT_CATEGORICAL_HUE_CONFIG,
+	type AxisConfig,
+	type ChannelConfigs,
+} from "../channelConfig"
+import {
+	applyDerivedVariablesBeforeReshape,
+	splitDerivedVariablesAroundReshape,
+} from "../derivedReshapeStages"
+import {
+	applyDerivedVariablesToView,
+	DEFAULT_DERIVED_VARIABLES_CONFIG,
+	type DerivedVariablesConfig,
+} from "../derivedVariables"
 import { effectiveType } from "../fieldType"
 import { foldFlowNodeTitles } from "../foldFlowNodeTitles"
-import { seedOutlineHue } from "../hueDefaults"
+import { buildQuantHueConfigFromTheme, seedOutlineHue } from "../hueDefaults"
 import { applyCellConversions } from "../materializeTransforms"
 import { scaffoldVariation, type ChannelAssignment } from "../quickStart"
 import {
@@ -18,11 +33,21 @@ import {
 	type QuickStartChartType,
 	type QuickStartVariation,
 } from "../quickStartVariations"
+import { applyReshapeToView, DEFAULT_RESHAPE_CONFIG, type ReshapeConfig } from "../reshape"
 import { resolveDatasetViewFromMeta } from "../resolveDatasetVersion"
 import { structureVisualKeys } from "../savedKeyStructure"
 import { parseValue } from "../scales"
-import type { DatasetMeta, FieldType, Folder, Theme, Visual } from "../types"
-import { newVisualDraft } from "../visualDefaults"
+import type {
+	DataLabelsEncodings,
+	DatasetMeta,
+	DatasetView,
+	Encodings,
+	FieldType,
+	Folder,
+	Theme,
+	Visual,
+} from "../types"
+import { hydrateVisual, newVisualDraft } from "../visualDefaults"
 import {
 	capProblems,
 	MAX_PROBLEMS,
@@ -95,10 +120,30 @@ const DISCRETE: readonly FieldType[] = ["categorical", "ordinal"]
 const list = (items: readonly string[]): string =>
 	items.map((s) => `"${s}"`).join(", ")
 
+/** The data as the editor shows it for a visual (useCurrentDatasetView):
+ *  the derived variables the reshape uses, computed wide; the reshape; the
+ *  cell conversions an override switches on; then the other derived
+ *  variables. */
+const visualView = (
+	raw: DatasetView,
+	overrides: Record<string, FieldType>,
+	reshape: ReshapeConfig,
+	derived: DerivedVariablesConfig
+): DatasetView => {
+	const stages = splitDerivedVariablesAroundReshape(raw.fields, derived, reshape)
+	const wide =
+		applyDerivedVariablesBeforeReshape(raw, derived, stages.beforeIds, () =>
+			applyCellConversions(raw, overrides)
+		) ?? raw
+	const converted = applyCellConversions(applyReshapeToView(wide, reshape), overrides) ?? wide
+	return applyDerivedVariablesToView(converted, derived, stages.afterIds) ?? converted
+}
+
 const compose = (
 	spec: ChartSpecDraft,
 	prior: SpecProblem[],
-	ctx: ComposeContext
+	ctx: ComposeContext,
+	base?: Visual
 ): ComposeVisualResult => {
 	const errors = [...prior]
 	const problem = (path: string, message: string) => {
@@ -122,38 +167,44 @@ const compose = (
 		)
 	}
 
+	const datasetId = base ? base.datasetId : spec.datasetId
 	const dataset =
-		spec.datasetId !== undefined && ctx.dataset?.meta.id === spec.datasetId
-			? ctx.dataset
-			: null
-	if (spec.datasetId !== undefined && !dataset) {
-		problem("datasetId", `no dataset with id "${spec.datasetId}"`)
+		datasetId != null && ctx.dataset?.meta.id === datasetId ? ctx.dataset : null
+	if (datasetId != null && !dataset) {
+		problem(base ? "" : "datasetId", `no dataset with id "${datasetId}"`)
+	}
+	if (base && datasetId == null) {
+		problem("", "this chart has no dataset to check the edit against")
 	}
 	const raw = dataset
 		? resolveDatasetViewFromMeta(dataset.meta, dataset.rows, undefined)
 		: undefined
 	if (!raw) return { ok: false, errors: capProblems(errors) }
+	const hydrated = base ? hydrateVisual(base) : undefined
 
 	// No prototype, so a field named "constructor" or "toString" reads as
 	// unset rather than as an Object.prototype member.
 	const overrides: Record<string, FieldType> = Object.create(null)
-	for (const [field, type] of Object.entries(spec.fieldTypes ?? {})) {
+	for (const [field, type] of Object.entries({ ...base?.fieldTypeOverrides, ...spec.fieldTypes })) {
 		overrides[field] = type
 	}
-	const rawNames = raw.fields.map((f) => f.name)
-	for (const field of Object.keys(spec.fieldTypes ?? {})) {
-		if (rawNames.includes(field)) continue
-		problem(
-			pathOf("fieldTypes", field),
-			`no field "${named(field)}" in dataset "${raw.name}"${hint(field, rawNames)}`
-		)
-		delete overrides[field]
-	}
-	// The data as the editor shows it: the cell conversions an override
-	// switches on.
-	const view = applyCellConversions(raw, overrides) ?? raw
+	const view = visualView(
+		raw,
+		overrides,
+		hydrated?.reshapeConfig ?? DEFAULT_RESHAPE_CONFIG,
+		hydrated?.derivedVariablesConfig ?? DEFAULT_DERIVED_VARIABLES_CONFIG
+	)
 	const fieldNames = view.fields.map((f) => f.name)
 	const hasField = (name: string) => fieldNames.includes(name)
+	const missingField = (path: string, name: string) =>
+		problem(path, `no field "${named(name)}" in dataset "${view.name}"${hint(name, fieldNames)}`)
+	for (const field of Object.keys(spec.fieldTypes ?? {})) {
+		if (hasField(field)) continue
+		missingField(pathOf("fieldTypes", field), field)
+		const kept = base?.fieldTypeOverrides?.[field]
+		if (kept !== undefined) overrides[field] = kept
+		else delete overrides[field]
+	}
 	const typeOf = (field: string): FieldType => effectiveType(view, field, overrides)
 
 	for (const [field, type] of Object.entries(spec.fieldTypes ?? {})) {
@@ -166,16 +217,31 @@ const compose = (
 		}
 	}
 
-	const fields = spec.encodings
+	// The chart's channels after the spec: an edit starts from the chart's
+	// own, and a null unmaps one. A channel the chart fills with a derived
+	// measure (no field) stays unless unmapped.
+	const fields: Partial<Record<SpecChannel, string>> = {}
+	const measureChannels: SpecChannel[] = []
+	for (const [channel, enc] of Object.entries(base?.encodings ?? {})) {
+		if (channel === "text" || !enc) continue
+		if (enc.field) fields[channel as SpecChannel] = enc.field
+		else if (enc.measureSource) measureChannels.push(channel as SpecChannel)
+	}
+	const changed = Object.entries(spec.encodings) as Array<[SpecChannel, string | null]>
+	for (const [channel, field] of changed) {
+		if (field === null) delete fields[channel]
+		else fields[channel] = field
+		const i = measureChannels.indexOf(channel)
+		if (i >= 0) measureChannels.splice(i, 1)
+	}
 	const mapped = Object.entries(fields) as Array<[SpecChannel, string]>
+
 	let encodingsOk = true
-	for (const [channel, field] of mapped) {
+	for (const [channel, field] of changed) {
+		if (field === null) continue
 		const path = pathOf("encodings", channel)
 		if (!hasField(field)) {
-			problem(
-				path,
-				`no field "${named(field)}" in dataset "${view.name}"${hint(field, fieldNames)}`
-			)
+			missingField(path, field)
 			encodingsOk = false
 			continue
 		}
@@ -185,14 +251,37 @@ const compose = (
 			encodingsOk = false
 		}
 	}
-	const channels = mapped.map(([c]) => c)
-	channels.forEach((channel, i) => {
-		const others = channels.slice(0, i).filter((o) => channelsConflict(channel, o))
-		if (others.length === 0) return
-		const names = list(others).replace(/, ([^,]*)$/, " and $1")
-		problem(pathOf("encodings", channel), `"${channel}" can't be mapped together with ${names}`)
+	if (base && mapped.some(([, field]) => !hasField(field))) {
+		if (encodingsOk) {
+			problem("encodings", "this chart maps a field its dataset no longer has; fix it in the editor")
+		}
 		encodingsOk = false
+	}
+	// A clash is blamed on the channel the spec names when only one of the
+	// pair is new.
+	const active = [...mapped.map(([c]) => c), ...measureChannels]
+	const clashes = new Map<SpecChannel, SpecChannel[]>()
+	active.forEach((channel, i) => {
+		for (const other of active.slice(0, i)) {
+			if (!channelsConflict(channel, other)) continue
+			const blamed = spec.encodings[channel] !== undefined ? channel : other
+			const kept = blamed === channel ? other : channel
+			clashes.set(blamed, [...(clashes.get(blamed) ?? []), kept])
+		}
 	})
+	for (const [blamed, others] of clashes) {
+		const names = list(others).replace(/, ([^,]*)$/, " and $1")
+		problem(
+			pathOf("encodings", blamed),
+			base
+				? `"${blamed}" can't be mapped together with ${names}; set ${names} to null to unmap ${others.length > 1 ? "them" : "it"}`
+				: `"${blamed}" can't be mapped together with ${names}`
+		)
+		encodingsOk = false
+	}
+	if (base && active.length === 0 && changed.some(([, f]) => f === null)) {
+		problem("encodings", "an edit can't unmap every channel")
+	}
 
 	const picked =
 		spec.family && spec.variation
@@ -202,7 +291,7 @@ const compose = (
 	const variant =
 		typeof picked === "object"
 			? picked
-			: spec.family && !spec.variation
+			: spec.family && !spec.variation && !base
 				? matchVariation(spec.family, fields, typeOf)
 				: undefined
 
@@ -215,41 +304,54 @@ const compose = (
 	}
 
 	const draft = newVisualDraft(ctx.theme)
-	/** Each axis's bounds as stored: numbers, dates as epoch ms. */
-	const bounds: Record<"x" | "y", { min?: number; max?: number }> = { x: {}, y: {} }
-	let scaffold: ReturnType<typeof scaffoldVariation> | undefined
+	/** Each axis's bounds as stored: numbers, dates as epoch ms; null
+	 *  clears one. */
+	const bounds: Record<"x" | "y", { min?: number | null; max?: number | null }> = { x: {}, y: {} }
+	let start: { encodings: Encodings; channelConfigs: ChannelConfigs; dataLabels: DataLabelsEncodings } | undefined
 	if (encodingsOk) {
-		const assignments: ChannelAssignment[] = mapped.map(([channel, field]) => ({
-			channel,
-			field: { name: field, inferredType: typeOf(field) },
-		}))
-		const variation: QuickStartVariation = {
-			...(variant ? knobsOf(variant, fields) : {}),
-			name: spec.family ?? "spec",
-			channels: Object.fromEntries(assignments.map((a) => [a.channel, [a.field.inferredType]])),
-			...(spec.stack ? { stackMode: spec.stack } : {}),
-		}
-		scaffold = scaffoldVariation(variation, assignments, draft.channelConfigs, ctx.theme)
-		// The Outline color panel seeds its config when a field is picked; mirror it.
-		if (fields.outlineHue !== undefined) {
-			scaffold.configs.outlineHue = seedOutlineHue(
-				scaffold.configs.outlineHue,
-				typeOf(fields.outlineHue),
-				ctx.theme
-			)
-		}
-		const mode = getChartModeDef(scaffold.encodings, typeOf, scaffold.configs, draft.mapConfig)
-		const modes: readonly string[] = spec.family ? (FAMILY_MODES[spec.family] ?? []) : []
-		if (spec.family && !variant && !spec.variation) {
-			problem(
-				"family",
-				`${familyNeeds(spec.family, fields, typeOf)}; these encodings make a "${mode.id}" chart`
-			)
-		} else if (spec.family && variant && !modes.includes(mode.id)) {
-			problem(
-				"family",
-				`a "${spec.family}" chart is ${list(modes)}; these encodings make a "${mode.id}" chart`
-			)
+		let mode: ReturnType<typeof getChartModeDef>
+		if (hydrated) {
+			const encodings = { ...hydrated.encodings }
+			for (const [channel, field] of changed) encodings[channel] = { field }
+			start = {
+				encodings,
+				channelConfigs: { ...hydrated.channelConfigs },
+				dataLabels: { ...hydrated.dataLabelsEncodings },
+			}
+			mode = getChartModeDef(encodings, typeOf, hydrated.channelConfigs, hydrated.mapConfig)
+			const modes: readonly string[] = spec.family ? (FAMILY_MODES[spec.family] ?? []) : []
+			if (spec.family && !modes.includes(mode.id)) {
+				problem(
+					"family",
+					`a "${spec.family}" chart is ${list(modes)}; these encodings make a "${mode.id}" chart`
+				)
+			}
+		} else {
+			const assignments: ChannelAssignment[] = mapped.map(([channel, field]) => ({
+				channel,
+				field: { name: field, inferredType: typeOf(field) },
+			}))
+			const variation: QuickStartVariation = {
+				...(variant ? knobsOf(variant, fields) : {}),
+				name: spec.family ?? "spec",
+				channels: Object.fromEntries(assignments.map((a) => [a.channel, [a.field.inferredType]])),
+				...(spec.stack ? { stackMode: spec.stack } : {}),
+			}
+			const scaffold = scaffoldVariation(variation, assignments, draft.channelConfigs, ctx.theme)
+			start = { encodings: scaffold.encodings, channelConfigs: scaffold.configs, dataLabels: scaffold.dataLabels }
+			mode = getChartModeDef(scaffold.encodings, typeOf, scaffold.configs, draft.mapConfig)
+			const modes: readonly string[] = spec.family ? (FAMILY_MODES[spec.family] ?? []) : []
+			if (spec.family && !variant && !spec.variation) {
+				problem(
+					"family",
+					`${familyNeeds(spec.family, fields, typeOf)}; these encodings make a "${mode.id}" chart`
+				)
+			} else if (spec.family && variant && !modes.includes(mode.id)) {
+				problem(
+					"family",
+					`a "${spec.family}" chart is ${list(modes)}; these encodings make a "${mode.id}" chart`
+				)
+			}
 		}
 		// A density curve is drawn only along one axis with the other empty.
 		const curve = variant?.distributionOverlay
@@ -268,7 +370,9 @@ const compose = (
 				const v = spec.axes?.[axis]?.[bound]
 				const path = pathOf("axes", axis, bound)
 				if (v === undefined) continue
-				if (type === "temporal") {
+				if (v === null) {
+					bounds[axis][bound] = null
+				} else if (type === "temporal") {
 					if (isBarModeId(mode.id) && mode.canvas.measureAxis !== axis) {
 						problem(
 							path,
@@ -298,42 +402,94 @@ const compose = (
 		}
 	}
 
-	if (errors.length > 0 || !scaffold) return { ok: false, errors: capProblems(errors) }
+	if (errors.length > 0 || !start) return { ok: false, errors: capProblems(errors) }
 
-	const channelConfigs = { ...scaffold.configs }
+	const channelConfigs = start.channelConfigs
+	// The Outline color panel seeds its config when a field is picked; mirror it.
+	if (typeof spec.encodings.outlineHue === "string") {
+		channelConfigs.outlineHue = seedOutlineHue(
+			channelConfigs.outlineHue,
+			typeOf(spec.encodings.outlineHue),
+			ctx.theme
+		)
+	}
+	if (hydrated) {
+		if (spec.encodings.length === null) channelConfigs.defaultLength = null
+		// A hue field of the other kind swaps the hue config, keeping the
+		// one it replaces as the Color panel does.
+		if (spec.encodings.hue && hueType) {
+			const quant = hueType === "quantitative" || hueType === "temporal"
+			const hue = channelConfigs.hue
+			if (quant && hue?.kind !== "quantitative") {
+				channelConfigs.hue = channelConfigs.hueQuantStash ?? buildQuantHueConfigFromTheme(ctx.theme)
+				if (hue?.kind === "categorical") channelConfigs.hueCategoricalStash = hue
+			} else if (!quant && hue?.kind !== "categorical") {
+				channelConfigs.hue = channelConfigs.hueCategoricalStash ?? { ...DEFAULT_CATEGORICAL_HUE_CONFIG }
+				if (hue?.kind === "quantitative") channelConfigs.hueQuantStash = hue
+			}
+		}
+		if (spec.stack && channelConfigs.hue?.kind === "categorical") {
+			channelConfigs.hue = { ...channelConfigs.hue, stackMode: spec.stack }
+		}
+	}
 	for (const axis of ["x", "y"] as const) {
 		const want = spec.axes?.[axis]
 		if (!want) continue
 		const next: AxisConfig = { ...(channelConfigs[axis] ?? DEFAULT_AXIS_CONFIG) }
-		if (bounds[axis].min !== undefined) next.min = bounds[axis].min
-		if (bounds[axis].max !== undefined) next.max = bounds[axis].max
+		for (const bound of ["min", "max"] as const) {
+			const b = bounds[axis][bound]
+			if (b === null) delete next[bound]
+			else if (b !== undefined) next[bound] = b
+		}
+		// Only one bound can be new here: the reader already compared a pair
+		// given together.
+		if (typeof next.min === "number" && typeof next.max === "number" && next.min >= next.max) {
+			const given = want.min !== undefined ? "min" : "max"
+			const message =
+				given === "min"
+					? `"min" (${String(want.min)}) must be below "max" (${next.max}), which the chart already has`
+					: `"max" (${String(want.max)}) must be above "min" (${next.min}), which the chart already has`
+			return { ok: false, errors: [{ path: pathOf("axes", axis, given), message }] }
+		}
 		if (want.format !== undefined) next.customFormat = want.format
 		channelConfigs[axis] = next
 	}
 
-	const labelsConfig = { ...draft.labelsConfig }
+	const labelsConfig = { ...(hydrated ?? draft).labelsConfig }
 	if (spec.title !== undefined) labelsConfig.title = spec.title
 	if (spec.subtitle !== undefined) labelsConfig.subtitle = spec.subtitle
 	if (spec.axes?.x?.title !== undefined) labelsConfig.xAxisTitle = spec.axes.x.title
 	if (spec.axes?.y?.title !== undefined) labelsConfig.yAxisTitle = spec.axes.y.title
 
-	const visual: Visual = {
-		...draft,
-		id: ctx.id,
-		name: spec.name?.trim() || spec.title?.trim() || "Untitled",
-		folderId: spec.folderId ?? null,
-		datasetId: raw.id,
-		createdAtVersionId: raw.versionId,
-		fieldTypeOverrides: { ...overrides },
-		encodings: scaffold.encodings,
-		channelConfigs,
-		labelsConfig,
-		dataLabelsEncodings: { ...scaffold.dataLabels },
-		...(ctx.themeId !== null ? { themeId: ctx.themeId } : {}),
-		thumbnail: null,
-		createdAt: ctx.now,
-		updatedAt: ctx.now,
-	}
+	const name = spec.name?.trim() || hydrated?.name || spec.title?.trim() || "Untitled"
+	const visual: Visual = hydrated
+		? {
+				...hydrated,
+				name,
+				folderId: spec.folderId !== undefined ? spec.folderId : hydrated.folderId,
+				fieldTypeOverrides: { ...overrides },
+				encodings: start.encodings,
+				channelConfigs,
+				labelsConfig,
+				updatedAt: ctx.now,
+			}
+		: {
+				...draft,
+				id: ctx.id,
+				name,
+				folderId: spec.folderId ?? null,
+				datasetId: raw.id,
+				createdAtVersionId: raw.versionId,
+				fieldTypeOverrides: { ...overrides },
+				encodings: start.encodings,
+				channelConfigs,
+				labelsConfig,
+				dataLabelsEncodings: { ...start.dataLabels },
+				...(ctx.themeId !== null ? { themeId: ctx.themeId } : {}),
+				thumbnail: null,
+				createdAt: ctx.now,
+				updatedAt: ctx.now,
+			}
 	return { ok: true, visual: structuredVisual(visual), warnings: [] }
 }
 
@@ -440,4 +596,17 @@ export const composeChartSpec = (input: unknown, ctx: ComposeContext): ComposeVi
 	const { draft, errors } = readChartSpec(input)
 	if (!draft) return { ok: false, errors: capProblems(errors) }
 	return compose(draft, errors, ctx)
+}
+
+/** Parse and apply a chart edit in one pass, with the checks a create
+ *  gets. Only what the edit names changes; `ctx.dataset` must be the
+ *  visual's own. */
+export const composeChartEdit = (
+	visual: Visual,
+	input: unknown,
+	ctx: Omit<ComposeContext, "id">
+): ComposeVisualResult => {
+	const { draft, errors } = readChartSpec(input, "edit")
+	if (!draft) return { ok: false, errors: capProblems(errors) }
+	return compose(draft, errors, { ...ctx, id: visual.id }, structuredVisual(visual))
 }

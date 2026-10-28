@@ -31,9 +31,10 @@ export type SpecChannel = Exclude<EncodingChannel, "text">
 export type AxisSpec = {
 	/** Axis title; absent falls back to the field name, "" is blank. */
 	title?: string
-	/** A number, or on a temporal axis a date ("2020-01-01") or epoch ms. */
-	min?: number | string
-	max?: number | string
+	/** A number, or on a temporal axis a date ("2020-01-01") or epoch ms.
+	 *  In an edit, null clears the bound. */
+	min?: number | string | null
+	max?: number | string | null
 	/** Tick format, in the Format box's grammar (d3-format and affixes). */
 	format?: string
 }
@@ -65,9 +66,11 @@ export type SpecProblem = { path: string; message: string }
 
 /** What survived the shape checks: valid parts kept, invalid ones dropped
  *  (and reported), so the data checks can still run over the rest. */
-export type ChartSpecDraft = Omit<ChartSpec, "datasetId" | "folderId"> & {
+export type ChartSpecDraft = Omit<ChartSpec, "datasetId" | "folderId" | "encodings"> & {
 	datasetId?: string
 	folderId?: string | null
+	/** null only in an edit: unmap the channel. */
+	encodings: Partial<Record<SpecChannel, string | null>>
 }
 
 /** Every key a spec takes, with what it says. GET /api/chart-spec serves
@@ -88,6 +91,16 @@ export const SPEC_KEYS: Readonly<Record<keyof ChartSpec, string>> = {
 }
 
 const TOP_LEVEL_KEYS = Object.keys(SPEC_KEYS)
+
+/** Keys only a new chart takes, with why an edit refuses each. */
+const CREATE_ONLY: Readonly<Record<string, string>> = {
+	datasetId: "an edit can't change the dataset; create a new chart instead",
+	variation: `"variation" applies to a new chart; change encodings instead`,
+	themeId: "an edit can't change the theme; change it in the editor",
+}
+
+/** The keys an edit takes. */
+export const EDIT_KEYS = TOP_LEVEL_KEYS.filter((k) => !Object.hasOwn(CREATE_ONLY, k))
 
 /** Families a spec can't make yet: maps need region detection and flows a
  *  target field, which only the editor sets. */
@@ -230,11 +243,14 @@ const familyProblem = (raw: unknown, hint: (name: string, c: readonly string[]) 
 		: `unknown family "${named(name)}"${hint(name, SPEC_FAMILIES)} (families: ${quoted(SPEC_FAMILIES)})`
 }
 
-/** Read a spec, keeping what is well-formed and reporting the rest. `draft`
- *  is null only when the body isn't an object at all. */
+/** Read a spec, or with `mode` "edit" a chart edit, keeping what is
+ *  well-formed and reporting the rest. `draft` is null only when the body
+ *  isn't an object at all. */
 export const readChartSpec = (
-	input: unknown
+	input: unknown,
+	mode: "create" | "edit" = "create"
 ): { draft: ChartSpecDraft | null; errors: SpecProblem[] } => {
+	const edit = mode === "edit"
 	const errors: SpecProblem[] = []
 	const problem = (path: string, message: string) => {
 		errors.push({ path, message })
@@ -243,11 +259,18 @@ export const readChartSpec = (
 	const hint = (name: string, candidates: readonly string[]): string =>
 		errors.length < MAX_PROBLEMS ? didYouMean(name, candidates) : ""
 	if (!isRecord(input)) {
-		problem("", "a chart spec must be a JSON object")
+		problem("", edit ? "a chart edit must be a JSON object" : "a chart spec must be a JSON object")
 		return { draft: null, errors }
 	}
 
+	if (edit && Object.keys(input).length === 0) {
+		problem("", "an edit must name at least one setting to change")
+	}
 	for (const key of Object.keys(input)) {
+		if (edit && Object.hasOwn(CREATE_ONLY, key)) {
+			problem(key, CREATE_ONLY[key] ?? "")
+			continue
+		}
 		if (Object.hasOwn(SPEC_KEYS, key)) continue
 		problem(pathOf(key), `unknown key "${named(key)}"${hint(key, TOP_LEVEL_KEYS)}`)
 	}
@@ -261,7 +284,9 @@ export const readChartSpec = (
 		else problem(key, `"${key}" must be a string`)
 	}
 
-	if (input.datasetId === undefined) {
+	if (edit) {
+		// The chart's own dataset.
+	} else if (input.datasetId === undefined) {
 		problem("datasetId", `"datasetId" is required`)
 	} else if (typeof input.datasetId !== "string" || input.datasetId === "") {
 		problem("datasetId", `"datasetId" must be a non-empty string`)
@@ -270,7 +295,7 @@ export const readChartSpec = (
 	}
 
 	if (input.folderId === undefined) {
-		problem("folderId", `"folderId" is required (null for the library root)`)
+		if (!edit) problem("folderId", `"folderId" is required (null for the library root)`)
 	} else if (
 		input.folderId !== null &&
 		(typeof input.folderId !== "string" || input.folderId.trim() === "")
@@ -283,13 +308,13 @@ export const readChartSpec = (
 	text("name")
 	text("title")
 	text("subtitle")
-	text("themeId")
+	if (!edit) text("themeId")
 
 	if (input.family !== undefined) {
 		if (isOneOf(SPEC_FAMILIES, input.family)) draft.family = input.family
 		else problem("family", familyProblem(input.family, hint))
 	}
-	if (input.variation !== undefined) {
+	if (input.variation !== undefined && !edit) {
 		if (typeof input.variation !== "string") {
 			problem("variation", `"variation" must be a string`)
 		} else if (input.family === undefined) {
@@ -301,11 +326,11 @@ export const readChartSpec = (
 
 	const encodings = input.encodings
 	if (encodings === undefined) {
-		problem("encodings", `"encodings" is required: channel → field name`)
+		if (!edit) problem("encodings", `"encodings" is required: channel → field name`)
 	} else if (!isRecord(encodings)) {
 		problem("encodings", `"encodings" must be an object of channel → field name`)
 	} else {
-		if (Object.keys(encodings).length === 0) {
+		if (!edit && Object.keys(encodings).length === 0) {
 			problem("encodings", "map at least one channel")
 		}
 		const seen = new Map<SpecChannel, string>()
@@ -323,8 +348,15 @@ export const readChartSpec = (
 				problem(path, `unknown channel "${named(name)}"${near}`)
 			} else if (twin !== undefined) {
 				problem(path, `"${name}" and "${twin}" are the same channel ("${channel}")`)
+			} else if (edit && field === null) {
+				draft.encodings[channel] = null
 			} else if (typeof field !== "string" || field === "") {
-				problem(path, `"${channel}" must name a field, as a string`)
+				problem(
+					path,
+					edit
+						? `"${channel}" must name a field, or be null to unmap it`
+						: `"${channel}" must name a field, as a string`
+				)
 			} else {
 				draft.encodings[channel] = field
 			}
@@ -364,7 +396,7 @@ export const readChartSpec = (
 				} else if (!isRecord(raw)) {
 					problem(path, `axis "${axis}" must be an object`)
 				} else {
-					axes[axis] = readAxis(axis, raw, problem, hint)
+					axes[axis] = readAxis(axis, raw, edit, problem, hint)
 				}
 			}
 			draft.axes = axes
@@ -382,6 +414,7 @@ export const readChartSpec = (
 const readAxis = (
 	axis: "x" | "y",
 	raw: Record<string, unknown>,
+	edit: boolean,
 	problem: (path: string, message: string) => void,
 	hint: (name: string, candidates: readonly string[]) => string
 ): AxisSpec => {
@@ -399,6 +432,7 @@ const readAxis = (
 		if (v === undefined) continue
 		if (typeof v === "number" && Number.isFinite(v)) spec[bound] = v
 		else if (typeof v === "string" && !Number.isNaN(specDateMs(v))) spec[bound] = v
+		else if (edit && v === null) spec[bound] = null
 		else {
 			problem(
 				pathOf("axes", axis, bound),
@@ -406,8 +440,8 @@ const readAxis = (
 			)
 		}
 	}
-	const asNumber = (b: number | string | undefined) =>
-		typeof b === "string" ? specDateMs(b) : b
+	const asNumber = (b: number | string | null | undefined) =>
+		typeof b === "string" ? specDateMs(b) : (b ?? undefined)
 	const lo = asNumber(spec.min)
 	const hi = asNumber(spec.max)
 	if (lo !== undefined && hi !== undefined && lo >= hi) {
