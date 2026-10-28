@@ -5,6 +5,7 @@
  *  renderer reads is present and themed. An edit starts from the stored
  *  visual as the editor opens it (`hydrateVisual`) instead. */
 
+import { barTotalFieldName } from "../barTotalLabel"
 import { channelAccepts, channelsConflict } from "../channels"
 import { getChartModeDef, type ChartMode } from "../chartMode"
 import { isBarModeId } from "../chartModes/families"
@@ -13,7 +14,10 @@ import {
 	DEFAULT_CATEGORICAL_HUE_CONFIG,
 	type AxisConfig,
 	type ChannelConfigs,
+	type ColorSlotConfig,
+	type ColorSlotKey,
 } from "../channelConfig"
+import { COLOR_SLOT_DEFS, legacySlotColor } from "../colorSlots"
 import {
 	applyDerivedVariablesBeforeReshape,
 	splitDerivedVariablesAroundReshape,
@@ -24,6 +28,7 @@ import {
 	type DerivedVariablesConfig,
 } from "../derivedVariables"
 import { effectiveType } from "../fieldType"
+import { flowLabelFieldNames } from "../flowNodeLabels"
 import { foldFlowNodeTitles } from "../foldFlowNodeTitles"
 import { buildQuantHueConfigFromTheme, seedOutlineHue } from "../hueDefaults"
 import { applyCellConversions } from "../materializeTransforms"
@@ -37,6 +42,7 @@ import { applyReshapeToView, DEFAULT_RESHAPE_CONFIG, type ReshapeConfig } from "
 import { resolveDatasetViewFromMeta } from "../resolveDatasetVersion"
 import { structureVisualKeys } from "../savedKeyStructure"
 import { parseValue } from "../scales"
+import { seedColorSlot } from "../seedColorSlot"
 import type {
 	DataLabelsEncodings,
 	DatasetMeta,
@@ -61,6 +67,7 @@ import {
 	type SpecChannel,
 	type SpecProblem,
 } from "./chartSpec"
+import { applySettings, settingsProblems, type SettingsPatch } from "./settings"
 import { didYouMean } from "./suggest"
 
 /** What a spec is composed against. The caller looks up the spec's dataset
@@ -402,6 +409,22 @@ const compose = (
 		}
 	}
 
+	// Settings are checked against the visual they land on once it is
+	// composed; when something else is already wrong they are checked now,
+	// against the chart or a new chart's draft, so every problem is reported
+	// in one answer.
+	const settingsDraft = { ...draft } as Visual
+	// A label may also print what the Data Labels panel derives: a bar's
+	// total, a flow node's in and out.
+	const labelFields = [
+		...fieldNames,
+		...[barTotalFieldName(fieldNames) ?? []].flat(),
+		...flowLabelFieldNames(fieldNames),
+	]
+	if (spec.settings && (errors.length > 0 || !start)) {
+		errors.push(...settingsProblems(spec.settings, hydrated ?? settingsDraft, settingsDraft, labelFields))
+	}
+
 	if (errors.length > 0 || !start) return { ok: false, errors: capProblems(errors) }
 
 	const channelConfigs = start.channelConfigs
@@ -490,7 +513,43 @@ const compose = (
 				createdAt: ctx.now,
 				updatedAt: ctx.now,
 			}
+	if (spec.settings) {
+		const problems = settingsProblems(spec.settings, visual, settingsDraft, labelFields)
+		if (problems.length > 0) return { ok: false, errors: capProblems(problems) }
+		const patch = spec.settings as SettingsPatch
+		const patched = seedPickedSlots(applySettings(visual, patch), patch, typeOf, ctx.theme)
+		return { ok: true, visual: structuredVisual(patched), warnings: [] }
+	}
 	return { ok: true, visual: structuredVisual(visual), warnings: [] }
+}
+
+/** A color slot a settings patch gives a field, and no colors, gets the
+ *  colors the Color panel gives it when that field is picked there
+ *  (`ColorSlotControls`). */
+const seedPickedSlots = (
+	visual: Visual,
+	patch: SettingsPatch,
+	typeOf: (field: string) => FieldType,
+	theme: Theme
+): Visual => {
+	const configs = patch.channelConfigs as { colorSlots?: Record<string, unknown> } | undefined
+	const slots = configs?.colorSlots
+	if (!slots) return visual
+	const colorSlots = { ...visual.channelConfigs.colorSlots }
+	for (const [key, slot] of Object.entries(slots)) {
+		if (typeof slot !== "object" || slot === null) continue
+		const given = slot as Record<string, unknown>
+		if (typeof given.field !== "string" || "hue" in given || "palette" in given || "paletteId" in given) continue
+		const k = key as ColorSlotKey
+		const current = colorSlots[k]
+		colorSlots[k] = {
+			singleColor:
+				current?.singleColor ?? legacySlotColor(k, visual.channelConfigs) ?? COLOR_SLOT_DEFS[k]?.themeColor(theme),
+			...current,
+			...seedColorSlot(given.field, typeOf(given.field), theme),
+		} as ColorSlotConfig
+	}
+	return { ...visual, channelConfigs: { ...visual.channelConfigs, colorSlots } }
 }
 
 /** The channels a spec must fill to make the variation, and the field
