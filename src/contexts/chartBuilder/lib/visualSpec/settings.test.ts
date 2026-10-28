@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { CAFE, contextFor, DATES } from "../../../../testSupport/chartSpecFixtures"
+import { DEFAULT_CATEGORICAL_HUE_CONFIG } from "../channelConfig"
 import type { Visual } from "../types"
 import { hydrateVisual } from "../visualDefaults"
 import { composeChartEdit, composeChartSpec, type ComposeVisualResult } from "./composeVisual"
@@ -224,6 +225,29 @@ describe("settings checks", () => {
 			hue: { kind: "categorical" },
 			palette: v.channelConfigs.categoricalPalette,
 		})
+	})
+
+	it("completes a new slot's hue as the Color panel makes one, so its swatches have colors", () => {
+		const line = { field: "flavor", singleColor: "#000000", hue: { kind: "categorical" } }
+		const v = ok(set(bars(), { channelConfigs: { colorSlots: { line } } }))
+		expect(v.channelConfigs.colorSlots?.line?.hue).toEqual({ ...DEFAULT_CATEGORICAL_HUE_CONFIG, colors: {} })
+		const quant = { field: "muffins", singleColor: "#000000", hue: { kind: "quantitative", palette: "plasma" } }
+		const q = ok(set(bars(), { channelConfigs: { colorSlots: { line: quant } } }))
+		expect(q.channelConfigs.colorSlots?.line?.hue).toMatchObject({ kind: "quantitative", palette: "plasma", lowColor: expect.any(String) })
+	})
+
+	it("takes a whole new slot as sent, and gives a slot with no field its single color", () => {
+		const line = { field: "flavor", singleColor: "#000000", hue: { kind: "categorical", colors: { Bran: "#123456" }, stackMode: "group" } }
+		expect(ok(set(bars(), { channelConfigs: { colorSlots: { line } } })).channelConfigs.colorSlots?.line).toEqual(line)
+		const stem = ok(set(bars(), { channelConfigs: { colorSlots: { stem: { colorRules: [] } } } })).channelConfigs.colorSlots?.stem
+		expect(stem).toEqual({ field: null, singleColor: expect.any(String), colorRules: [] })
+	})
+
+	it("refuses a new config missing what its shape needs", () => {
+		const errors = errorsOf(set(bars(), { channelConfigs: { outlineHue: { kind: "categorical" }, opacity: { kind: "categorical" } } }))
+		expect(errors).toEqual([
+			{ path: "settings.channelConfigs.opacity", message: `this setting needs "overrides" when "kind" is "categorical"` },
+		])
 	})
 
 	it("works in a create, after the spec's own keys, and reports with the other problems", () => {

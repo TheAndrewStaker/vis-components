@@ -50,13 +50,17 @@ const tidy = (doc) => {
 	return end > 80 ? cut.slice(0, end + 1) : `${cut.trimEnd()}…`
 }
 
-/** `{ slices, docs, types, required }`: the settings slices; path to doc
- *  comment; path to declared type as `{ kinds, values?, items? }`, where
- *  `kinds` holds "string", "number", "boolean", "null", "list" or
+/** `{ slices, docs, types, required, shapes }`: the settings slices; path
+ *  to doc comment; path to declared type as `{ kinds, values?, items? }`,
+ *  where `kinds` holds "string", "number", "boolean", "null", "list" or
  *  "object", `values` the allowed strings when the type is a union of
  *  string literals, and `items` a list's element type (a path whose type
- *  can't be described, any or unknown, has none); and a list's path to
- *  the fields each of its elements must have. */
+ *  can't be described, any or unknown, has none); a list's path to the
+ *  fields each of its elements must have; and an object's path to the
+ *  shapes it may take, each as `{ must, tags }`: the members it must have,
+ *  and the members fixed to one string that tell a union's shapes apart
+ *  (`{kind: "categorical"}`). A path with a shape that needs nothing has
+ *  no entry. */
 export const extractSettingCatalog = () => {
 	const program = ts.createProgram([TYPES], {
 		strict: true,
@@ -129,6 +133,30 @@ export const extractSettingCatalog = () => {
 	const docs = {}
 	const types = {}
 	const required = {}
+	const shapes = {}
+	/** Paths with a shape that needs nothing, so any object will do. */
+	const loose = new Set()
+	const shapeOf = (o) => {
+		const props = checker.getPropertiesOfType(o)
+		const must = props.filter((p) => !(p.flags & ts.SymbolFlags.Optional)).map((p) => p.name)
+		const tags = {}
+		for (const p of props) {
+			const t = checker.getTypeOfSymbol(p)
+			if (!(p.flags & ts.SymbolFlags.Optional) && t.flags & ts.TypeFlags.StringLiteral) tags[p.name] = t.value
+		}
+		return { must, tags }
+	}
+	const recordShape = (path, o) => {
+		if (loose.has(path)) return
+		const shape = shapeOf(o)
+		if (shape.must.length === 0) {
+			loose.add(path)
+			delete shapes[path]
+			return
+		}
+		const known = shapes[path] ?? []
+		if (!known.some((k) => JSON.stringify(k) === JSON.stringify(shape))) shapes[path] = [...known, shape]
+	}
 	const record = (at, type, doc) => {
 		if (doc && doc.trim() && !docs[at]) docs[at] = tidy(doc)
 		const described = describe(type)
@@ -151,7 +179,9 @@ export const extractSettingCatalog = () => {
 				walk(element, at, within)
 				continue
 			}
-			if (!isPlainObject(part) || within.has(part)) continue
+			if (!isPlainObject(part)) continue
+			recordShape(path, part)
+			if (within.has(part)) continue
 			const inner = new Set(within).add(part)
 			for (const prop of checker.getPropertiesOfType(part)) {
 				const at = `${path}.${prop.name}`
@@ -179,7 +209,7 @@ export const extractSettingCatalog = () => {
 				.filter(([, v]) => v !== undefined)
 				.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
 		)
-	return { slices, docs: sorted(docs), types: sorted(types), required: sorted(required) }
+	return { slices, docs: sorted(docs), types: sorted(types), required: sorted(required), shapes: sorted(shapes) }
 }
 
 const ID = "virtual:setting-catalog"

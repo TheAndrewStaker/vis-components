@@ -63,6 +63,13 @@ describe("the setting catalog", () => {
 		expect(SETTING_CATALOG.required["annotationsConfig.texts"]).toEqual(expect.arrayContaining(["id", "text"]))
 	})
 
+	it("knows the shapes an object may take, and the tag that picks each", () => {
+		expect(SETTING_CATALOG.shapes["channelConfigs.colorSlots.line.hue"]).toEqual(
+			expect.arrayContaining([{ must: expect.arrayContaining(["kind", "colors", "stackMode"]), tags: { kind: "categorical" } }])
+		)
+		expect(SETTING_CATALOG.shapes["channelConfigs.colorSlots.line"]).toEqual([{ must: ["field", "singleColor"], tags: {} }])
+	})
+
 	it("keeps each setting's doc comment", () => {
 		expect(SETTING_CATALOG.docs["accessibilityConfig.description"]).toBeTruthy()
 	})

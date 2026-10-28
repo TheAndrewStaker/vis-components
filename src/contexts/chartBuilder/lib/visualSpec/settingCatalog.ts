@@ -22,6 +22,12 @@ export type SettingCatalog = {
 	types: Record<string, SettingType>
 	/** A list setting's path to the fields each of its elements must have. */
 	required: Record<string, string[]>
+	/** An object setting's path to the shapes it may take: the members it
+	 *  must have, and the members fixed to one string that tell a union's
+	 *  shapes apart (`{kind: "categorical"}`). */
+	shapes: Record<string, SettingShape[]>
 }
+
+export type SettingShape = { must: string[]; tags: Record<string, string> }
 
 export const SETTING_CATALOG: SettingCatalog = CATALOG

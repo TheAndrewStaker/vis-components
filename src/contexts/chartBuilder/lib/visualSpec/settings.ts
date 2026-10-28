@@ -10,7 +10,7 @@
 import { newComposedLabelId } from "../dataLabelsSelection"
 import type { Visual } from "../types"
 import { named, type SpecProblem } from "./chartSpec"
-import { SETTING_CATALOG, type SettingKind, type SettingType } from "./settingCatalog"
+import { SETTING_CATALOG, type SettingKind, type SettingShape, type SettingType } from "./settingCatalog"
 import { didYouMean } from "./suggest"
 
 /** The slices a settings patch may touch. */
@@ -310,6 +310,92 @@ export const settingsProblems = (
 	}
 	return problems
 }
+
+/** The shape `value` best fits at `bare`, with the members it lacks: of
+ *  the shapes its tags allow (all of them when none do), the one it lacks
+ *  least of. Only an object whose every shape is picked by a tag, as a
+ *  hue's `kind` picks its members, is judged: the editor reads an untagged
+ *  config over its defaults (`{...DEFAULT_FACET_CONFIG, ...facet}`), so
+ *  part of one is whole to it. */
+const bestShape = (value: Record<string, unknown>, bare: string): { shape: SettingShape; lacks: string[] } | undefined => {
+	const shapes = SETTING_CATALOG.shapes[bare]
+	if (!shapes || !shapes.every((s) => Object.keys(s.tags).length > 0)) return undefined
+	const tagged = shapes.filter((s) => Object.entries(s.tags).every(([k, v]) => !Object.hasOwn(value, k) || value[k] === v))
+	let best: { shape: SettingShape; lacks: string[] } | undefined
+	for (const shape of tagged.length > 0 ? tagged : shapes) {
+		const lacks = shape.must.filter((k) => !Object.hasOwn(value, k) || value[k] === undefined)
+		if (!best || lacks.length < best.lacks.length) best = { shape, lacks }
+	}
+	return best
+}
+
+/** Problems with the objects a patch names, as they stand once it is
+ *  merged and completed (`after`): each tagged one must have what the
+ *  shape its tags pick needs (a categorical hue needs its colors). A member
+ *  the chart's own object (`before`) of that shape lacks too is let be, so
+ *  a chart stored before a member was added stays editable. A list entry
+ *  is checked whole by settingsProblems; the objects inside it here. */
+export const shapeProblems = (patch: SettingsPatch, before: Visual, after: Visual): SpecProblem[] => {
+	const problems: SpecProblem[] = []
+	const visit = (sent: unknown, was: unknown, now: unknown, path: string, bare: string) => {
+		if (Array.isArray(sent)) {
+			if (!Array.isArray(now)) return
+			const stored = Array.isArray(was) ? was : []
+			now.forEach((entry, i) => {
+				const id = idOf(entry)
+				const own = id === undefined ? undefined : stored.find((e) => idOf(e) === id)
+				visit(sent[i], own, entry, `${path}[${i}]`, `${bare}[]`)
+			})
+			return
+		}
+		if (!isRecord(sent) || !isRecord(now)) return
+		const prior = isRecord(was) ? was : {}
+		for (const [k, v] of Object.entries(sent)) visit(v, prior[k], now[k], join(path, k), catalogKey(bare, k))
+		if (bare.endsWith("[]")) return
+		const best = bestShape(now, bare)
+		if (!best) return
+		const { shape } = best
+		const sameShape = isRecord(was) && Object.entries(shape.tags).every(([k, v]) => was[k] === v)
+		const lacks = sameShape ? best.lacks.filter((k) => Object.hasOwn(prior, k)) : best.lacks
+		if (lacks.length === 0) return
+		const tags = Object.entries(shape.tags).map(([k, v]) => `"${k}" is "${v}"`)
+		problems.push({
+			path,
+			message: `this setting needs ${lacks.map((k) => `"${k}"`).join(", ")}${tags.length > 0 ? ` when ${tags.join(" and ")}` : ""}`,
+		})
+	}
+	for (const [slice, value] of Object.entries(patch)) {
+		const key = slice as keyof Visual
+		visit(value, before[key], after[key], join("settings", slice), slice)
+	}
+	return problems
+}
+
+/** `visual` with each object a patch names passed through `complete`,
+ *  innermost first, with its catalog path. */
+export const completeSettings = (
+	visual: Visual,
+	patch: SettingsPatch,
+	complete: (value: Record<string, unknown>, bare: string) => Record<string, unknown>
+): Visual => {
+	const visit = (sent: unknown, now: unknown, bare: string): unknown => {
+		if (Array.isArray(sent) && Array.isArray(now)) return now.map((e, i) => visit(sent[i], e, `${bare}[]`))
+		if (!isRecord(sent) || !isRecord(now)) return now
+		const out = { ...now }
+		for (const k of Object.keys(sent)) {
+			if (Object.hasOwn(now, k)) out[k] = visit(sent[k], now[k], catalogKey(bare, k))
+		}
+		return complete(out, bare)
+	}
+	const out = { ...visual } as Record<string, unknown>
+	for (const [slice, value] of Object.entries(patch)) out[slice] = visit(value, out[slice], slice)
+	return out as Visual
+}
+
+/** Whether the object at `bare` is a hue config: the shapes the main
+ *  Color encoding's `hue` takes. */
+export const isHueConfig = (bare: string): boolean =>
+	sameValue(SETTING_CATALOG.shapes[bare], SETTING_CATALOG.shapes["channelConfigs.hue"])
 
 /** An id for a new entry of the list at `bare`, made the way the editor
  *  makes one. */
