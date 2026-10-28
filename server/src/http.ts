@@ -37,11 +37,13 @@ export const readBody = (
 export const sendJson = (
 	res: ServerResponse,
 	status: number,
-	body: string
+	body: string,
+	headers: Record<string, string> = {}
 ): void => {
 	res.writeHead(status, {
 		"content-type": "application/json; charset=utf-8",
 		"cache-control": "no-store",
+		...headers,
 	})
 	res.end(body)
 }
