@@ -182,6 +182,26 @@ visual changed after the edit (a new preview alone doesn't count); **409** for a
 version; **428** without `If-Match`; **400** for a body that isn't a whole
 `undo` for this visual; **415** and **403** as for a create.
 
+### Creating a dataset from rows
+
+`POST /api/datasets` with `{name, rows, types?}` stores rows as a new
+dataset, the same shape an upload makes, so a spec can chart data that
+arrives without a file. Values are kept as text; each column's type is
+inferred as an upload infers it unless `types` names it (`quantitative`,
+`categorical`, `temporal`, `ordinal`).
+
+```
+curl -X POST https://charts.example.com/api/datasets \
+  -H 'content-type: application/json' \
+  -d '{"name":"Muffins","rows":[{"month":"Jan","muffins":3},{"month":"Feb","muffins":5}]}'
+```
+
+It answers **201** `{id, name, rowCount, fields}`; **400** `{errors}` with
+every problem and its path; **409** when a dataset of that name exists or
+stored data sets are at another content version; **413** past the upload size
+limit, checked before sparse rows are filled out. The library lists the
+dataset only once all of it is stored.
+
 `GET /api/chart-spec` lists what a spec can say: the channels (with the field
 types each takes and the channels it can't be mapped with), the field types,
 the families with the channels each variation fills, and the themes as
