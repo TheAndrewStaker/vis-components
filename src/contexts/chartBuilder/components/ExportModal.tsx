@@ -9,6 +9,7 @@ import {
 	DEFAULT_PIXEL_RATIO,
 	MAX_EXPORT_DIM,
 	MIN_EXPORT_DIM,
+	clampExportDim,
 	clampPixelRatio,
 	renderExport,
 } from "../lib/exportImage"
@@ -214,10 +215,8 @@ export const ExportModal = ({ open, onClose, visualId }: Props) => {
 		seededRef.current = true
 		const saved = exportSizes[visualId]
 		if (fixedCanvas) {
-			const clampDim = (n: number) =>
-				Math.min(MAX_EXPORT_DIM, Math.max(MIN_EXPORT_DIM, Math.round(n)))
-			setWidth(clampDim(fixedCanvas.width))
-			setHeight(clampDim(fixedCanvas.height))
+			setWidth(clampExportDim(fixedCanvas.width))
+			setHeight(clampExportDim(fixedCanvas.height))
 			setAspectLocked(saved?.aspectLocked ?? false)
 			setUnit(fixedCanvas.unit ?? "px")
 			return

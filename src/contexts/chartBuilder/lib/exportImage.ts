@@ -10,13 +10,42 @@ import {
 import { embedFontsInSvg } from "./fontEmbed"
 import { withJpegDpi, withPngDpi } from "./imageDpi"
 import { nameWeightedFaces } from "./portableSvg"
+import type { CanvasSizeConfig } from "./channelConfig"
 
-export type ImageFormat = "png" | "jpeg" | "svg" | "pdf"
+export const IMAGE_FORMATS = ["png", "jpeg", "svg", "pdf"] as const
+export type ImageFormat = (typeof IMAGE_FORMATS)[number]
 
 export const DEFAULT_PIXEL_RATIO = 4
 // Shared bounds for the size inputs AND the drag-resize handles.
 export const MIN_EXPORT_DIM = 50
 export const MAX_EXPORT_DIM = 4096
+
+export const clampExportDim = (n: number) =>
+	Math.min(MAX_EXPORT_DIM, Math.max(MIN_EXPORT_DIM, Math.round(n)))
+
+/** Export size for a visual without a fixed canvas when nobody is at the
+ *  dialog to measure the editor: 6.5 × 4 in (a US Letter text column) at
+ *  300 dpi. */
+const UNFIXED_EXPORT = { width: 624, height: 384, dpi: 300 }
+
+/** The export size and resolution a visual gets with no dialog open. A
+ *  fixed canvas size wins, at the dialog's default resolution, as the
+ *  dialog seeds it; otherwise UNFIXED_EXPORT. */
+export const exportSizeFor = (
+	canvas: CanvasSizeConfig | undefined
+): { width: number; height: number; pixelRatio: number } => {
+	if (canvas?.enabled) {
+		const width = clampExportDim(canvas.width)
+		const height = clampExportDim(canvas.height)
+		return {
+			width,
+			height,
+			pixelRatio: clampPixelRatio(width, height, DEFAULT_PIXEL_RATIO),
+		}
+	}
+	const { width, height, dpi } = UNFIXED_EXPORT
+	return { width, height, pixelRatio: clampPixelRatio(width, height, dpi / 96) }
+}
 
 /** Capture the embed page loaded in `iframe` and build the export file.
  *  The iframe must be laid out at `width × height` CSS px; `height` is the
