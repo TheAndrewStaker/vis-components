@@ -67,6 +67,7 @@ import {
 	type SpecChannel,
 	type SpecProblem,
 } from "./chartSpec"
+import { panelEdits } from "./panelEdits"
 import {
 	applySettings,
 	completeSettings,
@@ -428,8 +429,20 @@ const compose = (
 		...[barTotalFieldName(fieldNames) ?? []].flat(),
 		...flowLabelFieldNames(fieldNames),
 	]
+	/** The patch as the panels would make it, checked. */
+	const settingsFor = (on: Visual) => {
+		const edits = panelEdits(spec.settings as SettingsPatch, {
+			visual: on,
+			theme: ctx.theme,
+			rows: view.rows,
+			fieldNames,
+			typeOf,
+		})
+		const problems = [...settingsProblems(edits.patch, on, settingsDraft, labelFields), ...edits.problems]
+		return { edits, problems }
+	}
 	if (spec.settings && (errors.length > 0 || !start)) {
-		errors.push(...settingsProblems(spec.settings, hydrated ?? settingsDraft, settingsDraft, labelFields))
+		errors.push(...settingsFor(hydrated ?? settingsDraft).problems)
 	}
 
 	if (errors.length > 0 || !start) return { ok: false, errors: capProblems(errors) }
@@ -521,14 +534,14 @@ const compose = (
 				updatedAt: ctx.now,
 			}
 	if (spec.settings) {
-		const problems = settingsProblems(spec.settings, visual, settingsDraft, labelFields)
+		const { edits, problems } = settingsFor(visual)
 		if (problems.length > 0) return { ok: false, errors: capProblems(problems) }
-		const patch = spec.settings as SettingsPatch
-		const seeded = seedPickedSlots(applySettings(visual, patch), patch, typeOf, ctx.theme)
-		const patched = completeSettings(seeded, patch, (value, bare) =>
+		const applied = applySettings(visual, edits.patch, edits.newId)
+		const seeded = edits.finish(seedPickedSlots(applied, edits.patch, typeOf, ctx.theme))
+		const patched = completeSettings(seeded, edits.patch, (value, bare) =>
 			isHueConfig(bare) ? completeHue(value, ctx.theme) : value
 		)
-		const unshaped = shapeProblems(patch, visual, patched)
+		const unshaped = shapeProblems(edits.patch, visual, patched)
 		if (unshaped.length > 0) return { ok: false, errors: capProblems(unshaped) }
 		return { ok: true, visual: structuredVisual(patched), warnings: [] }
 	}

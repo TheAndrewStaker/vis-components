@@ -111,7 +111,7 @@ const OPACITY = /opacity$/i
 const COLOR = /(colou?r|colou?rs|colou?roverrides|inkcolors)$/i
 const CSS_COLOR =
 	/^(#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|rgba?\([\d\s.,%]+\)|hsla?\([\d\s.,%deg]+\)|transparent|none|currentcolor|white|black|gray|grey|silver|red|maroon|orange|yellow|olive|lime|green|teal|aqua|cyan|blue|navy|purple|fuchsia|magenta|pink|brown)$/i
-const FIELD = /(^field|Field)$/
+const FIELD = /(^fields?|Fields?)$/
 
 /** A problem with a value the setting's type allows, judged by its name:
  *  counts within bounds, sizes not negative, opacities within 0 to 1,
@@ -404,15 +404,19 @@ const newEntryId = (bare: string): string =>
 		? newComposedLabelId()
 		: `${settingName(bare)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 
+/** Makes an id for a new entry of the list at a catalog path, or leaves
+ *  it to `newEntryId` (undefined). */
+export type NewId = (path: string) => string | undefined
+
 /** `value` with an id given to each new entry (one without an id) of a
  *  list keyed by id, wherever such a list sits in it. */
-const withNewIds = (value: unknown, bare: string): unknown => {
+const withNewIds = (value: unknown, bare: string, newId?: NewId): unknown => {
 	if (Array.isArray(value)) {
 		if (!keyedById(bare)) return value
-		return value.map((e) => (isRecord(e) && e.id === undefined ? { id: newEntryId(bare), ...e } : e))
+		return value.map((e) => (isRecord(e) && e.id === undefined ? { id: newId?.(bare) ?? newEntryId(bare), ...e } : e))
 	}
 	if (!isRecord(value)) return value
-	return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, withNewIds(v, catalogKey(bare, k))]))
+	return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, withNewIds(v, catalogKey(bare, k), newId)]))
 }
 
 const deepMerge = (base: unknown, patch: unknown): unknown => {
@@ -424,9 +428,9 @@ const deepMerge = (base: unknown, patch: unknown): unknown => {
 
 /** The visual with a checked patch merged in; a new entry of a list keyed
  *  by id gets its id here. */
-export const applySettings = (visual: Visual, patch: SettingsPatch): Visual => {
+export const applySettings = (visual: Visual, patch: SettingsPatch, newId?: NewId): Visual => {
 	const out = { ...visual } as Record<string, unknown>
-	for (const [slice, value] of Object.entries(patch)) out[slice] = deepMerge(out[slice], withNewIds(value, slice))
+	for (const [slice, value] of Object.entries(patch)) out[slice] = deepMerge(out[slice], withNewIds(value, slice, newId))
 	return out as Visual
 }
 
