@@ -67,7 +67,14 @@ import {
 	type SpecChannel,
 	type SpecProblem,
 } from "./chartSpec"
-import { applySettings, settingsProblems, type SettingsPatch } from "./settings"
+import {
+	applySettings,
+	completeSettings,
+	isHueConfig,
+	settingsProblems,
+	shapeProblems,
+	type SettingsPatch,
+} from "./settings"
 import { didYouMean } from "./suggest"
 
 /** What a spec is composed against. The caller looks up the spec's dataset
@@ -517,15 +524,36 @@ const compose = (
 		const problems = settingsProblems(spec.settings, visual, settingsDraft, labelFields)
 		if (problems.length > 0) return { ok: false, errors: capProblems(problems) }
 		const patch = spec.settings as SettingsPatch
-		const patched = seedPickedSlots(applySettings(visual, patch), patch, typeOf, ctx.theme)
+		const seeded = seedPickedSlots(applySettings(visual, patch), patch, typeOf, ctx.theme)
+		const patched = completeSettings(seeded, patch, (value, bare) =>
+			isHueConfig(bare) ? completeHue(value, ctx.theme) : value
+		)
+		const unshaped = shapeProblems(patch, visual, patched)
+		if (unshaped.length > 0) return { ok: false, errors: capProblems(unshaped) }
 		return { ok: true, visual: structuredVisual(patched), warnings: [] }
 	}
 	return { ok: true, visual: structuredVisual(visual), warnings: [] }
 }
 
-/** A color slot a settings patch gives a field, and no colors, gets the
- *  colors the Color panel gives it when that field is picked there
- *  (`ColorSlotControls`). */
+/** The members of a categorical hue config, which a hue with no kind
+ *  that names only these is taken to be. */
+const CATEGORICAL_HUE_KEYS = Object.keys(DEFAULT_CATEGORICAL_HUE_CONFIG)
+
+/** A hue config a settings patch names, completed as the Color panel
+ *  makes one: a categorical hue from the default with no colors of its
+ *  own (`SlotCategoricalControls`), a quantitative one from the theme's
+ *  gradient. A kind it can't tell is left for shapeProblems to report. */
+const completeHue = (hue: Record<string, unknown>, theme: Theme): Record<string, unknown> => {
+	const kind = hue.kind ?? (Object.keys(hue).every((k) => CATEGORICAL_HUE_KEYS.includes(k)) ? "categorical" : undefined)
+	if (kind === "categorical") return { ...DEFAULT_CATEGORICAL_HUE_CONFIG, colors: {}, ...hue }
+	if (kind === "quantitative") return { ...buildQuantHueConfigFromTheme(theme), ...hue }
+	return hue
+}
+
+/** A color slot a settings patch names gets a field and a single color,
+ *  as the Color panel's first touch of a slot gives it (`updateSlot`).
+ *  One the patch gives a field, and no colors, gets the colors the Color
+ *  panel gives it when that field is picked there (`ColorSlotControls`). */
 const seedPickedSlots = (
 	visual: Visual,
 	patch: SettingsPatch,
@@ -539,15 +567,16 @@ const seedPickedSlots = (
 	for (const [key, slot] of Object.entries(slots)) {
 		if (typeof slot !== "object" || slot === null) continue
 		const given = slot as Record<string, unknown>
-		if (typeof given.field !== "string" || "hue" in given || "palette" in given || "paletteId" in given) continue
 		const k = key as ColorSlotKey
 		const current = colorSlots[k]
-		colorSlots[k] = {
+		const base = {
+			field: current?.field ?? null,
 			singleColor:
 				current?.singleColor ?? legacySlotColor(k, visual.channelConfigs) ?? COLOR_SLOT_DEFS[k]?.themeColor(theme),
 			...current,
-			...seedColorSlot(given.field, typeOf(given.field), theme),
-		} as ColorSlotConfig
+		}
+		const picked = typeof given.field === "string" && !("hue" in given || "palette" in given || "paletteId" in given)
+		colorSlots[k] = (picked ? { ...base, ...seedColorSlot(given.field as string, typeOf(given.field as string), theme) } : base) as ColorSlotConfig
 	}
 	return { ...visual, channelConfigs: { ...visual.channelConfigs, colorSlots } }
 }
