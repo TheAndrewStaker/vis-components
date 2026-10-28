@@ -20,15 +20,15 @@ describe("exportSizeFor", () => {
 		expect(size.pixelRatio * 96).toBe(300)
 	})
 
-	it("defaults to 6.5 × 4 in at 300 dpi without a fixed canvas", () => {
+	it("defaults to the dialog's unmeasured size at 4× without a fixed canvas", () => {
 		for (const canvas of [
 			undefined,
 			{ enabled: false, width: 1000, height: 600 },
 		]) {
 			expect(exportSizeFor(canvas)).toEqual({
-				width: 624,
-				height: 384,
-				pixelRatio: 300 / 96,
+				width: 650,
+				height: 400,
+				pixelRatio: 4,
 			})
 		}
 	})

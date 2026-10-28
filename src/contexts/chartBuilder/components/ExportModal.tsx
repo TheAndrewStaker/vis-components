@@ -6,6 +6,8 @@ import {
 } from "../lib/downloadVisuals"
 import { upsertEmbedInstance } from "../lib/embedInstances"
 import {
+	DEFAULT_EXPORT_HEIGHT,
+	DEFAULT_EXPORT_WIDTH,
 	DEFAULT_PIXEL_RATIO,
 	MAX_EXPORT_DIM,
 	MIN_EXPORT_DIM,
@@ -90,9 +92,6 @@ const EMBED_FALLBACK_FULL = { width: 800, height: 500 }
 const EMBED_FALLBACK_CHART = { width: 650, height: 400 }
 const EMBED_FALLBACK_LEGEND = { width: 220, height: 400 }
 
-const DEFAULT_WIDTH = 650
-const DEFAULT_HEIGHT = 400
-
 // Horizontal chrome inside the panel around the preview image: modal content
 // padding (p-4 → 16px each side) plus the preview box padding (p-3 → 12px each
 // side) plus its border. Used to cap the image width to the panel's slot.
@@ -163,11 +162,11 @@ const useViewportSize = () => {
 
 export const ExportModal = ({ open, onClose, visualId }: Props) => {
 	const [tab, setTab] = useState<Tab>("export")
-	const [width, setWidth] = useState(DEFAULT_WIDTH)
-	const [height, setHeight] = useState(DEFAULT_HEIGHT)
+	const [width, setWidth] = useState(DEFAULT_EXPORT_WIDTH)
+	const [height, setHeight] = useState(DEFAULT_EXPORT_HEIGHT)
 	const [aspectLocked, setAspectLocked] = useState(false)
 	// Frozen aspect ratio used while the lock is engaged. Re-captured on lock.
-	const ratioRef = useRef<number>(DEFAULT_WIDTH / DEFAULT_HEIGHT)
+	const ratioRef = useRef<number>(DEFAULT_EXPORT_WIDTH / DEFAULT_EXPORT_HEIGHT)
 	const viewport = useViewportSize()
 	const exportSizes = useAtomValue(exportSizesAtom)
 	// The modal always opens for the CURRENT visual (SaveBar), so the current
@@ -222,8 +221,8 @@ export const ExportModal = ({ open, onClose, visualId }: Props) => {
 			return
 		}
 		const editorSize = saved ? null : measureEditorChartSize()
-		setWidth(saved?.width ?? editorSize?.width ?? DEFAULT_WIDTH)
-		setHeight(saved?.height ?? editorSize?.height ?? DEFAULT_HEIGHT)
+		setWidth(saved?.width ?? editorSize?.width ?? DEFAULT_EXPORT_WIDTH)
+		setHeight(saved?.height ?? editorSize?.height ?? DEFAULT_EXPORT_HEIGHT)
 		setAspectLocked(saved?.aspectLocked ?? false)
 	}, [open, visualId, exportSizes, fixedCanvas, setUnit])
 
@@ -910,7 +909,7 @@ const ExportTab = ({
 					step={UNIT_STEP[unit]}
 					// Preserve the raw input's guard: an all-cleared / zero entry
 					// falls back to the default rather than committing 0.
-					onChange={(v) => onWidthChange(unitToPx(v, unit) || DEFAULT_WIDTH)}
+					onChange={(v) => onWidthChange(unitToPx(v, unit) || DEFAULT_EXPORT_WIDTH)}
 					inputClassName="w-24"
 				/>
 				<NumberInput
@@ -921,7 +920,7 @@ const ExportTab = ({
 					min={pxToUnit(MIN_EXPORT_DIM, unit)}
 					max={pxToUnit(MAX_EXPORT_DIM, unit)}
 					step={UNIT_STEP[unit]}
-					onChange={(v) => onHeightChange(unitToPx(v, unit) || DEFAULT_HEIGHT)}
+					onChange={(v) => onHeightChange(unitToPx(v, unit) || DEFAULT_EXPORT_HEIGHT)}
 					inputClassName="w-24"
 				/>
 				<label className="flex flex-col gap-1 text-sm">

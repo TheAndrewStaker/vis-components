@@ -55,7 +55,7 @@ test.describe("Export page", () => {
 		expect(pngDpi(bytes)).toBe(384)
 	})
 
-	test("without a fixed canvas, defaults to 6.5 × 4 in at 300 dpi", async ({
+	test("without a fixed canvas, exports at the dialog's default size", async ({
 		page,
 	}) => {
 		const { mime, bytes } = await exportFile(
@@ -64,8 +64,8 @@ test.describe("Export page", () => {
 			"format=png"
 		)
 		expect(mime).toBe("image/png")
-		expect(pngSize(bytes)).toEqual([1950, 1200])
-		expect(pngDpi(bytes)).toBe(300)
+		expect(pngSize(bytes)).toEqual([2600, 1600])
+		expect(pngDpi(bytes)).toBe(384)
 	})
 
 	test("a fixed canvas size sets the export size at 4×", async ({ page }) => {
@@ -84,8 +84,8 @@ test.describe("Export page", () => {
 		// SOI, then the JFIF APP0: density units at 13, x / y density at 14 / 16.
 		expect(bytes.subarray(6, 10).toString("ascii")).toBe("JFIF")
 		expect(bytes[13]).toBe(1) // dots per inch
-		expect(bytes.readUInt16BE(14)).toBe(300)
-		expect(bytes.readUInt16BE(16)).toBe(300)
+		expect(bytes.readUInt16BE(14)).toBe(384)
+		expect(bytes.readUInt16BE(16)).toBe(384)
 	})
 
 	test("SVG includes the legend entries", async ({
@@ -113,8 +113,8 @@ test.describe("Export page", () => {
 		expect(mime).toBe("application/pdf")
 		const text = bytes.toString("latin1")
 		expect(text.startsWith("%PDF-")).toBe(true)
-		// 6.5 × 4 in = 468 × 288 pt.
-		expect(text).toContain("/MediaBox [0 0 468 288]")
+		// 650 × 400 px at 96 px/in = 487.5 × 300 pt.
+		expect(text).toMatch(/\/MediaBox \[0 0 487\.5 300\]/)
 	})
 
 	test("an unknown visual or format reports an error", async ({ page }) => {

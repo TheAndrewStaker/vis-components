@@ -5279,9 +5279,9 @@ it as **PNG**, **JPEG**, **SVG**, or **PDF**:
 dialog, for a script or headless browser. Query: `format=png|jpeg|svg|pdf`
 (default png), `v=<versionId>` to pin a version, and `width` / `height`
 (px) / `ratio` (the multiplier) to override the size. Without them a
-fixed canvas size exports as the dialog seeds it (4×); any other visual
-exports at 6.5 × 4 in at 300 dpi (`exportSizeFor`), since there is no
-on-screen chart to measure. The file lands base64 in
+fixed canvas size exports as the dialog seeds it, and any other visual
+at the dialog's size when it can't measure the editor (650 × 400), both
+at the dialog's default 4× (`exportSizeFor`). The file lands base64 in
 `<pre id="export-result">` with `data-mime`, `data-bytes`, `data-width`,
 `data-height`, `data-pixel-ratio` and `data-ms`; a failure lands in
 `<pre id="export-error">`. Nothing is saved or uploaded.

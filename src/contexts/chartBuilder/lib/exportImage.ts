@@ -23,14 +23,14 @@ export const MAX_EXPORT_DIM = 4096
 export const clampExportDim = (n: number) =>
 	Math.min(MAX_EXPORT_DIM, Math.max(MIN_EXPORT_DIM, Math.round(n)))
 
-/** Export size for a visual without a fixed canvas when nobody is at the
- *  dialog to measure the editor: 6.5 × 4 in (a US Letter text column) at
- *  300 dpi. */
-const UNFIXED_EXPORT = { width: 624, height: 384, dpi: 300 }
+/** The dialog's size when it can't measure the editor's chart. */
+export const DEFAULT_EXPORT_WIDTH = 650
+export const DEFAULT_EXPORT_HEIGHT = 400
 
-/** The export size and resolution a visual gets with no dialog open. A
- *  fixed canvas size wins, at the dialog's default resolution, as the
- *  dialog seeds it; otherwise UNFIXED_EXPORT. */
+/** The export size and resolution a visual gets with no dialog open, as
+ *  the dialog seeds it with nothing saved or measured: a fixed canvas size
+ *  wins; otherwise the dialog's default size. Both at its default
+ *  resolution. */
 export const exportSizeFor = (
 	canvas: CanvasSizeConfig | undefined
 ): { width: number; height: number; pixelRatio: number } => {
@@ -43,8 +43,15 @@ export const exportSizeFor = (
 			pixelRatio: clampPixelRatio(width, height, DEFAULT_PIXEL_RATIO),
 		}
 	}
-	const { width, height, dpi } = UNFIXED_EXPORT
-	return { width, height, pixelRatio: clampPixelRatio(width, height, dpi / 96) }
+	return {
+		width: DEFAULT_EXPORT_WIDTH,
+		height: DEFAULT_EXPORT_HEIGHT,
+		pixelRatio: clampPixelRatio(
+			DEFAULT_EXPORT_WIDTH,
+			DEFAULT_EXPORT_HEIGHT,
+			DEFAULT_PIXEL_RATIO
+		),
+	}
 }
 
 /** Capture the embed page loaded in `iframe` and build the export file.
