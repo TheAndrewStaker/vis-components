@@ -86,8 +86,11 @@ import { requestUser, sanitizeUser, type AppUser, type IdentifyUser } from "./id
 import { JSON_BODY_CAP_BYTES, SPEC_BODY_CAP_BYTES } from "./limits.js"
 
 /** What this server's chart-spec routes do, listed by GET /api/chart-spec
- *  so a client can tell which of them it serves. */
-export const CHART_SPEC_FEATURES = ["create", "edit", "restore", "read", "datasets", "settings"] as const
+ *  so a client can tell which of them it serves. `panelEdits`: a settings
+ *  patch gets what the panels do beyond storing a value (new annotations
+ *  from the Add buttons, label fields with their composed labels, level
+ *  order choices). */
+export const CHART_SPEC_FEATURES = ["create", "edit", "restore", "read", "datasets", "settings", "panelEdits"] as const
 
 /** Same row the client's settings adapter reads: which theme seeds new
  *  visualizations on this server. */
