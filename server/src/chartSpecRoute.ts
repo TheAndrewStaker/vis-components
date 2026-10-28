@@ -41,7 +41,7 @@ import { chartVocabulary } from "../../src/contexts/chartBuilder/lib/visualSpec/
 import type { ServerConfig } from "./config.js"
 import { isSafeId, readDatasetFile, readDatasetVersionFile } from "./datasetFiles.js"
 import { insertVisual, listContentVersions, listRows, readDatasetMeta } from "./db.js"
-import { HttpError, readBody, sendJson } from "./http.js"
+import { assertJsonWrite, HttpError, readBody, sendJson } from "./http.js"
 import { requestUser, type AppUser, type IdentifyUser } from "./identity.js"
 import { SPEC_BODY_CAP_BYTES } from "./limits.js"
 
@@ -196,6 +196,7 @@ export const createVisualFromSpec = async (
 	mintId: () => string = newVisualId,
 	user: AppUser | null = null
 ): Promise<void> => {
+	assertJsonWrite(req, new URL(config.baseUrl).origin)
 	const dryRun = readDryRun(res, query)
 	if (dryRun === undefined) return
 	const input = parseJson((await readBody(req, SPEC_BODY_CAP_BYTES)).toString("utf-8"))

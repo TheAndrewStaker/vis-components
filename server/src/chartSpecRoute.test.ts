@@ -64,7 +64,7 @@ const seedDataset = async (base: string, dataset: Dataset) => {
 const post = (base: string, spec: unknown, query = "", headers = {}) =>
 	fetch(`${base}/api/visuals${query}`, {
 		method: "POST",
-		headers,
+		headers: { "content-type": "application/json", ...headers },
 		body: typeof spec === "string" ? spec : JSON.stringify(spec),
 	})
 
@@ -214,6 +214,17 @@ describe("POST /api/visuals", () => {
 		expect((await visuals(base))[0]?.updatedBy).toEqual(jane)
 		const anonymous = await post(base, cafe())
 		expect(((await anonymous.json()) as { visual: Visual }).visual.updatedBy).toBeUndefined()
+	})
+
+	it("takes only a JSON body, and from no other site's page", async () => {
+		const base = await start()
+		await seedDataset(base, CAFE)
+		expect((await post(base, cafe(), "", { "content-type": "text/plain" })).status).toBe(415)
+		expect((await post(base, cafe(), "", { origin: "https://evil.example.com" })).status).toBe(403)
+		expect(await visuals(base)).toEqual([])
+		expect((await post(base, cafe(), "", { origin: "https://charts.example.com" })).status).toBe(201)
+		expect((await post(base, cafe(), "", { "content-type": "application/json; charset=utf-8" })).status).toBe(201)
+		expect(await visuals(base)).toHaveLength(2)
 	})
 
 	it("leaves PUT and other collection-level writes as they were", async () => {
