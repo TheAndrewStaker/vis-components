@@ -591,6 +591,7 @@ export const createDatasetFromRows = async (
 	db: DatabaseSync,
 	config: ServerConfig
 ): Promise<void> => {
+	assertJsonWrite(req, new URL(config.baseUrl).origin)
 	const input = parseJson((await readBody(req, JSON_BODY_CAP_BYTES)).toString("utf-8"))
 	if (typeof input !== "object" || input === null || Array.isArray(input)) {
 		return specErrors(res, [{ path: "", message: "the body must be a JSON object" }])

@@ -503,8 +503,12 @@ describe("Saved by on edits and undos", () => {
 })
 
 describe("POST /api/datasets", () => {
-	const create = (base: string, body: unknown) =>
-		fetch(`${base}/api/datasets`, { method: "POST", body: JSON.stringify(body) })
+	const create = (base: string, body: unknown, headers = {}) =>
+		fetch(`${base}/api/datasets`, {
+			method: "POST",
+			headers: { "content-type": "application/json", ...headers },
+			body: JSON.stringify(body),
+		})
 	const index = async (base: string) =>
 		(await (await fetch(`${base}/api/datasets?view=index`)).json()) as Record<string, DatasetMeta | null>
 
@@ -563,6 +567,15 @@ describe("POST /api/datasets", () => {
 		expect(res.status).toBe(413)
 		expect(((await res.json()) as { error: string }).error).toContain("limit")
 		expect(await index(base)).toEqual({})
+	})
+
+	it("takes only a JSON body, and from no other site's page", async () => {
+		const base = await start()
+		const body = { name: "Visits", rows: [{ a: 1 }] }
+		expect((await create(base, body, { "content-type": "text/plain" })).status).toBe(415)
+		expect((await create(base, body, { origin: "https://evil.example.com" })).status).toBe(403)
+		expect(await index(base)).toEqual({})
+		expect((await create(base, body, { origin: "https://charts.example.com" })).status).toBe(201)
 	})
 
 	it("refuses a name already in the library", async () => {
