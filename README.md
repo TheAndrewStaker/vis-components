@@ -217,7 +217,8 @@ Data Labels panel. `fieldLevelOrderSpecs.<field>` (`{by: "alphabetical"}`
 or `{by: "field", byField, scopeField?, scopeLevel?, decreasing?}`) computes
 `fieldLevelOrders.<field>` as the Fields panel's Order-by picker does; an
 order set by hand in `fieldLevelOrders` clears the field's Order-by choice,
-as the panel's arrows do. Sending both keeps both as sent.
+as the panel's arrows do. Sending both keeps both as sent. A server that
+does this lists `panelEdits` in `GET /api/chart-spec`'s `features`.
 
 Every key and value is checked against the declared types, read from
 `lib/types.ts` with the TypeScript checker at build time (the

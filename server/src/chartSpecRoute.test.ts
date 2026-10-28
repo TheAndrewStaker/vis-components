@@ -269,7 +269,7 @@ describe("GET /api/chart-spec", () => {
 		}
 		expect(Object.keys(body.spec)).toEqual(expect.arrayContaining(["datasetId", "encodings", "axes"]))
 		expect(body.spec.encodings).toMatch(/Channel → field name/)
-		expect(body.features).toEqual(["create", "edit", "restore", "read", "datasets", "settings"])
+		expect(body.features).toEqual(["create", "edit", "restore", "read", "datasets", "settings", "panelEdits"])
 		expect(body.settingsSlices).toEqual(expect.arrayContaining(["channelConfigs", "annotationsConfig", "accessibilityConfig"]))
 		expect(body.settingsSlices).not.toContain("encodings")
 		expect(body.channels.map((c) => c.channel)).toContain("hue")
