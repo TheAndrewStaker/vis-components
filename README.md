@@ -164,8 +164,11 @@ visual's JSON with its keys sorted and `updatedAt`, `updatedBy`,
 `thumbnail` and `thumbnailAt` left out, so a save that changes only when or
 by whom it was saved, or its preview image (as opening it in the editor
 does), keeps the ETag. Create, edit and restore answer it in an `ETag`
-header; a visual read from `GET /api/visuals` hashes the same way
-(`visualEtag` in `server/src/chartSpecRoute.ts`). A saved edit answers **200** `{id, visual, warnings,
+header, and `GET /api/visuals/<id>` answers the stored visual (without its
+preview image, as `GET /api/visuals?thumbnails=0` lists it) with its current
+`ETag`; **404** for an unknown visual or one in the trash. A visual read from
+`GET /api/visuals` hashes the same way (`visualEtag` in
+`server/src/chartSpecRoute.ts`). A saved edit answers **200** `{id, visual, warnings,
 editorUrl, undo}`; `?dryRun=1` answers `{visual, warnings}` and writes
 nothing. **404** for an unknown visual, **409** for one in the trash. The
 preview image is cleared. An editor tab already open on the visual still

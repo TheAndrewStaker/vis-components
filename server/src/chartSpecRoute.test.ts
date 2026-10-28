@@ -267,7 +267,7 @@ describe("GET /api/chart-spec", () => {
 		}
 		expect(Object.keys(body.spec)).toEqual(expect.arrayContaining(["datasetId", "encodings", "axes"]))
 		expect(body.spec.encodings).toMatch(/Channel → field name/)
-		expect(body.features).toEqual(["create", "edit", "restore"])
+		expect(body.features).toEqual(["create", "edit", "restore", "read"])
 		expect(body.channels.map((c) => c.channel)).toContain("hue")
 		expect(body.channels.map((c) => c.channel)).not.toContain("text")
 		expect(body.channels.find((c) => c.channel === "r")?.conflictsWith).toEqual(
@@ -393,6 +393,35 @@ describe("PATCH /api/visuals/<id>", () => {
 		await put(base, `/api/visuals/${v0.id}`, { ...v0, thumbnail: "data:image/png;base64,AAAA" })
 		expect((await patch(base, v0.id, { title: "x" })).status).toBe(200)
 		expect((await visuals(base))[0]?.thumbnail).toBeNull()
+	})
+})
+
+describe("GET /api/visuals/<id>", () => {
+	it("answers the stored visual without its preview, and the ETag an edit takes", async () => {
+		const base = await start()
+		const v0 = await created(base)
+		await put(base, `/api/visuals/${v0.id}`, { ...v0, thumbnail: "data:image/png;base64,AAAA", thumbnailAt: 2 })
+		const res = await fetch(`${base}/api/visuals/${v0.id}`)
+		expect(res.status).toBe(200)
+		const body = (await res.json()) as Visual
+		const listed = (await (await fetch(`${base}/api/visuals?thumbnails=0`)).json()) as Visual[]
+		expect(body).toEqual(listed[0])
+		expect(body).not.toHaveProperty("thumbnail")
+		const etag = res.headers.get("etag")
+		expect(etag).toBe(visualEtag(v0))
+		expect((await patch(base, v0.id, { title: "x" }, { "if-match": etag ?? "" })).status).toBe(200)
+		expect((await fetch(`${base}/api/visuals/${v0.id}`)).headers.get("etag")).not.toBe(etag)
+	})
+
+	it("answers 404 for an unknown, trashed or deleted visual and 400 for a bad id", async () => {
+		const base = await start()
+		const v0 = await created(base)
+		expect((await fetch(`${base}/api/visuals/vs-nope`)).status).toBe(404)
+		expect((await fetch(`${base}/api/visuals/bad%20id`)).status).toBe(400)
+		await put(base, `/api/visuals/${v0.id}`, { ...v0, deletedAt: 1 })
+		expect((await fetch(`${base}/api/visuals/${v0.id}`)).status).toBe(404)
+		await fetch(`${base}/api/visuals/${v0.id}`, { method: "DELETE" })
+		expect((await fetch(`${base}/api/visuals/${v0.id}`)).status).toBe(404)
 	})
 })
 
