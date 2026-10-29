@@ -47,10 +47,12 @@ import { polygonPatternView } from "../../../lib/resolveLayerColor"
 import { resolveRuleColor } from "../../../lib/textColorRules"
 import {
 	ComposedSwatch,
+	composedSwatchSize,
 	DEFAULT_GRADIENT_BAR_STYLE,
 	EntryHoverWrap,
 	GradientBarRamp,
 	renderEntryList,
+	swatchColumnWidth,
 	SwatchCell,
 } from "./swatches"
 import type { ReversibleLegendProps } from "./types"
@@ -794,11 +796,11 @@ export const CombinedGroupLegend = ({
 				/>
 			)
 		}
+		const stopEntries = stops.map((s) => ({ stop: s, entry: buildEntry(String(s)) }))
 		if (orientation === "horizontal") {
 			return (
 				<div className="flex flex-row flex-nowrap items-center gap-3">
-					{stops.map((s, i) => {
-						const entry = buildEntry(String(s))
+					{stopEntries.map(({ stop: s, entry }, i) => {
 						return (
 							<div
 								key={s}
@@ -814,13 +816,19 @@ export const CombinedGroupLegend = ({
 				</div>
 			)
 		}
+		// Stops whose swatches differ in width (area-sized glyphs) share one
+		// reserved column so the labels align.
+		const stopSwatchCol = swatchColumnWidth(
+			stopEntries.map(({ entry }) =>
+				composedSwatchSize({ ...entry, swatchShape, swatchSize }),
+			),
+		)
 		return (
 			<div className="vc-legend-rows flex flex-col gap-1">
-				{stops.map((s, i) => {
-					const entry = buildEntry(String(s))
+				{stopEntries.map(({ stop: s, entry }, i) => {
 					return (
 						<div key={s} className="flex items-center gap-2">
-							<SwatchCell>
+							<SwatchCell minWidth={stopSwatchCol}>
 								<ComposedSwatch {...entry} swatchShape={swatchShape} swatchSize={swatchSize} />
 							</SwatchCell>
 							<span className="min-w-0 truncate">{fmt(s, i)}</span>
@@ -833,20 +841,20 @@ export const CombinedGroupLegend = ({
 
 	const rawUnique = orderCategories(uniqueValues(values, { type }), type, pinnedOrder)
 	const unique = reverseCategorical ? [...rawUnique].reverse() : rawUnique
-	// When area sizes the swatches, their SVG widths vary by category, which
-	// would ragged-left the labels in a stacked list. Reserve a fixed column
-	// (the widest swatch) and center each swatch in it so labels align.
-	const areaSwatchColWidth = areaSizeScale
-		? Math.max(
-				16,
-				(Math.max(...unique.map((v) => areaRadiusFor(v) ?? 5)) + 3) * 2,
-			)
-		: null
+	const entries = unique.map((v) => ({ v, entry: buildEntry(v) }))
+	// When the swatches differ in width (area-sized glyphs, a shape channel
+	// mixing a star with a circle), the labels of a stacked list would sit
+	// ragged-left. Reserve a fixed column — the widest swatch — and center
+	// each swatch in it so the labels align.
+	const swatchColWidth = swatchColumnWidth(
+		entries.map(({ entry }) =>
+			composedSwatchSize({ ...entry, swatchShape, swatchSize }),
+		),
+	)
 	if (orientation === "horizontal") {
 		return (
 			<div className="flex flex-row flex-nowrap items-center gap-3">
-				{unique.map((v) => {
-					const entry = buildEntry(v)
+				{entries.map(({ v, entry }) => {
 					return (
 						<EntryHoverWrap key={v} field={highlightField} value={v}>
 							<div className="vc-legend-hentry flex flex-shrink-0 flex-row items-center gap-1.5">
@@ -862,18 +870,17 @@ export const CombinedGroupLegend = ({
 		)
 	}
 	return renderEntryList(
-		unique.map((v) => {
-			const entry = buildEntry(v)
+		entries.map(({ v, entry }) => {
 			const swatch = (
 				<ComposedSwatch {...entry} swatchShape={swatchShape} swatchSize={swatchSize} />
 			)
 			return (
 				<EntryHoverWrap key={v} field={highlightField} value={v}>
 					<div className="flex items-center gap-2">
-						{/* SwatchCell keeps the area-sized swatches' own column
-						 * floor (`minWidth`) while also honoring the legend-wide
-						 * shared swatch column when multiple sections stack. */}
-						<SwatchCell minWidth={areaSwatchColWidth}>{swatch}</SwatchCell>
+						{/* SwatchCell keeps the section's own column floor
+						 * (`minWidth`) while also honoring the legend-wide shared
+						 * swatch column when multiple sections stack. */}
+						<SwatchCell minWidth={swatchColWidth}>{swatch}</SwatchCell>
 						<span className="min-w-0 truncate" title={v}>
 							{v}
 						</span>

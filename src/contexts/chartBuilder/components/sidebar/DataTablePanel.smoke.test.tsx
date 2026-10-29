@@ -12,12 +12,14 @@ import {
 } from "../../lib/dataTableConfig"
 import { buildDataset } from "../../../../testSupport/fixtures"
 import { emptyEncodings } from "../../lib/types"
+import { LIGHT_THEME_BASE } from "../../lib/systemThemes"
 import {
 	currentDataTableConfigAtom,
 	currentDatasetIdAtom,
 	currentEncodingsAtom,
 	loadedDatasetsAtom,
 	previewVersionIdAtom,
+	themeAtom,
 } from "../../store/atoms"
 
 import { DataTablePanel } from "./DataTablePanel"
@@ -31,6 +33,11 @@ const mount = (cfg: Partial<DataTableConfig> = {}) => {
 		<TestProvider
 			initializeState={(s) => {
 				captured.store = s
+				// `currentThemeIdAtom` defaults null, so `useCurrentTheme` falls back to
+				// the legacy `themeAtom`. Pin the NEUTRAL base there: these tests describe
+				// the table against a theme that sets nothing, and the bundled system
+				// themes pin several data-table rows of their own.
+				s.set(themeAtom, LIGHT_THEME_BASE)
 				s.set(currentDataTableConfigAtom, { ...DEFAULT_DATA_TABLE_CONFIG, ...cfg })
 			}}
 		>
@@ -60,13 +67,13 @@ describe("DataTablePanel", () => {
 		expect(utils.queryByText("Table text")).toBeNull()
 	})
 
-	it("orders the groups Title, Caption, Header, Table text, Rows", () => {
+	it("orders the groups Title, Header, Table text, Rows, Caption", () => {
 		const utils = mount({ enabled: true })
 		const titles = utils
 			.getAllByRole("button")
 			.map((b) => b.textContent?.trim())
-			.filter((t) => ["Title", "Caption", "Header", "Table text", "Rows"].includes(t ?? ""))
-		expect(titles).toEqual(["Title", "Caption", "Header", "Table text", "Rows"])
+			.filter((t) => ["Title", "Header", "Table text", "Rows", "Caption"].includes(t ?? ""))
+		expect(titles).toEqual(["Title", "Header", "Table text", "Rows", "Caption"])
 	})
 
 	it("reveals every option once enabled, and writes through", () => {

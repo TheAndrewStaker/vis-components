@@ -49,8 +49,25 @@ export const AsideSection = ({
 	return (
 		// Tighter rhythm below `lg` (phones, tablets in portrait): a column of
 		// collapsed sections otherwise spends most of a small screen on gaps.
-		<div className={c("flex flex-col pb-1.5 lg:pb-3", className)}>
-			<div className="mx-3 flex items-center justify-between pb-1 lg:pb-2">
+		//
+		// Both bottom paddings exist for an OPEN section: the header row's
+		// separates the heading from its body, the wrapper's separates the body
+		// from the divider below. A collapsed section has no body, so it drops
+		// both and the heading sits the same distance (the stack's gap) from
+		// the divider below as from the one above.
+		<div
+			className={c(
+				"flex flex-col",
+				!collapsed && "pb-1.5 lg:pb-3",
+				className
+			)}
+		>
+			<div
+				className={c(
+					"mx-3 flex items-center justify-between",
+					!collapsed && "pb-1 lg:pb-2"
+				)}
+			>
 				{collapsible ? (
 					// The heading wraps the toggle (not the other way round) so
 					// assistive tech still exposes the section title as a heading.

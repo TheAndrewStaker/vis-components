@@ -3,6 +3,7 @@ import { GlyphMark, resolveGlyph, stripNudge } from "../../../lib/customGlyphs"
 import { orderCategories } from "../../../lib/legendSections"
 import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import { makeShapeIndexer } from "../../../lib/scales"
+import { swatchGlyphBox } from "../../../lib/swatchBox"
 import { EntryHoverWrap, renderEntryList, SwatchCell } from "./swatches"
 import type { LegendProps } from "./types"
 
@@ -59,12 +60,20 @@ export const ShapeLegend = ({
 	const labelClass = isHorizontal
 		? "vc-legend-label whitespace-nowrap"
 		: "min-w-0 truncate"
-	// Swatch-size control: radius of each glyph; the box grows with it so
-	// larger glyphs don't clip (16px floor keeps the default look unchanged).
+	// Swatch-size control: radius of each glyph. Every row shares one box so
+	// the labels align, sized to the widest glyph among them — pointed
+	// symbols reach past the radius (see `swatchGlyphBox`) — with a 16px
+	// floor that keeps the default look unchanged.
 	const r = swatchSize ?? 5
-	const side = Math.max(16, (r + 3) * 2)
+	// Swatches render centered — nudged text glyphs would sit off-center in
+	// (or clip out of) the box.
+	const glyphOf = (v: string) =>
+		stripNudge(resolveGlyph(indexer(v), configs.shape?.customGlyphs))
+	const side = Math.max(
+		16,
+		...unique.map((v) => swatchGlyphBox(glyphOf(v), r, 1)),
+	)
 	const rows = unique.map((v) => {
-		const idx = indexer(v)
 		const fillOverride = fillOverrides[v]
 		const fill =
 			fillOverride === "none" ? "none" : (fillOverride ?? fallbackFill)
@@ -81,9 +90,7 @@ export const ShapeLegend = ({
 							className="flex-shrink-0"
 						>
 							<GlyphMark
-								// Swatches render centered — nudged text glyphs would sit
-								// off-center in (or clip out of) the box.
-								glyph={stripNudge(resolveGlyph(idx, configs.shape?.customGlyphs))}
+								glyph={glyphOf(v)}
 								r={r}
 								fill={fill}
 								fillOpacity={fill === "none" ? 0 : defaultSwatchOpacity}

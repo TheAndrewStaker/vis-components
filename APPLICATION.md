@@ -1583,6 +1583,15 @@ outline color) carries the same palette-icon palette-popover button
 as the per-value override rows, offering the active categorical
 palette's colors (the chart's picked palette when one is stored, else
 the theme default) as one-click alternatives to the open-ended picker.
+That open-ended picker is the app's own popover, not the browser's
+`<input type="color">` (which looked nothing alike across browsers:
+Chrome's swatch square, Safari's OS color panel with its crayon grid).
+Clicking a swatch opens a saturation × brightness square under the
+chosen hue, a hue strip, and a hex field; edits apply live as you drag
+or type, the hue is kept while you pass through white, black or grey,
+and the popover follows the sidebar's scroll. Escape, Tab past either
+end, or a press elsewhere closes it; arrow keys (Shift for steps of 10)
+drive both sliders from the keyboard.
 Swatches that color TEXT rather than marks — the shared font editor's
 Color row (chart title, subtitle, axis titles, per-axis tick labels,
 facet titles, chord ring tick labels), the caption's Text color, an
@@ -3944,7 +3953,7 @@ exact values. The top toggle, **Show a data table**, is
 off by default; every other control is hidden while it is off.
 Below the toggle the controls sit in collapsible subsections: **Table
 properties** (open by default — the list below up to Download link),
-**Title**, **Caption**, **Header**, **Table text** and **Rows**.
+**Title**, **Header**, **Table text**, **Rows** and **Caption**.
 
 - **Placement** — *Below the chart* renders the table always; *Behind a
   button* renders a **View data** / **Hide data** link at the bottom
@@ -4006,11 +4015,6 @@ properties** (open by default — the list below up to Download link),
   region). **Text** empty = "Data for <chart title>", falling back to
   the visual's name (the placeholder shows it). Then Family, Size (pt),
   Weight, Color and Alignment.
-- **Caption** — a paragraph BELOW the table (a source, a note), which
-  the table is `aria-describedby`. **Text** is a multi-line box; empty =
-  no caption, and its Family / Size / Weight / Color / Alignment stay
-  hidden until it has text. Line breaks are kept. It sits above the
-  table's own computed note and the Show all / Download CSV links.
 - **Header** — the header row's Family, Size (pt), Weight and Text
   color (empty family / size / text color follow the table text; weight is the
   theme's, semibold out of the box), Background, and a **Bottom line**
@@ -4031,6 +4035,11 @@ properties** (open by default — the list below up to Download link),
   its default. (Visuals that stored the old single number alignment
   keep it as their numbers & dates starting point.)
 - **Rows** — Border color and **Striped rows** with a Stripe color.
+- **Caption** — a paragraph BELOW the table (a source, a note), which
+  the table is `aria-describedby`. **Text** is a multi-line box; empty =
+  no caption, and its Family / Size / Weight / Color / Alignment stay
+  hidden until it has text. Line breaks are kept. It sits above the
+  table's own computed note and the Show all / Download CSV links.
 
 Every styling control starts from the theme's **Data tables** defaults
 (Settings → Themes, §12) and shows them as its placeholder: an empty
@@ -4045,11 +4054,12 @@ color); it clears that one setting so it follows the theme again. A
 visual still carrying the old single number alignment shows the reset
 next to the "Numbers and dates start …" line.
 Choosing the inherited value for Striped rows, any Weight or any
-Alignment stores nothing. Out of the box the theme gives the base
+Alignment stores nothing. A theme that sets nothing gives the base
 text font and weight, a semibold left-aligned title, a plain
 left-aligned caption, an unfilled semibold header (text in the table's
 color) over a 2px line, rules and stripes as soft tints of the text
-color, and right-aligned numbers. The visuals v10 migration (a) clears
+color, and right-aligned numbers; the bundled System themes set more
+than that (see §12 Data tables). The visuals v10 migration (a) clears
 the Striped / right-alignment values older visuals stored as plain
 backfilled values, so they follow the theme (an off / left / center
 choice is kept), and turns their old header **Bold** flag into a
@@ -4739,16 +4749,18 @@ Theme settings:
   to the historical look (240px, 6px corners, Auto colors, opaque, a
   12px black shadow at 15%).
 - **Data tables** — the look of the optional data table under the
-  chart (§10b), in the sidebar's order and wording: Title and Caption
-  (family, size, weight, color, alignment each; the title defaults to
-  semibold), Header (family, size, weight — semibold by default — text
+  chart (§10b), in the sidebar's order and wording: Title (family,
+  size, weight — semibold by default — color, alignment), Header
+  (family, size, weight — semibold by default — text
   color, background, and a Bottom line: thickness, 2px by default, and
   color), Table text (family, size, weight, color, Format first column
-  like other columns — checked by default — a First column block with
+  like other columns — checked unless the theme says otherwise — a
+  First column block with
   its own family, size, weight and color, and under Column
   alignment the Numbers & dates row — where number and date columns
-  start; every other column starts left) and Rows (border color,
-  Striped rows, stripe color). Unlike the sidebar, the sheet keeps the
+  start; every other column starts left), Rows (border color, Striped
+  rows, stripe color) and Caption (family, size, weight, color,
+  alignment). Unlike the sidebar, the sheet keeps the
   stripe color, the bottom line's color and the First column block
   visible while stripes are off, the line is 0px or the first column is
   formatted like the others: a visual that turns them on still takes
@@ -4761,7 +4773,12 @@ Theme settings:
   stores an override only when a visual deviates. Themes saved before
   these fields existed fall back to the shipped look (base text font,
   semibold unfilled header over a 2px line, striped, numbers
-  right-aligned).
+  right-aligned). The bundled System themes set more than the shipped
+  look: 10pt table text, a semibold first column of its own, a
+  Quicksand title and a 10pt caption. System (Light) also fills the
+  header pale pink (#FFCCD8) over faintly pink stripes (#FFFAFB);
+  System (Dark) leaves the header unfilled and draws its bottom line
+  in the near-white ink instead.
 - **Maps** — default stroke (line color + thickness) for the leader
   lines that connect a map's data labels back to their regions ("Draw
   leader lines" in the Data Labels panel, §6). Seeded on chart

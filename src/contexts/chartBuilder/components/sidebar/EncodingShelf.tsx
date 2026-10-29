@@ -36,7 +36,7 @@ import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
 import { useCurrentTheme } from "../../store/useCurrentTheme"
 import { Disclosure } from "@headlessui/react"
 
-import { DisclosureChevron } from "../../../../components/ui/Chevron"
+import { RowChevron } from "../../../../components/ui/Chevron"
 import { LABEL_COL } from "../../../../components/ui/LabeledField"
 import { SelectInput } from "../../../../components/ui/SelectInput"
 import { encodingRowId } from "../../../../components/ui/SidebarJumpLink"
@@ -443,7 +443,19 @@ export const EncodingShelf = ({ channel }: Props) => {
 		</div>
 	)
 
-	if (!hasPanel) return row
+	// No options panel → no chevron, but keep the chevron's column as an
+	// empty spacer so this row's dropdown ends where the others do instead
+	// of stretching into the gap.
+	if (!hasPanel)
+		return (
+			<div className="flex items-center gap-1">
+				<div className="min-w-0 flex-1">{row}</div>
+				<div
+					className="h-6 w-6 flex-shrink-0 pointer-coarse:h-9 pointer-coarse:w-9"
+					aria-hidden="true"
+				/>
+			</div>
+		)
 
 	return (
 		<Disclosure
@@ -462,13 +474,13 @@ export const EncodingShelf = ({ channel }: Props) => {
 						<div className="min-w-0 flex-1">{row}</div>
 						<Disclosure.Button
 							ref={toggleRef}
-							className="relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 hover:text-stone-900 pointer-coarse:h-9 pointer-coarse:w-9 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
+							className="relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 pointer-coarse:h-9 pointer-coarse:w-9 dark:hover:bg-stone-700"
 							aria-label={`Toggle options for ${ENCODING_CHANNEL_LABELS[channel]}`}
 						>
-							<DisclosureChevron open={open} />
+							<RowChevron open={open} />
 							{hasCustomization && (
 								<span
-									className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-stone-900 dark:bg-white"
+									className="absolute top-0 right-0 h-1.5 w-1.5 rounded-full bg-stone-900 dark:bg-white"
 									aria-hidden="true"
 								/>
 							)}

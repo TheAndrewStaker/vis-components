@@ -1,6 +1,6 @@
 import type { MouseEventHandler } from "react"
 import type { CustomGlyph } from "./channelConfig"
-import { SHAPE_PALETTE, symbolPath } from "./scales"
+import { SHAPE_PALETTE, symbolExtent, symbolPath } from "./scales"
 
 /**
  * Custom mark glyphs — the "Custom" option in the Shape picker.
@@ -57,6 +57,13 @@ export const stripNudge = (glyph: ResolvedGlyph): ResolvedGlyph =>
 	glyph.kind === "text" && (glyph.dx || glyph.dy)
 		? { kind: "text", text: glyph.text }
 		: glyph
+
+/** Farthest any ink of a (centered) glyph drawn at circle-equivalent radius
+ * `r` lies from its center — fill only; add half the stroke for an outline.
+ * Built-in symbols share an AREA, so pointed ones overshoot `r` (see
+ * `symbolExtent`); text and image glyphs are fitted inside the 2r box. */
+export const glyphExtent = (glyph: ResolvedGlyph, r: number): number =>
+	glyph.kind === "symbol" ? symbolExtent(glyph.idx, r) : r
 
 /** Split into user-perceived characters: grapheme clusters when
  * `Intl.Segmenter` exists (so a skin-tone or ZWJ-sequence emoji counts

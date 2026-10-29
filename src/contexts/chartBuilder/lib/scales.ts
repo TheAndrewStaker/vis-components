@@ -49,6 +49,7 @@ import {
 	symbolSquare,
 	symbolStar,
 	symbolTriangle,
+	type CanvasPath_D3Shape,
 } from "d3-shape"
 
 import type {
@@ -820,6 +821,48 @@ export const symbolPath = (shapeIdx: number, radius: number): string => {
 	const area = Math.PI * radius * radius
 	return symbol().type(type).size(area)() ?? ""
 }
+
+/** Ratio of each palette symbol's bounding half-extent to its circle-
+ * equivalent radius, measured once from the symbol's own draw calls so it
+ * tracks d3's geometry exactly. d3 sizes symbols by AREA, so pointed
+ * shapes reach past the radius: star ≈1.67×, diamond ≈1.65×, triangle
+ * ≈1.56×, cross ≈1.19×; the square sits inside it (≈0.89×). */
+const SYMBOL_EXTENT_FACTORS: readonly number[] = SHAPE_PALETTE.map((type) => {
+	let max = 0
+	const track = (x: number, y: number) => {
+		max = Math.max(max, Math.abs(x), Math.abs(y))
+	}
+	const unsupported = (method: string) => () => {
+		throw new Error(`symbolExtent: a palette symbol draws with ${method}`)
+	}
+	const recorder: CanvasPath_D3Shape = {
+		moveTo: track,
+		lineTo: track,
+		closePath: () => {},
+		arc: (x, y, r) => {
+			track(x - r, y - r)
+			track(x + r, y + r)
+		},
+		rect: (x, y, w, h) => {
+			track(x, y)
+			track(x + w, y + h)
+		},
+		arcTo: unsupported("arcTo"),
+		bezierCurveTo: unsupported("bezierCurveTo"),
+		ellipse: unsupported("ellipse"),
+		quadraticCurveTo: unsupported("quadraticCurveTo"),
+	}
+	// Unit circle-equivalent radius → size (area) π.
+	type.draw(recorder, Math.PI)
+	return max
+})
+
+/** Farthest any point of `symbolPath(shapeIdx, radius)` lies from the
+ * symbol's center along either axis — the half-side of the smallest
+ * centered square that shows the whole symbol. Equals `radius` for the
+ * circle alone. */
+export const symbolExtent = (shapeIdx: number, radius: number): number =>
+	radius * (SYMBOL_EXTENT_FACTORS[shapeIdx % SHAPE_PALETTE.length] ?? 1)
 
 // For a shape encoding: given all raw values + their type, return a lookup from
 // raw value → shape palette index. Config lets the user pin specific values to

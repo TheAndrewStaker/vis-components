@@ -29,7 +29,7 @@ import {
 	type SectionInfo,
 } from "./legendSections"
 import { hierarchyHighlightField } from "./packedMeasure"
-import { makeHueScale } from "./scales"
+import { makeHueScale, symbolExtent } from "./scales"
 import {
 	emptyEncodings,
 	type DatasetView,
@@ -761,6 +761,22 @@ describe("planLegendSections — layout plan", () => {
 		})
 		expect(horizontal?.alignSwatchColumn).toBe(false)
 		expect(plan({ encodings: enc({ hue: "region" }) })?.alignSwatchColumn).toBe(false)
+	})
+
+	it("the shared swatch column fits a star swatch shape at a large size", () => {
+		// The column is sized from the same `swatchGlyphBox` the swatches draw
+		// in: a circle keeps the historical (r + 3) * 2; a star's tips reach
+		// ~1.67× the radius, so its column grows to hold them.
+		const col = (patch: Partial<LegendConfig>): number => {
+			const p = plan({ encodings: two, legendCfg: legendCfg(patch) })
+			return Number.parseFloat(
+				String(p?.innerStyle["--vc-legend-swatch-col" as keyof typeof p.innerStyle]),
+			)
+		}
+		expect(col({ swatchShapes: { hue: 0 }, swatchSizes: { hue: 20 } })).toBe(46)
+		expect(
+			col({ swatchShapes: { hue: 5 }, swatchSizes: { hue: 20 } }),
+		).toBeGreaterThanOrEqual(2 * symbolExtent(5, 20))
 	})
 
 	it("an outside legend budgets a numeric width that grows with measured text", () => {

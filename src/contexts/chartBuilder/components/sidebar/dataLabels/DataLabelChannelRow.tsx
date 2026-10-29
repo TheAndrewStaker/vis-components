@@ -1,7 +1,7 @@
 import { useId } from "react"
 import { Disclosure } from "@headlessui/react"
 
-import { DisclosureChevron } from "../../../../../components/ui/Chevron"
+import { RowChevron } from "../../../../../components/ui/Chevron"
 import { LABEL_COL } from "../../../../../components/ui/LabeledField"
 import type { DataLabelsChannel } from "./shared"
 import { Select } from "../../../../../components/ui/Select"
@@ -86,9 +86,16 @@ export const DataLabelChannelRow = ({
 
 	// No per-channel options → plain dropdown row, no disclosure chrome.
 	// px-2 matches the padding of the subsection cards / purple boxes below,
-	// so the label column and dropdowns line up with the boxed rows.
+	// so the label column and dropdowns line up with the boxed rows. The
+	// empty spacer holds the chevron's column so the dropdown ends where
+	// the chevroned rows' dropdowns do.
 	if (children == null) {
-		return <div className="flex items-center gap-1 px-2">{fieldSelect}</div>
+		return (
+			<div className="flex items-center gap-1 px-2">
+				{fieldSelect}
+				<div className="h-6 w-6 flex-shrink-0" aria-hidden="true" />
+			</div>
+		)
 	}
 
 	return (
@@ -98,10 +105,10 @@ export const DataLabelChannelRow = ({
 					<div className="flex items-center gap-1 px-2">
 						{fieldSelect}
 						<Disclosure.Button
-							className="relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 hover:text-stone-900 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
+							className="relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 dark:hover:bg-stone-700"
 							aria-label={`Toggle settings for ${label}`}
 						>
-							<DisclosureChevron open={open} />
+							<RowChevron open={open} />
 						</Disclosure.Button>
 					</div>
 					<Disclosure.Panel>

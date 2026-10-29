@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useAtom } from "jotai"
 import {
 	isManagedTheme,
@@ -13,13 +13,14 @@ import {
 	userDefaultThemeIdAtom,
 } from "../../chartBuilder/store/atoms"
 import { stringifyJsonDangerous } from "../../../lib/json"
+import { deepEqual } from "../../../lib/deepEqual"
 import {
 	pickSaveTarget,
 	writeSaveTarget,
 } from "../../chartBuilder/lib/saveFile"
 import type { SaveFileType } from "../../chartBuilder/lib/saveFile"
 
-import { ConfirmDialog } from "../../../components/ui/Modal"
+import { ConfirmDialog, Modal } from "../../../components/ui/Modal"
 
 import { ManagedThemeGate } from "../../chartBuilder/components/ManagedThemeGate"
 
@@ -50,9 +51,27 @@ const THEME_FILE_TYPE: SaveFileType = {
 	extensions: [".json"],
 }
 
+/** A navigation guard: the route calls it before leaving the page, and
+ *  the answer — `true` lets the navigation through, `false` keeps the
+ *  page — may arrive later, once the user has answered a dialog. */
+export type NavigationGuard = () => boolean | Promise<boolean>
+
+/** What the editor edits: the theme's values plus its name. Identity — the
+ *  id, the folder it's filed in, the system flag — stays with the library
+ *  entry, so a folder move made from the rail while the editor is open
+ *  isn't undone by a later Done. */
+type ThemeDraft = Theme & { name: string }
+const draftOf = (saved: SavedTheme): ThemeDraft => ({
+	name: saved.name,
+	...themeOf(saved),
+})
+/** Stands in while the routed theme doesn't exist (the not-found notice is
+ *  what renders then) so the hooks above the early return stay unconditional. */
+const MISSING_THEME_DRAFT = draftOf(SYSTEM_LIGHT_THEME)
+
 /** The editor's live previews: the gallery card's bar chart plus a sampler
- *  of what it leaves out. Both read the theme straight from the atom, so
- *  every edit below redraws them at once. */
+ *  of what it leaves out. Both draw the DRAFT, so every edit below redraws
+ *  them at once — before anything is saved. */
 const EditorPreviews = ({ theme, name }: { theme: Theme; name: string }) => (
 	<div className="mb-6 grid gap-4 sm:grid-cols-2">
 		<div className="min-w-0 overflow-hidden rounded-card border border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-900">
@@ -68,23 +87,78 @@ const EditorPreviews = ({ theme, name }: { theme: Theme; name: string }) => (
 	</div>
 )
 
-/** The editor for one theme. Router-free on purpose: `ThemeEditorPage`
- *  reads the `$themeId` route param and passes it in, along with the way
- *  back to the gallery and what to do once this theme is deleted. */
+/** Put up when a navigation would drop unsaved edits. Three ways out, in
+ *  the order a reader weighs them: stay, go without the edits, or save and
+ *  go. Escape and the backdrop count as staying — the one answer that
+ *  loses nothing. */
+const UnsavedChangesDialog = ({
+	open,
+	themeName,
+	onKeepEditing,
+	onDiscard,
+	onSave,
+}: {
+	open: boolean
+	themeName: string
+	onKeepEditing: () => void
+	onDiscard: () => void
+	onSave: () => void
+}) => (
+	// One step wider than the default so the three answers fit on one row;
+	// they still wrap on a phone.
+	<Modal
+		open={open}
+		onClose={onKeepEditing}
+		title="You have unsaved changes"
+		widthClass="max-w-lg"
+	>
+		<div className="flex flex-col gap-4">
+			<p className="text-sm vc-text">
+				Your edits to{" "}
+				<span className="font-medium vc-heading">&ldquo;{themeName}&rdquo;</span>{" "}
+				haven&rsquo;t been saved. Save them before leaving, or leave and lose
+				them?
+			</p>
+			<div className="flex flex-wrap justify-end gap-2">
+				<Button compact onClick={onKeepEditing}>
+					Keep editing
+				</Button>
+				<Button compact danger onClick={onDiscard}>
+					Leave without saving
+				</Button>
+				<Button compact onClick={onSave}>
+					Save and leave
+				</Button>
+			</div>
+		</div>
+	</Modal>
+)
+
+/** The editor for one theme. It edits a DRAFT: the library's copy is left
+ *  alone until Done (or the leave dialog's "Save and leave") writes the
+ *  draft back, and leaving any other way drops it. Router-free on purpose:
+ *  `ThemeEditorPage` reads the `$themeId` route param and passes it in,
+ *  along with the way back to the gallery, what to do once this theme is
+ *  deleted, and where to register the unsaved-changes guard. */
 export const ThemesPage = ({
 	themeId,
 	onDeleted,
 	onDone,
 	backLink,
+	blockNavigation,
 }: {
 	themeId: string
 	/** Fires after this theme has been deleted — the route leaves the editor. */
 	onDeleted?: () => void
-	/** The footer's "Done" — back to the gallery. Edits save as they're
-	 *  made, so this is navigation, not a commit. */
+	/** The footer's "Done" — saves the draft to the library, then back to
+	 *  the gallery. Until it's pressed, nothing the editor shows is saved. */
 	onDone?: () => void
 	/** The "← All themes" link, rendered above the editor's header. */
 	backLink?: React.ReactNode
+	/** Registers a guard the route consults before any navigation away, and
+	 *  returns the unregister. The editor holds one only while the draft has
+	 *  unsaved changes, and answers it from the leave dialog. */
+	blockNavigation?: (guard: NavigationGuard) => () => void
 }) => {
 	const [themes, setThemes] = useAtom(themesAtom)
 	const [userDefaultId, setUserDefaultId] = useAtom(
@@ -107,27 +181,95 @@ export const ThemesPage = ({
 	// Two separate locks. `isSystem` is absolute — the two bundled themes
 	// ship with the app and are never editable, only copied. Every OTHER
 	// managed theme is shared rather than read-only: it unlocks for editing
-	// once the administrator dialog has been answered FOR THAT THEME.
+	// once the administrator dialog has been answered FOR THAT THEME. The
+	// unlock then sticks for as long as this editor is open: the rail hands
+	// the unlock to the NEXT managed theme before it navigates there, and if
+	// the leave dialog stops that navigation, the theme still on screen has
+	// to stay editable. A fresh editor (a route change remounts it) reads
+	// the atom anew.
 	const isManaged = isManagedTheme(editingTheme)
 	const isSystem = editingTheme.isSystem
-	const isReadOnly =
-		isSystem || (isManaged && unlockedThemeId !== editingTheme.id)
-	// Plain Theme view (without the SavedTheme metadata) so the existing
-	// section components can stay untouched.
-	const theme = themeOf(editingTheme)
+	const unlockedNow = unlockedThemeId === editingTheme.id
+	const [unlockedHere, setUnlockedHere] = useState(unlockedNow)
+	if (unlockedNow && !unlockedHere) setUnlockedHere(true)
+	const isReadOnly = isSystem || (isManaged && !(unlockedNow || unlockedHere))
+
+	// The editor works on a DRAFT. `saved` is the library's copy in the
+	// editor's shape; `edits` holds the user's version from the first change
+	// on, and is null until then. Only Done (or "Save and leave") writes the
+	// draft back — leaving any other way drops it. Comparing by value means
+	// an edit undone by hand doesn't count as a change.
+	const saved = useMemo(() => (found ? draftOf(found) : null), [found])
+	const [edits, setEdits] = useState<ThemeDraft | null>(null)
+	const draft = edits ?? saved ?? MISSING_THEME_DRAFT
+	const dirty = edits !== null && saved !== null && !deepEqual(edits, saved)
+	// Plain Theme view (without the name) so the existing section components
+	// can stay untouched.
+	const { name: draftName, ...theme } = draft
 
 	const set = <K extends keyof Theme>(key: K, value: Theme[K]) => {
 		if (isReadOnly) return
-		setThemes((prev) =>
-			prev.map((t) => (t.id === editingTheme.id ? { ...t, [key]: value } : t))
-		)
+		setEdits((prev) => ({ ...(prev ?? draft), [key]: value }))
 	}
 
 	const renameTheme = (name: string) => {
 		if (isReadOnly) return
+		setEdits((prev) => ({ ...(prev ?? draft), name }))
+	}
+
+	// Mirrors `dirty` for the navigation guard, which runs outside React's
+	// render cycle: a save or a delete clears it by hand, so the navigation
+	// each one triggers goes straight through instead of waiting on a
+	// re-render the router won't see in time.
+	const dirtyRef = useRef(false)
+	useEffect(() => {
+		dirtyRef.current = dirty
+	})
+
+	/** Writes the draft to the library. The entry's identity fields come from
+	 *  the stored copy, so a folder move made while the editor was open
+	 *  survives the save. */
+	const saveDraft = () => {
+		if (edits === null) return
+		const next = edits
 		setThemes((prev) =>
-			prev.map((t) => (t.id === editingTheme.id ? { ...t, name } : t))
+			prev.map((t) => (t.id === editingTheme.id ? { ...t, ...next } : t))
 		)
+		dirtyRef.current = false
+	}
+	const done = () => {
+		saveDraft()
+		onDone?.()
+	}
+
+	// --- Leaving with unsaved changes ---
+	// While the draft is dirty a guard is registered with the route; the
+	// editor page wires it to the router's history, which also puts up the
+	// browser's own prompt on a reload or a closed tab. The guard parks the
+	// navigation behind the dialog below, and `leaveRequest` is that
+	// navigation's pending answer.
+	const [leaveRequest, setLeaveRequest] = useState<
+		((allow: boolean) => void) | null
+	>(null)
+	useEffect(() => {
+		if (!blockNavigation || !dirty) return
+		return blockNavigation(() => {
+			if (!dirtyRef.current) return true
+			return new Promise<boolean>((resolve) => setLeaveRequest(() => resolve))
+		})
+	}, [blockNavigation, dirty])
+	const answerLeave = (allow: boolean) => {
+		leaveRequest?.(allow)
+		setLeaveRequest(null)
+	}
+	const keepEditing = () => answerLeave(false)
+	const leaveWithoutSaving = () => {
+		dirtyRef.current = false
+		answerLeave(true)
+	}
+	const saveAndLeave = () => {
+		saveDraft()
+		answerLeave(true)
 	}
 
 	// Modal state for the styled confirm dialogs (delete + replace-default).
@@ -154,6 +296,8 @@ export const ThemesPage = ({
 		if (userDefaultId === editingTheme.id) {
 			setUserDefaultId(SYSTEM_LIGHT_THEME.id)
 		}
+		// The draft dies with the theme: the route's exit mustn't ask about it.
+		dirtyRef.current = false
 		onDeleted?.()
 	}
 
@@ -199,7 +343,7 @@ export const ThemesPage = ({
 	const fileInputRef = useRef<HTMLInputElement>(null)
 
 	const exportTheme = async () => {
-		const safeName = (editingTheme.name || "theme")
+		const safeName = (draftName || "theme")
 			.toLowerCase()
 			.replaceAll(/[^a-z0-9]+/g, "-")
 			.replaceAll(/(^-|-$)/g, "")
@@ -212,10 +356,12 @@ export const ThemesPage = ({
 			rememberAs: "vis-export-theme",
 		})
 		if (target === null) return
+		// What's on screen, unsaved edits included — the file matches the
+		// previews the user is looking at.
 		const payload = {
 			version: 1,
 			exportedAt: new Date().toISOString(),
-			theme: editingTheme,
+			theme: { ...editingTheme, ...draft },
 		}
 		const blob = new Blob([stringifyJsonDangerous(payload as never)], {
 			type: THEME_FILE_TYPE.mimeType,
@@ -243,21 +389,20 @@ export const ThemesPage = ({
 			// Override the current theme's content but keep its identity —
 			// id, name, and which folder it sits in. An import must not be
 			// able to promote or demote a theme, or to strip `isSystem` off
-			// one of the bundled two.
+			// one of the bundled two. It lands in the draft like any other
+			// edit: Done is still what saves it.
 			// `normalizeSavedTheme` backfills fields the export file predates —
 			// `themesAtom` readers take entries as-is, so a sparse import must
-			// be completed before it lands in the list.
-			setThemes((prev) =>
-				prev.map((t) =>
-					t.id === editingTheme.id
-						? normalizeSavedTheme({
-								...candidate,
-								id: editingTheme.id,
-								name: editingTheme.name,
-								isSystem: editingTheme.isSystem,
-								managed: isManaged,
-							})
-						: t
+			// be completed before it can be saved into the list.
+			setEdits(
+				draftOf(
+					normalizeSavedTheme({
+						...candidate,
+						id: editingTheme.id,
+						name: draftName,
+						isSystem: editingTheme.isSystem,
+						managed: isManaged,
+					})
 				)
 			)
 		} catch (error) {
@@ -311,7 +456,7 @@ export const ThemesPage = ({
 						) : null}
 						<Input
 							type="text"
-							value={editingTheme.name}
+							value={draftName}
 							onChange={(e) => renameTheme(e.target.value)}
 							disabled={isReadOnly}
 							aria-label="Theme name"
@@ -346,7 +491,7 @@ export const ThemesPage = ({
 							onClick={() => {
 								void exportTheme()
 							}}
-							title={`Download "${editingTheme.name}" as a JSON file`}
+							title={`Download "${draftName}" as a JSON file`}
 						>
 							Export theme
 						</Button>
@@ -403,7 +548,7 @@ export const ThemesPage = ({
 					</p>
 				)}
 
-				<EditorPreviews theme={theme} name={editingTheme.name} />
+				<EditorPreviews theme={theme} name={draftName} />
 
 				<div className="flex flex-col gap-4">
 					<GlobalAestheticsSection {...sectionProps} />
@@ -423,7 +568,9 @@ export const ThemesPage = ({
 					<ExportingSection {...sectionProps} />
 				</div>
 
-				{/* Footer: Delete on the left, Done on the right. Delete sits at
+				{/* Footer: Delete on the left, Done on the right. Done is the one
+				 *  way to save: it writes the draft back, and the hint beside it
+				 *  says while there's something to write. Delete sits at
 				 *  the bottom — destructive actions live below the thing they
 				 *  destroy, not in the header where they're easy to hit by
 				 *  accident — and is kept apart from Done so a reach for the
@@ -438,11 +585,16 @@ export const ThemesPage = ({
 							</Button>
 						)}
 					</div>
-					{onDone && (
-						<Button compact onClick={onDone}>
-							Done
-						</Button>
-					)}
+					<div className="flex items-center gap-3">
+						{dirty && (
+							<span className="text-sm vc-muted">Unsaved changes</span>
+						)}
+						{onDone && (
+							<Button compact onClick={done}>
+								Done
+							</Button>
+						)}
+					</div>
 				</div>
 			</div>
 			<ManagedThemeGate
@@ -460,7 +612,7 @@ export const ThemesPage = ({
 					<>
 						Delete the theme{" "}
 						<span className="font-medium vc-heading">
-							&ldquo;{editingTheme.name}&rdquo;
+							&ldquo;{draftName}&rdquo;
 						</span>
 						? This cannot be undone.
 					</>
@@ -493,7 +645,7 @@ export const ThemesPage = ({
 					<>
 						Importing will overwrite the contents of{" "}
 						<span className="font-medium vc-heading">
-							&ldquo;{editingTheme.name}&rdquo;
+							&ldquo;{draftName}&rdquo;
 						</span>
 						. The theme&rsquo;s name stays the same. To import as a new theme
 						instead, cancel and use <strong>+ Add a new theme</strong>.
@@ -503,6 +655,13 @@ export const ThemesPage = ({
 				destructive
 				onCancel={() => setPendingImport(null)}
 				onConfirm={() => void confirmImport()}
+			/>
+			<UnsavedChangesDialog
+				open={leaveRequest !== null}
+				themeName={draftName}
+				onKeepEditing={keepEditing}
+				onDiscard={leaveWithoutSaving}
+				onSave={saveAndLeave}
 			/>
 		</div>
 	)

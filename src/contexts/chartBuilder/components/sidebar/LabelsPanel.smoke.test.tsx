@@ -135,7 +135,7 @@ describe("LabelsPanel — Facet titles (panel) subsection (hide-empty per-panel 
 
 		// Each subsection's styling controls render inline once opened.
 		expandSection(container, "Facet titles (panel)")
-		expect(container.querySelector('input[type="color"]')).not.toBeNull()
+		expect(container.querySelector("button[data-color]")).not.toBeNull()
 	})
 
 	it("omits the panel subsection when hideEmptyPanels is off (row/column still present)", () => {
@@ -159,7 +159,7 @@ describe("LabelsPanel — Facet titles (panel) subsection (hide-empty per-panel 
 		// Single-axis facet has one automatic title, so its styling controls are
 		// shown inline (no per-row chevron) — the font editor's color swatch is
 		// present straight away once the subsection is open.
-		expect(container.querySelector('input[type="color"]')).not.toBeNull()
+		expect(container.querySelector("button[data-color]")).not.toBeNull()
 	})
 
 	it("setting a color in the panel subsection writes fontOverrides.facetPanelTitle", () => {
@@ -173,11 +173,14 @@ describe("LabelsPanel — Facet titles (panel) subsection (hide-empty per-panel 
 		// Only this one subsection is open, so its color swatch is the only
 		// one on the page.
 		expandSection(container, "Facet titles (panel)")
-		const swatch = container.querySelector<HTMLInputElement>(
-			'input[type="color"]'
+		const swatch = container.querySelector<HTMLButtonElement>(
+			"button[data-color]"
 		)
 		expect(swatch).not.toBeNull()
-		fireEvent.change(swatch!, { target: { value: "#ff0000" } })
+		fireEvent.click(swatch!)
+		fireEvent.change(document.body.querySelector('input[aria-label="Hex code"]')!, {
+			target: { value: "#ff0000" },
+		})
 
 		// ColorInput normalizes swatch picks to uppercase hex.
 		expect(probe.dataset.panelColor).toBe("#FF0000")
@@ -225,7 +228,7 @@ describe("LabelsPanel — collapsible subsections", () => {
 			container.querySelector('textarea[placeholder="Untitled chart"]')
 		).toBeNull()
 		expect(rowToggle(container, "X-axis title")).toBeNull()
-		expect(container.querySelector('input[type="color"]')).toBeNull()
+		expect(container.querySelector("button[data-color]")).toBeNull()
 		expect(rowToggle(container, "Color legend")).toBeNull()
 	})
 
@@ -421,10 +424,10 @@ describe("LabelsPanel — secondary-tier inherit entries follow the axis-title s
 		expandSection(container, "Facet titles")
 		expect(familyInheritEntries(container)).toEqual(["(Quicksand)"])
 		// The swatch previews the axis-title color, not the shared title color.
-		const swatch = container.querySelector<HTMLInputElement>(
-			'input[type="color"]'
+		const swatch = container.querySelector<HTMLButtonElement>(
+			"button[data-color]"
 		)
-		expect(swatch?.value).toBe("#222222")
+		expect(swatch?.dataset.color).toBe("#222222")
 	})
 
 	it("names the axis-title family for the x-axis title row", () => {

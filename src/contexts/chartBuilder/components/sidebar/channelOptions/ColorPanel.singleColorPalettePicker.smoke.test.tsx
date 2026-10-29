@@ -93,8 +93,8 @@ describe("ColorPanel — single-color palette picker", () => {
 		// The row's color swatch (sibling of the picker button) now holds the pick.
 		const row = toggle.closest(".gap-2")!.parentElement!
 		const colorInput =
-			row.querySelector<HTMLInputElement>('input[type="color"]')!
-		expect(colorInput.value.toLowerCase()).toBe(picked.toLowerCase())
+			row.querySelector<HTMLButtonElement>("button[data-color]")!
+		expect(colorInput.dataset.color!.toLowerCase()).toBe(picked.toLowerCase())
 	})
 
 	it("the Outline row's single-color swatch offers the palette popover", () => {

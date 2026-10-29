@@ -14,6 +14,7 @@ import {
 	type DataTableConfig,
 } from "../../lib/dataTableConfig"
 import { emptyEncodings } from "../../lib/types"
+import { LIGHT_THEME_BASE } from "../../lib/systemThemes"
 import {
 	currentChannelConfigsAtom,
 	currentDataTableConfigAtom,
@@ -24,6 +25,7 @@ import {
 	currentVisualNameAtom,
 	loadedDatasetsAtom,
 	previewVersionIdAtom,
+	themeAtom,
 } from "../../store/atoms"
 
 import {
@@ -43,6 +45,11 @@ const mount = (
 ) => {
 	installInMemoryLocalStorage()
 	const init = (s: TestStore) => {
+		// `currentThemeIdAtom` defaults null, so `useCurrentTheme` falls back to
+		// the legacy `themeAtom`. Pin the NEUTRAL base there: these tests describe
+		// the table against a theme that sets nothing, and the bundled system
+		// themes pin several data-table rows of their own.
+		s.set(themeAtom, LIGHT_THEME_BASE)
 		s.set(
 			loadedDatasetsAtom,
 			{

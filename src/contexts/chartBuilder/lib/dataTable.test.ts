@@ -14,7 +14,7 @@ import {
 	resolveDataTableStyle,
 	themeDataTableStyle,
 } from "./dataTableConfig"
-import { SYSTEM_LIGHT_THEME, themeOf } from "./systemThemes"
+import { LIGHT_THEME_BASE } from "./systemThemes"
 import { emptyEncodings, type DatasetView, type Encodings } from "./types"
 
 const view = (over: Partial<DatasetView> = {}): DatasetView => ({
@@ -304,7 +304,10 @@ describe("defaultDataTableTitle", () => {
 })
 
 describe("resolveDataTableStyle", () => {
-	const theme = themeOf(SYSTEM_LIGHT_THEME)
+	// The neutral base: every data-table field null / off, so a visual that
+	// sets nothing falls through to the base text. (The bundled system themes
+	// layer their own data-table look on top of this.)
+	const theme = LIGHT_THEME_BASE
 
 	it("a visual that sets nothing gets the theme's base text font and derived tints", () => {
 		const look = resolveDataTableStyle(DEFAULT_DATA_TABLE_CONFIG, theme)

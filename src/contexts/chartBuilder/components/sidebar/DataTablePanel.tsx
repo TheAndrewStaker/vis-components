@@ -535,50 +535,6 @@ export const DataTablePanel = () => {
 					</CollapsibleSubsection>
 
 					<CollapsibleSubsection
-						title="Caption"
-						changed={changed(
-							"caption",
-							"captionFontFamily",
-							"captionFontSize",
-							"captionColor",
-							"captionFontWeight",
-							"captionAlign"
-						)}
-					>
-						<p className="vc-help">
-							Below the table, e.g. a source or a note. Empty = no caption.
-						</p>
-						<label className="flex items-start gap-2 text-sm">
-							<span className={`${LABEL_COL} shrink-0 pt-1`}>Text</span>
-							<Textarea
-								className="flex-1"
-								autoSize
-								rows={2}
-								value={cfg.caption ?? ""}
-								onChange={(e) =>
-									update({ caption: e.target.value === "" ? null : e.target.value })
-								}
-							/>
-						</label>
-						{cfg.caption !== null && (
-							<FontFields
-								keys={{
-									family: "captionFontFamily",
-									size: "captionFontSize",
-									weight: "captionFontWeight",
-									color: "captionColor",
-									align: "captionAlign",
-								}}
-								cfg={cfg}
-								inherited={textLook}
-								group="Caption"
-								followLabel="Default"
-								update={update}
-							/>
-						)}
-					</CollapsibleSubsection>
-
-					<CollapsibleSubsection
 						title="Header"
 						changed={changed(
 							"headerBackground",
@@ -797,6 +753,50 @@ export const DataTablePanel = () => {
 									onClear={() => update({ stripeColor: null })}
 								/>
 							</ResetRow>
+						)}
+					</CollapsibleSubsection>
+
+					<CollapsibleSubsection
+						title="Caption"
+						changed={changed(
+							"caption",
+							"captionFontFamily",
+							"captionFontSize",
+							"captionColor",
+							"captionFontWeight",
+							"captionAlign"
+						)}
+					>
+						<p className="vc-help">
+							Below the table, e.g. a source or a note. Empty = no caption.
+						</p>
+						<label className="flex items-start gap-2 text-sm">
+							<span className={`${LABEL_COL} shrink-0 pt-1`}>Text</span>
+							<Textarea
+								className="flex-1"
+								autoSize
+								rows={2}
+								value={cfg.caption ?? ""}
+								onChange={(e) =>
+									update({ caption: e.target.value === "" ? null : e.target.value })
+								}
+							/>
+						</label>
+						{cfg.caption !== null && (
+							<FontFields
+								keys={{
+									family: "captionFontFamily",
+									size: "captionFontSize",
+									weight: "captionFontWeight",
+									color: "captionColor",
+									align: "captionAlign",
+								}}
+								cfg={cfg}
+								inherited={textLook}
+								group="Caption"
+								followLabel="Default"
+								update={update}
+							/>
 						)}
 					</CollapsibleSubsection>
 				</>

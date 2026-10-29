@@ -102,9 +102,9 @@ describe("LegendPanel — Legend text", () => {
 		expect(weight.options[0].text).toBe("(Semibold)")
 		// The color swatch previews the inherited legend color.
 		// The Color row is a ColorInput: its <label> names the swatch "Color".
-		const swatch = utils.getByLabelText("Color") as HTMLInputElement
-		expect(swatch.type).toBe("color")
-		expect(swatch.value).toBe("#0000aa")
+		const swatch = utils.getByLabelText("Color") as HTMLButtonElement
+		expect(swatch.tagName).toBe("BUTTON")
+		expect(swatch.dataset.color).toBe("#0000aa")
 	})
 
 	it("size, family, weight and color write into the sparse textFont override", () => {
@@ -115,7 +115,9 @@ describe("LegendPanel — Legend text", () => {
 			target: { value: "Georgia, 'Times New Roman', serif" },
 		})
 		fireEvent.change(utils.getByLabelText("Weight"), { target: { value: "700" } })
-		fireEvent.change(utils.getByLabelText("Color"), {
+		// The swatch opens the picker popover; its hex field commits the pick.
+		fireEvent.click(utils.getByLabelText("Color"))
+		fireEvent.change(document.body.querySelector('input[aria-label="Hex code"]')!, {
 			target: { value: "#ff0000" },
 		})
 		expect(utils.cfg()?.textFont).toEqual({

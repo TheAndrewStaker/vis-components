@@ -43,9 +43,13 @@ describe("CaptionPanel", () => {
 	it("Text holds Align + font rows; Padding lives in Box", () => {
 		mount()
 		fireEvent.click(screen.getByRole("button", { name: "Text" }))
-		for (const label of ["Family", "Color", "Size", "Weight"]) {
+		for (const label of ["Family", "Size", "Weight"]) {
 			expect(screen.getByLabelText(label, { selector: "input, select" })).toBeTruthy()
 		}
+		// Color is a swatch button (it opens the picker popover), not a field.
+		expect(
+			screen.getByLabelText("Color", { selector: "button[data-color]" })
+		).toBeTruthy()
 		expect(screen.getByText("Align")).toBeTruthy()
 		expect(screen.getByRole("button", { name: "Italic" })).toBeTruthy()
 		expect(screen.queryByLabelText("Padding")).toBeNull()

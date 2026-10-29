@@ -1,6 +1,7 @@
-import { useId, useState, useEffect } from "react"
+import { useId, useState, useEffect, useRef } from "react"
 import { combine as c } from "../../lib/cls"
 
+import { ColorPickerPopover } from "./ColorPickerPopover"
 import { LabeledField } from "./LabeledField"
 import { PalettePickerButton } from "./PalettePickerButton"
 
@@ -14,10 +15,13 @@ const HEX_PATTERN = /^#(?:[\dA-Fa-f]{3}|[\dA-Fa-f]{6}|[\dA-Fa-f]{8})$/
  *  gray so the swatch reads as "nothing chosen" rather than as a pick. */
 const INHERIT_SWATCH = "#9CA3AF"
 
-/** Paired color picker — a native `<input type="color">` swatch and a
- *  free-form hex text input that stay in sync. Both share the same id
- *  via `<label htmlFor>`, so clicking the visible label opens the
- *  swatch (the primary control).
+/** Paired color picker — a swatch button that opens the app's own
+ *  `ColorPickerPopover` and a free-form hex text input that stay in sync.
+ *  The swatch carries the field's id via `<label htmlFor>`, so clicking
+ *  the visible label opens the picker (the primary control). The popover
+ *  replaced a native `<input type="color">`, which looked nothing alike
+ *  across browsers: Chrome draws a swatch square + hue strip, Safari hands
+ *  off to the OS color panel and its crayon grid.
  *
  *  The text input is intentionally `type="text"` (not `color`) so users
  *  can paste a hex code without the browser intercepting. It only fires
@@ -93,6 +97,8 @@ export const ColorInput = ({
 	const generatedId = useId()
 	const inputId = id ?? generatedId
 	const inherited = value === null
+	const [pickerOpen, setPickerOpen] = useState(false)
+	const swatchRef = useRef<HTMLButtonElement>(null)
 	// What the swatch (and the palette picker's "current" ring) shows: the
 	// value, else the inherited color when the placeholder names one.
 	const swatchColor =
@@ -108,11 +114,6 @@ export const ColorInput = ({
 		setTextValue(value?.toUpperCase() ?? "")
 	}, [value])
 
-	const handleSwatchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		// The native swatch always emits lowercase hex; normalize so
-		// stored values (and the text box) stay uppercase.
-		onChange(e.target.value.toUpperCase())
-	}
 	const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const next = e.target.value.toUpperCase()
 		setTextValue(next)
@@ -155,7 +156,7 @@ export const ColorInput = ({
 						// narrowed sidebar. Below 360px viewports (the 2016 iPhone SE)
 						// even that doesn't fit beside the label column, swatch and
 						// palette picker, so the row goes swatch-only there: tapping the
-						// swatch still opens the native picker.
+						// swatch still opens the picker, which has its own hex field.
 						className={c(
 							"hidden w-24 min-w-18 rounded-control border border-stone-400 bg-white px-1.5 py-1 font-mono text-xs text-stone-900 transition-colors vc-focus-ring placeholder:text-vc-faint hover:border-stone-600 focus:border-stone-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-white dark:placeholder:text-stone-500 dark:hover:border-stone-600 dark:focus:border-stone-500 min-[360px]:block",
 							!HEX_PATTERN.test(textValue) &&
@@ -164,22 +165,40 @@ export const ColorInput = ({
 						)}
 					/>
 				)}
-				<input
+				{/* The swatch is a button so `<label htmlFor>` still activates it;
+				 *  `data-color` exposes what it shows (tests and the e2e specs read
+				 *  it, the way they read the old input's value). */}
+				<button
+					ref={swatchRef}
 					id={inputId}
-					type="color"
-					value={swatchColor}
-					onChange={handleSwatchChange}
+					type="button"
+					onClick={() => setPickerOpen((o) => !o)}
 					disabled={disabled}
-					title={inherited ? "Inherited — pick a color to override" : undefined}
+					aria-haspopup="dialog"
+					aria-expanded={pickerOpen}
+					data-color={swatchColor}
+					title={
+						inherited ? "Inherited — pick a color to override" : "Pick a color"
+					}
 					className={c(
-						"h-6 w-10 shrink-0 cursor-pointer rounded border border-stone-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700",
+						"h-6 w-10 shrink-0 cursor-pointer rounded border border-stone-400 vc-focus-ring disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700",
 						// Dashed border = "nothing chosen here; previewing the inherited
 						// color" — the one visual cue that the swatch isn't a pick.
 						inherited && "border-dashed"
 					)}
+					style={{ backgroundColor: swatchColor }}
 				/>
+				{pickerOpen && (
+					<ColorPickerPopover
+						anchorRef={swatchRef}
+						value={swatchColor}
+						onChange={onChange}
+						onClose={() => setPickerOpen(false)}
+						label={labelText}
+					/>
+				)}
 				{/* Every swatch in the app carries the on-palette shortcut — the
-				 *  native picker is open-ended, so without this each row is one
+				 *  picker is open-ended, so without this each row is one
 				 *  eyeballed hex away from drifting off the theme. */}
 				{showPalettePicker && !disabled && (
 					<PalettePickerButton

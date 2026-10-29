@@ -250,9 +250,12 @@ export const LIGHT_THEME_BASE: Theme = {
 	tooltipShadowSize: 12,
 	tooltipShadowColor: "#000000",
 	tooltipShadowOpacity: 0.15,
-	// Data table: the look it shipped with — the base text font, a bold
-	// unfilled header, soft-tint rules and stripes, numbers right-aligned,
-	// a semibold left title above and a plain left caption below.
+	// Data table: the NEUTRAL look — the base text font, a bold unfilled
+	// header, soft-tint rules and stripes, numbers right-aligned, a semibold
+	// left title above and a plain left caption below. This block is the
+	// backfill floor under every saved theme, so it stays neutral; the system
+	// themes' own data-table styling lives in `SYSTEM_THEME_STYLE` and
+	// `DARK_THEME_STYLE`.
 	dataTableFontFamily: null,
 	dataTableFontSize: null,
 	dataTableFontWeight: null,
@@ -311,9 +314,14 @@ const DARK_THEME_BASE: Theme = {
 	legendSwatchStroke: DARK_INK,
 }
 
-/** OPTIONAL `Theme` fields the two system themes ship with. Kept out of
- * `LIGHT_THEME_BASE` on purpose (see its doc) — these are applied to the
- * bundled `SavedTheme`s only, never backfilled into user themes. */
+/** OPTIONAL `Theme` fields the two system themes ship with, plus their
+ * data-table look. Kept out of `LIGHT_THEME_BASE` on purpose (see its doc) —
+ * these are applied to the bundled `SavedTheme`s only, never backfilled into
+ * user themes. The data-table fields are required-but-nullable on `Theme`,
+ * and they sit here for the same reason: a styled value in the base (a
+ * tinted header, say) would be frozen into every sparse old theme — dark
+ * ones included — in place of the neutral `null` that follows the table
+ * text. */
 const SYSTEM_THEME_STYLE: Partial<Theme> = {
 	titleFontWeight: 700,
 	titleAlignment: "left",
@@ -344,6 +352,20 @@ const SYSTEM_THEME_STYLE: Partial<Theme> = {
 	annotationTextColor: "#000000",
 	annotationTextBoxFillOpacity: 1,
 	annotationTextBoxBorderColor: "#000000",
+	// Data table (lifted from Nancy's "Test Theme", 2026-10-29): 10pt
+	// Quicksand body, a semibold first column, a pink-tinted header row and
+	// faintly pink stripes. Title family and caption size are pinned too.
+	dataTableFontFamily: QUICKSAND,
+	dataTableFontSize: 10,
+	dataTableFontWeight: 400,
+	dataTableFirstColumnLikeOthers: false,
+	dataTableFirstColumnFontFamily: QUICKSAND,
+	dataTableFirstColumnFontWeight: 600,
+	dataTableHeaderBackground: "#FFCCD8",
+	dataTableHeaderFontSize: 10,
+	dataTableStripeColor: "#FFFAFB",
+	dataTableTitleFontFamily: QUICKSAND,
+	dataTableCaptionFontSize: 10,
 }
 
 export const SYSTEM_LIGHT_THEME: SavedTheme = {
@@ -357,7 +379,10 @@ export const SYSTEM_LIGHT_THEME: SavedTheme = {
 
 /** Dark overrides of `SYSTEM_THEME_STYLE`: every ink that is black in the
  * light theme goes near-white, plus per-axis gridlines, the annotation text
- * box fill and map leader lines that the light theme leaves unset. */
+ * box fill and map leader lines that the light theme leaves unset. The data
+ * table swaps the light theme's pink header fill and stripe color (they'd
+ * sit on a navy chart) for a solid near-white header rule, and lets the body
+ * font, weight and header size follow the table text again. */
 const DARK_THEME_STYLE: Partial<Theme> = {
 	dataLabelsColor: DARK_INK,
 	xGridlineColor: DARK_INK,
@@ -371,6 +396,16 @@ const DARK_THEME_STYLE: Partial<Theme> = {
 	annotationTextBoxFillColor: DARK_BG,
 	annotationTextBoxBorderColor: DARK_INK,
 	mapLeaderLineColor: DARK_INK,
+	// Data table (lifted from Nancy's "Test Theme DARK", 2026-10-29).
+	dataTableFontFamily: null,
+	dataTableFontWeight: null,
+	dataTableFirstColumnFontFamily: null,
+	dataTableHeaderBackground: null,
+	dataTableHeaderFontFamily: QUICKSAND,
+	dataTableHeaderFontSize: null,
+	dataTableHeaderBorderColor: DARK_INK,
+	dataTableStripeColor: null,
+	dataTableCaptionFontFamily: QUICKSAND,
 }
 
 export const SYSTEM_DARK_THEME: SavedTheme = {

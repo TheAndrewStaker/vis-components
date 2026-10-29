@@ -31,7 +31,7 @@ import { useDragReorder } from "../useDragReorder"
 import { Disclosure } from "@headlessui/react"
 
 import { Checkbox } from "../../../../components/ui/Checkbox"
-import { DisclosureChevron } from "../../../../components/ui/Chevron"
+import { RowChevron } from "../../../../components/ui/Chevron"
 import { SelectInput } from "../../../../components/ui/SelectInput"
 
 const TYPE_OPTIONS: ReadonlyArray<{ value: FieldType; label: FieldType }> = [
@@ -210,11 +210,11 @@ export const FieldList = () => {
 										/>
 										{reorderable ? (
 											<Disclosure.Button
-												className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 hover:text-stone-900 dark:hover:bg-stone-700 dark:hover:text-white vc-muted"
+												className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 dark:hover:bg-stone-700"
 												aria-label={`Reorder levels of ${field.name}`}
 												title="Reorder levels"
 											>
-												<DisclosureChevron open={open} />
+												<RowChevron open={open} />
 											</Disclosure.Button>
 										) : (
 											/* Keeps the type dropdowns lined up across rows that have

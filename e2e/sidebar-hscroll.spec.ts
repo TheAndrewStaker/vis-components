@@ -48,7 +48,7 @@ const measureSidebar = (page: Page) =>
 		const aside = document.querySelector("aside")!
 		const asideLeft = aside.getBoundingClientRect().left
 		const colorRows = [
-			...document.querySelectorAll("aside input[type=color]"),
+			...document.querySelectorAll("aside button[data-color]"),
 		].map((s) => s.closest(".flex.items-center")!)
 		return {
 			scrollWidth: aside.scrollWidth,

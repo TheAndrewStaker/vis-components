@@ -244,6 +244,7 @@ export const Legend = ({
 		modeDef,
 		insideExtras,
 		levelOrders,
+		swatchTheme: theme,
 		measureText: measureMaxLabelWidth,
 	})
 	if (!plan) return null

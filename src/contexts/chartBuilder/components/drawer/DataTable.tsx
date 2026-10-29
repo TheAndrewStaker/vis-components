@@ -213,7 +213,7 @@ export const DataTable = () => {
 	if (!dataset) {
 		return (
 			<div className="flex h-full items-center justify-center p-4 text-sm vc-muted">
-				No data set loaded. Upload a CSV from the sidebar, or paste data with the button above.
+				Copy-paste or drag and drop a CSV here, or upload a data set here.
 			</div>
 		)
 	}

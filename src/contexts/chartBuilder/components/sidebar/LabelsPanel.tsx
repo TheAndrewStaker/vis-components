@@ -51,7 +51,7 @@ import {
 } from "../../store/useFontOptions"
 import { Disclosure } from "@headlessui/react"
 
-import { DisclosureChevron } from "../../../../components/ui/Chevron"
+import { RowChevron } from "../../../../components/ui/Chevron"
 import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
 import { ColorInput } from "../../../../components/ui/ColorInput"
 import { LABEL_COL } from "../../../../components/ui/LabeledField"
@@ -1554,18 +1554,18 @@ const LabelRow = ({
 							</label>
 						)}
 						<Disclosure.Button
-							className={`relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 hover:text-stone-900 disabled:pointer-events-none disabled:opacity-60 dark:hover:bg-stone-700 dark:hover:text-white vc-muted`}
+							className="relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-stone-200 disabled:pointer-events-none disabled:opacity-60 dark:hover:bg-stone-700"
 							aria-label={`Toggle font settings for ${label}`}
 							disabled={disabled}
 						>
-							<DisclosureChevron open={open} />
+							<RowChevron open={open} />
 							{(hasOverride ||
 								hasAlignment ||
 								hasVerticalAlignment ||
 								hasAngle ||
 								extraActive) && (
 								<span
-									className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-stone-900 dark:bg-white"
+									className="absolute top-0 right-0 h-1.5 w-1.5 rounded-full bg-stone-900 dark:bg-white"
 									aria-hidden="true"
 								/>
 							)}

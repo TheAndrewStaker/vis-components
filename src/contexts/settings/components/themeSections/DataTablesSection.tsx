@@ -187,13 +187,6 @@ export const DataTablesSection = ({ theme, set, isReadOnly }: ThemeSectionProps)
 				</p>
 				<TextBlockRows slot="Title" theme={theme} look={look} set={set} />
 			</Section>
-			<Section title="Caption">
-				<p className="text-xs vc-muted">
-					Below the table, when a visual writes one. Empty rows follow the
-					table text.
-				</p>
-				<TextBlockRows slot="Caption" theme={theme} look={look} set={set} />
-			</Section>
 			<Section title="Header">
 				<p className="text-xs vc-muted">
 					Empty family / size / text color rows follow the table text.
@@ -345,6 +338,13 @@ export const DataTablesSection = ({ theme, set, isReadOnly }: ThemeSectionProps)
 					theme={theme}
 					set={set}
 				/>
+			</Section>
+			<Section title="Caption">
+				<p className="text-xs vc-muted">
+					Below the table, when a visual writes one. Empty rows follow the
+					table text.
+				</p>
+				<TextBlockRows slot="Caption" theme={theme} look={look} set={set} />
 			</Section>
 		</SectionGroup>
 	)

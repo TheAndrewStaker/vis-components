@@ -26,12 +26,12 @@ describe("form primitives — label / id association", () => {
 		expect(label!.getAttribute("for")).toBe(input!.getAttribute("id"))
 	})
 
-	it("ColorInput links its label to the color swatch input", () => {
+	it("ColorInput links its label to the color swatch button", () => {
 		const { container } = render(
 			<ColorInput label="Fill" value="#abcdef" onChange={() => {}} />
 		)
 		const label = container.querySelector("label")
-		const swatch = container.querySelector('input[type="color"]')
+		const swatch = container.querySelector("button[data-color]")
 		expect(label!.getAttribute("for")).toBe(swatch!.getAttribute("id"))
 	})
 
@@ -327,7 +327,7 @@ describe("NumberInput", () => {
 describe("ColorInput", () => {
 	afterEach(cleanup)
 
-	it("fires onChange when the swatch changes", () => {
+	it("fires onChange when a color is picked in the swatch's popover", () => {
 		let captured: string | null = null
 		const { container } = render(
 			<ColorInput
@@ -338,8 +338,11 @@ describe("ColorInput", () => {
 				}}
 			/>
 		)
-		const swatch = container.querySelector('input[type="color"]')!
-		fireEvent.change(swatch, { target: { value: "#ff0000" } })
+		const swatch = container.querySelector("button[data-color]")!
+		fireEvent.click(swatch)
+		fireEvent.change(document.body.querySelector('input[aria-label="Hex code"]')!, {
+			target: { value: "#ff0000" },
+		})
 		expect(captured).toBe("#FF0000")
 	})
 
@@ -396,7 +399,7 @@ describe("ColorInput", () => {
 			/>
 		)
 		expect(container.querySelector('input[type="text"]')).toBeNull()
-		expect(container.querySelector('input[type="color"]')).not.toBeNull()
+		expect(container.querySelector("button[data-color]")).not.toBeNull()
 	})
 
 	it("re-syncs the text input when value prop changes externally", () => {
@@ -436,11 +439,11 @@ describe("ColorInput", () => {
 			'input[type="text"]'
 		) as HTMLInputElement
 		const swatch = container.querySelector(
-			'input[type="color"]'
-		) as HTMLInputElement
+			"button[data-color]"
+		) as HTMLButtonElement
 		expect(text.value).toBe("")
 		expect(text.placeholder).toBe("#ABCDEF")
-		expect(swatch.value.toLowerCase()).toBe("#abcdef")
+		expect(swatch.dataset.color!.toLowerCase()).toBe("#abcdef")
 		expect(swatch.className).toContain("border-dashed")
 	})
 
@@ -455,9 +458,9 @@ describe("ColorInput", () => {
 			/>
 		)
 		const swatch = container.querySelector(
-			'input[type="color"]'
-		) as HTMLInputElement
-		expect(swatch.value.toLowerCase()).toBe("#9ca3af")
+			"button[data-color]"
+		) as HTMLButtonElement
+		expect(swatch.dataset.color!.toLowerCase()).toBe("#9ca3af")
 	})
 
 	it("inherit mode: emptying the hex box fires onClear (not onChange); a pick still fires onChange", () => {
@@ -476,7 +479,8 @@ describe("ColorInput", () => {
 		fireEvent.change(text, { target: { value: "" } })
 		expect(onClear).toHaveBeenCalledTimes(1)
 		expect(onChange).not.toHaveBeenCalled()
-		fireEvent.change(container.querySelector('input[type="color"]')!, {
+		fireEvent.click(container.querySelector("button[data-color]")!)
+		fireEvent.change(document.body.querySelector('input[aria-label="Hex code"]')!, {
 			target: { value: "#ff0000" },
 		})
 		expect(onChange).toHaveBeenCalledWith("#FF0000")
@@ -501,7 +505,9 @@ describe("ColorInput", () => {
 			<ColorInput label="Fill" value="#123456" onChange={() => {}} />
 		)
 		expect((getByLabelText("Fill hex") as HTMLInputElement).type).toBe("text")
-		expect((getByLabelText("Fill") as HTMLInputElement).type).toBe("color")
+		expect((getByLabelText("Fill") as HTMLButtonElement).dataset.color).toBe(
+			"#123456"
+		)
 	})
 })
 

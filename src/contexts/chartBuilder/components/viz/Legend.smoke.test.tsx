@@ -32,7 +32,7 @@ import {
 } from "../../lib/labelsConfig"
 import { CUSTOM_GLYPH_BASE } from "../../lib/customGlyphs"
 import { ptToPx } from "../../lib/fontUnit"
-import { applyHueScale, makeHueScale } from "../../lib/scales"
+import { applyHueScale, makeHueScale, symbolExtent } from "../../lib/scales"
 import { SYSTEM_LIGHT_THEME, themeOf } from "../../lib/systemThemes"
 import { emptyEncodings, type Dataset, type Theme } from "../../lib/types"
 import {
@@ -3020,5 +3020,88 @@ describe("Legend — rug + density curve colored by the Color field", () => {
 		expect(sectionTitles(container)).toEqual(["group"])
 		// Every category is listed exactly once — one swatch row each.
 		expect(container.querySelectorAll(".vc-swatch-cell")).toHaveLength(3)
+	})
+})
+
+describe("swatch boxes fit pointed glyphs — big star tips were cut off", () => {
+	// Every swatch SVG has a centered viewBox, so half its width is how far
+	// ink can reach before the box clips it. The bug: the box was sized for
+	// a circle of the swatch radius, while d3 sizes symbols by area — a
+	// star's tips sit ~1.67× the radius out, and at large sizes the 3px pad
+	// no longer absorbed that.
+	const halfSide = (svg: Element | null | undefined): number =>
+		Number(svg?.getAttribute("width") ?? 0) / 2
+
+	it("ShapeLegend: a big star's box holds its tips, and every row shares that box", () => {
+		const { container } = render(
+			<ShapeLegend
+				type="categorical"
+				values={["a", "b"]}
+				configs={{
+					...EMPTY_CHANNEL_CONFIGS,
+					// "b" pinned to the star (palette index 5); "a" stays a circle.
+					shape: { ...DEFAULT_SHAPE_CONFIG, overrides: { b: 5 } },
+				}}
+				legendFillColor={null}
+				legendStrokeColor={null}
+				swatchSize={20}
+			/>
+		)
+		const svgs = [...container.querySelectorAll("svg")]
+		expect(svgs).toHaveLength(2)
+		// Tips at symbolExtent(5, 20) ≈ 33.5px, plus the 1px stroke's outer half.
+		for (const svg of svgs) {
+			expect(halfSide(svg)).toBeGreaterThanOrEqual(symbolExtent(5, 20) + 0.5)
+		}
+		// One shared box, so the circle row's label lines up with the star's.
+		expect(new Set(svgs.map((s) => s.getAttribute("width"))).size).toBe(1)
+	})
+
+	it("hue legend: a star swatch shape at a large size grows its box; a circle keeps (r + 3) * 2", () => {
+		const renderShape = (swatchShape: number) =>
+			render(
+				<CombinedGroupLegend
+					channels={["hue"]}
+					type="categorical"
+					values={["A", "B"]}
+					configs={EMPTY_CHANNEL_CONFIGS}
+					reverseCategorical={false}
+					swatchShape={swatchShape}
+					swatchSize={20}
+				/>
+			)
+		const star = renderShape(5).container.querySelector("svg")
+		expect(halfSide(star)).toBeGreaterThanOrEqual(symbolExtent(5, 20))
+		const circle = renderShape(0).container.querySelector("svg")
+		expect(circle?.getAttribute("width")).toBe("46")
+	})
+
+	it("combined Color · Shape legend: rows whose glyphs differ share one swatch column", () => {
+		const { container } = render(
+			<CombinedGroupLegend
+				channels={["hue", "shape"]}
+				type="categorical"
+				values={["a", "b"]}
+				configs={{
+					...EMPTY_CHANNEL_CONFIGS,
+					shape: { ...DEFAULT_SHAPE_CONFIG, overrides: { b: 5 } },
+				}}
+				reverseCategorical={false}
+				shapeSwatchSize={20}
+			/>
+		)
+		const svgs = [...container.querySelectorAll("svg")]
+		expect(svgs).toHaveLength(2)
+		const widths = svgs.map((s) => Number(s.getAttribute("width")))
+		// Each swatch's own box fits its glyph (the star's is the wider one) …
+		expect(Math.max(...widths)).toBeGreaterThan(Math.min(...widths))
+		expect(Math.max(...widths) / 2).toBeGreaterThanOrEqual(symbolExtent(5, 20))
+		// … and the stacked list reserves a column as wide as the widest so the
+		// labels align.
+		const cells = [...container.querySelectorAll(".vc-swatch-cell")] as HTMLElement[]
+		expect(cells).toHaveLength(2)
+		for (const cell of cells) {
+			expect(cell.style.minWidth).toBe(`${Math.max(...widths)}px`)
+		}
 	})
 })

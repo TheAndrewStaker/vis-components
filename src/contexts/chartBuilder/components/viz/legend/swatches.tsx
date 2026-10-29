@@ -16,6 +16,11 @@ import {
 import { PatternTile } from "../../../lib/patternDefs"
 import { symbolPath } from "../../../lib/scales"
 import {
+	lineSwatchStrokeWidth,
+	SWATCH_BOX_PAD,
+	swatchGlyphBox,
+} from "../../../lib/swatchBox"
+import {
 	currentRenderedGradientBarLengthAtom,
 	currentTooltipConfigAtom,
 	hoveredLegendEntryAtom,
@@ -408,7 +413,11 @@ export const Swatch = ({
 			) : (
 				(() => {
 					const r = size ?? 5
-					const side = (r + 3) * 2
+					const side = swatchGlyphBox(
+						shape,
+						r,
+						strokeColor ? (strokeWidth ?? 1.5) : 0,
+					)
 					return (
 						<svg
 							width={side}
@@ -425,7 +434,7 @@ export const Swatch = ({
 									x2={r}
 									y2={0}
 									stroke={color}
-									strokeWidth={Math.max(2, Math.round(r / 2))}
+									strokeWidth={lineSwatchStrokeWidth(r)}
 									strokeLinecap="round"
 								/>
 							) : (
@@ -461,17 +470,7 @@ export const Swatch = ({
  * (colored by the hue) instead of a rectangle, so that hue+shape on the
  * same field collapses into one row per category. `shapeFill === "none"`
  * routes through to render an outline-only glyph. */
-export const ComposedSwatch = ({
-	color,
-	opacity,
-	pattern,
-	shape,
-	dash,
-	swatchShape,
-	swatchSize,
-	outlineStroke,
-	outlineWidth,
-}: {
+export type ComposedSwatchProps = {
 	color: string
 	opacity: number
 	/** Pattern overlay for the swatch. `scale` is the tile zoom (the
@@ -520,13 +519,95 @@ export const ComposedSwatch = ({
 	/** Border width (px) for `outlineStroke`. Defaults to 1.5 (the historical
 	 *  split-outline width); the user's Swatch outline setting passes its own. */
 	outlineWidth?: number | null
-}) => {
+}
+
+/** The point glyph the line-chart (dash) swatch draws behind its dashed
+ *  line: the encoded shape when a shape channel is mapped, else the hue
+ *  swatch shape, else a circle (a "line" swatch shape has no point form). */
+const dashPointGlyph = ({
+	shape,
+	swatchShape,
+}: Pick<ComposedSwatchProps, "shape" | "swatchShape">): ResolvedGlyph =>
+	shape?.glyph ?? {
+		kind: "symbol",
+		idx: shape?.idx ?? (typeof swatchShape === "number" ? swatchShape : 0),
+	}
+
+/** Rendered box (px) of a `ComposedSwatch` — the one sizing rule for every
+ *  route it draws, so a stacked entry list can reserve a column as wide as
+ *  its widest swatch (`swatchColumnWidth`) when entries differ. Glyph boxes
+ *  follow `swatchGlyphBox`, which grows past the historical `(r + 3) * 2`
+ *  only when a pointed symbol or a thick outline would otherwise be cut
+ *  off; the default rectangle scales 18×12 by r/5. */
+export const composedSwatchSize = (
+	props: ComposedSwatchProps,
+): { w: number; h: number } => {
+	const { shape, dash, swatchShape, swatchSize, outlineStroke, outlineWidth } =
+		props
+	if (dash) {
+		// Glyph radius honors the user's swatch-size choice — `shape.size` when
+		// a shape channel is mapped, otherwise the hue swatch-size picker. 4.5
+		// stays the baseline so existing line charts don't shift.
+		const r = shape?.size ?? swatchSize ?? 4.5
+		// The "line" swatch shape (or a synthesized line descriptor) reads as a
+		// pure dashed stroke — no point glyph behind it to make room for.
+		const showGlyph = swatchShape !== "line" && !shape?.line
+		const box = showGlyph
+			? swatchGlyphBox(dashPointGlyph(props), r, 1)
+			: (r + SWATCH_BOX_PAD) * 2
+		// Keep extra horizontal room so the dashed line still reads as a line
+		// beside larger symbols.
+		return { w: Math.max(22, box + 8), h: Math.max(14, box) }
+	}
+	if (shape) {
+		// 16px floor keeps the default look unchanged.
+		const r = shape.size ?? 5
+		const side = Math.max(
+			16,
+			swatchGlyphBox(shape.line ? "line" : (shape.glyph ?? shape.idx), r, 1),
+		)
+		return { w: side, h: side }
+	}
+	if (swatchShape != null) {
+		const r = swatchSize ?? 5
+		const side = swatchGlyphBox(
+			swatchShape,
+			r,
+			outlineStroke ? (outlineWidth ?? 1.5) : 0,
+		)
+		return { w: side, h: side }
+	}
 	// Default-rectangle dimensions. The swatch-size picker (radius-like, 5 =
 	// historical) scales them proportionally so the rectangle honors the size
 	// control just like the shaped glyphs do.
 	const rectScale = (swatchSize ?? 5) / 5
-	const w = Math.round(18 * rectScale)
-	const h = Math.round(12 * rectScale)
+	return { w: Math.round(18 * rectScale), h: Math.round(12 * rectScale) }
+}
+
+/** Column width (px) a stacked entry list reserves for its swatches so the
+ *  labels align: the widest swatch when the swatches differ in width (area-
+ *  sized glyphs, a shape channel mixing a star with a circle), else `null`
+ *  — the cells hug their graphic as before. */
+export const swatchColumnWidth = (
+	sizes: ReadonlyArray<{ w: number }>,
+): number | null => {
+	const widths = sizes.map((s) => s.w)
+	return new Set(widths).size > 1 ? Math.max(...widths) : null
+}
+
+export const ComposedSwatch = (props: ComposedSwatchProps) => {
+	const {
+		color,
+		opacity,
+		pattern,
+		shape,
+		dash,
+		swatchShape,
+		swatchSize,
+		outlineStroke,
+		outlineWidth,
+	} = props
+	const { w, h } = composedSwatchSize(props)
 	// Line chart context: mirror the rendered visual — dash line passing
 	// behind a (patterned) point. Shape uses the encoded shape index when
 	// available, otherwise defaults to a circle. Pattern fills the shape.
@@ -535,21 +616,14 @@ export const ComposedSwatch = ({
 		// a shape channel is mapped, otherwise the hue swatch-size picker. 4.5
 		// stays the baseline so existing line charts don't shift.
 		const r = shape?.size ?? swatchSize ?? 4.5
-		// Grow the swatch box with the glyph; keep extra horizontal room so the
-		// dashed line still reads as a line beside larger symbols.
-		const lh = Math.max(14, (r + 3) * 2)
-		const lw = Math.max(22, (r + 3) * 2 + 8)
+		const lw = w
+		const lh = h
 		const cx = lw / 2
 		const cy = lh / 2
 		// The "line" swatch shape (or a synthesized line descriptor) reads as a
 		// pure dashed stroke — skip the point glyph behind it.
 		const showGlyph = swatchShape !== "line" && !shape?.line
-		// The dash (line-chart) context draws a point glyph behind the line; a
-		// "line" swatch shape has no point form here, so fall back to a circle.
-		const shapeIdx =
-			shape?.idx ?? (typeof swatchShape === "number" ? swatchShape : 0)
-		const pointGlyph: ResolvedGlyph =
-			shape?.glyph ?? { kind: "symbol", idx: shapeIdx }
+		const pointGlyph = dashPointGlyph(props)
 		const patId = pattern ? `legend-combined-${pattern.svgId}` : null
 		const shapeFill = pattern
 			? `url(#${patId})`
@@ -609,7 +683,7 @@ export const ComposedSwatch = ({
 		// field). Synthesized outline swatches may carry a `size` (from the
 		// swatch-size picker) and a `line` flag (the "line" swatch shape).
 		const r = shape.size ?? 5
-		const side = Math.max(16, (r + 3) * 2)
+		const side = w
 		return (
 			<svg
 				width={side}
@@ -626,7 +700,7 @@ export const ComposedSwatch = ({
 						x2={r}
 						y2={0}
 						stroke={shape.stroke}
-						strokeWidth={Math.max(2, Math.round(r / 2))}
+						strokeWidth={lineSwatchStrokeWidth(r)}
 						strokeLinecap="round"
 					/>
 				) : (
@@ -652,7 +726,7 @@ export const ComposedSwatch = ({
 		const patId = pattern ? `legend-combined-${pattern.svgId}` : null
 		const fill = pattern && patId ? `url(#${patId})` : color
 		const r = swatchSize ?? 5
-		const side = (r + 3) * 2
+		const side = w
 		return (
 			<svg
 				width={side}
@@ -680,7 +754,7 @@ export const ComposedSwatch = ({
 						x2={r}
 						y2={0}
 						stroke={pattern ? color : (outlineStroke ?? color)}
-						strokeWidth={Math.max(2, Math.round(r / 2))}
+						strokeWidth={lineSwatchStrokeWidth(r)}
 						strokeLinecap="round"
 					/>
 				) : (

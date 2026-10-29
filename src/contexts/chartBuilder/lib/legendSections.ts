@@ -7,6 +7,7 @@ import type {
 import { densityCurveGroupField, densityCurveOn } from "./colorSlots"
 import { flowNodeNames, resolveFlowEndpoints } from "./buildFlowGraph"
 import { resolveHierarchyIdField } from "./buildHierarchy"
+import { resolveGlyph } from "./customGlyphs"
 import {
 	hierarchyDepthLevels,
 	hierarchyHighlightField,
@@ -21,13 +22,19 @@ import type { ChartModeDef } from "./chartModes/types"
 import {
 	LEGEND_FRIENDLY_NAME,
 	legendFontKey,
+	legendSwatchOutlineWidth,
 	legendSwatchShape,
 	legendSwatchSize,
 	type LabelsConfig,
 	type LegendChannel,
 	type LegendConfig,
+	type LegendSwatchShape,
+	type LegendSwatchThemeDefaults,
 	QUANTITATIVE_LEGEND_CHANNELS,
 	type QuantitativeLegendChannel,
+	resolveLegendSwatchOutlineWidth,
+	resolveLegendSwatchShape,
+	resolveLegendSwatchSize,
 	resolveLegendTextFont,
 	resolveTitleFont,
 	shownLegendTitle,
@@ -54,9 +61,11 @@ import {
 	makeAreaScale,
 	makeHueScale,
 	makeLengthScale,
+	makeShapeIndexer,
 } from "./scales"
 import type { HueScale } from "./scales"
 import { applyLevelOrder } from "./smartSort"
+import { SWATCH_BOX_PAD, swatchGlyphBox } from "./swatchBox"
 import type { DatasetView, EncodingChannel, Encodings, FieldType } from "./types"
 import { uniqueValues } from "./uniqueFieldValues"
 
@@ -296,6 +305,12 @@ export type PlanLegendSectionsInput = {
 	 *  domain — ordering decides WHICH wrap-mode panels survive grid
 	 *  truncation. Optional so pure callers/tests can omit it. */
 	levelOrders?: Record<string, readonly string[]>
+	/** Theme defaults the legend's swatch shape / size / outline fall back
+	 *  to when the visual made no choice — the same resolution the renderer
+	 *  uses, so the swatch-column estimate matches what is drawn. Optional
+	 *  so pure callers/tests can omit it (then only per-visual choices
+	 *  count). */
+	swatchTheme?: LegendSwatchThemeDefaults
 	/** Optional text measurer (canvas `measureText`, in px) for the widest of
 	 *  `texts` at the given font. The component injects the real one so the
 	 *  legend column is budgeted from RENDERED glyph widths — the 0.55-em
@@ -351,6 +366,7 @@ export const planLegendSections = ({
 	modeDef,
 	insideExtras,
 	levelOrders,
+	swatchTheme,
 	measureText,
 }: PlanLegendSectionsInput): LegendPlan | null => {
 	const hideLength = modeDef.legend.hideLengthInThisMode
@@ -822,28 +838,83 @@ export const planLegendSections = ({
 				return COMPOSED_SWATCH_W
 		}
 	}
+	// Per-section swatch shape / size / outline, resolved as the renderer
+	// resolves them: the visual's choice, else the theme's default when the
+	// caller passed one.
+	const swatchShapeOf = (key: SwatchShapeChannel): LegendSwatchShape => {
+		if (swatchTheme) return resolveLegendSwatchShape(legendCfg, swatchTheme, key)
+		const choice = legendSwatchShape(legendCfg, key)
+		return choice === "rect" ? null : choice
+	}
+	const swatchSizeOf = (key: SwatchShapeChannel): number =>
+		swatchTheme
+			? resolveLegendSwatchSize(legendCfg, swatchTheme, key)
+			: (legendSwatchSize(legendCfg, key) ?? 5)
+	// The user's swatch outline stays inert while the outline-color encoding
+	// is mapped (Legend.tsx) — no stroke widens the box then.
+	const swatchOutlineWidthOf = (key: SwatchShapeChannel): number =>
+		encodings.outlineHue?.field
+			? 0
+			: swatchTheme
+				? resolveLegendSwatchOutlineWidth(legendCfg, swatchTheme, key)
+				: (legendSwatchOutlineWidth(legendCfg, key) ?? 0)
 	// Composed (color-style) swatch width honoring the user's per-section
 	// swatch shape + size (Legend panel → Swatches): a shaped glyph draws in
-	// a (r + 3) * 2 box; the default rectangle scales 18px × r/5.
+	// its `swatchGlyphBox`; the default rectangle scales 18px × r/5.
 	// COMPOSED_SWATCH_W stays the floor so the estimate never shrinks below
 	// the historical constant.
 	const composedSwatchW = (key: SwatchShapeChannel): number => {
-		const r = legendSwatchSize(legendCfg, key) ?? 5
-		const shaped = legendSwatchShape(legendCfg, key) !== null
+		const r = swatchSizeOf(key)
+		const shape = swatchShapeOf(key)
 		return Math.max(
 			COMPOSED_SWATCH_W,
-			shaped ? (r + 3) * 2 : Math.round(18 * (r / 5)),
+			shape === null
+				? Math.round(18 * (r / 5))
+				: swatchGlyphBox(shape, r, swatchOutlineWidthOf(key)),
+		)
+	}
+	// Widest box among a section's shape-channel glyphs at radius `r`: the
+	// glyph varies per category (a star beside a circle), and the renderers
+	// size every row to the widest (ShapeLegend's shared box, the combined
+	// legend's reserved column).
+	const widestShapeGlyphBox = (
+		s: SectionInfo,
+		r: number,
+		strokeWidth: number,
+	): number => {
+		const indexer = makeShapeIndexer(s.values, s.type, configs.shape)
+		return Math.max(
+			0,
+			...uniqueValues(s.values, { type: s.type }).map((v) =>
+				swatchGlyphBox(
+					resolveGlyph(indexer(v), configs.shape?.customGlyphs),
+					r,
+					strokeWidth,
+				),
+			),
 		)
 	}
 	// Shape-channel glyph box (ShapeLegend / combined shape glyphs), scaled
-	// by the Shape swatch-size picker.
-	const shapeGlyphW = Math.max(
-		16,
-		((legendSwatchSize(legendCfg, "shape") ?? 5) + 3) * 2,
-	)
+	// by the Shape swatch-size picker; 16px floor like the renderers.
+	const shapeGlyphW = (s: SectionInfo): number =>
+		Math.max(16, widestShapeGlyphBox(s, swatchSizeOf("shape"), 1))
+	// Combined ordinal-area section: its glyph — the shape channel's, else
+	// the section's swatch shape, else the default shape — drawn at the area
+	// scale's largest radius. AREA_SWATCH_W (a circle there) stays the floor.
+	const areaGlyphW = (s: CombinedSection, key: SwatchShapeChannel): number => {
+		if (s.channels.includes("shape")) {
+			return Math.max(AREA_SWATCH_W, widestShapeGlyphBox(s, areaMaxRadius, 1))
+		}
+		const shape = swatchShapeOf(key)
+		const glyph =
+			shape === null
+				? resolveGlyph(configs.defaultShape ?? 0, configs.shape?.customGlyphs)
+				: shape
+		return Math.max(AREA_SWATCH_W, swatchGlyphBox(glyph, areaMaxRadius, 1))
+	}
 	// Line-chart context: a combined pattern section overlays the dash line
-	// through the point glyph in a wider box — mirror ComposedSwatch's
-	// max(22, (r + 3) * 2 + 8).
+	// through the point glyph in a wider box — mirror `composedSwatchSize`'s
+	// dash route: max(22, glyph box + 8).
 	const connectionMapped =
 		!modeDef.legend.hideConnectionInThisMode && !!encodings.connection?.field
 	// Swatch shape / size lookups key on the section's LEAD channel — same
@@ -867,7 +938,7 @@ export const planLegendSections = ({
 				case "opacity":
 					return OPACITY_SWATCH_W
 				case "shape":
-					return Math.max(COMPOSED_SWATCH_W, shapeGlyphW)
+					return Math.max(COMPOSED_SWATCH_W, shapeGlyphW(s))
 				default:
 					return composedSwatchW(key)
 			}
@@ -882,16 +953,19 @@ export const planLegendSections = ({
 		let w = composedSwatchW(key)
 		for (const c of s.channels) {
 			if (c === "length") w = Math.max(w, LENGTH_SWATCH_W)
-			else if (c === "area") w = Math.max(w, AREA_SWATCH_W)
+			else if (c === "area") w = Math.max(w, areaGlyphW(s, key))
 			else if (c === "angle") w = Math.max(w, ANGLE_SWATCH_W)
-			else if (c === "shape") w = Math.max(w, shapeGlyphW)
+			else if (c === "shape") w = Math.max(w, shapeGlyphW(s))
 		}
 		if (connectionMapped && s.channels.includes("pattern")) {
-			const glyphR = Math.max(
-				legendSwatchSize(legendCfg, "shape") ?? 0,
-				legendSwatchSize(legendCfg, key) ?? 4.5,
-			)
-			w = Math.max(w, 22, (glyphR + 3) * 2 + 8)
+			const glyphR = Math.max(swatchSizeOf("shape"), swatchSizeOf(key))
+			const dashShape = swatchShapeOf(key)
+			const box = s.channels.includes("shape")
+				? widestShapeGlyphBox(s, glyphR, 1)
+				: dashShape === "line"
+					? (glyphR + SWATCH_BOX_PAD) * 2
+					: swatchGlyphBox(dashShape ?? 0, glyphR, 1)
+			w = Math.max(w, 22, box + 8)
 		}
 		return w
 	}
