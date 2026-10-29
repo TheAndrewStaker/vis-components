@@ -26,6 +26,7 @@ const VISUAL_KEYS = {
 	themeId: "not a setting",
 	fieldLevelOrders: "setting",
 	fieldLevelOrderSpecs: "setting",
+	fieldOrder: "setting",
 	annotationsConfig: "setting",
 	captionConfig: "setting",
 	dataTableConfig: "setting",
