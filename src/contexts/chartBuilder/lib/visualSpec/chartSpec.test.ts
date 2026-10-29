@@ -101,7 +101,7 @@ describe("readChartSpec", () => {
 		expect(paths({ ...valid(), axes: { y: { min: 5, max: 5 } } })).toEqual(["axes.y"])
 		expect(paths({ ...valid(), axes: { y: { max: "40" } } })).toEqual(["axes.y.max"])
 		expect(paths({ ...valid(), axes: { y: { format: ".f1" }, z: {} } })).toEqual(["axes.y.format", "axes.z"])
-		for (const format of ["", ",.0f kg", "${,.2f}", "literal", "year-ends", "%Y"]) {
+		for (const format of ["", ",.0f kg", "${,.2f}", "literal", "year-ends", "%Y", ",.1~fK", ",.1~fM", ",.1~fB", "$,.1~fM", "${$,.1~fB} spent"]) {
 			expect(errorsOf({ ...valid(), axes: { y: { format } } })).toEqual([])
 		}
 		expect(errorsOf({ ...valid(), axes: { x: { min: "2020", max: "2021-06" } } })).toEqual([])

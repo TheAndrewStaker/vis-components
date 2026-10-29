@@ -11,7 +11,7 @@ import { formatSpecifier } from "d3-format"
 
 import type { StackMode } from "../channelConfig"
 import { CHANNELS } from "../channels"
-import { LITERAL_FORMAT, parseFormatSpec, YEAR_ENDS_FORMAT } from "../formatTick"
+import { LITERAL_FORMAT, parseFormatSpec, parseScaledSpec, YEAR_ENDS_FORMAT } from "../formatTick"
 import { parseLocalDate } from "../localDate"
 import {
 	QUICK_START_CHART_TYPES,
@@ -200,14 +200,14 @@ export const pathOf = (...segments: string[]): string =>
 
 /** Why a Format-box string won't format, or null. Auto (""), `literal`,
  *  `year-ends` and d3-time-format specs pass; anything else must be a
- *  d3-format spec. */
+ *  d3-format spec, optionally ending in a fixed-scale K, M or B. */
 export const formatProblem = (raw: string): string | null => {
 	const spec = parseFormatSpec(raw).spec.trim()
 	const lower = spec.toLowerCase()
 	if (spec === "" || lower === LITERAL_FORMAT || lower === YEAR_ENDS_FORMAT) return null
 	if (/%[a-zA-Z]/.test(spec)) return null
 	try {
-		formatSpecifier(spec)
+		formatSpecifier(parseScaledSpec(spec)?.base ?? spec)
 		return null
 	} catch {
 		return `"${raw}" isn't a d3-format spec (e.g. ",.0f", ".1%", "$,.2s")`
