@@ -10,6 +10,7 @@ import { isBarModeId } from "../chartModes/families"
 import { DEFAULT_AXIS_CONFIG, type AxisConfig } from "../channelConfig"
 import { effectiveType } from "../fieldType"
 import { foldFlowNodeTitles } from "../foldFlowNodeTitles"
+import { seedOutlineHue } from "../hueDefaults"
 import { applyCellConversions } from "../materializeTransforms"
 import { scaffoldVariation, type ChannelAssignment } from "../quickStart"
 import {
@@ -229,6 +230,14 @@ const compose = (
 			...(spec.stack ? { stackMode: spec.stack } : {}),
 		}
 		scaffold = scaffoldVariation(variation, assignments, draft.channelConfigs, ctx.theme)
+		// The Outline color panel seeds its config when a field is picked; mirror it.
+		if (fields.outlineHue !== undefined) {
+			scaffold.configs.outlineHue = seedOutlineHue(
+				scaffold.configs.outlineHue,
+				typeOf(fields.outlineHue),
+				ctx.theme
+			)
+		}
 		const mode = getChartModeDef(scaffold.encodings, typeOf, scaffold.configs, draft.mapConfig)
 		const modes: readonly string[] = spec.family ? (FAMILY_MODES[spec.family] ?? []) : []
 		if (spec.family && !variant && !spec.variation) {
