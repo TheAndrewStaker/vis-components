@@ -103,6 +103,21 @@ describe("POST /api/visuals", () => {
 		expect((await post(base, cafe())).status).toBe(201)
 	})
 
+	it("reads rows from the whole body when its meta is gone, not a version file it replaced", async () => {
+		const base = await start()
+		await seedDataset(base, CAFE)
+		const numbered = {
+			...CAFE,
+			versions: CAFE.versions.map((v) => ({
+				...v,
+				rows: v.rows.map((r, i) => ({ ...r, flavor: String(i + 1) })),
+			})),
+		}
+		await put(base, `/api/datasets/${CAFE.id}`, numbered, { "x-vis-versions-managed": "1" })
+		const res = await post(base, cafe({ fieldTypes: { flavor: "quantitative" } }), "?dryRun=1")
+		expect(res.status).toBe(200)
+	})
+
 	it("refuses a dataset whose rows can't be loaded, instead of checking against none", async () => {
 		const base = await start()
 		await seedDataset(base, CAFE)
