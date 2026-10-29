@@ -7,7 +7,13 @@ import type { StackMode } from "../channelConfig"
 import { CHANNELS, conflictsFor } from "../channels"
 import { QUICK_START_VARIATIONS, type QuickStartChartType } from "../quickStartVariations"
 import type { EncodingChannel, FieldType } from "../types"
-import { SPEC_CHANNELS, SPEC_FAMILIES, SPEC_KEYS, type SpecChannel } from "./chartSpec"
+import {
+	DEFERRED_FAMILIES,
+	SPEC_CHANNELS,
+	SPEC_FAMILIES,
+	SPEC_KEYS,
+	type SpecChannel,
+} from "./chartSpec"
 import { FAMILY_MODES, OPTIONAL_CHANNELS } from "./composeVisual"
 
 export type ChartVocabulary = {
@@ -32,6 +38,8 @@ export type ChartVocabulary = {
 			stack?: StackMode
 		}>
 	}>
+	/** Families the editor draws that a spec can't make yet. */
+	editorOnlyFamilies: readonly QuickStartChartType[]
 	fieldTypes: readonly FieldType[]
 }
 
@@ -60,5 +68,6 @@ export const chartVocabulary = (): ChartVocabulary => ({
 			}
 		}),
 	})),
+	editorOnlyFamilies: DEFERRED_FAMILIES,
 	fieldTypes: ["quantitative", "categorical", "temporal", "ordinal"],
 })

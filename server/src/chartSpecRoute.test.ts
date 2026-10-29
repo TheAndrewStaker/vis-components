@@ -259,6 +259,7 @@ describe("GET /api/chart-spec", () => {
 		const body = (await res.json()) as {
 			channels: Array<{ channel: string; conflictsWith: string[] }>
 			families: Array<{ family: string; variations: Array<{ name: string }> }>
+			editorOnlyFamilies: string[]
 			themes: Array<{ id: string; default: boolean }>
 			spec: Record<string, string>
 			features: string[]
@@ -275,6 +276,7 @@ describe("GET /api/chart-spec", () => {
 		expect(families).toContain("dumbbell")
 		expect(families).not.toContain("map")
 		expect(families).not.toContain("sankey")
+		expect(body.editorOnlyFamilies).toEqual(["map", "sankey", "chord"])
 		expect(body.families.find((f) => f.family === "dumbbell")?.variations[0]).toMatchObject({
 			name: "Dumbbell",
 			sameFieldAs: { connection: "y" },
