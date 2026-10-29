@@ -105,6 +105,13 @@ describe("composeChartSpec", () => {
 		expect(tile.channelConfigs.hue).toEqual(buildQuantHueConfigFromTheme(themeOf(THEME)))
 	})
 
+	it("seeds an outline color as the Outline color panel does", () => {
+		const quant = composed(cafe({ encodings: { x: "month", y: "muffins", outlineHue: "coffees" } }))
+		expect(quant.channelConfigs.outlineHue).toEqual(buildQuantHueConfigFromTheme(themeOf(THEME)))
+		const cat = composed(cafe({ encodings: { x: "month", y: "muffins", outlineHue: "flavor" } }))
+		expect(cat.channelConfigs.outlineHue).toBeUndefined()
+	})
+
 	it("keeps a named variation's stack mode unless the spec sets one", () => {
 		const grouped = cafe({ family: "bar", variation: "Vertical grouped bars" })
 		expect(composed(grouped).channelConfigs.hue?.stackMode).toBe("group")
