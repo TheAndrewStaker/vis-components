@@ -101,16 +101,22 @@ const loadDataset = async (
 		(body ??= gunzipJson(await readDatasetFile(dataDir, datasetId)) as Dataset | undefined)
 	const parsed = stored === null ? undefined : parseJson(stored)
 	let meta: DatasetMeta | undefined = isDatasetMeta(parsed) ? parsed : undefined
+	// No meta means the body was written after it, so a version file may be older than the body.
+	const fromBody = !meta
 	if (!meta) {
 		const whole = await wholeBody()
 		if (!whole) return null
 		meta = datasetMetaFrom(whole)
 	}
 	const latest = meta.latestVersionId
-	const own = isSafeId(latest)
-		? rowsOf(gunzipJson(await readDatasetVersionFile(dataDir, datasetId, latest)))
-		: undefined
-	const rows = own ?? rowsOf((await wholeBody())?.versions?.find((v) => v.id === latest))
+	const bodyRows = async () => rowsOf((await wholeBody())?.versions?.find((v) => v.id === latest))
+	const fileRows = async () =>
+		isSafeId(latest)
+			? rowsOf(gunzipJson(await readDatasetVersionFile(dataDir, datasetId, latest)))
+			: undefined
+	const rows = fromBody
+		? ((await bodyRows()) ?? (await fileRows()))
+		: ((await fileRows()) ?? (await bodyRows()))
 	if (rows === undefined) throw new RowsMissing()
 	return { meta, rows }
 }
