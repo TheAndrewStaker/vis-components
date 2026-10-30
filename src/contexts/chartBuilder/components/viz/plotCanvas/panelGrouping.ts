@@ -154,7 +154,7 @@ const panelMeasureBound = (
 		)
 	}
 	if (perLeaf.size === 0) return 0
-	return sign > 0
-		? Math.max(0, ...perLeaf.values())
-		: Math.min(0, ...perLeaf.values())
+	let out = 0
+	for (const v of perLeaf.values()) out = sign > 0 ? Math.max(out, v) : Math.min(out, v)
+	return out
 }
