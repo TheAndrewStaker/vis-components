@@ -141,7 +141,9 @@ export const AnnotationsPanel = () => {
 				if (Number.isFinite(n)) nums.push(n)
 			}
 			if (nums.length > 0) {
-				;[dataMin, dataMax] = extent(nums) as [number, number]
+				const [lo, hi] = extent(nums) as [number, number]
+				dataMin = lo
+				dataMax = hi
 			}
 		}
 		return { field, type, categories, dataMin, dataMax }
