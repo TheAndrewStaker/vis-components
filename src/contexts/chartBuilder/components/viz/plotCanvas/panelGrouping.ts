@@ -55,10 +55,10 @@ export const groupRowsByShareGroup = (
 		const { rowKey, colKey } = panelGroupKeys(panelData, k, i)
 		const rs = panelData.rowsByValue.get(k) ?? []
 		const colRows = colRowsByColKey.get(colKey)
-		if (colRows) colRows.push(...rs)
+		if (colRows) for (const r of rs) colRows.push(r)
 		else colRowsByColKey.set(colKey, [...rs])
 		const rowRows = rowRowsByRowKey.get(rowKey)
-		if (rowRows) rowRows.push(...rs)
+		if (rowRows) for (const r of rs) rowRows.push(r)
 		else rowRowsByRowKey.set(rowKey, [...rs])
 	})
 	return { colRowsByColKey, rowRowsByRowKey }
