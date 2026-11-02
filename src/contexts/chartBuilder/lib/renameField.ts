@@ -476,12 +476,20 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 		: dle
 
 	const cc = state.channelConfigs
+	// Axis-level field references: the regression's per-group split and the
+	// mirrored axis's two-level direction field.
 	const swapAxis = (axis: ChannelConfigs["x"]): ChannelConfigs["x"] =>
-		axis?.regression && axis.regression.groupField === oldName
-			? {
-					...axis,
-					regression: { ...axis.regression, groupField: newName },
-				}
+		axis
+			? patched(axis, {
+					regression:
+						axis.regression?.groupField === oldName
+							? { ...axis.regression, groupField: newName }
+							: axis.regression,
+					mirror:
+						axis.mirror?.directionField === oldName
+							? { ...axis.mirror, directionField: newName }
+							: axis.mirror,
+				})
 			: axis
 	const channelConfigs = patched(cc, {
 		x: swapAxis(cc.x),
@@ -504,6 +512,13 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 							: cc.connection.thicknessField,
 				})
 			: cc.connection,
+		// Segment "Vary by" field. Its `segmentThicknessByValue` map (like
+		// `connection.thicknessByValue`) is keyed by the field's VALUES, which
+		// a column rename doesn't touch.
+		length:
+			cc.length && cc.length.segmentThicknessField === oldName
+				? { ...cc.length, segmentThicknessField: newName }
+				: cc.length,
 		shape: cc.shape
 			? patched(cc.shape, {
 					outlineColorRules: renameRuleTokens(
@@ -568,10 +583,15 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 				fieldLayers: renameKey(dlc.fieldLayers, oldName, newName),
 				// A default label's id IS the variable's name, so the key moves
 				// with the field; every template swaps its tokens.
-				composedLabels: dlc.composedLabels?.map((l) => ({
-					id: l.id === oldName ? newName : l.id,
-					template: renameLabelTokens(l.template, oldName, newName) ?? l.template,
-				})),
+				composedLabels:
+					dlc.composedLabels &&
+					mapItems(dlc.composedLabels, (l) =>
+						patched(l, {
+							id: l.id === oldName ? newName : l.id,
+							template:
+								renameLabelTokens(l.template, oldName, newName) ?? l.template,
+						})
+					),
 				fieldPositionRules: mapRecordValues(
 					renameKey(dlc.fieldPositionRules, oldName, newName),
 					(rules) => renameRuleTokens(rules, oldName, newName) ?? rules
@@ -619,7 +639,9 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 				visibleFields:
 					renameInList(tc.visibleFields, oldName, newName) ??
 					tc.visibleFields,
-				customHtml: tc.customHtml.includes(`{{${oldName}}}`)
+				// `customHtml` is optional on partial / pre-default stored
+				// configs; a missing template has nothing to rename.
+				customHtml: tc.customHtml?.includes(`{{${oldName}}}`)
 					? tc.customHtml.replaceAll(`{{${oldName}}}`, `{{${newName}}}`)
 					: tc.customHtml,
 			})
@@ -973,6 +995,60 @@ export const renameFieldInConfigs = <T extends FieldNameConfigs>(
 	return meltedInto !== undefined
 		? renameMeltedValueRefs(base, meltedInto, oldName, newName)
 		: renameViewFieldRefs(base, oldName, newName)
+}
+
+/** Prefix of the scratch names `remapFieldsInConfigs` routes every pair
+ * through. Never observable in its result. */
+const REMAP_TEMP_PREFIX = "__remap_"
+
+/** Apply a whole field-name mapping (`old → new`) to one visual-state slice
+ * at once — every pair SIMULTANEOUSLY, so `{ A: "B", B: "A" }` swaps cleanly
+ * and rotations work. Used to re-bind a visual's fields onto a different data
+ * set. Identity pairs are skipped; an empty / all-identity mapping returns
+ * `state` itself.
+ *
+ * Done as two `renameFieldInConfigs` passes through collision-free temporary
+ * names (old → temp, then temp → new), with the `datasetFields` list renamed
+ * in lockstep so the standard/melted mode decision and the melt lookups see
+ * the names the state currently holds. `datasetFields` must be the field
+ * list the state's CURRENT names refer to (the mapping's keys). A target
+ * that is already some OTHER field's name (and isn't itself remapped away)
+ * merges onto it — callers pick collision-free targets. Throws if any
+ * dataset-field or mapping name already contains the temporary prefix. */
+export const remapFieldsInConfigs = <T extends FieldNameConfigs>(
+	state: T,
+	datasetFields: Field[],
+	mapping: Record<string, string>
+): T => {
+	const pairs = Object.entries(mapping).filter(([from, to]) => from !== to)
+	if (pairs.length === 0) return state
+
+	const clash = [...datasetFields.map((f) => f.name), ...pairs.flat()].find(
+		(n) => n.includes(REMAP_TEMP_PREFIX)
+	)
+	if (clash !== undefined)
+		throw new Error(
+			`remapFieldsInConfigs: name "${clash}" collides with the temporary-name prefix "${REMAP_TEMP_PREFIX}".`
+		)
+
+	// Plain name swap for the lockstep list — no `sourceNames` bookkeeping
+	// (unlike `renameDatasetField`), so temporary names never leak into a
+	// field's alias history.
+	const renameFields = (fields: Field[], from: string, to: string): Field[] =>
+		fields.map((f) => (f.name === from ? { ...f, name: to } : f))
+
+	const temps = pairs.map((_, i) => `${REMAP_TEMP_PREFIX}${i}__`)
+	let out = state
+	let fields = datasetFields
+	pairs.forEach(([from], i) => {
+		out = renameFieldInConfigs(out, fields, from, temps[i])
+		fields = renameFields(fields, from, temps[i])
+	})
+	pairs.forEach(([, to], i) => {
+		out = renameFieldInConfigs(out, fields, temps[i], to)
+		fields = renameFields(fields, temps[i], to)
+	})
+	return out
 }
 
 /** `renameFieldInConfigs` over a saved Visual. Same reference when nothing

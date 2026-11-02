@@ -5,6 +5,7 @@ import {
 	DEFAULT_FACET_CONFIG,
 	DEFAULT_REGRESSION_CONFIG,
 	DEFAULT_AXIS_CONFIG,
+	DEFAULT_LENGTH_CONFIG,
 	DEFAULT_SHAPE_CONFIG,
 } from "./channelConfig"
 import { DEFAULT_ANNOTATIONS_CONFIG } from "./annotationsConfig"
@@ -13,6 +14,7 @@ import {
 	fieldRenameError,
 	originalFieldName,
 	renameDatasetField,
+	remapFieldsInConfigs,
 	renameFieldInConfigs,
 	type FieldNameConfigs,
 } from "./renameField"
@@ -229,6 +231,63 @@ describe("renameFieldInConfigs — standard (view-field) rewrite", () => {
 		// the untouched slot keeps its identity
 		expect(next.channelConfigs.colorSlots?.rug).toBe(
 			state.channelConfigs.colorSlots?.rug
+		)
+	})
+
+	it("follows the field into a mirrored axis's direction field", () => {
+		const state = baseState()
+		state.channelConfigs = {
+			x: {
+				...DEFAULT_AXIS_CONFIG,
+				mirror: { enabled: true, directionField: "region", positiveMax: 9 },
+			},
+			y: {
+				...DEFAULT_AXIS_CONFIG,
+				mirror: { enabled: true, directionField: "other" },
+			},
+		}
+		const next = renameFieldInConfigs(state, fields, "region", "area")
+		expect(next.channelConfigs.x?.mirror).toEqual({
+			enabled: true,
+			directionField: "area",
+			positiveMax: 9,
+		})
+		// The axis whose mirror doesn't use the field keeps its identity.
+		expect(next.channelConfigs.y).toBe(state.channelConfigs.y)
+		// Nothing mentions the field → whole state unchanged.
+		expect(renameFieldInConfigs(state, fields, "sales", "revenue")).toBe(
+			state
+		)
+	})
+
+	it("follows the field into the segment-thickness Vary-by, leaving its value keys", () => {
+		const state = baseState()
+		state.channelConfigs = {
+			length: {
+				...DEFAULT_LENGTH_CONFIG,
+				segmentThicknessField: "region",
+				// Keyed by the field's VALUES — a column rename leaves them be.
+				segmentThicknessByValue: { region: 2, east: 4 },
+			},
+		}
+		const next = renameFieldInConfigs(state, fields, "region", "area")
+		expect(next.channelConfigs.length?.segmentThicknessField).toBe("area")
+		expect(next.channelConfigs.length?.segmentThicknessByValue).toBe(
+			state.channelConfigs.length?.segmentThicknessByValue
+		)
+		expect(renameFieldInConfigs(state, fields, "sales", "revenue")).toBe(
+			state
+		)
+	})
+
+	it("keeps composed labels' identity when none mentions the field", () => {
+		const state = baseState()
+		state.dataLabelsConfig = {
+			...DEFAULT_DATA_LABELS_CONFIG,
+			composedLabels: [{ id: "lbl-1", template: "{region}" }],
+		}
+		expect(renameFieldInConfigs(state, fields, "sales", "revenue")).toBe(
+			state
 		)
 	})
 
@@ -699,5 +758,156 @@ describe("renameFieldInConfigs — derived variables", () => {
 		}
 		const next = renameFieldInConfigs(state, meltFields, "jan", "January")
 		expect(next.derivedVariablesConfig).toBe(state.derivedVariablesConfig)
+	})
+})
+
+/** Every string reachable from `value` — object keys included. */
+const allStrings = (value: unknown, out: string[] = []): string[] => {
+	if (typeof value === "string") out.push(value)
+	else if (Array.isArray(value)) for (const v of value) allStrings(v, out)
+	else if (value && typeof value === "object")
+		for (const [k, v] of Object.entries(value)) {
+			out.push(k)
+			allStrings(v, out)
+		}
+	return out
+}
+
+describe("remapFieldsInConfigs", () => {
+	const fields = [q("sales"), q("cost"), c("region")]
+
+	const richState = () => {
+		const state = baseState()
+		state.encodings = {
+			...state.encodings,
+			x: { field: "sales" },
+			y: { field: "cost" },
+			hue: { field: "region" },
+		}
+		state.fieldTypeOverrides = { sales: "ordinal" }
+		state.fieldOrder = ["sales", "cost", "region"]
+		state.dataLabelsConfig = {
+			...DEFAULT_DATA_LABELS_CONFIG,
+			labelTemplate: "{sales} / {cost}",
+			fieldFormats: { sales: ".1%", cost: "$,.0f" },
+			textColorRules: [{ condition: "{sales} > {cost}", color: "#0a0" }],
+		}
+		return state
+	}
+
+	it("renames a single field onto a name absent from the data set", () => {
+		const next = remapFieldsInConfigs(richState(), fields, {
+			sales: "revenue",
+		})
+		expect(next.encodings.x.field).toBe("revenue")
+		expect(next.encodings.y.field).toBe("cost")
+		expect(next.fieldTypeOverrides).toEqual({ revenue: "ordinal" })
+		expect(next.dataLabelsConfig.fieldFormats).toEqual({
+			revenue: ".1%",
+			cost: "$,.0f",
+		})
+	})
+
+	it("swaps two fields cleanly across encodings, per-field maps and rule tokens", () => {
+		const state = richState()
+		const next = remapFieldsInConfigs(state, fields, {
+			sales: "cost",
+			cost: "sales",
+		})
+		expect(next.encodings.x.field).toBe("cost")
+		expect(next.encodings.y.field).toBe("sales")
+		expect(next.encodings.hue).toBe(state.encodings.hue)
+		expect(next.fieldTypeOverrides).toEqual({ cost: "ordinal" })
+		expect(next.fieldOrder).toEqual(["cost", "sales", "region"])
+		expect(next.dataLabelsConfig.fieldFormats).toEqual({
+			cost: ".1%",
+			sales: "$,.0f",
+		})
+		expect(next.dataLabelsConfig.labelTemplate).toBe("{cost} / {sales}")
+		expect(next.dataLabelsConfig.textColorRules?.[0].condition).toBe(
+			"{cost} > {sales}"
+		)
+		// Untouched slices keep their identity.
+		expect(next.tooltipConfig).toBe(state.tooltipConfig)
+	})
+
+	it("rotates three fields", () => {
+		const next = remapFieldsInConfigs(richState(), fields, {
+			sales: "cost",
+			cost: "region",
+			region: "sales",
+		})
+		expect(next.encodings.x.field).toBe("cost")
+		expect(next.encodings.y.field).toBe("region")
+		expect(next.encodings.hue.field).toBe("sales")
+		expect(next.fieldOrder).toEqual(["cost", "region", "sales"])
+	})
+
+	it("returns the same reference for an empty or all-identity mapping", () => {
+		const state = richState()
+		expect(remapFieldsInConfigs(state, fields, {})).toBe(state)
+		expect(
+			remapFieldsInConfigs(state, fields, { sales: "sales", cost: "cost" })
+		).toBe(state)
+	})
+
+	it("never leaks a temporary name into the result", () => {
+		const state = richState()
+		state.channelConfigs = {
+			x: {
+				...DEFAULT_AXIS_CONFIG,
+				mirror: { enabled: true, directionField: "region" },
+			},
+			length: { ...DEFAULT_LENGTH_CONFIG, segmentThicknessField: "cost" },
+		}
+		const next = remapFieldsInConfigs(state, fields, {
+			sales: "cost",
+			cost: "region",
+			region: "sales",
+		})
+		expect(allStrings(next).filter((s) => s.includes("__remap_"))).toEqual(
+			[]
+		)
+		expect(next.channelConfigs.x?.mirror?.directionField).toBe("sales")
+		expect(next.channelConfigs.length?.segmentThicknessField).toBe("region")
+	})
+
+	it("swaps melted columns' value keys under an applying reshape", () => {
+		const wide = [c("region"), q("jan"), q("feb")]
+		const state = baseState()
+		state.reshapeConfig = {
+			...DEFAULT_RESHAPE_CONFIG,
+			idFields: ["region"],
+			meltFields: ["jan", "feb"],
+		}
+		state.encodings = { ...state.encodings, hue: { field: "category" } }
+		state.channelConfigs = {
+			hue: {
+				kind: "categorical",
+				colors: { jan: "#111", feb: "#222" },
+				stackMode: "stack",
+			},
+		}
+		const next = remapFieldsInConfigs(state, wide, { jan: "feb", feb: "jan" })
+		expect(next.reshapeConfig.meltFields).toEqual(["feb", "jan"])
+		expect(next.channelConfigs.hue).toEqual({
+			kind: "categorical",
+			colors: { feb: "#111", jan: "#222" },
+			stackMode: "stack",
+		})
+		expect(allStrings(next).filter((s) => s.includes("__remap_"))).toEqual(
+			[]
+		)
+	})
+
+	it("throws when a field already carries the temporary-name prefix", () => {
+		expect(() =>
+			remapFieldsInConfigs(richState(), [...fields, q("__remap_0__")], {
+				sales: "cost",
+			})
+		).toThrow(/__remap_/)
+		expect(() =>
+			remapFieldsInConfigs(richState(), fields, { sales: "__remap_1__" })
+		).toThrow(/__remap_/)
 	})
 })
