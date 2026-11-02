@@ -61,6 +61,10 @@ type ModalProps = {
 	/** Accessible name when there's no `title` (with a title, the dialog is
 	 * labelled by it). */
 	"aria-label"?: string
+	/** Show a small × at the right end of the title bar that calls `onClose`.
+	 * For dialogs with no "Done" — the user leaves them by closing, not by
+	 * confirming anything. Requires `title`. */
+	closeButton?: boolean
 }
 
 export const Modal = ({
@@ -77,6 +81,7 @@ export const Modal = ({
 	panelClassName,
 	bodyClassName,
 	"aria-label": ariaLabel,
+	closeButton = false,
 }: ModalProps) => {
 	// A text-selection drag that starts inside the panel (e.g. highlighting a
 	// dimension input) and releases over the backdrop fires the click on the
@@ -180,11 +185,32 @@ export const Modal = ({
 			aria-label={title ? undefined : ariaLabel}
 		>
 			{title && (
-				<div
-					id={titleId}
-					className="border-b border-stone-200 px-4 py-3 text-sm font-medium dark:border-stone-700 vc-heading"
-				>
-					{title}
+				<div className="flex items-center gap-3 border-b border-stone-200 px-4 py-3 dark:border-stone-700">
+					<div id={titleId} className="min-w-0 flex-1 text-sm font-medium vc-heading">
+						{title}
+					</div>
+					{closeButton && (
+						<button
+							type="button"
+							onClick={onClose}
+							title="Close"
+							aria-label="Close"
+							className="-mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-200 vc-muted"
+						>
+							<svg
+								viewBox="0 0 16 16"
+								width={12}
+								height={12}
+								aria-hidden="true"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth={1.75}
+								strokeLinecap="round"
+							>
+								<path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />
+							</svg>
+						</button>
+					)}
 				</div>
 			)}
 			<div className={c("p-4", bodyClassName)}>{children}</div>

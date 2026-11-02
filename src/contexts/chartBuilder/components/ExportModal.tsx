@@ -40,6 +40,7 @@ import { SaveTemplateButton } from "./SaveTemplateButton"
 import { EXPORT_TABLE_HEIGHT_MESSAGE } from "./viz/DataTableBlock"
 
 import { Button } from "../../../components/ui/Button"
+import { CopyButton } from "../../../components/ui/CopyButton"
 import { Modal } from "../../../components/ui/Modal"
 import { NumberInput } from "../../../components/ui/NumberInput"
 import { Select } from "../../../components/ui/Select"
@@ -279,6 +280,7 @@ export const ExportModal = ({ open, onClose, visualId }: Props) => {
 			open={open}
 			onClose={onClose}
 			title="Export this visualization"
+			closeButton
 			maxWidthPx={slotWidth}
 			anchorTop
 			fitWidth
@@ -286,27 +288,28 @@ export const ExportModal = ({ open, onClose, visualId }: Props) => {
 		>
 			<div className="flex flex-col gap-4">
 				<div className="flex items-stretch gap-3 border-b border-stone-200 dark:border-stone-700">
-					{/* Not a tab: the JSON bundle downloads straight away, so it sits
-					    beside the two panes rather than opening one. Wrapped so the
-					    button centers vertically while the tabs stay full height and
-					    keep their active underline flush with the row's border. */}
-					<div className="flex items-center gap-2 pb-2">
-						<DownloadJsonButton visualId={visualId} />
-						<SaveTemplateButton visualId={visualId} />
-					</div>
 					<TabButton active={tab === "embed"} onClick={() => setTab("embed")}>
 						Embed
 					</TabButton>
 					<TabButton active={tab === "export"} onClick={() => setTab("export")}>
 						Export image
 					</TabButton>
+					{/* Not tabs: the JSON bundle downloads straight away and the
+					    template saves straight away, so they sit at the row's right
+					    end rather than opening a pane. Wrapped so the buttons center
+					    vertically while the tabs stay full height and keep their
+					    active underline flush with the row's border. */}
+					<div className="ml-auto flex items-center gap-2 pb-2">
+						<DownloadJsonButton visualId={visualId} />
+						<SaveTemplateButton visualId={visualId} />
+					</div>
 				</div>
 				{tab === "embed" ? (
 					// Fixed content width (the panel hugs its content in fitWidth
 					// mode): matches the max-w-2xl (672px) panel this tab used to
 					// get, minus the panel's p-4 padding.
 					<div className="max-w-full" style={{ width: EMBED_TAB_WIDTH }}>
-						<EmbedTab visualId={visualId} onClose={onClose} />
+						<EmbedTab visualId={visualId} />
 					</div>
 				) : (
 					<ExportTab
@@ -407,10 +410,8 @@ const TabButton = ({
 
 const EmbedTab = ({
 	visualId,
-	onClose,
 }: {
 	visualId: string
-	onClose: () => void
 }) => {
 	const view = useCurrentDatasetView()
 	const instances = useAtomValue(embedInstancesAtom)
@@ -436,7 +437,6 @@ const EmbedTab = ({
 		.replaceAll(">", "&gt;")
 	const [mode, setMode] = useState<PinMode>("live")
 	const [splitLegend, setSplitLegend] = useState(false)
-	const [copied, setCopied] = useState<"main" | "legend" | null>(null)
 	const [busy, setBusy] = useState<"publish" | "unpublish" | null>(null)
 	const [publishError, setPublishError] = useState<string | null>(null)
 	// Unpublishing kills public URLs, so the button asks twice (inline).
@@ -575,16 +575,10 @@ const EmbedTab = ({
 		}
 	}
 
-	const onCopy = async (key: "main" | "legend", value: string) => {
-		try {
-			await globalThis.navigator.clipboard.writeText(value)
-			setCopied(key)
-			window.setTimeout(() => setCopied(null), 1500)
-		} catch {
-			// Older browsers — let the user select+copy manually.
-		}
+	// Taking a snippet records the instance (the landing table lists where a
+	// visual is embedded).
+	const onCopied = () =>
 		setEmbedInstances((prev) => upsertEmbedInstance(prev, visualId, versionId))
-	}
 
 	const formatVersionLabel = (): string => {
 		if (!view) return ""
@@ -614,11 +608,6 @@ const EmbedTab = ({
 				<div className="rounded-sm border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
 					Publishing embeds requires the self-host server — this session is
 					running browser-local, so there is nowhere public to publish to.
-				</div>
-				<div className="flex items-center justify-end">
-					<Button compact onClick={onClose}>
-						Done
-					</Button>
 				</div>
 			</div>
 		)
@@ -670,7 +659,7 @@ const EmbedTab = ({
 			</fieldset>
 
 			{/* eslint-disable-next-line jsx-a11y/label-has-associated-control -- native label wraps the checkbox; its text sits below the rule's depth-2 scan */}
-			<label className="flex items-start gap-2 rounded-sm bg-stone-50 px-3 py-2 text-sm dark:bg-stone-800/60">
+			<label className="my-2 flex items-start gap-2 text-sm">
 				<input
 					type="checkbox"
 					className="mt-0.5"
@@ -688,23 +677,23 @@ const EmbedTab = ({
 				</div>
 			</label>
 
-			<div className="flex items-center gap-3">
+			<div className="flex items-center justify-end gap-2">
 				<Button compact disabled={busy !== null} onClick={() => void onPublish()}>
 					{publishLabel}
 				</Button>
-				{published && (
-					<Button
-						compact
-						disabled={busy !== null}
-						onClick={() => void onUnpublish()}
-					>
-						{busy === "unpublish"
-							? "Unpublishing…"
-							: confirmUnpublish
-								? "Really unpublish? The public URL will stop working"
-								: "Unpublish"}
-					</Button>
-				)}
+				{/* Always present so the row doesn't reflow on publish; greyed
+				    until there is something to unpublish. */}
+				<Button
+					compact
+					disabled={busy !== null || !published}
+					onClick={() => void onUnpublish()}
+				>
+					{busy === "unpublish"
+						? "Unpublishing…"
+						: confirmUnpublish
+							? "Really unpublish? The public URL will stop working"
+							: "Unpublish"}
+				</Button>
 			</div>
 
 			{publishError !== null && (
@@ -736,9 +725,7 @@ const EmbedTab = ({
 									onFocus={(e) => e.currentTarget.select()}
 								/>
 								<div className="flex items-center justify-end">
-									<Button compact onClick={() => onCopy(s.key, value)}>
-										{copied === s.key ? "Copied!" : "Copy snippet"}
-									</Button>
+									<CopyButton value={value} label="Copy snippet" onCopied={onCopied} />
 								</div>
 							</div>
 						)
@@ -748,12 +735,8 @@ const EmbedTab = ({
 
 			{published && <LinkedPictureRow url={published.publishedUrls?.image} />}
 
-			<div
-				className={`flex items-center ${
-					published && embedUrl !== null ? "justify-between" : "justify-end"
-				}`}
-			>
-				{published && embedUrl !== null && (
+			{published && embedUrl !== null && (
+				<div className="flex items-center">
 					<a
 						href={embedUrl}
 						target="_blank"
@@ -762,11 +745,8 @@ const EmbedTab = ({
 					>
 						Open embed in new tab
 					</a>
-				)}
-				<Button compact onClick={onClose}>
-					Done
-				</Button>
-			</div>
+				</div>
+			)}
 		</div>
 	)
 }
@@ -1099,9 +1079,6 @@ const ExportTab = ({
 			{/* Actions ride the popup's bottom-right corner, below the preview —
 			    they move as the popup resizes with the image, by design. */}
 			<div className="flex justify-end gap-2">
-				<Button compact onClick={onClose}>
-					Cancel
-				</Button>
 				<Button compact onClick={onDownload} disabled={busy}>
 					{busy ? "Exporting…" : `Save ${format.toUpperCase()}`}
 				</Button>

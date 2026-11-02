@@ -78,3 +78,28 @@ describe("Modal accessibility", () => {
 		expect(document.activeElement).toBe(opener)
 	})
 })
+
+describe("Modal close button", () => {
+	const Closable = () => {
+		const [open, setOpen] = useState(true)
+		return (
+			<Modal open={open} onClose={() => setOpen(false)} title="Export" closeButton>
+				<p>Body</p>
+			</Modal>
+		)
+	}
+
+	it("is absent by default", () => {
+		render(<Harness title="Export" />)
+		fireEvent.click(screen.getByText("Open"))
+		expect(screen.queryByRole("button", { name: "Close" })).toBeNull()
+	})
+
+	it("renders an × in the title bar that closes the dialog", () => {
+		render(<Closable />)
+		const close = screen.getByRole("button", { name: "Close" })
+		expect(screen.getByRole("dialog").contains(close)).toBe(true)
+		fireEvent.click(close)
+		expect(screen.queryByRole("dialog")).toBeNull()
+	})
+})

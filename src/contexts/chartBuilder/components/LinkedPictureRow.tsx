@@ -1,6 +1,6 @@
-import { useId, useState } from "react"
+import { useId } from "react"
 
-import { Button } from "../../../components/ui/Button"
+import { CopyButton } from "../../../components/ui/CopyButton"
 import { Input } from "../../../components/ui/Input"
 
 export const LINKED_PICTURE_LABEL = "Linked picture (experimental)"
@@ -13,17 +13,6 @@ export const LINKED_PICTURE_RETRY = "Picture didn't publish. Republish to retry.
  *  retry hint when that step of the publish failed (`url` undefined). */
 export const LinkedPictureRow = ({ url }: { url: string | undefined }) => {
 	const inputId = useId()
-	const [copied, setCopied] = useState(false)
-
-	const onCopy = async (value: string) => {
-		try {
-			await globalThis.navigator.clipboard.writeText(value)
-			setCopied(true)
-			window.setTimeout(() => setCopied(false), 1500)
-		} catch {
-			// Older browsers — let the user select+copy manually.
-		}
-	}
 
 	if (url === undefined) {
 		return (
@@ -48,9 +37,7 @@ export const LinkedPictureRow = ({ url }: { url: string | undefined }) => {
 			/>
 			<p className="vc-help">{LINKED_PICTURE_HELP}</p>
 			<div className="flex items-center justify-end">
-				<Button compact onClick={() => void onCopy(url)}>
-					{copied ? "Copied!" : "Copy link"}
-				</Button>
+				<CopyButton value={url} label="Copy link" />
 			</div>
 		</div>
 	)
