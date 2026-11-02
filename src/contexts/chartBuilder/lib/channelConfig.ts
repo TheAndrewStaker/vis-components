@@ -1881,7 +1881,7 @@ export const EMPTY_CHANNEL_CONFIGS: ChannelConfigs = {}
  *  variable on its own, `{A} ({B})` for a combination. The `id` keys the
  *  label in every per-label map (`fieldColors`, `fieldColorRules`,
  *  `fieldSizes`, `fieldFonts`, `fieldBackgrounds`, `fieldAlignments`,
- *  `fieldOffsets`, `fieldBarPlacements`, `fieldLayouts`,
+ *  `fieldOffsets`, `fieldBarPlacements`, `fieldPolarPlacements`, `fieldLayouts`,
  *  `fieldLabelPoints`), which is where its own sections in the sidebar
  *  read and write. The default labels use the variable's NAME as the id,
  *  so a per-variable entry saved before composed labels keys its label. */
@@ -1902,6 +1902,23 @@ export type FieldLabelLayout = {
 export type FieldBarPlacement = {
 	position?: NonNullable<DataLabelsConfig["barLabelPosition"]>
 	side?: NonNullable<DataLabelsConfig["barLabelSide"]>
+}
+
+/** A data label's horizontal alignment. Left / center / right are screen
+ *  directions; "outward" is for the polar charts (pies, sunburst rings):
+ *  the text hangs away from the figure's center — left-aligned on the
+ *  right side, right-aligned on the left, centered near straight up /
+ *  down (`lib/polarLabelAlignment.ts`). The renderer that knows the
+ *  center works out each label's side (`DataLabelAnchor.outwardAlign`);
+ *  elsewhere it reads as centered. */
+export type DataLabelAlignment = "left" | "center" | "right" | "outward"
+
+/** One variable's own pie placement (`DataLabelsConfig.fieldPolarPlacements`):
+ *  a sparse pair of the layer-wide `polarLabelAngle` (degrees) /
+ *  `polarLabelRadius` (percent of the pie radius). */
+export type FieldPolarPlacement = {
+	angle?: number
+	radius?: number
 }
 
 /** Which layer of a bar + marks combo (§3.3) a label annotates
@@ -2061,7 +2078,7 @@ export type DataLabelsConfig = {
 	/** Separate-variables mode only (`combineVariables === false`, where
 	 * each variable is its own label): per-variable horizontal alignment,
 	 * keyed by field name. Unset → the layer-wide `alignment`. */
-	fieldAlignments?: Record<string, "left" | "center" | "right">
+	fieldAlignments?: Record<string, DataLabelAlignment>
 	/** Separate-variables mode only: per-variable X / Y pixel nudges, keyed
 	 * by field name — the variable's own base offsets (a matching position
 	 * rule still replaces them). Unset keys → the layer-wide offsets. */
@@ -2110,6 +2127,14 @@ export type DataLabelsConfig = {
 	 * stays centered inside it. Unset keys inherit the layer-wide
 	 * `barLabelPosition` / `barLabelSide`. */
 	fieldBarPlacements?: Record<string, FieldBarPlacement>
+	/** Separate-variables mode only, on a pie: per-variable polar placement,
+	 * keyed by field name — each variable's own angular nudge and / or
+	 * radius, so e.g. the category name sits at the rim while the value
+	 * sits inside the wedge. Unset keys inherit the layer-wide
+	 * `polarLabelAngle` / `polarLabelRadius`. The radius is the only way to
+	 * tell variables apart around a pie: a pixel nudge pushes a top wedge's
+	 * label outward and a bottom wedge's inward. */
+	fieldPolarPlacements?: Record<string, FieldPolarPlacement>
 	/** Separate-variables mode only: per-variable text layout, keyed by
 	 * field name — the variable's own angle, wrapping, and overlap
 	 * avoidance. Unset keys inherit the layer-wide values. Overlap
@@ -2253,8 +2278,10 @@ export type DataLabelsConfig = {
 	 *  - `right` → `end` (label extends left of anchor)
 	 *  Pairs naturally with `onlyLastLabel`: setting alignment to "left"
 	 *  + a small positive `xOffset` puts the last label cleanly to the
-	 *  right of its point instead of overlapping it. */
-	alignment?: "left" | "center" | "right"
+	 *  right of its point instead of overlapping it.
+	 *  `outward` (polar charts) hangs each label away from the center —
+	 *  see `DataLabelAlignment`. */
+	alignment?: DataLabelAlignment
 	/** Rotation in DEGREES applied to each label around its anchor point,
 	 *  same convention as the axes' `tickLabelAngle` (positive = clockwise,
 	 *  clamped to ±90 by the panel). Paint-time only: layout passes (overlap
@@ -2406,7 +2433,7 @@ export type EndpointLabelOverrides = {
 	xOffset?: number | null
 	yOffset?: number | null
 	/** Replace the layer-wide alignment. null/unset = inherit. */
-	alignment?: "left" | "center" | "right" | null
+	alignment?: DataLabelAlignment | null
 }
 
 /** The selection `DataLabelsLayer` should apply: the new `labelPoints`
@@ -2477,6 +2504,7 @@ export const DEFAULT_DATA_LABELS_CONFIG: DataLabelsConfig = {
 	barLabelPosition: "center",
 	barLabelSide: "center",
 	fieldBarPlacements: {},
+	fieldPolarPlacements: {},
 	fieldLayouts: {},
 	fieldLayers: {},
 	areaLabelPosition: "edge",

@@ -2702,7 +2702,13 @@ y-title can be set to render horizontally instead of rotated -90°.
 ### 6.5 Data labels
 Data labels are a separate layer drawn on top of the chart marks.
 They respect alignment toggles (left / center / right glyph
-buttons), offer position adjusters in px (apply to the whole label
+buttons — and on a pie or sunburst a fourth, **Outward**, drawn as a
+right-aligned and a left-aligned block back to back: each label hangs
+away from the figure's center, so one on the right side starts at its
+anchor, one on the left ends there, and one within 10° of straight up
+or down is centered; it works per label, per variable and per series
+end like the other three, and reads as centered on any chart that has
+no center to hang from), offer position adjusters in px (apply to the whole label
 group along x or y), and an **Angle** input (±90°, same convention as
 the axes' tick-label Angle: positive = clockwise) that rotates each
 label — together with its text-background rect — around its own anchor
@@ -2735,7 +2741,8 @@ arc anchors (already placed, styled, and fit-gated) to this layer in a
 `"layout"` gate — no position or Value mapping required, and the
 per-series "Which labels" selection stands down (no series) — so it
 keeps the rest of the fine-tuning like a pie: Avoid overlaps (the 2-D
-spread, as on maps), Align, text Angle, Wrap text (the fit gate
+spread, as on maps), Align (Outward included — each arc label hangs
+away from the center), text Angle, Wrap text (the fit gate
 then measures the widest wrapped line, so wrapping is how a long name
 fits a narrow arc), X/Y pixel nudges, position rules, and Text
 Background. Its **Adjust position** polar pair is Angle (the pie's
@@ -3177,16 +3184,26 @@ check (`arcWrapLevels` in `DataLabelsConfig`).
   subsection PER VARIABLE (titled by field, like the Color / Size /
   Text blocks), each holding that variable's Align,
   Angle, Wrap text (+ Characters), Avoid overlapping labels, the bar
-  Placement pair, and the Adjust position X / Y — effective values
+  Placement pair, and the Adjust position X / Y — on a pie, that
+  variable's own polar Angle / R pair sits above X / Y, where the
+  layer-wide group keeps it — effective values
   shown (the variable's own entry, else the layer's), writes to the
   variable's entry (`fieldAlignments`, `fieldLayouts` for angle / wrap
-  / overlap, `fieldBarPlacements`, `fieldOffsets`). The layer-wide
+  / overlap, `fieldBarPlacements`, `fieldPolarPlacements`,
+  `fieldOffsets`). The layer-wide
   versions of those controls hide in this mode (they still back any
   blank). Position rules go in the subsection too — they position ONE
   label, so each variable's block ends with its own "+ Add rule"
   (`fieldPositionRules`), and there are as many links as there are
-  label variables. The pie / sunburst nudges and the area Layer
-  position stay layer-wide. Overlap avoidance is then per variable: the
+  label variables. The sunburst nudges and the area Layer
+  position stay layer-wide. The pie pair is per variable because the
+  radius is the only way to tell variables apart around a pie — the
+  category name at the rim (R 110%) and the value inside the wedge
+  (R 60%); a pixel nudge pushes a top wedge's label outward and a
+  bottom wedge's inward. A lone composed label (one "Multiple
+  variables…" label) reads and writes its own `fieldPolarPlacements`
+  entry through the layer-wide pair, as its bar Placement does.
+  Overlap avoidance is then per variable: the
   labels of variables with it on move out of EACH OTHER's way, and a
   variable with it off never moves. So e.g. the category name sits
   beside the bar while the value stays centered inside it. A variable

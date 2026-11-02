@@ -11,6 +11,7 @@ import {
 	DEFAULT_ANGLE_CONFIG,
 	DEFAULT_SHAPE_CONFIG,
 	type ChannelConfigs,
+	type FieldPolarPlacement,
 	type LabelPointsScope,
 } from "../../lib/channelConfig"
 import { getChartMode } from "../../lib/chartMode"
@@ -30,6 +31,7 @@ import {
 	slotOpacityResolver,
 } from "../../lib/resolveLayerColor"
 import { aggregateField } from "../../lib/aggregateField"
+import { outwardAlignmentFor } from "../../lib/polarLabelAlignment"
 import { parseNumericCell, type PositionScale } from "../../lib/scales"
 import {
 	labelSeriesChannelsFromEncodings,
@@ -133,6 +135,10 @@ export const PiePlot = (props: PiePlotProps = {}) => {
 	// Its default is 100 % (the pie's border), so labels read cleanly with
 	// no tuning; lower values pull them inside the wedge.
 	const dataLabelsRadiusPct = dataLabelsCfg?.polarLabelRadius ?? 100
+	// Separate variables: each variable's own Angle / R pair, resolved
+	// against the layer-wide pair by the anchor builder (as bars do with
+	// `fieldBarPlacements`).
+	const dataLabelsPolarPlacements = dataLabelsCfg?.fieldPolarPlacements
 	// "Multiple variables…": the checked fields each wedge's anchor carries
 	// as a composable row (see `DataLabelAnchor.row`), as bars do.
 	const dataLabelsRowFields =
@@ -533,6 +539,7 @@ export const PiePlot = (props: PiePlotProps = {}) => {
 								arc: resolvePieArc(channelConfigs.angle),
 								labelRadiusPct: dataLabelsRadiusPct,
 								labelAngleDeg: dataLabelsCfg?.polarLabelAngle,
+								fieldPlacements: dataLabelsPolarPlacements,
 								valueFieldMapped,
 								labelPointsScope: dataLabelsCfg?.labelPointsScope,
 								sliceOpacity: (groupValues) =>
@@ -621,6 +628,7 @@ export const PiePlot = (props: PiePlotProps = {}) => {
 							arc: resolvePieArc(channelConfigs.angle),
 							labelRadiusPct: dataLabelsRadiusPct,
 							labelAngleDeg: dataLabelsCfg?.polarLabelAngle,
+							fieldPlacements: dataLabelsPolarPlacements,
 							valueFieldMapped,
 							labelPointsScope: dataLabelsCfg?.labelPointsScope,
 							sliceOpacity: (groupValues) =>
@@ -763,7 +771,14 @@ const buildSinglePieWedges = ({
  *  the wedge as one record (`DataLabelAnchor.row`) — the checked fields
  *  aggregated over the wedge's rows, its category, its group values and
  *  its measure — so the layer composes `{Field}` templates per wedge, as
- *  it does per bar slice. */
+ *  it does per bar slice.
+ *
+ *  Separate variables with their own polar placement (`fieldPlacements`):
+ *  each such variable gets its own point on the anchor
+ *  (`DataLabelAnchor.fieldPlacements`), at ITS radius and angle — its
+ *  entry, else the layer-wide pair — so the category name can sit at the
+ *  rim while the value sits inside the wedge. Same slot bars fill from
+ *  `fieldBarPlacements`. */
 export const buildPieAnchors = ({
 	stacks,
 	pieCenters,
@@ -779,6 +794,7 @@ export const buildPieAnchors = ({
 	arc,
 	labelRadiusPct,
 	labelAngleDeg,
+	fieldPlacements,
 	valueFieldMapped,
 	sliceOpacity,
 	labelPointsScope,
@@ -812,6 +828,11 @@ export const buildPieAnchors = ({
 	/** Angular nudge in DEGREES added to every label's midpoint angle (Data
 	 *  Labels' `polarLabelAngle`). Positive = clockwise. Defaults to 0. */
 	labelAngleDeg?: number
+	/** Separate-variables mode: per-variable Angle / R
+	 *  (`DataLabelsConfig.fieldPolarPlacements`), keyed by field. Only
+	 *  fields with an entry get their own point on the anchor; a missing
+	 *  half of the pair takes the layer-wide value above. */
+	fieldPlacements?: Record<string, FieldPolarPlacement>
 	/** True when the label value field is mapped and distinct from the
 	 * measure — that field is then authoritative: slices where it's blank
 	 * render no label (sparse labeling) instead of falling back to the
@@ -852,6 +873,16 @@ export const buildPieAnchors = ({
 		: (labelPointsScope ?? "series")
 	const midRadius = pieRadius * ((labelRadiusPct ?? 100) / 100)
 	const angleOffset = ((labelAngleDeg ?? 0) * Math.PI) / 180
+	// Per-variable placements resolve against the layer-wide pair; only
+	// fields with an entry get a resolved point on the anchor.
+	const ownPlacements = Object.entries(fieldPlacements ?? {}).map(
+		([field, p]) =>
+			[
+				field,
+				pieRadius * ((p.radius ?? labelRadiusPct ?? 100) / 100),
+				((p.angle ?? labelAngleDeg ?? 0) * Math.PI) / 180,
+			] as const
+	)
 	const arcStart = arc?.start ?? 0
 	const arcSweep = arc?.sweep ?? Math.PI * 2
 	stacks.forEach((stack, stackIdx) => {
@@ -867,12 +898,28 @@ export const buildPieAnchors = ({
 			const startAngle = runningAngle
 			const endAngle = runningAngle + sweep
 			runningAngle = endAngle
-			const midAngle = (startAngle + endAngle) / 2 + angleOffset
+			const wedgeMid = (startAngle + endAngle) / 2
+			const midAngle = wedgeMid + angleOffset
 			// d3 arc convention: angle 0 = 12 o'clock, growing clockwise.
 			// Screen coords: y grows down, so cos drives the y offset
 			// negatively at angle 0 (top) and positively at angle π (bottom).
 			const cx = center.cx + Math.sin(midAngle) * midRadius
 			const cy = center.cy - Math.cos(midAngle) * midRadius
+			// A separate variable with its own placement: the same polar →
+			// screen step at ITS radius and angle off the wedge midpoint. Each
+			// point carries which way "outward" alignment hangs at its angle.
+			let fieldPoints: DataLabelAnchor["fieldPlacements"]
+			if (ownPlacements.length > 0) {
+				fieldPoints = {}
+				for (const [field, r, offset] of ownPlacements) {
+					const a = wedgeMid + offset
+					fieldPoints[field] = {
+						cx: center.cx + Math.sin(a) * r,
+						cy: center.cy - Math.cos(a) * r,
+						outwardAlign: outwardAlignmentFor(a),
+					}
+				}
+			}
 			const labelValue = valueFieldMapped
 				? slice.textValue
 				: (slice.textValue ?? slice.value)
@@ -958,6 +1005,8 @@ export const buildPieAnchors = ({
 				sourceRows: slice.rows,
 				cx,
 				cy,
+				outwardAlign: outwardAlignmentFor(midAngle),
+				fieldPlacements: fieldPoints,
 				key: `${stack.category}|${slice.key}`,
 				series,
 				rank,

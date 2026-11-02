@@ -133,6 +133,14 @@ describe("DataLabelsPanel — sunburst fine-tuning", () => {
 		expect(c.textContent).toContain("Wrap text")
 	})
 
+	it("sunburst Align offers the outward option", () => {
+		const c = mountPanel("sunburst")
+		expand(c, "Position and alignment")
+		expect(
+			c.querySelectorAll('button[aria-label^="Align outward"]')
+		).toHaveLength(1)
+	})
+
 	it("treemap and packed circles keep the fine-tuning hidden (self-drawn labels)", () => {
 		for (const layout of ["treemap", "pack"] as const) {
 			const c = mountPanel(layout)

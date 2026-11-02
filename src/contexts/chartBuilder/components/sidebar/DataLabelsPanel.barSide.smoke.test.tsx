@@ -273,3 +273,32 @@ describe("DataLabelsPanel — bar side placement", () => {
 		expect(hasAlignmentRow(container)).toBe(true)
 	})
 })
+
+describe("DataLabelsPanel — outward alignment is polar-only", () => {
+	afterEach(cleanup)
+
+	it("bars offer left / center / right only — no outward button", () => {
+		const { container } = mountPanel({ chart: "vertical-bars" })
+		expect(
+			container.querySelectorAll('button[aria-label^="Align outward"]')
+		).toHaveLength(0)
+		expect(
+			container.querySelectorAll('button[aria-label="Align left"]')
+		).toHaveLength(1)
+	})
+
+	it("a stored outward on a bar chart shows as centered, and the row still writes a side", () => {
+		const { container, readCfg } = mountPanel({
+			chart: "vertical-bars",
+			cfg: { alignment: "outward" },
+		})
+		const center = container.querySelector<HTMLButtonElement>(
+			'button[aria-label="Center"]'
+		)!
+		expect(center.getAttribute("aria-pressed")).toBe("true")
+		fireEvent.click(
+			container.querySelector<HTMLButtonElement>('button[aria-label="Align left"]')!
+		)
+		expect(readCfg().alignment).toBe("left")
+	})
+})

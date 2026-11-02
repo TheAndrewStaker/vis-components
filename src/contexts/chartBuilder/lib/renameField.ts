@@ -563,6 +563,7 @@ const renameViewFieldRefs = <T extends FieldNameConfigs>(
 				fieldAlignments: renameKey(dlc.fieldAlignments, oldName, newName),
 				fieldOffsets: renameKey(dlc.fieldOffsets, oldName, newName),
 				fieldBarPlacements: renameKey(dlc.fieldBarPlacements, oldName, newName),
+				fieldPolarPlacements: renameKey(dlc.fieldPolarPlacements, oldName, newName),
 				fieldLayouts: renameKey(dlc.fieldLayouts, oldName, newName),
 				fieldLayers: renameKey(dlc.fieldLayers, oldName, newName),
 				// A default label's id IS the variable's name, so the key moves

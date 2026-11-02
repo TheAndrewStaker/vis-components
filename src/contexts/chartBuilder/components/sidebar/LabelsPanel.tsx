@@ -1130,33 +1130,53 @@ type LabelRowProps = {
 	disabled?: boolean
 }
 
+/** The data-label Alignment adds "outward" on the polar charts: text hangs
+ *  away from the figure's center (`DataLabelAlignment`, channelConfig). */
+type AlignmentValue = LabelAlignment | "outward"
+
 /** Word-style horizontal-line glyphs for left / center / right alignment.
  * Four lines: long, short, long, short — staggered by `x` to convey the
- * alignment direction. Stroke-based so they inherit currentColor cleanly
- * (so the active state can flip white on a dark pill without a fill swap). */
-const AlignmentGlyph = ({ a }: { a: LabelAlignment }) => {
+ * alignment direction. "Outward" is a right-aligned block and a
+ * left-aligned block back to back — the figure sits at the spine, the
+ * text hangs off either side of it. Stroke-based so they inherit
+ * currentColor cleanly (so the active state can flip white on a dark pill
+ * without a fill swap). */
+const AlignmentGlyph = ({ a }: { a: AlignmentValue }) => {
+	// `row` picks the line's y; outward draws two short lines per row.
 	const lines = (() => {
 		if (a === "left") {
 			return [
-				{ x1: 1, x2: 13 },
-				{ x1: 1, x2: 9 },
-				{ x1: 1, x2: 13 },
-				{ x1: 1, x2: 9 },
+				{ x1: 1, x2: 13, row: 0 },
+				{ x1: 1, x2: 9, row: 1 },
+				{ x1: 1, x2: 13, row: 2 },
+				{ x1: 1, x2: 9, row: 3 },
 			]
 		}
 		if (a === "right") {
 			return [
-				{ x1: 1, x2: 13 },
-				{ x1: 5, x2: 13 },
-				{ x1: 1, x2: 13 },
-				{ x1: 5, x2: 13 },
+				{ x1: 1, x2: 13, row: 0 },
+				{ x1: 5, x2: 13, row: 1 },
+				{ x1: 1, x2: 13, row: 2 },
+				{ x1: 5, x2: 13, row: 3 },
+			]
+		}
+		if (a === "outward") {
+			return [
+				{ x1: 1, x2: 6, row: 0 },
+				{ x1: 8, x2: 13, row: 0 },
+				{ x1: 3, x2: 6, row: 1 },
+				{ x1: 8, x2: 11, row: 1 },
+				{ x1: 1, x2: 6, row: 2 },
+				{ x1: 8, x2: 13, row: 2 },
+				{ x1: 3, x2: 6, row: 3 },
+				{ x1: 8, x2: 11, row: 3 },
 			]
 		}
 		return [
-			{ x1: 1, x2: 13 },
-			{ x1: 3, x2: 11 },
-			{ x1: 1, x2: 13 },
-			{ x1: 3, x2: 11 },
+			{ x1: 1, x2: 13, row: 0 },
+			{ x1: 3, x2: 11, row: 1 },
+			{ x1: 1, x2: 13, row: 2 },
+			{ x1: 3, x2: 11, row: 3 },
 		]
 	})()
 	return (
@@ -1172,7 +1192,7 @@ const AlignmentGlyph = ({ a }: { a: LabelAlignment }) => {
 		>
 			{lines.map((l, i) => (
 				// eslint-disable-next-line react/no-array-index-key
-				<line key={i} x1={l.x1} x2={l.x2} y1={3 + i * 2.5} y2={3 + i * 2.5} />
+				<line key={i} x1={l.x1} x2={l.x2} y1={3 + l.row * 2.5} y2={3 + l.row * 2.5} />
 			))}
 		</svg>
 	)
@@ -1191,21 +1211,33 @@ const segmentButtonClass = (on: boolean) =>
 			: "border-stone-300 bg-white text-stone-600 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800"
 	}`
 
-export const AlignmentControl = ({
+/** Generic over the value so a caller that stores plain left / center /
+ *  right (titles, legends, captions…) keeps that type on its `onChange`,
+ *  and only the data-labels caller — which passes `outward` and stores a
+ *  `DataLabelAlignment` — sees "outward" come back. */
+export const AlignmentControl = <A extends AlignmentValue = LabelAlignment>({
 	value,
 	onChange,
+	outward = false,
 }: {
-	value: LabelAlignment
-	onChange: (a: LabelAlignment) => void
+	value: A
+	onChange: (a: A) => void
+	/** Offer the fourth, "outward", option (data labels on pies / sunburst
+	 *  rings). A stored "outward" shown without it reads as centered. */
+	outward?: boolean
 }) => {
-	const opt = (a: LabelAlignment, title: string) => (
+	const shown: AlignmentValue =
+		value === "outward" && !outward ? "center" : value
+	const opt = (a: AlignmentValue, title: string) => (
 		<button
 			type="button"
-			onClick={() => onChange(a)}
+			// Only the outward button hands back "outward", and it only
+			// renders for a caller whose `A` admits it.
+			onClick={() => onChange(a as A)}
 			title={title}
 			aria-label={title}
-			aria-pressed={value === a}
-			className={segmentButtonClass(value === a)}
+			aria-pressed={shown === a}
+			className={segmentButtonClass(shown === a)}
 		>
 			<AlignmentGlyph a={a} />
 		</button>
@@ -1215,6 +1247,7 @@ export const AlignmentControl = ({
 			{opt("left", "Align left")}
 			{opt("center", "Center")}
 			{opt("right", "Align right")}
+			{outward && opt("outward", "Align outward (away from the center)")}
 		</div>
 	)
 }

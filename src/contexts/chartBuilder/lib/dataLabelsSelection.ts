@@ -25,6 +25,7 @@ import {
 	type LabelPieceSection,
 	type LabelPointsMode,
 	type LabelPointsScope,
+	type DataLabelAlignment,
 } from "./channelConfig"
 import type { EndpointTag } from "./dataLabelsLayout"
 import type { FacetPanelRef } from "./facetPanelRef"
@@ -302,7 +303,7 @@ const legacyComposedLabels = (
 ): {
 	labels: ComposedLabel[]
 	labelPoints: Record<string, LabelPointsMode>
-	alignments: Record<string, "left" | "center" | "right">
+	alignments: Record<string, DataLabelAlignment>
 	offsets: Record<string, { xOffset?: number; yOffset?: number }>
 } => {
 	if (cfg.combineVariables === false) {
@@ -338,7 +339,7 @@ const legacyComposedLabels = (
 	}
 	const labels: ComposedLabel[] = []
 	const labelPoints: Record<string, LabelPointsMode> = {}
-	const alignments: Record<string, "left" | "center" | "right"> = {}
+	const alignments: Record<string, DataLabelAlignment> = {}
 	const offsets: Record<string, { xOffset?: number; yOffset?: number }> = {}
 	for (const pop of present) {
 		const id = LEGACY_ARRANGED_ID[pop]

@@ -1,10 +1,12 @@
 import { useAtomValue } from "jotai"
 import {
 	DEFAULT_DATA_LABELS_CONFIG,
+	type DataLabelAlignment,
 	type DataLabelsConfig,
 	type HueConfig,
 	type LabelPointsScope,
 } from "../../lib/channelConfig"
+import { resolveOutwardAlignment } from "../../lib/polarLabelAlignment"
 import {
 	alignBoxToAnchorEdge,
 	labelBlockHeight,
@@ -171,14 +173,27 @@ export type DataLabelAnchor = {
 	 * series-end Alignment settings, which the panel hides while a side is
 	 * set. Absent = the user's alignment. */
 	hAlign?: "left" | "right"
-	/** Separate-variables mode on bars: a variable's OWN resolved point and
-	 * hanging alignment (`DataLabelsConfig.fieldBarPlacements`), keyed by
-	 * field. The layer builds that variable's box from this instead of the
-	 * anchor's `cx` / `cy` / `hAlign` / `vAlign`; fields without an entry use
-	 * the anchor's base point. */
+	/** What the "outward" Alignment resolves to for THIS label: the side
+	 * away from the figure's center at the label's angle
+	 * (`lib/polarLabelAlignment.ts`). Set by the polar renderers (pies,
+	 * sunburst rings); absent, outward reads as centered. Unlike `hAlign`
+	 * it only applies when the user picked outward. */
+	outwardAlign?: "left" | "center" | "right"
+	/** Separate-variables mode on bars / pies: a variable's OWN resolved
+	 * point and hanging alignment (`DataLabelsConfig.fieldBarPlacements` /
+	 * `fieldPolarPlacements`), keyed by field. The layer builds that
+	 * variable's box from this instead of the anchor's `cx` / `cy` /
+	 * `hAlign` / `vAlign` / `outwardAlign`; fields without an entry use the
+	 * anchor's base point. */
 	fieldPlacements?: Record<
 		string,
-		{ cx: number; cy: number; hAlign?: "left" | "right"; vAlign?: LabelVAlign }
+		{
+			cx: number
+			cy: number
+			hAlign?: "left" | "right"
+			vAlign?: LabelVAlign
+			outwardAlign?: "left" | "center" | "right"
+		}
 	>
 }
 
@@ -286,8 +301,10 @@ type RenderableLabel = {
 	 *  renders as its own `<tspan>`; with wrapping on, pieces line-break at
 	 *  the plain label's wrap points via `wrapSegments`. */
 	segments?: LabelPiece[]
-	/** Per-box alignment override (endpoint labels). Unset → `cfg.alignment`. */
-	alignment?: "left" | "center" | "right"
+	/** Per-box alignment override (endpoint labels). Unset → `cfg.alignment`.
+	 *  "outward" is resolved to a side before the boxes reach the renderer
+	 *  (`selectAndSpread`); one that slips through renders centered. */
+	alignment?: DataLabelAlignment
 	/** Legend-hover fade for this label (1 / unset = no fade). Mirrors the
 	 * fade applied to the mark the label annotates. */
 	opacityMul?: number
@@ -307,7 +324,7 @@ type EndpointAwareBox = LabelBox & {
 	key: string
 	anchorX: number
 	anchorY: number
-	alignment?: "left" | "center" | "right"
+	alignment?: DataLabelAlignment
 	/** A position rule matched this label and set its offsets — they win
 	 *  over the first / last label's own X / Y. */
 	ruleOffset?: boolean
@@ -1148,6 +1165,9 @@ export const DataLabelsLayer = ({
 		/** See `DataLabelAnchor.hAlign`; re-applied after the series-end
 		 *  expansion so an endpoint's own alignment can't undo it. */
 		hAlign?: "left" | "right"
+		/** See `DataLabelAnchor.outwardAlign`: the side an "outward"
+		 *  alignment takes for this box. */
+		outwardAlign?: "left" | "center" | "right"
 		/** Separate-variables mode: the one variable this box shows. */
 		ownField?: string
 		/** See `DataLabelAnchor.seriesByScope` — the box's identity under
@@ -1241,6 +1261,18 @@ export const DataLabelsLayer = ({
 			// expansion may have applied: beside a bar, every label hangs
 			// away from it.
 			.map((b) => (b.hAlign ? { ...b, alignment: b.hAlign } : b))
+			// "Outward" resolves per label HERE — after the series-end override
+			// and the forced side have had their say, before the overlap pass
+			// measures the block — to the side the renderer worked out for
+			// this anchor (centered where it worked out none).
+			.map((b) =>
+				(b.alignment ?? cfg.alignment) === "outward"
+					? {
+							...b,
+							alignment: resolveOutwardAlignment("outward", b.outwardAlign),
+						}
+					: b
+			)
 		// Overlap pass: seriesless anchors (maps, layout-placed labels) spread
 		// colliding labels in ANY direction (a downward-only pile looks
 		// lopsided around a ring or with leader lines); series charts keep the
@@ -1369,6 +1401,7 @@ export const DataLabelsLayer = ({
 					opacityMul: a.opacityMul,
 					vAlign: place.vAlign,
 					hAlign: place.hAlign,
+					outwardAlign: place.outwardAlign ?? a.outwardAlign,
 					ownField: own ?? undefined,
 					alignment: place.hAlign ?? ownAlignment(own),
 				},

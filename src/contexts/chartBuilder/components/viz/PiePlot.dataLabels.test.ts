@@ -320,3 +320,95 @@ describe("buildPieAnchors — multi-field label row", () => {
 		])
 	})
 })
+
+/** Separate variables: a variable with its own Angle / R entry gets its own
+ *  point on the anchor (`fieldPlacements`), resolved against the layer-wide
+ *  pair — the slot bars fill from `fieldBarPlacements`. */
+describe("buildPieAnchors — per-variable polar placement", () => {
+	const bySlice = (anchors: ReturnType<typeof buildPieAnchors>) =>
+		new Map(anchors.map((a) => [a.key, a]))
+
+	it("fills no per-field slot without entries", () => {
+		expect(buildPieAnchors(baseArgs)[0]!.fieldPlacements).toBeUndefined()
+		expect(
+			buildPieAnchors({ ...baseArgs, fieldPlacements: {} })[0]!.fieldPlacements
+		).toBeUndefined()
+	})
+
+	it("each entry lands at ITS radius / angle; a missing half inherits the layer-wide value", () => {
+		const anchors = buildPieAnchors({
+			...baseArgs,
+			labelRadiusPct: 50,
+			fieldPlacements: { name: { radius: 120 }, val: { angle: 90 } },
+		})
+		const n = bySlice(anchors).get("A|n")!
+		// The anchor's own point stays the layer-wide one (mid-wedge, 45°).
+		expect(distFromCenter(n)).toBeCloseTo(50, 1)
+		expect(n.cx).toBeCloseTo(100 + Math.SQRT1_2 * 50, 1)
+		expect(n.cy).toBeCloseTo(100 - Math.SQRT1_2 * 50, 1)
+		// `name`: its own radius (120%), the layer's angle (none).
+		const name = n.fieldPlacements!.name!
+		expect(distFromCenter(name)).toBeCloseTo(120, 1)
+		expect(name.cx).toBeCloseTo(100 + Math.SQRT1_2 * 120, 1)
+		expect(name.cy).toBeCloseTo(100 - Math.SQRT1_2 * 120, 1)
+		// `val`: the layer's radius (50%), its own +90° → 135°, lower right.
+		const val = n.fieldPlacements!.val!
+		expect(distFromCenter(val)).toBeCloseTo(50, 1)
+		expect(val.cx).toBeCloseTo(100 + Math.SQRT1_2 * 50, 1)
+		expect(val.cy).toBeCloseTo(100 + Math.SQRT1_2 * 50, 1)
+		// Only entered fields get a point.
+		expect(Object.keys(n.fieldPlacements!)).toEqual(["name", "val"])
+	})
+
+	it("an entry's angle adds to the layer-wide angle's place, not on top of it", () => {
+		const anchors = buildPieAnchors({
+			...baseArgs,
+			labelAngleDeg: 30,
+			fieldPlacements: { val: { angle: 0 } },
+		})
+		const n = bySlice(anchors).get("A|n")!
+		// The anchor itself is nudged 30° (to 75°); val's own 0° puts it back
+		// on the wedge midpoint (45°).
+		const val = n.fieldPlacements!.val!
+		expect(val.cx).toBeCloseTo(100 + Math.SQRT1_2 * 100, 1)
+		expect(val.cy).toBeCloseTo(100 - Math.SQRT1_2 * 100, 1)
+		expect(n.cx).toBeCloseTo(100 + Math.sin((75 * Math.PI) / 180) * 100, 1)
+	})
+})
+
+/** "Outward" alignment: each anchor says which way text hangs away from the
+ *  center at ITS angle — left-aligned on the right side, right-aligned on
+ *  the left, centered near straight up / down — and so does each
+ *  per-variable point. */
+describe("buildPieAnchors — outward alignment side", () => {
+	const sideOf = (anchors: ReturnType<typeof buildPieAnchors>) =>
+		Object.fromEntries(anchors.map((a) => [a.key, a.outwardAlign]))
+
+	it("right-side wedges hang left-aligned, left-side wedges right-aligned", () => {
+		// Quarter wedges at 45° / 135° / 225° / 315°.
+		expect(sideOf(buildPieAnchors(baseArgs))).toEqual({
+			"A|n": "left",
+			"A|e": "left",
+			"A|s": "right",
+			"A|w": "right",
+		})
+	})
+
+	it("follows the label's nudged angle, centering near the top", () => {
+		// −45° puts the first wedge's label at 12 o'clock.
+		const anchors = buildPieAnchors({ ...baseArgs, labelAngleDeg: -45 })
+		expect(sideOf(anchors)["A|n"]).toBe("center")
+		expect(sideOf(anchors)["A|e"]).toBe("left")
+	})
+
+	it("a per-variable point carries its own side", () => {
+		const anchors = buildPieAnchors({
+			...baseArgs,
+			fieldPlacements: { name: { angle: 0 }, val: { angle: 180 } },
+		})
+		const n = anchors.find((a) => a.key === "A|n")!
+		expect(n.fieldPlacements!.name!.outwardAlign).toBe("left")
+		// 45° + 180° = 225° → the left side.
+		expect(n.fieldPlacements!.val!.outwardAlign).toBe("right")
+	})
+})

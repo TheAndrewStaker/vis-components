@@ -9,6 +9,7 @@ import {
 	type FacetConfig,
 	type FieldBarPlacement,
 	type FieldLabelLayout,
+	type FieldPolarPlacement,
 	type LabelPieceSection,
 	type LabelPointsMode,
 	type LabelPointsScope,
@@ -632,6 +633,27 @@ export const DataLabelsPanel = () => {
 						[loneLabelKey]: { ...primaryPlacement, ...p },
 					},
 				})
+	// Same for a lone composed label's Angle / R pair on a pie: its own
+	// entry over the layer-wide pair, written in place of it.
+	const primaryPolar: FieldPolarPlacement =
+		loneLabelKey === null
+			? {}
+			: (merged.fieldPolarPlacements?.[loneLabelKey] ?? {})
+	const primaryPolarAngle = primaryPolar.angle ?? merged.polarLabelAngle ?? 0
+	const primaryPolarRadius =
+		primaryPolar.radius ?? merged.polarLabelRadius ?? 100
+	const setPrimaryPolar = (p: FieldPolarPlacement) =>
+		loneLabelKey === null
+			? updateCfg({
+					...(p.angle !== undefined ? { polarLabelAngle: p.angle } : {}),
+					...(p.radius !== undefined ? { polarLabelRadius: p.radius } : {}),
+				})
+			: updateCfg({
+					fieldPolarPlacements: {
+						...(merged.fieldPolarPlacements ?? {}),
+						[loneLabelKey]: { ...primaryPolar, ...p },
+					},
+				})
 	const sideLocksAlignment = sideLocksAlignmentFor(loneLabelKey)
 	// The primary label's combo layer: a lone composed label keys by its id,
 	// the single-field label by its value field (the renderer's rule).
@@ -751,9 +773,10 @@ export const DataLabelsPanel = () => {
 		) ||
 		(primaryLabel && (merged.positionRules ?? []).length > 0) ||
 		(isAreaMode && (merged.areaLabelPosition ?? "edge") !== "edge") ||
+		(isPolarMode && anyOwn(merged.fieldPolarPlacements)) ||
 		(isPolarMode &&
-			((merged.polarLabelAngle ?? 0) !== 0 ||
-				(merged.polarLabelRadius ?? 100) !== 100)) ||
+			primaryLabel &&
+			(primaryPolarAngle !== 0 || primaryPolarRadius !== 100)) ||
 		(isRingLabels &&
 			((merged.polarLabelAngle ?? 0) !== 0 ||
 				(merged.ringLabelRadius ?? 50) !== 50)) ||
@@ -1391,6 +1414,7 @@ export const DataLabelsPanel = () => {
 						const ownLayout = merged.fieldLayouts?.[name] ?? {}
 						const ownOffsets = merged.fieldOffsets?.[name] ?? {}
 						const ownPlacement = merged.fieldBarPlacements?.[name] ?? {}
+						const ownPolar = merged.fieldPolarPlacements?.[name] ?? {}
 						const ownAlignment = merged.fieldAlignments?.[name]
 						const patchLayout = (p: FieldLabelLayout) =>
 							updateCfg({
@@ -1413,6 +1437,15 @@ export const DataLabelsPanel = () => {
 									[name]: { ...ownPlacement, ...p },
 								},
 							})
+						const patchPolar = (p: FieldPolarPlacement) =>
+							updateCfg({
+								fieldPolarPlacements: {
+									...(merged.fieldPolarPlacements ?? {}),
+									[name]: { ...ownPolar, ...p },
+								},
+							})
+						const polarAngle = ownPolar.angle ?? merged.polarLabelAngle ?? 0
+						const polarRadius = ownPolar.radius ?? merged.polarLabelRadius ?? 100
 						const angle = ownLayout.textAngle ?? merged.textAngle ?? 0
 						const wrap = ownLayout.wrapText ?? merged.wrapText === true
 						const avoid =
@@ -1433,7 +1466,8 @@ export const DataLabelsPanel = () => {
 							ownOffsets.yOffset != null ||
 							ownRules.length > 0 ||
 							(isComboMode && merged.fieldLayers?.[name] != null) ||
-							(isBarMode && !ownOnMarks && Object.keys(ownPlacement).length > 0)
+							(isBarMode && !ownOnMarks && Object.keys(ownPlacement).length > 0) ||
+							(isPolarMode && Object.keys(ownPolar).length > 0)
 						const measureSelect = (
 							<SelectInput
 								label={isVerticalBars ? "Vertical" : "Horizontal"}
@@ -1466,6 +1500,7 @@ export const DataLabelsPanel = () => {
 									<div className="flex items-center gap-2 text-sm">
 										<span className={LABEL_COL}>Align</span>
 										<AlignmentControl
+											outward={isPolarMode || isRingLabels}
 											value={ownAlignment ?? merged.alignment ?? "center"}
 											onChange={(alignment) =>
 												updateCfg({
@@ -1533,6 +1568,45 @@ export const DataLabelsPanel = () => {
 								)}
 								<div className="vc-divider-group">
 									<span className="vc-group-header">Adjust position</span>
+									{/* On a pie each variable has its own Angle / R, above the
+									 *  X / Y nudge as in the layer-wide group: the radius is
+									 *  what puts the name at the rim and the value in the wedge
+									 *  (a pixel nudge pushes a top wedge's label outward and a
+									 *  bottom wedge's inward). */}
+									{isPolarMode && (
+										<>
+											<div className="flex items-center gap-2">
+												<NumberInput
+													label="Angle"
+													labelClassName={LABEL_COL}
+													value={polarAngle}
+													step={5}
+													onChange={(angle) => patchPolar({ angle })}
+													inputClassName="w-16"
+													suffix="°"
+												/>
+												{polarAngle !== 0 && (
+													<ResetLink onClick={() => patchPolar({ angle: 0 })} />
+												)}
+											</div>
+											<div className="flex items-center gap-2">
+												<NumberInput
+													label="R"
+													labelClassName={LABEL_COL}
+													value={polarRadius}
+													min={0}
+													max={200}
+													step={5}
+													onChange={(radius) => patchPolar({ radius })}
+													inputClassName="w-16"
+													suffix="%"
+												/>
+												{polarRadius !== 100 && (
+													<ResetLink onClick={() => patchPolar({ radius: 100 })} />
+												)}
+											</div>
+										</>
+									)}
 									<div className="flex items-center gap-2">
 										<NumberInput
 											label="X"
@@ -1592,6 +1666,7 @@ export const DataLabelsPanel = () => {
 							<div key={pop} className="flex items-center gap-2 text-sm">
 								<span className={LABEL_COL}>{POPULATION_LABEL[pop]}</span>
 								<AlignmentControl
+									outward={isPolarMode || isRingLabels}
 									value={
 										(pop === "all"
 											? merged.alignment
@@ -1610,7 +1685,11 @@ export const DataLabelsPanel = () => {
 				) : (
 					<div className="flex items-center gap-2 text-sm">
 						<span className={LABEL_COL}>Align</span>
+						{/* Pies and sunburst rings add the fourth, "outward", option:
+						 *  text hangs away from the center, so a label on the left
+						 *  ends at its anchor and one on the right starts there. */}
 						<AlignmentControl
+							outward={isPolarMode || isRingLabels}
 							value={merged.alignment ?? "center"}
 							onChange={(alignment) => updateCfg({ alignment })}
 						/>
@@ -1719,43 +1798,46 @@ export const DataLabelsPanel = () => {
 						/>
 					</>
 				)}
-				{(primaryLabel || isPolarMode || isRingLabels) && (
+				{(primaryLabel || isRingLabels) && (
 					<div className="vc-divider-group">
 						<span className="vc-group-header">Adjust position</span>
 						{/* Angle / R are polar-only — they only make sense around a pie,
 						 *  so they're hidden for cartesian charts. The X/Y pixel nudge
-						 *  below applies to every chart type, pies included. */}
-						{isPolarMode && (
+						 *  below applies to every chart type, pies included. With
+						 *  separate variables the pair moves into each variable's block
+						 *  above (`fieldPolarPlacements`); a lone composed label reads
+						 *  and writes its own entry, like its bar Placement. */}
+						{isPolarMode && primaryLabel && (
 							<>
 								<div className="flex flex-col gap-2 text-sm">
 									<div className="flex items-center gap-2">
 										<NumberInput
 											label="Angle"
 											labelClassName={LABEL_COL}
-											value={merged.polarLabelAngle ?? 0}
+											value={primaryPolarAngle}
 											step={5}
-											onChange={(polarLabelAngle) => updateCfg({ polarLabelAngle })}
+											onChange={(angle) => setPrimaryPolar({ angle })}
 											inputClassName="w-16"
 											suffix="°"
 										/>
-										{(merged.polarLabelAngle ?? 0) !== 0 && (
-											<ResetLink onClick={() => updateCfg({ polarLabelAngle: 0 })} />
+										{primaryPolarAngle !== 0 && (
+											<ResetLink onClick={() => setPrimaryPolar({ angle: 0 })} />
 										)}
 									</div>
 									<div className="flex items-center gap-2">
 										<NumberInput
 											label="R"
 											labelClassName={LABEL_COL}
-											value={merged.polarLabelRadius ?? 100}
+											value={primaryPolarRadius}
 											min={0}
 											max={200}
 											step={5}
-											onChange={(polarLabelRadius) => updateCfg({ polarLabelRadius })}
+											onChange={(radius) => setPrimaryPolar({ radius })}
 											inputClassName="w-16"
 											suffix="%"
 										/>
-										{(merged.polarLabelRadius ?? 100) !== 100 && (
-											<ResetLink onClick={() => updateCfg({ polarLabelRadius: 100 })} />
+										{primaryPolarRadius !== 100 && (
+											<ResetLink onClick={() => setPrimaryPolar({ radius: 100 })} />
 										)}
 									</div>
 								</div>

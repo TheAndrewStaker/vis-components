@@ -13,6 +13,7 @@ import type { ChartRendererBaseProps } from "../../lib/chartRendererProps"
 import { DEFAULT_DATA_LABELS_CONFIG } from "../../lib/channelConfig"
 import { wrapByCharCount } from "../../lib/multilineText"
 import { PatternDefs, type PatternDefSpec } from "../../lib/patternDefs"
+import { outwardAlignmentFor } from "../../lib/polarLabelAlignment"
 
 import { DataLabelsLayer, type DataLabelAnchor } from "./DataLabelsLayer"
 import { Plot, type PlotContext } from "./Plot"
@@ -162,6 +163,8 @@ export const SunburstPlot = (props: SunburstPlotProps = {}) => {
 				arcLabels.push({
 					cx: cx + Math.sin(midAngle) * labelRadius,
 					cy: cy - Math.cos(midAngle) * labelRadius,
+					// Which way the "outward" Alignment hangs at this arc.
+					outwardAlign: outwardAlignmentFor(midAngle),
 					key: `lbl-${d.key}`,
 					label: arcText,
 					// Backing value for the conditional position rules: the

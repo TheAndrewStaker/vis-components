@@ -163,3 +163,30 @@ describe("Data labels — composed labels on pies", () => {
 		expect(texts(container)).toEqual([...levels, ...levels, "12", "12"].sort())
 	})
 })
+
+/** "Outward" alignment through the production path: each label's
+ *  `text-anchor` is the side away from its pie's center — `start` on the
+ *  right half, `end` on the left — never the layer-wide middle. */
+describe("Data labels — outward alignment on pies", () => {
+	it("hangs every label away from its pie's center", () => {
+		seed(
+			{
+				alignment: "outward",
+				composedLabels: [{ id: "level", template: "{level}" }],
+			},
+			["level"]
+		)
+		const { container } = mount()
+		const anchors = [
+			...container.querySelectorAll(
+				'g[aria-hidden="true"][pointer-events="none"] text'
+			),
+		].map((t) => t.getAttribute("text-anchor"))
+		// Wedges of 10 / 11 / 12 sweep to 109° / 229° / 360°: midpoints at
+		// 55° and 169° fall on the right half (start), 295° on the left (end).
+		// Two pies → twice over.
+		expect(anchors).toHaveLength(6)
+		expect(anchors.filter((a) => a === "start")).toHaveLength(4)
+		expect(anchors.filter((a) => a === "end")).toHaveLength(2)
+	})
+})

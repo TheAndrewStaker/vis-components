@@ -3,6 +3,7 @@ import { barTotalFieldName, withBarTotals } from "../../../lib/barTotalLabel"
 import {
 	DEFAULT_DATA_LABELS_CONFIG,
 	type ChannelConfigs,
+	type DataLabelAlignment,
 	type DataLabelsConfig,
 } from "../../../lib/channelConfig"
 import { getChartModeDef } from "../../../lib/chartMode"
@@ -174,10 +175,16 @@ export const computeDataLabelOverflow = ({
 			20
 		)
 	}
+	// "Outward" belongs to the polar charts, which reserve nothing here; on
+	// a chart that does reserve it reads as centered (as it renders).
+	const reserveAlignment = (
+		a: DataLabelAlignment | null | undefined
+	): "left" | "center" | "right" | undefined =>
+		a === "outward" ? "center" : (a ?? undefined)
 	const baseProfile: ReserveProfile = {
 		template: dataLabels.labelTemplate,
 		xOffset: dataLabels.xOffset ?? 0,
-		alignment: dataLabels.alignment ?? "center",
+		alignment: reserveAlignment(dataLabels.alignment) ?? "center",
 		edges: "both",
 		wrapMaxChars: wrapFor(null),
 	}
@@ -251,7 +258,9 @@ export const computeDataLabelOverflow = ({
 	const ownProfile = (key: string, pop: "all" | "first" | "last"): ReserveProfile => ({
 		edges: edgesFor(pop),
 		xOffset: dataLabels.fieldOffsets?.[key]?.xOffset ?? baseProfile.xOffset,
-		alignment: dataLabels.fieldAlignments?.[key] ?? baseProfile.alignment,
+		alignment:
+			reserveAlignment(dataLabels.fieldAlignments?.[key]) ??
+			baseProfile.alignment,
 		side: onMarks(key, labelKeys.pieces[key] ?? [])
 			? "center"
 			: dataLabels.fieldBarPlacements?.[key]?.side,
@@ -269,7 +278,7 @@ export const computeDataLabelOverflow = ({
 			return [
 				{
 					xOffset: ov.xOffset ?? baseProfile.xOffset,
-					alignment: ov.alignment ?? baseProfile.alignment,
+					alignment: reserveAlignment(ov.alignment) ?? baseProfile.alignment,
 					edges: edgesFor(pop),
 					template: baseProfile.template,
 					wrapMaxChars: baseProfile.wrapMaxChars,
