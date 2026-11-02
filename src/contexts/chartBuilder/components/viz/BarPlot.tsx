@@ -8,6 +8,7 @@ import {
 	type Stack,
 	toDensityStacks,
 } from "../../lib/aggregators/stacks"
+import { aggregateField } from "../../lib/aggregateField"
 import {
 	buildPatternDefs,
 	buildPatternDefsFromItems,
@@ -57,7 +58,6 @@ import {
 	applyHueScale,
 	makeHueScale,
 	makeOpacityScale,
-	parseNumericCell,
 	type HueScale,
 	type PositionScale,
 	type UnitScale,
@@ -1934,32 +1934,9 @@ export const buildBarAnchors = ({
 			.join("|")
 		return sliceRowsIndex.get(`${category}\u0000${gv}`) ?? []
 	}
-	// Aggregate one field over a slice's rows: numeric sum (blank cells stay
-	// missing — `parseNumericCell`, not `Number`, so `""` isn't 0), else the
-	// first non-empty value. Mirrors the aggregator's `textValue` rule.
-	const aggregateField = (
-		sliceRows: readonly Record<string, unknown>[],
-		field: string
-	): number | string | undefined => {
-		let sum = 0
-		let foundNumeric = false
-		let firstNonNumeric: string | undefined
-		for (const row of sliceRows) {
-			const raw = row[field]
-			const n = parseNumericCell(raw)
-			if (n !== null) {
-				sum += n
-				foundNumeric = true
-			} else if (
-				firstNonNumeric === undefined &&
-				raw != null &&
-				String(raw).trim() !== ""
-			) {
-				firstNonNumeric = String(raw)
-			}
-		}
-		return foundNumeric ? sum : firstNonNumeric
-	}
+	// One field over a slice's rows — `lib/aggregateField.ts` (numeric sum,
+	// else first non-empty; the aggregator's `textValue` rule), shared with
+	// the pie anchors.
 	for (const stack of aggregation.stacks) {
 		const catPos = categoryScale(stack.category) ?? 0
 		const catSize = categoryScale.bandwidth()

@@ -242,3 +242,81 @@ describe("buildPieAnchors — label series + rank per scope", () => {
 		}
 	})
 })
+
+describe("buildPieAnchors — multi-field label row", () => {
+	// Two pies (x = cat) of two wedges (hue = region); each wedge's rows
+	// carry a text field to label by and the measure to sum.
+	const rows = [
+		{ cat: "A", region: "n", val: "3", Rating: "Awful" },
+		{ cat: "A", region: "n", val: "4", Rating: "Poor" },
+		{ cat: "A", region: "s", val: "10", Rating: "Fine" },
+		{ cat: "B", region: "n", val: "2", Rating: "Awful" },
+		{ cat: "B", region: "s", val: "5", Rating: "Great" },
+	]
+	const sliceRows = (cat: string, region: string) =>
+		rows.filter((r) => r.cat === cat && r.region === region)
+	const twoPies = [
+		{
+			category: "A",
+			slices: [
+				{ key: "n", groupValues: { hue: "n" }, value: 7, rows: sliceRows("A", "n") },
+				{ key: "s", groupValues: { hue: "s" }, value: 10, rows: sliceRows("A", "s") },
+			],
+		},
+		{
+			category: "B",
+			slices: [
+				{ key: "n", groupValues: { hue: "n" }, value: 2, rows: sliceRows("B", "n") },
+				{ key: "s", groupValues: { hue: "s" }, value: 5, rows: sliceRows("B", "s") },
+			],
+		},
+	]
+	const encodings = { x: { field: "cat" }, angle: { field: "val" }, hue: { field: "region" } }
+	const args = {
+		stacks: twoPies as any,
+		pieCenters: [
+			{ stackKey: "A", cx: 100, cy: 100 },
+			{ stackKey: "B", cx: 300, cy: 100 },
+		],
+		pieRadius: 50,
+		measureField: "val",
+		categoryField: "cat",
+		decimals: null,
+		encodings: encodings as any,
+		rows,
+	}
+
+	it("carries no row unless label fields are set", () => {
+		for (const a of buildPieAnchors(args)) expect(a.row).toBeUndefined()
+		for (const a of buildPieAnchors({ ...args, labelFields: [] }))
+			expect(a.row).toBeUndefined()
+	})
+
+	it("each wedge's row aggregates the label fields over its rows and records its identity", () => {
+		const anchors = buildPieAnchors({ ...args, labelFields: ["Rating", "val"] })
+		const byKey = new Map(anchors.map((a) => [a.key, a.row]))
+		// Text → first non-empty; numeric → sum; category / group / measure on top.
+		expect(byKey.get("A|n")).toEqual({ Rating: "Awful", val: 7, cat: "A", region: "n" })
+		expect(byKey.get("A|s")).toEqual({ Rating: "Fine", val: 10, cat: "A", region: "s" })
+		expect(byKey.get("B|s")).toEqual({ Rating: "Great", val: 5, cat: "B", region: "s" })
+	})
+
+	it("a field the wedge has no value for stays undefined (a bar-only derived name composes nothing)", () => {
+		const anchors = buildPieAnchors({ ...args, labelFields: ["Bar total"] })
+		for (const a of anchors) expect(a.row).toEqual({ "Bar total": undefined, cat: a.key.split("|")[0], region: a.key.split("|")[1], val: expect.any(Number) })
+	})
+
+	it("a lone pie records group values and the measure but no category", () => {
+		const anchors = buildPieAnchors({
+			...args,
+			stacks: [twoPies[0]] as any,
+			pieCenters: [{ stackKey: null, cx: 100, cy: 100 }],
+			categoryField: null,
+			labelFields: ["Rating"],
+		})
+		expect(anchors.map((a) => a.row)).toEqual([
+			{ Rating: "Awful", region: "n", val: 7 },
+			{ Rating: "Fine", region: "s", val: 10 },
+		])
+	})
+})

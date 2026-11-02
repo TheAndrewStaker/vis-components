@@ -29,6 +29,7 @@ import {
 	resolveLayerColor,
 	slotOpacityResolver,
 } from "../../lib/resolveLayerColor"
+import { aggregateField } from "../../lib/aggregateField"
 import { parseNumericCell, type PositionScale } from "../../lib/scales"
 import {
 	labelSeriesChannelsFromEncodings,
@@ -132,6 +133,12 @@ export const PiePlot = (props: PiePlotProps = {}) => {
 	// Its default is 100 % (the pie's border), so labels read cleanly with
 	// no tuning; lower values pull them inside the wedge.
 	const dataLabelsRadiusPct = dataLabelsCfg?.polarLabelRadius ?? 100
+	// "Multiple variables…": the checked fields each wedge's anchor carries
+	// as a composable row (see `DataLabelAnchor.row`), as bars do.
+	const dataLabelsRowFields =
+		dataLabels?.value?.multiField === true
+			? (dataLabels.value.fields ?? [])
+			: undefined
 	const anyDataLabelsMapped = Boolean(
 		dataLabels?.x?.field ||
 			dataLabels?.y?.field ||
@@ -520,6 +527,7 @@ export const PiePlot = (props: PiePlotProps = {}) => {
 								decimals: dataLabelsDecimals,
 								formatSpec: dataLabelsFormatSpec,
 								sizeField: dataLabels?.size?.field ?? null,
+								labelFields: dataLabelsRowFields,
 								encodings,
 								rows: rowsForChart,
 								arc: resolvePieArc(channelConfigs.angle),
@@ -607,6 +615,7 @@ export const PiePlot = (props: PiePlotProps = {}) => {
 							decimals: dataLabelsDecimals,
 							formatSpec: dataLabelsFormatSpec,
 							sizeField: dataLabels?.size?.field ?? null,
+							labelFields: dataLabelsRowFields,
 							encodings,
 							rows: rowsForChart,
 							arc: resolvePieArc(channelConfigs.angle),
@@ -748,7 +757,13 @@ const buildSinglePieWedges = ({
  *  When the user mapped `size` on the data-labels layer, we sum the
  *  size field across rows that match each slice's (category +
  *  groupValues) signature so the rendered label font size varies per
- *  slice — same aggregation rule BarPlot's anchors use. */
+ *  slice — same aggregation rule BarPlot's anchors use.
+ *
+ *  Multi-field labels (`labelFields` set): each anchor additionally carries
+ *  the wedge as one record (`DataLabelAnchor.row`) — the checked fields
+ *  aggregated over the wedge's rows, its category, its group values and
+ *  its measure — so the layer composes `{Field}` templates per wedge, as
+ *  it does per bar slice. */
 export const buildPieAnchors = ({
 	stacks,
 	pieCenters,
@@ -758,6 +773,7 @@ export const buildPieAnchors = ({
 	decimals,
 	formatSpec,
 	sizeField,
+	labelFields,
 	encodings,
 	rows,
 	arc,
@@ -781,6 +797,9 @@ export const buildPieAnchors = ({
 	 *  `DataLabelsConfig.fieldFormats`); wins over `decimals` when set. */
 	formatSpec?: string | null
 	sizeField?: string | null
+	/** "Multiple variables…": the checked Value fields. When set (and
+	 *  non-empty) every anchor carries a `row` for the layer to compose. */
+	labelFields?: readonly string[]
 	encodings?: Encodings
 	rows?: ReadonlyArray<Record<string, unknown>>
 	/** Angular bounds (radians) of the pie sweep — must match the wedges'
@@ -900,7 +919,25 @@ export const buildPieAnchors = ({
 				}
 				sizeValue = foundNumeric ? sum : firstNonNumeric
 			}
-			void measureField // measureField currently unused — slice.value already carries the aggregated measure
+			// Multi-field labels: the wedge as one record. Aggregated label
+			// fields first (the wedge's own rows — same category + group tuple),
+			// then its identity on top: the pie's category, the group values
+			// under their field names, the measure under the angle field. A
+			// lone pie (`categoryField` null) has no category to record.
+			let row: Record<string, unknown> | undefined
+			if (labelFields && labelFields.length > 0) {
+				row = {}
+				const sliceRows = slice.rows ?? []
+				for (const f of labelFields) row[f] = aggregateField(sliceRows, f)
+				if (categoryField !== null) row[categoryField] = stack.category
+				if (encodings) {
+					for (const [channel, value] of Object.entries(slice.groupValues)) {
+						const fieldName = encodings[channel as keyof typeof encodings]?.field
+						if (fieldName) row[fieldName] = value
+					}
+				}
+				row[measureField] = slice.value
+			}
 			const seriesByAll = seriesAllOf({
 				category: stack.category,
 				groupValues: slice.groupValues,
@@ -917,6 +954,7 @@ export const buildPieAnchors = ({
 				: seriesByAll
 			const { series, rank } = seriesByScope[layerScope]
 			anchors.push({
+				row,
 				sourceRows: slice.rows,
 				cx,
 				cy,

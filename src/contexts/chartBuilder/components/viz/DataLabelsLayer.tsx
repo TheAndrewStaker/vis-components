@@ -147,8 +147,9 @@ export type DataLabelAnchor = {
 	 * aggregated over the slice's rows (numeric → sum, else first non-empty;
 	 * the same rule as `textValue`). When present and the Value mapping is
 	 * multi-field, the layer arranges it with the templates and ignores
-	 * `label`; without it the anchor stays pre-formatted. Bars set it; area
-	 * / pie / tile anchors don't yet. */
+	 * `label`; without it the anchor stays pre-formatted and draws its
+	 * `label` wherever any composed label is shown. Bars and pies set it;
+	 * area / tile anchors don't yet. */
 	row?: Record<string, unknown>
 	/** The dataset rows behind the anchor's mark (a bar slice's, an area
 	 * layer cell's, a wedge's, a map shape's) — what `{Variable}` position /
@@ -1212,12 +1213,22 @@ export const DataLabelsLayer = ({
 		const expand = (bs: RenderBox[], own: string | null) =>
 			expandLabelPopulations(
 				bs.map((b) => atScope(b, own)),
-				own === null ? cfg : noOverridesCfg,
+				own === null && !multi ? cfg : noOverridesCfg,
 				selection,
 				lastAxis,
 				recomposeForPopulation
 			)
-		const filtered = ownKeys
+		// Multi-field mode with anchors that carry no row (a renderer that
+		// doesn't build one yet): their boxes are keyed to no composed label,
+		// so they'd match none of `ownKeys` and vanish. They keep their
+		// pre-formatted text under the `null` key instead, expanded like the
+		// composed labels — a stored "Multiple variables…" from another chart
+		// must not blank a chart that can't compose yet.
+		const preformatted = multi && wrapped.some((b) => b.ownField === undefined)
+		const expandKeys: (string | null)[] = preformatted
+			? [...ownKeys, null]
+			: ownKeys
+		const filtered = expandKeys
 			.flatMap((k) =>
 				expand(
 					wrapped.filter((b) => (b.ownField ?? null) === k),

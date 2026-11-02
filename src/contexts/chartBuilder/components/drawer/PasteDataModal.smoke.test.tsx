@@ -44,9 +44,10 @@ const openDialog = () => {
 describe("Paste data into the tray", () => {
 	it("previews the paste, requires a name, and creates the data set", async () => {
 		const { store } = mount()
-		expect(screen.getByText(/No data set loaded/).textContent).toContain(
-			"paste data"
-		)
+		// The empty tray points at pasting as one way in.
+		expect(
+			screen.getByText(/Copy-paste or drag and drop a CSV here/).textContent
+		).toContain("upload a data set")
 		const dialog = openDialog()
 		const addButton = screen.getByText("Add data").closest("button")!
 		expect(addButton.disabled).toBe(true)
