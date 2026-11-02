@@ -30,6 +30,7 @@ import {
 	currentLegendConfigAtom,
 	currentMapConfigAtom,
 	currentReshapeConfigAtom,
+	currentTemplateIdAtom,
 	currentThemeIdAtom,
 	currentTooltipConfigAtom,
 	currentVisualNameAtom,
@@ -38,7 +39,7 @@ import {
 /**
  * Editor undo / redo.
  *
- * The draft is ~20 independent atoms and every change autosaves 800 ms
+ * The draft is ~21 independent atoms and every change autosaves 800 ms
  * later, so there is no "unsaved" state to fall back to; undo is a history
  * of whole-draft snapshots instead. A snapshot is the 20 editable pieces of
  * a visual (everything `useSaveVisual` writes into the blob), held by
@@ -74,6 +75,9 @@ const DRAFT_ATOMS = {
 	reshapeConfig: currentReshapeConfigAtom,
 	derivedVariablesConfig: currentDerivedVariablesAtom,
 	themeId: currentThemeIdAtom,
+	// The template the visual came from — saved with it (so "Update
+	// template" can offer itself), hence part of the draft.
+	templateId: currentTemplateIdAtom,
 } as const
 
 type DraftKey = keyof typeof DRAFT_ATOMS

@@ -11,6 +11,7 @@ import {
 	visualsAtom,
 } from "../../chartBuilder/store/atoms"
 import { duplicateVisual } from "../../chartBuilder/lib/duplicateVisual"
+import { isTemplate } from "../../chartBuilder/lib/visualTrash"
 import {
 	loadLibrarySelectedFolderId,
 	saveLibrarySelectedFolderId,
@@ -46,9 +47,11 @@ import { DeleteVisualButton } from "./DeleteVisualButton"
 import { DownloadVisualsButton } from "./DownloadVisualsButton"
 import { DuplicateVisualButton } from "./DuplicateVisualButton"
 import { UNFILED_FOLDER_ID } from "../lib/folderSubtree"
+import type { LibraryKind } from "../lib/libraryKind"
 import { FolderPickerModal } from "./FolderPickerModal"
 import { FolderTree } from "./FolderTree"
 import { MoveToFolderButton } from "./MoveToFolderButton"
+import { OpenVisualLink, TemplateChip } from "./OpenVisualLink"
 import {
 	RefreshIcon,
 	RegeneratePreviewButton,
@@ -197,6 +200,7 @@ export const LibraryPage = () => {
 	}, [selectedFolderId])
 	const view = search.view ?? "grid"
 	const query = search.q ?? ""
+	const kind = search.kind
 	const { field: sortField, dir: sortDir } = parseSort(search.sort)
 
 	const setSelectedFolderId = (id: string | null) => {
@@ -209,6 +213,9 @@ export const LibraryPage = () => {
 		navigate({
 			search: (prev) => ({ ...prev, view: next === "grid" ? undefined : next }),
 		})
+	}
+	const setKind = (next: LibraryKind | undefined) => {
+		navigate({ search: (prev) => ({ ...prev, kind: next }) })
 	}
 	const setQuery = (next: string) => {
 		navigate({ search: (prev) => ({ ...prev, q: next || undefined }) })
@@ -235,6 +242,7 @@ export const LibraryPage = () => {
 		datasetName: selectedDatasetName,
 		query,
 		sort: search.sort,
+		kind,
 	})
 	const tableRows = useFilteredSortedLandingRows({
 		visuals,
@@ -245,6 +253,7 @@ export const LibraryPage = () => {
 		datasetName: selectedDatasetName,
 		query,
 		sort: search.sort,
+		kind,
 	})
 
 	// Dataset names for the filter dropdown, deduped and alphabetized. Keyed by
@@ -399,6 +408,11 @@ export const LibraryPage = () => {
 		.filter((v) => selectedVisualIds.has(v.id))
 		.map((v) => ({ id: v.id, name: v.name }))
 
+	// The Templates filter's empty state when the library has none at all
+	// (as opposed to none in this folder / matching this search).
+	const noTemplatesYet =
+		kind === "templates" && query === "" && !visuals.some(isTemplate)
+
 	const selectedFolderName =
 		selectedFolderId === null
 			? "All visualizations"
@@ -436,6 +450,7 @@ export const LibraryPage = () => {
 							<div className="fixed top-(--vc-header-h) bottom-0 left-0 z-30 w-[calc(100%-1.5rem)] border-r border-stone-200 shadow-xl sm:w-[360px] dark:border-stone-700">
 								<FolderTree
 									selectedFolderId={selectedFolderId}
+							kind={kind}
 									onSelect={(id) => {
 										setSelectedFolderId(id)
 										setRailSheetOpen(false)
@@ -468,6 +483,7 @@ export const LibraryPage = () => {
 					>
 						<FolderTree
 							selectedFolderId={selectedFolderId}
+							kind={kind}
 							onSelect={setSelectedFolderId}
 						/>
 					</div>
@@ -524,6 +540,7 @@ export const LibraryPage = () => {
 								</option>
 							))}
 						</Select>
+						<KindToggle kind={kind} onChange={setKind} />
 						{(missingPreviewCount > 0 || backfillProgress !== null) && (
 							<Button
 								compact
@@ -591,17 +608,24 @@ export const LibraryPage = () => {
 							onToggleVisual={toggleVisualSelected}
 							onSetVisualsSelected={setVisualsSelected}
 							onToggleAllVisible={toggleAllVisible}
+							noTemplatesYet={noTemplatesYet}
 						/>
 					) : gridRows.length === 0 ? (
 						<div className="flex flex-col items-center gap-4 rounded-card border border-dashed border-stone-300 bg-white px-8 py-20 text-center dark:border-stone-700 dark:bg-stone-800">
-							<p className="max-w-md text-sm vc-muted">
+							<p
+								className={`max-w-md text-sm ${noTemplatesYet ? "vc-faint" : "vc-muted"}`}
+							>
 								{query
 									? `No visualizations match "${query}".`
-									: selectedFolderId === UNFILED_FOLDER_ID
-										? "Every visualization is in a folder."
-										: selectedFolderId
-											? "This folder is empty."
-											: "No visualizations yet. Start a new one to upload a data set and build a visualization."}
+									: noTemplatesYet
+										? "No templates yet. Save one from a visual's Export dialog."
+										: kind === "templates"
+											? "No templates match the current filters."
+											: selectedFolderId === UNFILED_FOLDER_ID
+												? "Every visualization is in a folder."
+												: selectedFolderId
+													? "This folder is empty."
+													: "No visualizations yet. Start a new one to upload a data set and build a visualization."}
 							</p>
 							<Link to="/editor/new" className="mt-2">
 								<Button>New visualization</Button>
@@ -628,9 +652,8 @@ export const LibraryPage = () => {
 									}}
 									onDragEnd={() => setCurrentDrag(null)}
 								>
-									<Link
-										to="/editor/$visualId"
-										params={{ visualId: d.visual.id }}
+									<OpenVisualLink
+										visual={d.visual}
 										// The card (not the link or the thumbnail) is the drag
 										// source: a native link / image drag would otherwise
 										// start from those and carry the browser's own
@@ -667,6 +690,9 @@ export const LibraryPage = () => {
 														: "No preview"}
 												</div>
 											)}
+											{isTemplate(d.visual) && (
+												<TemplateChip className="absolute bottom-2 left-2" />
+											)}
 											{refreshingPreviewId === d.visual.id && (
 												<span
 													className="absolute right-2 bottom-2 flex h-6 w-6 items-center justify-center rounded bg-white/90 shadow-sm ring-1 ring-stone-200 dark:bg-stone-800/90 dark:ring-stone-700 vc-muted"
@@ -685,15 +711,19 @@ export const LibraryPage = () => {
 												{d.visual.name}
 											</div>
 											<div className="truncate text-sm vc-muted">
-												{d.datasetName
-													? `Data set: ${d.datasetName}`
-													: "No data set"}
+												{d.visual.template
+													? `Template · ${d.visual.template.sourceFields.length} field${
+															d.visual.template.sourceFields.length === 1 ? "" : "s"
+														}`
+													: d.datasetName
+														? `Data set: ${d.datasetName}`
+														: "No data set"}
 											</div>
 											<div className="text-sm vc-muted">
 												Updated {formatTimestamp(d.visual.updatedAt)}
 											</div>
 										</div>
-									</Link>
+									</OpenVisualLink>
 									{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- click here only stops propagation so checkbox clicks don't reach the card; the checkbox inside is the real (keyboard-accessible) interaction */}
 									<label
 										className={`absolute top-2 left-2 flex h-6 w-6 cursor-pointer items-center justify-center rounded bg-white/90 shadow-sm ring-1 ring-stone-200 transition-opacity dark:bg-stone-800/90 dark:ring-stone-700 ${
@@ -718,7 +748,10 @@ export const LibraryPage = () => {
 										/>
 									</label>
 									<div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover/card:opacity-100 kbd:group-has-focus-visible/card:opacity-100 pointer-coarse:opacity-100">
-										{d.visual.datasetId !== null &&
+										{/* No data set → nothing to draw; a template's preview is
+										 *  copied from its source visual and never recaptured. */}
+										{!isTemplate(d.visual) &&
+											d.visual.datasetId !== null &&
 											datasets[d.visual.datasetId] && (
 												<RegeneratePreviewButton
 													visualId={d.visual.id}
@@ -772,6 +805,26 @@ export const LibraryPage = () => {
 		</div>
 	)
 }
+
+const KindToggle = ({
+	kind,
+	onChange,
+}: {
+	kind: LibraryKind | undefined
+	onChange: (next: LibraryKind | undefined) => void
+}) => (
+	// Visuals | Templates | All. "visuals" is the clean URL (no ?kind=).
+	<Segmented
+		ariaLabel="Show visualizations, templates, or both"
+		value={kind ?? "visuals"}
+		segments={[
+			{ key: "visuals", label: "Visuals" },
+			{ key: "templates", label: "Templates" },
+			{ key: "all", label: "All" },
+		]}
+		onChange={(next) => onChange(next === "visuals" ? undefined : next)}
+	/>
+)
 
 const ViewToggle = ({
 	view,

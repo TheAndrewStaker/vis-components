@@ -25,6 +25,7 @@ import {
 import { loadZctaTopology } from "../lib/geo/zctaTopology"
 import { getStorageAdapter } from "../lib/storage/registry"
 import type { Dataset, SavedTheme } from "../lib/types"
+import { isTemplate } from "../lib/visualTrash"
 import type { EmbedPart } from "../../../embedRuntime/payload"
 import {
 	datasetIndexAtom,
@@ -54,6 +55,11 @@ export const usePublishEmbed = () =>
 				const visual = get(visualsAtom).find((v) => v.id === args.visualId)
 				if (!visual) {
 					throw new Error("Save the visualization before publishing.")
+				}
+				if (isTemplate(visual)) {
+					throw new Error(
+						"Templates can't be published. Start a visualization from it first."
+					)
 				}
 
 				// The one dataset version the embed draws — the payload carries it

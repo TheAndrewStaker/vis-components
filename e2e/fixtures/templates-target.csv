@@ -1,0 +1,13 @@
+period,rate,region,segment
+1,12%,East,Retail
+2,15%,East,Retail
+3,11%,East,Retail
+1,8%,West,Retail
+2,9%,West,Retail
+3,14%,West,Retail
+1,20%,East,Online
+2,22%,East,Online
+3,19%,East,Online
+1,5%,West,Online
+2,7%,West,Online
+3,6%,West,Online

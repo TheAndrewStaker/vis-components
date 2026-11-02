@@ -1,5 +1,6 @@
 import { createRoute, rootRoute } from "../../routes/router"
 import { LibraryPage } from "./components/LibraryPage"
+import { parseLibraryKind, type LibraryKind } from "./lib/libraryKind"
 
 // URL search params for the library page. Defaults are intentionally chosen so
 // that the "clean URL" /  matches the default UI state.
@@ -10,15 +11,17 @@ import { LibraryPage } from "./components/LibraryPage"
 // view    — "grid" | "table"; absent = "grid"
 // q       — search query string; absent = ""
 // sort    — `<field>:<asc|desc>`; absent = "updatedAt:desc"
+// kind    — "templates" | "all"; absent = ordinary visuals only (no templates)
 export type LibrarySearch = {
 	folder?: string
 	dataset?: string
 	view?: "grid" | "table"
 	q?: string
 	sort?: string
+	kind?: LibraryKind
 }
 
-const validateSearch = (raw: Record<string, unknown>): LibrarySearch => {
+export const validateSearch = (raw: Record<string, unknown>): LibrarySearch => {
 	const out: LibrarySearch = {}
 	if (typeof raw.folder === "string" && raw.folder.length > 0) {
 		out.folder = raw.folder
@@ -29,6 +32,8 @@ const validateSearch = (raw: Record<string, unknown>): LibrarySearch => {
 	if (raw.view === "table" || raw.view === "grid") out.view = raw.view
 	if (typeof raw.q === "string" && raw.q.length > 0) out.q = raw.q
 	if (typeof raw.sort === "string" && raw.sort.length > 0) out.sort = raw.sort
+	const kind = parseLibraryKind(raw.kind)
+	if (kind) out.kind = kind
 	return out
 }
 

@@ -6,6 +6,7 @@ import {
 	currentVisualIdAtom,
 	currentVisualNameAtom,
 	liveVisualsAtom,
+	templatePendingAtom,
 } from "../store/atoms"
 import {
 	canRedoAtom,
@@ -72,6 +73,10 @@ export const EditorActions = ({ compact = false }: { compact?: boolean }) => {
 	// restore renames the trashed one if it still collides).
 	const visuals = useAtomValue(liveVisualsAtom)
 	const saveVisual = useSaveVisual()
+	// A template draft with no data set yet: nothing to save until one binds
+	// (autosave waits for a data set too), so a data-less visual is never
+	// written.
+	const templatePending = useAtomValue(templatePendingAtom)
 	const navigate = useNavigate()
 	const [saving, setSaving] = useState(false)
 	const [exportOpen, setExportOpen] = useState(false)
@@ -109,7 +114,7 @@ export const EditorActions = ({ compact = false }: { compact?: boolean }) => {
 				(e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === "s"
 			if (!isSaveShortcut) return
 			e.preventDefault()
-			if (nameTaken) return
+			if (nameTaken || templatePending) return
 			void onSave()
 		}
 		document.addEventListener("keydown", onKeyDown)
@@ -118,7 +123,7 @@ export const EditorActions = ({ compact = false }: { compact?: boolean }) => {
 		// hooks, so we depend on the values it closes over rather than the
 		// function reference itself.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [saving, visualId, nameTaken])
+	}, [saving, visualId, nameTaken, templatePending])
 
 	const mod = modKey()
 	// Icon-only buttons lose the label's side padding in compact mode so the
@@ -163,7 +168,12 @@ export const EditorActions = ({ compact = false }: { compact?: boolean }) => {
 					{compact ? <ExportIcon /> : "Export"}
 				</Button>
 			)}
-			<Button compact onClick={onSave} disabled={saving || nameTaken}>
+			<Button
+				compact
+				onClick={onSave}
+				disabled={saving || nameTaken || templatePending}
+				title={templatePending ? "Attach a data set first" : undefined}
+			>
 				{visualId ? "Save" : compact ? "Save" : "Save visualization"}
 			</Button>
 			<ExportModal

@@ -4,6 +4,11 @@ import type { Folder, Visual } from "./types"
 /** A visual is in the Trash when it carries a `deletedAt` stamp. */
 export const isTrashed = (v: Visual): boolean => v.deletedAt !== undefined
 
+/** A visual row is a template when it carries `template` metadata (see
+ * `Visual.template`). */
+export const isTemplate = (v: Pick<Visual, "template">): boolean =>
+	v.template !== undefined
+
 /** Move the given visuals to the Trash: stamp `deletedAt`, keep everything
  * else (folder, thumbnail, embeds, data set) so Restore can put them back
  * exactly. Already-trashed visuals keep their original stamp. */

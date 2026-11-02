@@ -368,6 +368,44 @@ export type FieldLevelOrderSpec = {
 	decreasing?: boolean
 }
 
+/** The kind of data a field holds, finer than `FieldType`: quantitative
+ * splits by its view-time `formatHint` into dollar / percent / plain
+ * number. Templates remember formats per kind (`TemplateMeta.formatMemory`)
+ * so a date-x template still formats sensibly on number-x data. */
+export type DataKind =
+	| "dollar"
+	| "percent"
+	| "number"
+	| "date"
+	| "category"
+	| "ordinal"
+
+/** Names one format-bearing place in a visual (see
+ * `lib/templates/formatSurfaces.ts`). Grammar:
+ *   `axis:x` | `axis:y` | `axis:r` | `axis:angle` | `axis:chord`
+ *   `legend:<quantitative legend channel>` (hue, outlineHue, area, …)
+ *   `labels:value` (single-field data labels)
+ *   `labels:value:<i>` (the i-th field of multi-field data labels)
+ * A plain string so stored memory tolerates surfaces added later. */
+export type FormatSurfaceKey = string
+
+/** One field the template was built against — its name, effective type,
+ * data kind, and any former names (for rename-aware matching). */
+export type TemplateSourceField = {
+	name: string
+	type: FieldType
+	kind: DataKind
+	sourceNames?: string[]
+}
+
+/** What makes a visual row a template: the fields it was authored against
+ * (used to snap its encodings onto a new data set) and, per format
+ * surface, the format string last seen for each data kind. */
+export type TemplateMeta = {
+	sourceFields: TemplateSourceField[]
+	formatMemory: Record<FormatSurfaceKey, Partial<Record<DataKind, string>>>
+}
+
 export type Visual = {
 	id: string
 	name: string
@@ -484,6 +522,18 @@ export type Visual = {
 	 * (`liveVisualsAtom`) while id lookups and reference sweeps see all of
 	 * them. Sparse, so no storage version bump. */
 	deletedAt?: number
+	/** Present = this row is a TEMPLATE, not a chart: it has no data set
+	 * (`datasetId` null), is never rendered as a chart, and starting a new
+	 * visual from it snaps its encodings onto a data set by field kind
+	 * (`lib/templates/`). Lives in the normal library folders beside
+	 * visuals. Sparse, so no storage version bump (same precedent as
+	 * `thumbnailAt` / `deletedAt`). */
+	template?: TemplateMeta
+	/** The template this visual was started from (a visual row id), so
+	 * "Save as template" can offer to update it. Informational: a
+	 * template since deleted or trashed just stops being offered. Sparse,
+	 * so no storage version bump. */
+	templateId?: string
 }
 
 export type Folder = {

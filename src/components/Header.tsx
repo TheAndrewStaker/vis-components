@@ -18,7 +18,9 @@ import {
 	FolderPickerModal,
 	type NameField,
 } from "../contexts/library/components/FolderPickerModal"
+import { TemplatePickerModal } from "../contexts/library/components/TemplatePickerModal"
 import { UNFILED_FOLDER_ID } from "../contexts/library/lib/folderSubtree"
+import { isTemplate } from "../contexts/chartBuilder/lib/visualTrash"
 import { parseLibraryBundle } from "../contexts/chartBuilder/lib/libraryBundle"
 import {
 	UNTITLED_VISUAL_NAME,
@@ -180,6 +182,7 @@ type PendingAction =
 	| { kind: "keep" }
 	| { kind: "fresh" }
 	| { kind: "import"; file: File; singleVisualName: string | null }
+	| { kind: "template"; templateId: string; keepDatasetId?: string }
 
 /** The name of the one visual a bundle file holds, or null for anything
  *  else (several visuals, or a file the import will reject anyway — the
@@ -194,8 +197,10 @@ const singleVisualNameIn = (text: string): string | null => {
  * A split button. The main segment starts a new visualization on a clean
  * slate (no dataset, at the root); the arrow segment opens a menu: in the
  * editor with a dataset bound, carrying that dataset forward or starting
- * clean, and everywhere, importing a JSON file — one visual's "Download
- * JSON" or a whole library bundle (the same format), merged additively
+ * clean, and everywhere, starting from a template (a picker first,
+ * optionally carrying the editor's data set along) or importing a JSON
+ * file — one visual's "Download JSON" or a whole library bundle (the same
+ * format), merged additively
  * exactly as Settings → Sharing does. Each menu item first asks what to
  * call the result and where it should go (the Move/Duplicate folder
  * picker plus a name box, pre-set to the open visual's folder or the
@@ -215,6 +220,8 @@ const NewVisualizationButton = () => {
 	const folders = useAtomValue(foldersAtom)
 	// Live visuals only, like the Save button: a name in the Trash is free.
 	const liveVisuals = useAtomValue(liveVisualsAtom)
+	const hasTemplates = liveVisuals.some((v) => isTemplate(v))
+	const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
 	// The picker's starting point: the open visual's folder in the editor,
 	// the folder being browsed on the library page (its `?folder=` param;
 	// the "unfiled" pseudo-folder means the root). Id lookup on the full
@@ -278,9 +285,11 @@ const NewVisualizationButton = () => {
 	const startNew = async (
 		keepDatasetId: string | undefined,
 		folderId: string | null,
-		name: string | null
+		name: string | null,
+		templateId?: string
 	) => {
 		const search = {
+			...(templateId ? { templateId } : {}),
 			...(keepDatasetId ? { datasetId: keepDatasetId } : {}),
 			...(folderId ? { folderId } : {}),
 			...(name && name !== UNTITLED_VISUAL_NAME ? { name } : {}),
@@ -322,6 +331,9 @@ const NewVisualizationButton = () => {
 			case "import":
 				await runImport(action.file, folderId, name)
 				return
+			case "template":
+				await startNew(action.keepDatasetId, folderId, name, action.templateId)
+				return
 		}
 	}
 
@@ -350,6 +362,20 @@ const NewVisualizationButton = () => {
 		setOpen(false)
 		request({ kind: "fresh" })
 	}
+	const onPickTemplate = () => {
+		if (!hasTemplates) return
+		setOpen(false)
+		setTemplatePickerOpen(true)
+	}
+	// The picker answers WHICH template; the folder + name step follows.
+	const onTemplatePicked = (templateId: string, useCurrent: boolean) => {
+		setTemplatePickerOpen(false)
+		request({
+			kind: "template",
+			templateId,
+			keepDatasetId: useCurrent ? currentDataset?.id : undefined,
+		})
+	}
 	const onPickImport = () => {
 		setOpen(false)
 		importInputRef.current?.click()
@@ -369,7 +395,12 @@ const NewVisualizationButton = () => {
 	const pickerTitle =
 		pending?.kind === "import"
 			? `Import ${pending.file.name}`
-			: "New visualization"
+			: pending?.kind === "template"
+				? `New from template: ${
+						liveVisuals.find((v) => v.id === pending.templateId)?.name ??
+						"template"
+					}`
+				: "New visualization"
 	// New visuals must not take a live name (the Save button refuses one);
 	// an import may duplicate by design, so there the clash only warns. The
 	// box starts with the name the visual would get anyway — "Untitled" —
@@ -391,6 +422,9 @@ const NewVisualizationButton = () => {
 					}
 			: {
 					label: "Name",
+					// A template draft starts "Untitled" too: templates share the
+					// namespace, so defaulting to the template's own name would
+					// block Start every time. The template is named in the title.
 					initial: UNTITLED_VISUAL_NAME,
 					collision: {
 						test: (n) =>
@@ -471,9 +505,26 @@ const NewVisualizationButton = () => {
 					<button
 						type="button"
 						role="menuitem"
+						onClick={onPickTemplate}
+						disabled={!hasTemplates}
+						title={
+							hasTemplates
+								? undefined
+								: "Save a template from a visual's Export dialog first"
+						}
+						className={currentDataset ? MENU_ITEM_DIVIDED : MENU_ITEM}
+					>
+						<div className={MENU_TITLE}>New from template…</div>
+						<div className={MENU_HINT}>
+							Start from a saved design, then attach data.
+						</div>
+					</button>
+					<button
+						type="button"
+						role="menuitem"
 						onClick={onPickImport}
 						disabled={importing}
-						className={currentDataset ? MENU_ITEM_DIVIDED : MENU_ITEM}
+						className={MENU_ITEM_DIVIDED}
 					>
 						<div className={MENU_TITLE}>
 							{importing ? "Importing…" : "Import from JSON…"}
@@ -496,6 +547,12 @@ const NewVisualizationButton = () => {
 					e.target.value = ""
 					if (file) void onImportFile(file)
 				}}
+			/>
+			<TemplatePickerModal
+				open={templatePickerOpen}
+				onClose={() => setTemplatePickerOpen(false)}
+				onPick={onTemplatePicked}
+				currentDatasetName={currentDataset?.name}
 			/>
 			<FolderPickerModal
 				open={pending !== null}

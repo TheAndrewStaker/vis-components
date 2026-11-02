@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { EMPTY_CHANNEL_CONFIGS } from "../../chartBuilder/lib/channelConfig"
 import { DEFAULT_LABELS_CONFIG } from "../../chartBuilder/lib/labelsConfig"
 import * as storage from "../../chartBuilder/lib/storage"
-import type { Dataset, Visual } from "../../chartBuilder/lib/types"
+import type {
+	Dataset,
+	TemplateMeta,
+	Visual,
+} from "../../chartBuilder/lib/types"
 import { emptyEncodings } from "../../chartBuilder/lib/types"
 import {
 	backfillCandidates,
@@ -216,6 +220,40 @@ describe("staleThumbnailCandidates", () => {
 				datasets
 			).map((v) => v.id)
 		).toEqual(["missing", "stale-new", "stale-old"])
+	})
+})
+
+describe("templates", () => {
+	const TEMPLATE: TemplateMeta = {
+		sourceFields: [{ name: "a", type: "quantitative", kind: "number" }],
+		formatMemory: {},
+	}
+	const datasets = { "ds-cats": mkDataset("ds-cats", 50) }
+
+	it("never considers a template row stale or a capture candidate", () => {
+		// No preview, no stamp, edited after everything: any ordinary visual
+		// with a data set would be first in line.
+		const template = mkVisual({
+			id: "tpl-1",
+			datasetId: null,
+			createdAtVersionId: null,
+			template: TEMPLATE,
+			updatedAt: 100,
+		})
+		const withPreview = { ...template, id: "tpl-2", thumbnail: THUMB }
+		expect(thumbnailIsStale(template, datasets)).toBe(false)
+		expect(thumbnailIsStale(withPreview, datasets)).toBe(false)
+		expect(backfillCandidates([template, withPreview], datasets)).toEqual([])
+		expect(
+			staleThumbnailCandidates([template, withPreview], datasets)
+		).toEqual([])
+	})
+
+	it("excludes a template even if it somehow carries a data set id", () => {
+		const stray = mkVisual({ id: "tpl-3", template: TEMPLATE })
+		expect(thumbnailIsStale(stray, datasets)).toBe(false)
+		expect(backfillCandidates([stray], datasets)).toEqual([])
+		expect(staleThumbnailCandidates([stray], datasets)).toEqual([])
 	})
 })
 

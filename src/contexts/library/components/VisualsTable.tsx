@@ -1,11 +1,13 @@
-import { Link } from "@tanstack/react-router"
 import { useRef } from "react"
+
+import { isTemplate } from "../../chartBuilder/lib/visualTrash"
 
 import type {
 	DecoratedRow,
 	SortDir,
 	SortField,
 } from "../hooks/useFilteredSortedVisuals"
+import { OpenVisualLink, TemplateChip } from "./OpenVisualLink"
 
 const formatDate = (ts: number): string => {
 	const d = new Date(ts)
@@ -37,6 +39,9 @@ type Props = {
 	/** Toggle: if all visible visuals are selected, clear them; otherwise
 	 * add every visible visual to the selection. */
 	onToggleAllVisible: () => void
+	/** Templates filter with no templates in the library at all: the empty
+	 *  state points at where one is made instead of at the filters. */
+	noTemplatesYet?: boolean
 }
 
 const SortHeader = ({
@@ -137,6 +142,7 @@ export const VisualsTable = ({
 	onToggleVisual,
 	onSetVisualsSelected,
 	onToggleAllVisible,
+	noTemplatesYet = false,
 }: Props) => {
 	// Row key of the last checkbox clicked: the anchor a shift-click
 	// extends from. Keyed by row (not index) so it survives re-sorting;
@@ -145,9 +151,15 @@ export const VisualsTable = ({
 	if (rows.length === 0) {
 		return (
 			<div className="flex flex-col items-center gap-4 rounded-card border border-dashed border-stone-300 bg-white px-8 py-20 text-center dark:border-stone-700 dark:bg-stone-800">
-				<p className="max-w-md text-sm vc-muted">
-					No visualizations match the current filters.
-				</p>
+				{noTemplatesYet ? (
+					<p className="max-w-md text-sm vc-faint">
+						No templates yet. Save one from a visual&apos;s Export dialog.
+					</p>
+				) : (
+					<p className="max-w-md text-sm vc-muted">
+						No visualizations match the current filters.
+					</p>
+				)}
 			</div>
 		)
 	}
@@ -277,16 +289,24 @@ export const VisualsTable = ({
 									/>
 								</td>
 								<td className="px-3 py-2">
-									<Link
-										to="/editor/$visualId"
-										params={{ visualId: row.visual.id }}
-										className="font-medium hover:underline vc-heading"
-									>
-										{row.visual.name}
-									</Link>
+									<span className="inline-flex items-center gap-2">
+										<OpenVisualLink
+											visual={row.visual}
+											className="font-medium hover:underline vc-heading"
+										>
+											{row.visual.name}
+										</OpenVisualLink>
+										{isTemplate(row.visual) && <TemplateChip />}
+									</span>
 								</td>
 								<td className="px-3 py-2 vc-text">
-									{row.dataset ? (
+									{row.visual.template ? (
+										<span className="vc-muted">
+											Template · {row.visual.template.sourceFields.length}{" "}
+											field
+											{row.visual.template.sourceFields.length === 1 ? "" : "s"}
+										</span>
+									) : row.dataset ? (
 										<>
 											{row.dataset.name}
 											{row.kind === "instance" && (

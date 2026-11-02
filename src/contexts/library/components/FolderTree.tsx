@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { SectionChevron } from "../../../components/ui/Chevron"
-import { Link } from "@tanstack/react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import type { Folder, Visual } from "../../chartBuilder/lib/types"
 import {
@@ -36,6 +35,9 @@ import {
 	reorderFolder,
 } from "../lib/folderOrder"
 import { UNFILED_FOLDER_ID, folderAncestors } from "../lib/folderSubtree"
+import { kindPredicate, type LibraryKind } from "../lib/libraryKind"
+import { isTemplate } from "../../chartBuilder/lib/visualTrash"
+import { OpenVisualLink, TemplateChip } from "./OpenVisualLink"
 
 const newFolderId = () =>
 	`fl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -303,14 +305,14 @@ const VisualTreeItem = ({
 				<>
 					{/* The link spans the chevron gutter too, so the whole
 					 *  row short of the pencil still opens the editor. */}
-					<Link
-						to="/editor/$visualId"
-						params={{ visualId: visual.id }}
+					<OpenVisualLink
+						visual={visual}
 						className="flex min-w-0 flex-1 items-center gap-1"
 					>
 						<span className={ROW_CHEVRON_BOX} />
 						<span className="min-w-0 flex-1 truncate">{visual.name}</span>
-					</Link>
+						{isTemplate(visual) && <TemplateChip />}
+					</OpenVisualLink>
 					{/* Same pencil and reveal rule as the folder row's buttons:
 					 *  on hover, always on touch, and for a keyboard user who
 					 *  tabs onto it. */}
@@ -829,14 +831,23 @@ const FolderTreeItem = ({
 export const FolderTree = ({
 	selectedFolderId,
 	onSelect,
+	kind,
 }: {
 	selectedFolderId: string | null
 	onSelect: (id: string | null) => void
+	/** Visuals | Templates | All filter (the library's `?kind=`): the tree
+	 *  lists the same rows the gallery does. Absent = ordinary visuals. */
+	kind?: LibraryKind
 }) => {
 	const [folders, setFolders] = useAtom(foldersAtom)
-	// Listed: live visuals only. Written: the whole collection, so a move
-	// or folder delete never drops the trashed ones.
-	const visuals = useAtomValue(liveVisualsAtom)
+	// Listed: live visuals of the selected kind only. Written: the whole
+	// collection, so a move or folder delete never drops the trashed ones
+	// (or the rows another kind filter hides).
+	const liveVisuals = useAtomValue(liveVisualsAtom)
+	const visuals = useMemo(
+		() => liveVisuals.filter(kindPredicate(kind)),
+		[liveVisuals, kind]
+	)
 	const setVisuals = useSetAtom(visualsAtom)
 
 	// Expansion is lifted (rather than per-item useState) because shift-click

@@ -36,6 +36,7 @@ import {
 } from "../../chartBuilder/lib/storage"
 import type { DatasetLike } from "../../chartBuilder/lib/datasetMeta"
 import type { Visual } from "../../chartBuilder/lib/types"
+import { isTemplate } from "../../chartBuilder/lib/visualTrash"
 
 export type BackfillProgress = { done: number; total: number }
 export type BackfillResult = { regenerated: number; failed: number }
@@ -50,12 +51,17 @@ const latestVersionCreatedAt = (dataset: DatasetLike): number | undefined =>
 
 /** The data set this visual would render from, if it can be rendered
  *  offscreen at all. A visual whose data set was deleted can never produce
- *  a chart — including it would just burn the full capture timeout. */
+ *  a chart — including it would just burn the full capture timeout. A
+ *  template has no data set by construction (its preview is copied from
+ *  the visual it was saved from and never recaptured); it's excluded by
+ *  flag too, so a stray `datasetId` on one can't make it a candidate. */
 const renderSource = (
 	visual: Visual,
 	datasets: Record<string, DatasetLike>
 ): DatasetLike | undefined =>
-	visual.datasetId === null ? undefined : datasets[visual.datasetId]
+	visual.datasetId === null || isTemplate(visual)
+		? undefined
+		: datasets[visual.datasetId]
 
 /** A stored picture this much smaller than a capture of the chart could
  *  be is a capture of something else. Ratio, not pixels: a legitimately

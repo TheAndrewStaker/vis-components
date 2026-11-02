@@ -14,6 +14,7 @@ import type { Folder, Visual } from "../../chartBuilder/lib/types"
 import { emptyEncodings } from "../../chartBuilder/lib/types"
 import { setCurrentDrag } from "../lib/folderDnd"
 import { UNFILED_FOLDER_ID } from "../lib/folderSubtree"
+import type { LibraryKind } from "../lib/libraryKind"
 import { FolderTree } from "./FolderTree"
 
 // FolderTree only needs Link from the router; render it as a plain anchor
@@ -22,12 +23,18 @@ vi.mock("@tanstack/react-router", () => ({
 	Link: ({
 		children,
 		// Router-only props that must not leak onto the DOM node:
-		to: _to,
+		to,
 		params: _params,
+		search,
 		...rest
 	}: React.PropsWithChildren<
-		{ to?: string; params?: unknown } & React.AnchorHTMLAttributes<HTMLAnchorElement>
-	>) => <a {...rest}>{children}</a>,
+		{ to?: string; params?: unknown; search?: { templateId?: string } } & React.AnchorHTMLAttributes<HTMLAnchorElement>
+	>) => (
+		// Only the template target is spelled out; tests read it off href.
+		<a {...rest} href={search?.templateId ? `${to}?templateId=${search.templateId}` : undefined}>
+			{children}
+		</a>
+	),
 }))
 
 /** testing-library builds a NEW `window.DataTransfer` for every fireEvent
@@ -690,5 +697,60 @@ describe("the stock shelf (shipped examples' folder)", () => {
 		expect(readStoredVisuals().find((v) => v.id === "vis-1")?.folderId).toBe(
 			"fl-stock"
 		)
+	})
+})
+
+describe("FolderTree kind filter", () => {
+	const seed = () =>
+		seedStorage(
+			[mkFolder("fl-a", null, "Alpha"), mkFolder("fl-t", null, "Tpls")],
+			[
+				mkVisual("vis-1", "fl-a", "Chart"),
+				{
+					...mkVisual("tpl-1", "fl-t", "Starter"),
+					template: { sourceFields: [], formatMemory: {} },
+				},
+			]
+		)
+	const renderKind = (kind: LibraryKind | undefined) =>
+		render(
+			<TestProvider>
+				<FolderTree selectedFolderId={null} onSelect={() => {}} kind={kind} />
+			</TestProvider>
+		)
+
+	it("lists ordinary visuals only by default", () => {
+		seed()
+		const { queryByTitle } = renderKind(undefined)
+		expect(queryByTitle("Chart")).not.toBeNull()
+		expect(queryByTitle("Starter")).toBeNull()
+	})
+
+	it("lists templates only under Templates, chipped and linked to a new visual", () => {
+		seed()
+		const { queryByTitle, getByTitle } = renderKind("templates")
+		expect(queryByTitle("Chart")).toBeNull()
+		const row = getByTitle("Starter")
+		expect(row.textContent).toContain("Template")
+		expect(row.querySelector("a")?.getAttribute("href")).toBe(
+			"/editor/new?templateId=tpl-1"
+		)
+	})
+
+	it("lists both under All", () => {
+		seed()
+		const { queryByTitle } = renderKind("all")
+		expect(queryByTitle("Chart")).not.toBeNull()
+		expect(queryByTitle("Starter")).not.toBeNull()
+	})
+
+	it("a move while filtered keeps the rows the filter hides", () => {
+		seed()
+		const { container, getByTitle } = renderKind("templates")
+		dragTo(getByTitle("Starter"), folderRow(container, "Alpha"))
+		const stored = readStoredVisuals()
+		expect(stored.map((v) => v.id).sort()).toEqual(["tpl-1", "vis-1"])
+		expect(stored.find((v) => v.id === "tpl-1")?.folderId).toBe("fl-a")
+		expect(stored.find((v) => v.id === "vis-1")?.folderId).toBe("fl-a")
 	})
 })

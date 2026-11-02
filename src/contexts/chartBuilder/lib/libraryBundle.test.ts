@@ -807,6 +807,59 @@ describe("export then import", () => {
 	})
 })
 
+/* -------------------------------- templates ------------------------------ */
+
+describe("templates in bundles", () => {
+	const tplMeta = {
+		sourceFields: [{ name: "Sales", type: "quantitative", kind: "dollar" }],
+		formatMemory: { "axis:y": { dollar: "$,.0f" } },
+	} as unknown as NonNullable<Visual["template"]>
+
+	it("exports a data-less template without a dataset lookup", () => {
+		const result = buildBundleFromSource(
+			source({
+				visuals: [vis({ id: "tpl-1", datasetId: null, template: tplMeta })],
+			}),
+			["tpl-1"]
+		)
+		expect(result.visuals.map((v) => v.id)).toEqual(["tpl-1"])
+		expect(result.datasets).toEqual({})
+	})
+
+	it("round-trips a template and remaps a visual's templateId through a re-minted id", () => {
+		const exported = buildBundleFromSource(
+			source({
+				visuals: [
+					vis({ id: "tpl-1", datasetId: null, template: tplMeta }),
+					vis({ id: "v1", datasetId: "ds-1", templateId: "tpl-1" }),
+					vis({ id: "v2", templateId: "tpl-gone" }),
+				],
+				datasets: { "ds-1": ds({ id: "ds-1" }) },
+			}),
+			["tpl-1", "v1", "v2"]
+		)
+		const parsed = parseLibraryBundle(stringifyJsonDangerous(exported as never))
+		expect(parsed.ok).toBe(true)
+		if (!parsed.ok) return
+		// The recipient already has a "tpl-1", so the template's id is re-minted.
+		const result = merge(
+			parsed.bundle,
+			library({ visuals: [vis({ id: "tpl-1", name: "Mine" })] })
+		)
+		const tpl = result.visuals.find((v) => v.template !== undefined)
+		expect(tpl?.id).toBe("vs-new-1")
+		expect(tpl?.datasetId).toBeNull()
+		expect(tpl?.template).toEqual(tplMeta)
+		const v1 = result.visuals.find((v) => v.name === "Visual v1")
+		expect(v1?.templateId).toBe("vs-new-1")
+		// A template that didn't travel keeps its id (informational link).
+		const v2 = result.visuals.find((v) => v.name === "Visual v2")
+		expect(v2?.templateId).toBe("tpl-gone")
+		// Rows stay sparse: no templateId key where there was none.
+		expect("templateId" in (tpl ?? {})).toBe(false)
+	})
+})
+
 /* ------------------------------ server mode ------------------------------ */
 
 describe("server mode", () => {

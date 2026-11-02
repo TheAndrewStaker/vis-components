@@ -11,12 +11,9 @@ import {
 	datasetSizeIssue,
 	datasetWarnMessage,
 } from "../lib/datasetLimits"
-import { DEFAULT_DERIVED_VARIABLES_CONFIG } from "../lib/derivedVariables"
 import { inferFieldType } from "../lib/inferFieldType"
-import { DEFAULT_RESHAPE_CONFIG } from "../lib/reshape"
 import { parseCsvFile, parseCsvText } from "../lib/parseCsv"
 import {
-	emptyEncodings,
 	type Dataset,
 	type DatasetVersion,
 	type Field,
@@ -24,18 +21,13 @@ import {
 } from "../lib/types"
 
 import {
-	currentDatasetIdAtom,
-	currentDerivedVariablesAtom,
-	currentEncodingsAtom,
 	datasetIndexAtom,
-	currentFieldOverridesAtom,
-	currentReshapeConfigAtom,
 	currentVisualIdAtom,
 	getDatasetBody,
 	loadedDatasetsAtom,
 	pendingUploadAtom,
-	previewVersionIdAtom,
 } from "./atoms"
+import { bindDatasetToDraft } from "./bindDatasetToDraft"
 
 /** Thrown when an upload probably duplicates an existing dataset (same name,
  *  same content hash) but the stored body couldn't be loaded to confirm it.
@@ -96,7 +88,8 @@ export const parsePastedData = (text: string): ParsedUpload => {
 }
 
 /** Create a brand new Dataset from a parsed upload, bind it to the current
- * editor, reset encodings, and clear any preview-version pin. Shared between
+ * editor (`bindDatasetToDraft`: a pending template draft snaps onto it,
+ * anything else has its encodings reset), and clear any preview-version pin. Shared between
  * the sidebar Upload button and the drawer's drag-and-drop handler.
  * Returns the new dataset's id so callers can stash it in URL params before
  * navigating (avoids losing the binding to a downstream `useResetVisual`). */
@@ -130,12 +123,9 @@ export const useCreateNewDataset = () =>
 					? matchedBody.id
 					: null
 			if (existingId) {
-				set(currentDatasetIdAtom, existingId)
-				set(previewVersionIdAtom, null)
-				set(currentEncodingsAtom, emptyEncodings())
-				set(currentFieldOverridesAtom, {})
-				set(currentReshapeConfigAtom, DEFAULT_RESHAPE_CONFIG)
-				set(currentDerivedVariablesAtom, DEFAULT_DERIVED_VARIABLES_CONFIG)
+				// The body just loaded for the comparison is the one a pending
+				// template snaps onto.
+				bindDatasetToDraft(get, set, existingId, matchedBody)
 				return existingId
 			}
 			if (hashMatch && !matchedBody) {
@@ -173,12 +163,7 @@ export const useCreateNewDataset = () =>
 				}),
 			}
 			set(loadedDatasetsAtom, (prev) => ({ ...prev, [id]: dataset }))
-			set(currentDatasetIdAtom, id)
-			set(previewVersionIdAtom, null)
-			set(currentEncodingsAtom, emptyEncodings())
-			set(currentFieldOverridesAtom, {})
-			set(currentReshapeConfigAtom, DEFAULT_RESHAPE_CONFIG)
-			set(currentDerivedVariablesAtom, DEFAULT_DERIVED_VARIABLES_CONFIG)
+			bindDatasetToDraft(get, set, id, dataset)
 			return id
 		}, [])
 	)

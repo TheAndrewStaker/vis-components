@@ -10,6 +10,7 @@ import {
 	renameFieldInVisual,
 	type FieldNameConfigs,
 } from "../lib/renameField"
+import type { LegendConfig } from "../lib/labelsConfig"
 import type { Field } from "../lib/types"
 import { renameFieldInVersions } from "../lib/versionFields"
 
@@ -31,6 +32,7 @@ import {
 	currentFieldOrderAtom,
 	currentFieldOverridesAtom,
 	currentLabelsAtom,
+	currentLegendConfigAtom,
 	currentReshapeConfigAtom,
 	currentTooltipConfigAtom,
 	datasetIndexAtom,
@@ -39,6 +41,70 @@ import {
 } from "./atoms"
 
 export type RenameFieldResult = { ok: true } | { ok: false; error: string }
+
+/** Every field-name-bearing editor atom as one state slice — the shape
+ * `renameFieldInConfigs` / `remapFieldsInConfigs` read, plus the format
+ * surfaces (`legendConfig`) a template rebind also rewrites. Pair with
+ * {@link writeFieldConfigs}. */
+export type EditorFieldConfigs = Required<FieldNameConfigs> & {
+	legendConfig: LegendConfig
+}
+
+export const readFieldConfigs = (get: Getter): EditorFieldConfigs => ({
+	encodings: get(currentEncodingsAtom),
+	dataLabelsEncodings: get(currentDataLabelsEncodingsAtom),
+	fieldTypeOverrides: get(currentFieldOverridesAtom),
+	fieldLevelOrders: get(currentFieldLevelOrdersAtom),
+	fieldLevelOrderSpecs: get(currentFieldLevelOrderSpecsAtom),
+	fieldOrder: get(currentFieldOrderAtom),
+	channelConfigs: get(currentChannelConfigsAtom),
+	labelsConfig: get(currentLabelsAtom),
+	legendConfig: get(currentLegendConfigAtom),
+	dataLabelsConfig: get(currentDataLabelsConfigAtom),
+	tooltipConfig: get(currentTooltipConfigAtom),
+	reshapeConfig: get(currentReshapeConfigAtom),
+	annotationsConfig: get(currentAnnotationsAtom),
+	derivedVariablesConfig: get(currentDerivedVariablesAtom),
+})
+
+/** Write back the pieces of `next` that differ (by reference) from `prev`
+ * — untouched atoms keep their identity, so nothing downstream re-renders
+ * or records an undo step for them. */
+export const writeFieldConfigs = (
+	set: Setter,
+	prev: EditorFieldConfigs,
+	next: EditorFieldConfigs
+): void => {
+	if (next === prev) return
+	if (next.encodings !== prev.encodings)
+		set(currentEncodingsAtom, next.encodings)
+	if (next.dataLabelsEncodings !== prev.dataLabelsEncodings)
+		set(currentDataLabelsEncodingsAtom, next.dataLabelsEncodings)
+	if (next.fieldTypeOverrides !== prev.fieldTypeOverrides)
+		set(currentFieldOverridesAtom, next.fieldTypeOverrides)
+	if (next.fieldLevelOrders !== prev.fieldLevelOrders)
+		set(currentFieldLevelOrdersAtom, next.fieldLevelOrders)
+	if (next.fieldLevelOrderSpecs !== prev.fieldLevelOrderSpecs)
+		set(currentFieldLevelOrderSpecsAtom, next.fieldLevelOrderSpecs)
+	if (next.fieldOrder !== prev.fieldOrder)
+		set(currentFieldOrderAtom, next.fieldOrder)
+	if (next.channelConfigs !== prev.channelConfigs)
+		set(currentChannelConfigsAtom, next.channelConfigs)
+	if (next.labelsConfig !== prev.labelsConfig)
+		set(currentLabelsAtom, next.labelsConfig)
+	if (next.legendConfig !== prev.legendConfig)
+		set(currentLegendConfigAtom, next.legendConfig)
+	if (next.dataLabelsConfig !== prev.dataLabelsConfig)
+		set(currentDataLabelsConfigAtom, next.dataLabelsConfig)
+	if (next.tooltipConfig !== prev.tooltipConfig)
+		set(currentTooltipConfigAtom, next.tooltipConfig)
+	if (next.reshapeConfig !== prev.reshapeConfig)
+		set(currentReshapeConfigAtom, next.reshapeConfig)
+	if (next.annotationsConfig !== prev.annotationsConfig)
+		set(currentAnnotationsAtom, next.annotationsConfig)
+	if (next.derivedVariablesConfig !== prev.derivedVariablesConfig)
+		set(currentDerivedVariablesAtom, next.derivedVariablesConfig)
+}
 
 /** Rewrite every open-editor atom for a field rename: assemble the state
  * slice from the atoms, run `renameFieldInConfigs` once, and write back only
@@ -55,49 +121,12 @@ export const renameFieldAcrossEditorAtoms = (
 	oldName: string,
 	newName: string
 ): void => {
-	const state: Required<FieldNameConfigs> = {
-		encodings: get(currentEncodingsAtom),
-		dataLabelsEncodings: get(currentDataLabelsEncodingsAtom),
-		fieldTypeOverrides: get(currentFieldOverridesAtom),
-		fieldLevelOrders: get(currentFieldLevelOrdersAtom),
-		fieldLevelOrderSpecs: get(currentFieldLevelOrderSpecsAtom),
-		fieldOrder: get(currentFieldOrderAtom),
-		channelConfigs: get(currentChannelConfigsAtom),
-		labelsConfig: get(currentLabelsAtom),
-		dataLabelsConfig: get(currentDataLabelsConfigAtom),
-		tooltipConfig: get(currentTooltipConfigAtom),
-		reshapeConfig: get(currentReshapeConfigAtom),
-		annotationsConfig: get(currentAnnotationsAtom),
-		derivedVariablesConfig: get(currentDerivedVariablesAtom),
-	}
-	const next = renameFieldInConfigs(state, datasetFields, oldName, newName)
-	if (next === state) return
-	if (next.encodings !== state.encodings)
-		set(currentEncodingsAtom, next.encodings)
-	if (next.dataLabelsEncodings !== state.dataLabelsEncodings)
-		set(currentDataLabelsEncodingsAtom, next.dataLabelsEncodings)
-	if (next.fieldTypeOverrides !== state.fieldTypeOverrides)
-		set(currentFieldOverridesAtom, next.fieldTypeOverrides)
-	if (next.fieldLevelOrders !== state.fieldLevelOrders)
-		set(currentFieldLevelOrdersAtom, next.fieldLevelOrders)
-	if (next.fieldLevelOrderSpecs !== state.fieldLevelOrderSpecs)
-		set(currentFieldLevelOrderSpecsAtom, next.fieldLevelOrderSpecs)
-	if (next.fieldOrder !== state.fieldOrder)
-		set(currentFieldOrderAtom, next.fieldOrder)
-	if (next.channelConfigs !== state.channelConfigs)
-		set(currentChannelConfigsAtom, next.channelConfigs)
-	if (next.labelsConfig !== state.labelsConfig)
-		set(currentLabelsAtom, next.labelsConfig)
-	if (next.dataLabelsConfig !== state.dataLabelsConfig)
-		set(currentDataLabelsConfigAtom, next.dataLabelsConfig)
-	if (next.tooltipConfig !== state.tooltipConfig)
-		set(currentTooltipConfigAtom, next.tooltipConfig)
-	if (next.reshapeConfig !== state.reshapeConfig)
-		set(currentReshapeConfigAtom, next.reshapeConfig)
-	if (next.annotationsConfig !== state.annotationsConfig)
-		set(currentAnnotationsAtom, next.annotationsConfig)
-	if (next.derivedVariablesConfig !== state.derivedVariablesConfig)
-		set(currentDerivedVariablesAtom, next.derivedVariablesConfig)
+	const state = readFieldConfigs(get)
+	writeFieldConfigs(
+		set,
+		state,
+		renameFieldInConfigs(state, datasetFields, oldName, newName)
+	)
 }
 
 /** Rename a DERIVED variable (Fields panel click-to-edit — the same inline

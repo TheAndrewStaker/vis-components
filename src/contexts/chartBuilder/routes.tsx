@@ -16,9 +16,17 @@ export const editorNewRoute = createRoute({
 	// "Untitled").
 	validateSearch: (
 		search: Record<string, unknown>,
-	): { datasetId?: string; folderId?: string; name?: string } => ({
+	): {
+		datasetId?: string
+		folderId?: string
+		name?: string
+		templateId?: string
+	} => ({
 		datasetId:
 			typeof search.datasetId === "string" ? search.datasetId : undefined,
+		// Start the new visual from this template (`applyTemplateToDraft`).
+		templateId:
+			typeof search.templateId === "string" ? search.templateId : undefined,
 		folderId:
 			typeof search.folderId === "string" && search.folderId.length > 0
 				? search.folderId

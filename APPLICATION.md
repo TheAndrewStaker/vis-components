@@ -699,7 +699,7 @@ While a text field has focus `⌘Z` is left to the browser (it undoes the
 typing in that field); click the chart, or use the buttons, to undo the
 visual. An undo is an ordinary change to autosave, so the saved visual
 always matches the screen. (`store/editorHistory.ts`; the draft
-snapshot is the same 19 atoms `useSaveVisual` reads.)
+snapshot is the same 21 atoms `useSaveVisual` reads.)
 
 **Save status.** Beside the name, the top bar says when the open visual
 was last saved: "Saving…" mid-save, otherwise "Saved by Nancy at
@@ -827,6 +827,145 @@ the constant to re-run) and must never throw — a failure logs, skips
 the marker so it retries next launch, and first paint proceeds.
 
 ---
+
+### 2.5 Templates
+A **template** is a visual's design with the data taken out: every
+encoding slot, channel config, label, legend, data-label, annotation,
+caption, data-table and theme setting, but no data set, no values pinned
+to data, and no custom prose. It exists so a user who draws the same
+complicated figure (a faceted multi-line chart with specific colors,
+legend placement and labelling) for unrelated data sets can start from
+the finished design instead of from scratch, and have the encodings
+**snap** onto the new data set's fields.
+
+**A template is a visual row.** It lives in the `visuals` collection with
+`template` set (`TemplateMeta`, below), `datasetId: null`, and no
+`createdAtVersionId`; `templateId` on an ordinary visual records the
+template it was started from. Both fields are optional, so no
+`VISUALS_VERSION` bump: a build that does not know them carries them
+through untouched. Templates sit in the normal library folders, so
+folders, drag-and-drop, Trash, duplicate, bulk Download and bundle
+import/export all apply unchanged. The library's Visuals | Templates |
+All filter decides which show; cards, table rows and tree rows carry a
+"Template" chip, and clicking a template starts a NEW visual from it
+(`/editor/new?templateId=`) — it never opens in the editor as a chart,
+the editor refuses to load one the way it refuses a trashed visual, a
+template id in an embed is a missing visual, and Publish refuses it.
+Templates share the visual name namespace. A template's thumbnail is
+copied from the visual it was saved from and never recaptured (no data
+set → nothing to draw).
+
+**Saving one.** Export → **Save as template** (beside Download JSON;
+the Export modal only exists for a saved visual) asks for a name and a
+destination folder through the same dialog New uses. The name box starts
+as "<visual name> template" (templates share the visual namespace, so
+the bare name would always collide) and the folder list starts on the
+visual's own folder. When the open visual was started from a template
+that still exists, the dialog also offers **Update template "<name>"**.
+A "Saved as template" / "Template updated" note shows beside the button
+for a few seconds. The template body is built from
+the SAME draft the autosave reads (`buildTemplateBody`,
+`lib/templates/`), then:
+
+- *Dropped* — everything bound to the data set or to its values: the
+  data set binding, reshape and derived-variable configs (those are
+  data-set versions now, §2.1b/§2.1c), per-visual field order, pinned
+  category/level orders, facet panel order and the per-panel / per-row /
+  per-column axis overrides and overall facet ranges, axis min/max and
+  breaks, gridline breaks, mirrored-axis maxima, legend break values,
+  gradient stop VALUES (the colors stay), dash ranges, annotations placed
+  at data values, every annotation and data-label facet key, and the data
+  table's column selection and alignment.
+- *Kept* — per-category styling keyed by category value (hue colors,
+  shape / pattern / opacity / saturation overrides, connection colors,
+  facet-title colors): users' category vocabularies (payer types, years)
+  tend to repeat across data sets, and an entry whose value never appears
+  sits unused. Fonts, sizes, positions, the theme snapshot and `themeId`,
+  field-type overrides, tooltip settings (custom HTML included) and
+  data-label templates are kept with their `{Field}` tokens remapped on
+  snap.
+- *Replaced with placeholders* — custom prose: title → "Title",
+  subtitle → "Subtitle", caption text and title-prefix text cleared, axis
+  and legend titles back to automatic (the field name, so they read the
+  NEW field names after the snap), text annotations dropped and the text
+  on shape / line annotations cleared.
+
+`TemplateMeta` records `sourceFields` — every view field at save time
+with its effective type and **data kind** — and `formatMemory`. Kinds
+are dollar, percent, number, date, category, ordinal (effective type
+plus the view-time dollar / percent cell hint, §2.1). Format memory is
+keyed by format-bearing SURFACE (`axis:x|y|r|angle|chord`,
+`legend:<channel>`, `labels:value`, `labels:value:<i>`) and, under it,
+by kind: for each surface with a bound field and a non-Auto format, the
+format string is filed under that field's kind. So a template saved from
+a date-x / dollar-y chart knows one date format and one dollar format.
+
+**Updating one** replaces the template's design with the current draft
+and MERGES format memory: the same surface + kind is overwritten, a new
+kind is added, other kinds stay. Save a visual made from the template
+with percents on y and the template now formats both dollars and
+percents on y. `sourceFields` is replaced; id, name, folder and creation
+time are kept; the thumbnail is refreshed from the visual.
+
+**Starting from one.** New visualization ▾ → **New from template…**
+(disabled, with a hint, until a template exists) opens a picker: on the
+left "All templates" plus every folder whose subtree holds a template,
+on the right the thumbnail cards; click selects, double-click / Enter /
+"Use template" picks. Then the usual destination folder + name step runs,
+titled "New from template: <name>" with the name box at "Untitled" (the
+template's own name would collide), and the editor opens on
+`/editor/new?templateId=` with the design loaded and every encoding slot
+still naming the template's OLD fields. The draft is
+**template-pending**: a template id is set, no visual id, no data set.
+Pending is derived from those three atoms plus "the template row still
+exists live" — nothing new is persisted, and a reload re-applies the
+template from the route. Autosave already waits for a data set, and Save
+is disabled while pending ("Attach a data set first"), so a data-less
+visual is never written. When
+the editor already had a data set, the picker's "Use the current data
+set" box passes it along and the snap happens immediately.
+
+**The snap** happens the first time a data set binds to a pending draft
+— upload, paste, dedupe hit on an identical upload, or `?datasetId=` on
+the route — in one place (`bindDatasetToDraft`). Without a pending
+template that bind wipes the encodings as it always has; with one it
+runs `rebindTemplate`:
+
+- Each template field is matched to at most one new field, most
+  restrictive channel first (facet / shape / pattern / connection before
+  hue before x / y), by the first tier with a candidate: same name or
+  former name (`sourceNames`) with a compatible type → same kind → same
+  type → a type that can be READ as the template's type (only
+  categorical / ordinal targets, written as a type override) → any type
+  every occupied channel accepts. Ties go to data-set order.
+- The mapping is applied with the field-rename engine
+  (`remapFieldsInConfigs`, all pairs at once so swaps don't collide), so
+  every surface a rename reaches — encodings, data-label slots, per-field
+  maps, `{Field}` tokens, tooltip fields — moves together. A template
+  field with no match leaves its encoding slots EMPTY so the user sees
+  what to fill; other stray references dangle harmlessly, as they already
+  do.
+- Type overrides survive only for categorical / ordinal targets that
+  differ from the new field's inferred type.
+- Format memory is applied last: a surface whose new field has a kind
+  the template knows gets that format; an unknown kind gets Auto, which
+  the dollar / percent hint defaults already handle. A date-x / dollar-y
+  template on number-x / percent-y data therefore still draws, with
+  Auto number ticks and Auto percent ticks.
+
+The data-set id and the rebound configs land in the same callback, so
+the undo baseline (§2.3) is the snapped state. A dismissible banner
+above the chart then lists the mapping ("Date → Period, Spend → Rate;
+Facet: no match — pick a field"); it survives the autosave's redirect to
+`/editor/$id` and clears on dismiss, on New, or when another visual is
+opened. If the template was deleted between picking it and attaching
+data, the bind falls back to the plain wipe.
+
+**Limits.** A template saved from a reshaped or derived-column data set
+names those VIEW columns; the new data set has to be reshaped the same
+way, or the slots match by type to whatever is there. A reload on
+`/editor/new?templateId=` before data is attached re-applies the
+template and loses pre-snap tweaks — the draft is unsaved by design.
 
 ## 3. Encoding shelves & channels
 
@@ -4915,6 +5054,10 @@ localStorage:
 encodings, channel configs, labels, legend, tooltip, data labels,
 annotations, theme, and the Visuals library. Each atom has a versioned
 migration list so future schema changes don't break old saves.
+
+Templates (§2.5) are visual rows with two OPTIONAL fields, `template`
+and `templateId`; they ride the visuals migrations and needed no
+version bump.
 
 Datasets (parsed CSV rows) are the exception — they persist to
 **IndexedDB** (DB `vis-components`, store `kv`), not localStorage.

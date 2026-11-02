@@ -31,6 +31,11 @@ type Props = {
 	onCancel: () => void
 	/** `name` is the trimmed box contents, present only with `nameField`. */
 	onConfirm: (folderId: string | null, name?: string) => void
+	/** A second action beside Cancel that ignores the name and folder (Save
+	 *  as template's "Update template"). Never blocked by a name collision. */
+	secondaryAction?: { label: string; onClick: () => void | Promise<void> }
+	/** A failure from the caller's last confirm, shown above the buttons. */
+	error?: string | null
 }
 
 /** Destination-folder picker shared by Move, Duplicate and the header's
@@ -43,6 +48,8 @@ export const FolderPickerModal = ({
 	nameField,
 	onCancel,
 	onConfirm,
+	secondaryAction,
+	error = null,
 }: Props) => {
 	const folders = useAtomValue(foldersAtom)
 	const [target, setTarget] = useState<string | null>(initialTarget)
@@ -144,10 +151,28 @@ export const FolderPickerModal = ({
 				</div>
 					</>
 				)}
+				{error !== null && (
+					<div
+						role="alert"
+						className="rounded-sm bg-red-50 px-2 py-1 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300"
+					>
+						{error}
+					</div>
+				)}
 				<div className="flex justify-end gap-2">
 					<Button compact onClick={onCancel}>
 						Cancel
 					</Button>
+					{secondaryAction && (
+						<Button
+							compact
+							onClick={() => {
+								void secondaryAction.onClick()
+							}}
+						>
+							{secondaryAction.label}
+						</Button>
+					)}
 					<Button compact onClick={confirm} disabled={blocked}>
 						{confirmLabel}
 					</Button>

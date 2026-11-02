@@ -35,6 +35,7 @@ import { migrateDataTableConfig } from "../lib/dataTableConfig"
 import { usePublishEmbed, useUnpublishEmbed } from "../store/publishEmbed"
 import { useCurrentDatasetView } from "../store/useCurrentDatasetView"
 import { useEffectiveGeographyLevel } from "../store/useEffectiveGeographyLevel"
+import { SaveTemplateButton } from "./SaveTemplateButton"
 import { EXPORT_TABLE_HEIGHT_MESSAGE } from "./viz/DataTableBlock"
 
 import { Button } from "../../../components/ui/Button"
@@ -288,8 +289,9 @@ export const ExportModal = ({ open, onClose, visualId }: Props) => {
 					    beside the two panes rather than opening one. Wrapped so the
 					    button centers vertically while the tabs stay full height and
 					    keep their active underline flush with the row's border. */}
-					<div className="flex items-center pb-2">
+					<div className="flex items-center gap-2 pb-2">
 						<DownloadJsonButton visualId={visualId} />
+						<SaveTemplateButton visualId={visualId} />
 					</div>
 					<TabButton active={tab === "embed"} onClick={() => setTab("embed")}>
 						Embed

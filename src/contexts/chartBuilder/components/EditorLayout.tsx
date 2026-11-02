@@ -20,6 +20,7 @@ import { migrateDataTableConfig } from "../lib/dataTableConfig"
 
 import { DataDrawer } from "./drawer/DataDrawer"
 import { DerivedVariableModal } from "./drawer/DerivedVariableModal"
+import { TemplateRebindBanner } from "./TemplateRebindBanner"
 import { ErrorBoundary } from "./ErrorBoundary"
 import { CanvasZoomControls } from "./CanvasZoomControls"
 import { SaveBar } from "./SaveBar"
@@ -308,6 +309,9 @@ export const EditorLayout = () => {
 				)}
 				{/* relative: the accessibility check card docks over the chart. */}
 				<div className="relative flex min-h-0 min-w-0 flex-col">
+					{/* Above the scroll region (never inside it), so exports,
+					 *  thumbnails and the solver don't see it. */}
+					<TemplateRebindBanner />
 					<ErrorBoundary>
 						{/* data-editor-chart-viewport marks the element whose size the
 						 *  Export modal defaults its output dimensions to — the export

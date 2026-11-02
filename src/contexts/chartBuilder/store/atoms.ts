@@ -107,6 +107,8 @@ import {
 } from "../lib/storage"
 import { datasetIndexFrom } from "../lib/datasetMeta"
 import { resolveVersionIdFromMeta } from "../lib/resolveDatasetVersion"
+import { isTemplatePending } from "../lib/templates/pending"
+import type { RebindUnmatched } from "../lib/templates/rebind"
 import { idbAvailable } from "../lib/storage/idb"
 import {
 	overlayThemes,
@@ -878,6 +880,21 @@ export const currentVisualIdAtom = persistedAtom<string | null>(
  *  visual files, not what it draws), so deliberately NOT in `DRAFT_ATOMS`. */
 export const newVisualFolderIdAtom = atom<string | null>(null)
 
+/** The template the editor's draft was started from (or the visual's
+ *  remembered `templateId` once saved). Deliberately in-memory, NOT a
+ *  persisted `current*` atom: `/editor/new?templateId=…` always re-reads the
+ *  route, and a saved visual carries it on the row. In `DRAFT_ATOMS`, since
+ *  it is saved with the visual. */
+export const currentTemplateIdAtom = atom<string | null>(null)
+
+/** What the last template snap did — which template field went to which new
+ *  field, and the encoding slots that found nothing. Feeds the dismissible
+ *  banner above the chart; null = no banner. In-memory only. */
+export const templateRebindNoticeAtom = atom<{
+	mapping: Record<string, string | null>
+	unmatched: RebindUnmatched[]
+} | null>(null)
+
 /** True when the visual open in the editor has at least one PUBLISHED embed
  *  instance — the same test the Export modal's Embed tab uses (a publish id
  *  AND public urls). A copied-but-never-published instance does NOT count:
@@ -910,6 +927,20 @@ export const currentEncodingsAtom = persistedAtom<Encodings>(
 export const currentDatasetIdAtom = persistedAtom<string | null>(
 	loadCurrentDatasetId,
 	saveCurrentDatasetId
+)
+
+/** The draft was started from a template and has no data yet: not saved,
+ *  Save disabled, and the next data set attached snaps the template's
+ *  encodings onto it (`bindDatasetToDraft`). */
+export const templatePendingAtom = atom((get) =>
+	isTemplatePending(
+		{
+			templateId: get(currentTemplateIdAtom),
+			visualId: get(currentVisualIdAtom),
+			datasetId: get(currentDatasetIdAtom),
+		},
+		get(visualsAtom)
+	)
 )
 
 /** When set, the editor canvas previews the visualization at this dataset

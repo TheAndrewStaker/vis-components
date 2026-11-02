@@ -1,3 +1,4 @@
+import { UNTITLED_VISUAL_NAME } from "../contexts/chartBuilder/lib/nameUniqueness"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -132,12 +133,13 @@ describe("Header → New visualization dropdown", () => {
 		expect(store.get(currentDatasetIdAtom)).toBeNull()
 	})
 
-	it("on the library page the arrow menu offers only the import entry", () => {
+	it("on the library page the arrow menu offers templates and the import entry", () => {
 		mount()
 		openMenu()
 		const items = screen.getAllByRole("menuitem").map((el) => el.textContent)
-		expect(items).toHaveLength(1)
-		expect(items[0]).toContain("Import from JSON…")
+		expect(items).toHaveLength(2)
+		expect(items[0]).toContain("New from template…")
+		expect(items[1]).toContain("Import from JSON…")
 		expect(navigate).not.toHaveBeenCalled()
 	})
 
@@ -149,11 +151,12 @@ describe("Header → New visualization dropdown", () => {
 		})
 		openMenu()
 		const items = screen.getAllByRole("menuitem").map((el) => el.textContent)
-		expect(items).toHaveLength(3)
+		expect(items).toHaveLength(4)
 		expect(items[0]).toContain("New with this data set")
 		expect(items[0]).toContain("Q3 Sales")
 		expect(items[1]).toContain("New with a new data set")
-		expect(items[2]).toContain("Import from JSON…")
+		expect(items[2]).toContain("New from template…")
+		expect(items[3]).toContain("Import from JSON…")
 
 		fireEvent.click(screen.getByText("New with this data set"))
 		// No folders: the dialog asks only for a name, pre-filled with what
@@ -432,5 +435,83 @@ describe("Header → New visualization dropdown", () => {
 
 		fireEvent.click(screen.getByText("Got it"))
 		expect(screen.queryByText("Import failed")).toBeNull()
+	})
+})
+
+describe("Header → New from template…", () => {
+	const template = (id: string, name: string): Visual =>
+		({
+			...vis(id),
+			name,
+			template: { sourceFields: [], formatMemory: {} },
+		}) as unknown as Visual
+
+	const templateItem = () =>
+		screen
+			.getAllByRole("menuitem")
+			.find((el) => el.textContent?.includes("New from template…")) as
+			| HTMLButtonElement
+			| undefined
+
+	it("is disabled with a hint until a live template exists", () => {
+		mount((s) => {
+			s.set(visualsAtom, [
+				vis("v-1"),
+				{ ...template("t-gone", "Old"), deletedAt: 5 } as Visual,
+			])
+		})
+		openMenu()
+		const item = templateItem()!
+		expect(item.disabled).toBe(true)
+		expect(item.title).toBe("Save a template from a visual's Export dialog first")
+		fireEvent.click(item)
+		expect(screen.queryByText("New from template")).toBeNull()
+	})
+
+	it("picks a template, then asks folder + name (Untitled default, template in the title)", () => {
+		mount((s) => {
+			s.set(visualsAtom, [template("t-1", "Quarterly layout")])
+		})
+		openMenu()
+		fireEvent.click(templateItem()!)
+		expect(screen.queryByRole("menu")).toBeNull()
+		// On the library page there is no data set to carry along.
+		expect(screen.queryByLabelText(/Use the current data set/)).toBeNull()
+		fireEvent.doubleClick(screen.getByText("Quarterly layout"))
+
+		const nameBox = screen.getByLabelText("Name") as HTMLInputElement
+		// Templates share the name namespace, so the box starts "Untitled"
+		// (let through like any new visual) and the title names the template.
+		expect(nameBox.value).toBe(UNTITLED_VISUAL_NAME)
+		expect(screen.getByText("New from template: Quarterly layout")).toBeTruthy()
+		expect((screen.getByText("Start") as HTMLButtonElement).disabled).toBe(false)
+		fireEvent.change(nameBox, { target: { value: "Q4 sales" } })
+		fireEvent.click(screen.getByText("Start"))
+		expect(navigate).toHaveBeenCalledWith({
+			to: "/editor/new",
+			search: { templateId: "t-1", name: "Q4 sales" },
+		})
+	})
+
+	it("in the editor the picker can carry the current data set", () => {
+		pathname = "/editor/dv-1"
+		mount((s) => {
+			s.set(visualsAtom, [template("t-1", "Quarterly layout")])
+			s.set(loadedDatasetsAtom, { "ds-1": dataset() })
+			s.set(currentDatasetIdAtom, "ds-1")
+		})
+		openMenu()
+		fireEvent.click(templateItem()!)
+		fireEvent.click(screen.getByLabelText("Use the current data set (Q3 Sales)"))
+		fireEvent.click(screen.getByText("Quarterly layout"))
+		fireEvent.click(screen.getByRole("button", { name: "Use template" }))
+		fireEvent.change(screen.getByLabelText("Name"), {
+			target: { value: "Sales snap" },
+		})
+		fireEvent.click(screen.getByText("Start"))
+		expect(navigate).toHaveBeenCalledWith({
+			to: "/editor/new",
+			search: { templateId: "t-1", datasetId: "ds-1", name: "Sales snap" },
+		})
 	})
 })

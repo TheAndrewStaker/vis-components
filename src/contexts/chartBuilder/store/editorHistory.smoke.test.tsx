@@ -10,6 +10,7 @@ import {
 	currentAccessibilityConfigAtom,
 	currentDataTableConfigAtom,
 	currentDatasetIdAtom,
+	currentTemplateIdAtom,
 	currentVisualNameAtom,
 } from "./atoms"
 import {
@@ -70,6 +71,17 @@ const later = () => {
 }
 
 describe("useEditorHistory", () => {
+	it("covers the template link (templateId is a draft atom)", () => {
+		const { result, store } = mount()
+		later()
+		act(() => store.set(currentTemplateIdAtom, "tpl-1"))
+		expect(result.current.canUndo).toBe(true)
+		act(() => {
+			result.current.undo()
+		})
+		expect(store.get(currentTemplateIdAtom)).toBeNull()
+	})
+
 	it("starts with nothing to undo and records a change as a step", () => {
 		const { result, store } = mount()
 		expect(result.current.canUndo).toBe(false)

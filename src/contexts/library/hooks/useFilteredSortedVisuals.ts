@@ -10,6 +10,7 @@ import type {
 	Visual,
 } from "../../chartBuilder/lib/types"
 import { folderSelectionPredicate } from "../lib/folderSubtree"
+import { kindPredicate, type LibraryKind } from "../lib/libraryKind"
 
 export type SortField =
 	| "name"
@@ -92,6 +93,8 @@ type Args = {
 	datasetName: string | null
 	query: string
 	sort: string | undefined
+	/** Visuals | Templates | All filter; absent = ordinary visuals only. */
+	kind?: LibraryKind
 }
 
 /** Decorate, filter, and sort visuals once. Used by the grid view. */
@@ -103,6 +106,7 @@ export const useFilteredSortedVisuals = ({
 	datasetName,
 	query,
 	sort,
+	kind,
 }: Args): DecoratedVisual[] => {
 	return useMemo(() => {
 		const { field, dir } = parseSort(sort)
@@ -127,7 +131,10 @@ export const useFilteredSortedVisuals = ({
 		// the unfiled selection shows only visuals outside every folder.
 		const inSelectedFolder = folderSelectionPredicate(folders, folderId)
 
+		const ofKind = kindPredicate(kind)
+
 		const filtered = decorated.filter((d) => {
+			if (!ofKind(d.visual)) return false
 			if (!inSelectedFolder(d.visual.folderId)) return false
 			if (datasetName !== null && d.datasetName !== datasetName) {
 				return false
@@ -160,7 +167,7 @@ export const useFilteredSortedVisuals = ({
 		})
 
 		return sorted
-	}, [visuals, datasets, folders, folderId, datasetName, query, sort])
+	}, [visuals, datasets, folders, folderId, datasetName, query, sort, kind])
 }
 
 /** One LandingRow extended with folder path info for table display +
@@ -193,6 +200,7 @@ export const useFilteredSortedLandingRows = ({
 	datasetName,
 	query,
 	sort,
+	kind,
 }: RowArgs): DecoratedRow[] => {
 	return useMemo(() => {
 		const { field, dir } = parseSort(sort)
@@ -202,8 +210,11 @@ export const useFilteredSortedLandingRows = ({
 		// the unfiled selection shows only visuals outside every folder.
 		const inSelectedFolder = folderSelectionPredicate(folders, folderId)
 
+		const ofKind = kindPredicate(kind)
+
 		// Filter visuals first — row derivation only runs on the surviving set.
 		const filteredVisuals = visuals.filter((v) => {
+			if (!ofKind(v)) return false
 			if (!inSelectedFolder(v.folderId)) return false
 			if (datasetName !== null) {
 				const vName = v.datasetId ? datasets[v.datasetId]?.name ?? "" : ""
@@ -265,7 +276,17 @@ export const useFilteredSortedLandingRows = ({
 		})
 
 		return sorted
-	}, [visuals, datasets, instances, folders, folderId, datasetName, query, sort])
+	}, [
+		visuals,
+		datasets,
+		instances,
+		folders,
+		folderId,
+		datasetName,
+		query,
+		sort,
+		kind,
+	])
 }
 
 export { parseSort }

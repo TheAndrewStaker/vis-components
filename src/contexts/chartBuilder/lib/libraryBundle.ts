@@ -668,11 +668,29 @@ export const mergeBundleIntoLibrary = (
 			: existing.themes
 
 	// --- visuals: always added, ids remapped ---------------------------
+	// Ids are settled for every incoming visual first, so a visual's
+	// `templateId` can follow its template through a re-mint.
 	const usedVisualIds = new Set(existing.visuals.map((v) => v.id))
-	const imported: Visual[] = []
-	for (const v of bundle.visuals) {
+	// By position (a bundle may repeat an id); the map answers "where did
+	// the visual with this incoming id land" — the first one, on a repeat.
+	const importedIds = bundle.visuals.map((v) => {
 		const id = usedVisualIds.has(v.id) ? newId("vs") : v.id
 		usedVisualIds.add(id)
+		return id
+	})
+	const visualIdMap = new Map<string, string>()
+	bundle.visuals.forEach((v, i) => {
+		if (!visualIdMap.has(v.id)) visualIdMap.set(v.id, importedIds[i])
+	})
+	const imported: Visual[] = []
+	for (const [i, v] of bundle.visuals.entries()) {
+		const id = importedIds[i]
+		// The template a visual was started from: follows a re-minted id when
+		// the template came along; otherwise kept as-is (informational — a
+		// link to nothing just stops offering "Update template").
+		const templateId = v.templateId
+			? (visualIdMap.get(v.templateId) ?? v.templateId)
+			: undefined
 		// A datasetId the bundle doesn't carry is dangling: null it out rather
 		// than let it coincidentally match one of the recipient's own data sets
 		// and render the visual against somebody else's numbers. The parser
@@ -708,15 +726,19 @@ export const mergeBundleIntoLibrary = (
 		// the old base, and a flow chart from before 2026-10-19 its
 		// Node-titles styling. All five steps are idempotent; apply them to
 		// every import.
+		const { templateId: _incomingTemplateId, ...incoming } = v
 		imported.push({
 			...foldFlowNodeTitles(
 				structureVisualKeys(
 					rebaseCustomGlyphRefs(
-						measureFacetGapsFromPlotEdges(clearLegacyAutoTickLabelAngle(v))
+						measureFacetGapsFromPlotEdges(
+							clearLegacyAutoTickLabelAngle(incoming)
+						)
 					)
 				)
 			),
 			id,
+			...(templateId ? { templateId } : {}),
 			datasetId,
 			createdAtVersionId,
 			folderId,
