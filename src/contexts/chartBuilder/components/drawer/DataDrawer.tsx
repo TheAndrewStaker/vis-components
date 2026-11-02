@@ -186,7 +186,7 @@ export const DataDrawer = () => {
 					{!dataset && (
 						<>
 							<span className="hidden text-sm sm:inline vc-faint">
-								Drop a CSV to upload, or
+								Drop a CSV to upload
 							</span>
 							<button
 								type="button"

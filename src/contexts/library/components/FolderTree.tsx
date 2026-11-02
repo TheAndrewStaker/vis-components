@@ -1305,10 +1305,12 @@ export const FolderTree = ({
 						 *  them apart from the folder list (which ends on the pinned
 						 *  stock shelf). The block stretches over the panel's leftover
 						 *  space and tints on hover, so the whole "not in a folder"
-						 *  area reads as one click target (same shortcut as above). */}
+						 *  area reads as one click target (same shortcut as above). The
+						 *  faint dotted outline on hover (inset, so nothing shifts)
+						 *  shows the extent of that target. */}
 						{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- background shortcut, see above */}
 						<div
-							className="mt-3 min-h-8 shrink-0 grow rounded hover:bg-stone-100 dark:hover:bg-stone-800"
+							className="mt-3 min-h-8 shrink-0 grow rounded -outline-offset-1 hover:bg-stone-100 hover:outline-1 hover:outline-dotted hover:outline-stone-300 dark:hover:bg-stone-800 dark:hover:outline-stone-600"
 							onClick={(e) => {
 								if (e.target === e.currentTarget) onSelect(UNFILED_FOLDER_ID)
 							}}
