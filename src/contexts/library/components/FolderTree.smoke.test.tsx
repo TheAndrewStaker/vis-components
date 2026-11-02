@@ -107,10 +107,13 @@ const readStoredFolders = (): Folder[] => {
 
 /* eslint-enable @vc/no-storage-outside-try */
 
-const renderTree = (onSelect: (id: string | null) => void = () => {}) =>
+const renderTree = (
+	onSelect: (id: string | null) => void = () => {},
+	selectedFolderId: string | null = null
+) =>
 	render(
 		<TestProvider>
-			<FolderTree selectedFolderId={null} onSelect={onSelect} />
+			<FolderTree selectedFolderId={selectedFolderId} onSelect={onSelect} />
 		</TestProvider>
 	)
 
@@ -408,6 +411,122 @@ describe("FolderTree selection", () => {
 		fireEvent.click(folderRow(container, "All visualizations"))
 		expect(onSelect).toHaveBeenCalledTimes(1)
 		expect(onSelect).toHaveBeenCalledWith(null)
+	})
+})
+
+describe("entering a folder (the selected folder re-roots the tree)", () => {
+	// Two top-level folders; Alpha holds a subfolder and a visual.
+	const seed = () =>
+		seedStorage(
+			[
+				mkFolder("fl-a", null, "Alpha"),
+				mkFolder("fl-a1", "fl-a", "Kid"),
+				mkFolder("fl-b", null, "Beta"),
+			],
+			[mkVisual("vis-a", "fl-a", "In alpha"), mkVisual("vis-r", null, "Loose")]
+		)
+
+	it("shows the whole tree, and no crumbs, while nothing is selected", () => {
+		seed()
+		const { container, getByText } = renderTree()
+		expect(folderRowOrder(container, ["Alpha", "Beta"])).toEqual([
+			"Alpha",
+			"Beta",
+		])
+		expect(container.querySelector("[data-folder-crumb]")).toBeNull()
+		expect(getByText("Loose")).toBeTruthy()
+	})
+
+	it("the chevron opens a folder in place without selecting it", () => {
+		seed()
+		const onSelect = vi.fn()
+		const { getByLabelText, queryByText } = renderTree(onSelect)
+		fireEvent.click(getByLabelText("Collapse Alpha"))
+		expect(queryByText("Kid")).toBeNull()
+		fireEvent.click(getByLabelText("Expand Alpha"))
+		expect(queryByText("Kid")).toBeTruthy()
+		expect(onSelect).not.toHaveBeenCalled()
+	})
+
+	it("hides the entered folder's siblings and the unfiled visuals, keeps its contents", () => {
+		seed()
+		const { container, getByText, queryByText } = renderTree(() => {}, "fl-a")
+		expect(folderRowOrder(container, ["Alpha", "Kid", "Beta"])).toEqual(
+			["Alpha", "Kid"]
+		)
+		// The root row is gone; "All visualizations" survives only as a crumb.
+		expect(
+			[...container.querySelectorAll("[data-folder-row]")].some((r) =>
+				r.textContent?.includes("All visualizations")
+			)
+		).toBe(false)
+		expect(getByText("In alpha")).toBeTruthy()
+		expect(queryByText("Loose")).toBeNull()
+		// The entered folder is always open: no chevron to close it with.
+		expect(container.querySelector('[aria-label="Collapse Alpha"]')).toBeNull()
+		expect(container.querySelector('[aria-label="Collapse Kid"]')).toBeNull()
+	})
+
+	it("a crumb trail leads back out: root, then each ancestor", () => {
+		seed()
+		const onSelect = vi.fn()
+		const { container } = renderTree(onSelect, "fl-a1")
+		const crumbs = [...container.querySelectorAll("[data-folder-crumb]")]
+		expect(crumbs.map((c) => c.textContent)).toEqual([
+			"All visualizations",
+			"Alpha",
+		])
+		fireEvent.click(crumbs[1] as HTMLElement)
+		expect(onSelect).toHaveBeenLastCalledWith("fl-a")
+		fireEvent.click(crumbs[0] as HTMLElement)
+		expect(onSelect).toHaveBeenLastCalledWith(null)
+	})
+
+	it("clicking a child folder's name selects (enters) it", () => {
+		seed()
+		const onSelect = vi.fn()
+		const { container } = renderTree(onSelect, "fl-a")
+		fireEvent.click(folderRow(container, "Kid"))
+		expect(onSelect).toHaveBeenCalledWith("fl-a1")
+	})
+
+	it("an empty entered folder says so", () => {
+		seedStorage([mkFolder("fl-e", null, "Empty")], [])
+		const { getByText } = renderTree(() => {}, "fl-e")
+		expect(getByText("Empty folder")).toBeTruthy()
+	})
+
+	it("a stale selection (deleted folder id) shows the whole tree", () => {
+		seed()
+		const { container } = renderTree(() => {}, "fl-gone")
+		expect(folderRowOrder(container, ["Alpha", "Beta"])).toEqual([
+			"Alpha",
+			"Beta",
+		])
+	})
+
+	it("the header's + makes the new folder inside the entered folder", () => {
+		seed()
+		const { getByLabelText } = renderTree(() => {}, "fl-a")
+		fireEvent.click(getByLabelText("New folder in Alpha"))
+		const created = readStoredFolders().find((f) => f.name === "New folder")
+		expect(created?.parentId).toBe("fl-a")
+	})
+
+	it("dropping a visual on a crumb moves it up to that level", () => {
+		seedStorage(
+			[mkFolder("fl-a", null, "Alpha"), mkFolder("fl-a1", "fl-a", "Kid")],
+			[mkVisual("vis-c", "fl-a1", "Deep")]
+		)
+		const { container, getByText } = renderTree(() => {}, "fl-a1")
+		const crumbs = [...container.querySelectorAll("[data-folder-crumb]")]
+		dragTo(
+			getByText("Deep").closest("div") as HTMLElement,
+			crumbs[1] as HTMLElement
+		)
+		expect(readStoredVisuals().find((v) => v.id === "vis-c")?.folderId).toBe(
+			"fl-a"
+		)
 	})
 })
 

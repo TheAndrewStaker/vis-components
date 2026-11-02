@@ -127,11 +127,17 @@ export const dropZoneFor = (
  *  first, then alphabetical), each folder listing its
  *  subfolder subtrees before its own visuals (name-sorted), and visuals
  *  with no folder flat at the bottom. Collapsed folders contribute no
- *  rows. Shift-click ranges are computed over this order. */
+ *  rows. Shift-click ranges are computed over this order.
+ *
+ *  With an `enteredFolderId` the tree shows only that folder's subtree
+ *  (the folder itself always open, its siblings and the unfiled visuals
+ *  not rendered), so the order starts at its children and ends on its
+ *  own visuals. */
 export const visibleVisualOrder = (
 	folders: Folder[],
 	visuals: Visual[],
-	collapsedFolderIds: ReadonlySet<string>
+	collapsedFolderIds: ReadonlySet<string>,
+	enteredFolderId: string | null = null
 ): string[] => {
 	const order: string[] = []
 	const walk = (parentId: string | null) => {
@@ -144,6 +150,15 @@ export const visibleVisualOrder = (
 				order.push(v.id)
 			}
 		}
+	}
+	if (enteredFolderId !== null) {
+		walk(enteredFolderId)
+		for (const v of visuals
+			.filter((v) => v.folderId === enteredFolderId)
+			.sort(byName)) {
+			order.push(v.id)
+		}
+		return order
 	}
 	walk(null)
 	for (const v of visuals.filter((v) => v.folderId === null).sort(byName)) {

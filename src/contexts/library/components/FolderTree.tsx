@@ -35,7 +35,7 @@ import {
 	orderedSiblings,
 	reorderFolder,
 } from "../lib/folderOrder"
-import { UNFILED_FOLDER_ID } from "../lib/folderSubtree"
+import { UNFILED_FOLDER_ID, folderAncestors } from "../lib/folderSubtree"
 
 const newFolderId = () =>
 	`fl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -145,6 +145,40 @@ const dropZoneClass = (zone: FolderDropZone | null): string => {
 	if (zone === "before") return DROP_BEFORE_CLASS
 	if (zone === "after") return DROP_AFTER_CLASS
 	return ""
+}
+
+/** One step of the path shown above an entered folder: "All visualizations"
+ *  and each ancestor. Clicking it goes back out to that level (selecting
+ *  it, which is what entering means); it's also a drop target, so a visual
+ *  or folder can be dragged up out of the entered folder without leaving
+ *  it first. */
+const TrailCrumb = ({
+	label,
+	onClick,
+	resolve,
+	onDropPayload,
+}: {
+	label: string
+	onClick: () => void
+	resolve: (e: React.DragEvent) => FolderDropZone | null
+	onDropPayload: (e: React.DragEvent, zone: FolderDropZone) => void
+}) => {
+	const { dropZone, dropHandlers } = useFolderDropTarget({
+		resolve,
+		onDropPayload,
+	})
+	return (
+		<button
+			type="button"
+			data-folder-crumb
+			className={`max-w-full truncate rounded px-1 py-0.5 text-left hover:bg-stone-100 hover:text-stone-900 dark:hover:bg-stone-800 dark:hover:text-white ${dropZoneClass(dropZone)}`}
+			title={label}
+			{...dropHandlers}
+			onClick={onClick}
+		>
+			{label}
+		</button>
+	)
 }
 
 /** Replace the browser's default ghost (the full row, or a link preview)
@@ -510,6 +544,11 @@ type FolderTreeItemProps = {
 	) => (e: React.DragEvent, zone: FolderDropZone) => void
 	onVisualDragStart: (visualId: string) => (e: React.DragEvent) => void
 	depth: number
+	/** This folder is the one the tree has been entered into: it is the
+	 *  top row, always open (no chevron — closing it would leave nothing),
+	 *  and its row has no before/after drop bands, because the siblings
+	 *  those would order it against aren't on screen. */
+	entered?: boolean
 }
 
 const FolderTreeItem = ({
@@ -533,8 +572,9 @@ const FolderTreeItem = ({
 	onDropOn,
 	onVisualDragStart,
 	depth,
+	entered = false,
 }: FolderTreeItemProps) => {
-	const expanded = !collapsedFolderIds.has(folder.id)
+	const expanded = entered || !collapsedFolderIds.has(folder.id)
 	// The shipped examples' shelf: pinned last by `orderedSiblings`, drawn
 	// in plain heading ink rather than brand purple, and read-only — no
 	// rename (double-click or menu), no drag, no subfolder, no delete. Its
@@ -546,7 +586,7 @@ const FolderTreeItem = ({
 	const siblingIndex = siblings.findIndex((f) => f.id === folder.id)
 	const [editName, setEditName] = useState(folder.name)
 	const { dropZone, dropHandlers } = useFolderDropTarget({
-		resolve: resolveDropOn(folder),
+		resolve: entered ? resolveDropInto(folder) : resolveDropOn(folder),
 		onDropPayload: onDropOn(folder),
 	})
 	// The folder's own visual rows, as a second target with no edge zones —
@@ -601,9 +641,13 @@ const FolderTreeItem = ({
 				}}
 				onDragEnd={() => setCurrentDrag(null)}
 				{...dropHandlers}
+				// Selecting a folder ENTERS it: the tree re-roots on it and its
+				// siblings drop out of view (see FolderTree). The chevron is the
+				// other way in — it opens the folder in place, selecting
+				// nothing, so several siblings can be open at once.
 				onClick={() => onSelect(folder.id)}
 			>
-				{hasExpandable ? (
+				{hasExpandable && !entered ? (
 					<button
 						type="button"
 						onClick={(e) => {
@@ -821,6 +865,21 @@ export const FolderTree = ({
 		null
 	)
 
+	// The folder the tree has been entered into — the selected one, when it
+	// is a real folder. Selecting and entering are the same move: clicking
+	// a folder's name filters the gallery to it AND re-roots the tree on
+	// it, so a long top level stops competing with the folder's contents.
+	// "All visualizations", the unfiled set, and a stale id (a deleted
+	// folder still in the URL) all show the full tree.
+	const enteredFolder =
+		selectedFolderId !== null && selectedFolderId !== UNFILED_FOLDER_ID
+			? (folders.find((f) => f.id === selectedFolderId) ?? null)
+			: null
+	// The crumbs above the entered folder: root first, then each ancestor.
+	const enteredTrail = enteredFolder
+		? folderAncestors(folders, enteredFolder.parentId)
+		: []
+
 	const onVisualClick = (visualId: string, e: React.MouseEvent) => {
 		if (e.metaKey || e.ctrlKey) {
 			// Toggle membership. preventDefault stops the Link from opening
@@ -837,7 +896,12 @@ export const FolderTree = ({
 		}
 		if (e.shiftKey) {
 			e.preventDefault()
-			const order = visibleVisualOrder(folders, visuals, collapsedFolderIds)
+			const order = visibleVisualOrder(
+				folders,
+				visuals,
+				collapsedFolderIds,
+				enteredFolder?.id ?? null
+			)
 			setSelectedVisualIds(
 				new Set(rangeBetween(order, selectionAnchorId, visualId))
 			)
@@ -1077,22 +1141,32 @@ export const FolderTree = ({
 				<span className="text-sm font-medium tracking-wider uppercase vc-muted">
 					Folders
 				</span>
-				<button
-					type="button"
-					onClick={() => createFolder(null)}
-					className="-m-0.5 rounded p-1.5 hover:bg-stone-100 hover:text-stone-900 pointer-coarse:p-2 dark:hover:bg-stone-800 dark:hover:text-white vc-muted"
-					title="New folder"
-					aria-label="New folder"
-				>
-					<svg viewBox="0 0 12 12" width={12} height={12} aria-hidden="true">
-						<path
-							d="M6 2v8M2 6h8"
-							stroke="currentColor"
-							strokeWidth={1.5}
-							strokeLinecap="round"
-						/>
-					</svg>
-				</button>
+				{/* Makes a folder where the user IS: top level in the full
+				 *  tree, inside the entered folder otherwise. Gone while
+				 *  inside the read-only stock shelf, which takes no
+				 *  subfolders. */}
+				{!(enteredFolder && isStockFolder(enteredFolder)) && (
+					<button
+						type="button"
+						onClick={() => createFolder(enteredFolder?.id ?? null)}
+						className="-m-0.5 rounded p-1.5 hover:bg-stone-100 hover:text-stone-900 pointer-coarse:p-2 dark:hover:bg-stone-800 dark:hover:text-white vc-muted"
+						title="New folder"
+						aria-label={
+							enteredFolder
+								? `New folder in ${enteredFolder.name}`
+								: "New folder"
+						}
+					>
+						<svg viewBox="0 0 12 12" width={12} height={12} aria-hidden="true">
+							<path
+								d="M6 2v8M2 6h8"
+								stroke="currentColor"
+								strokeWidth={1.5}
+								strokeLinecap="round"
+							/>
+						</svg>
+					</button>
+				)}
 			</div>
 			{/* Clicking the panel's own whitespace — below/between the rows,
 			 *  not on any of them — filters to the visuals that aren't in any
@@ -1110,81 +1184,150 @@ export const FolderTree = ({
 					if (e.target === e.currentTarget) onSelect(UNFILED_FOLDER_ID)
 				}}
 			>
-				{/* "All visualizations" root item: pointer target row, with the
-				 *  label button as its keyboard path (same shape as a folder). */}
-				{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer convenience; the label button is the keyboard path */}
-				<div
-					className={`${TREE_ROW} ${
-						selectedFolderId === null
-							? "vc-nav-active"
-							: "hover:bg-stone-100 dark:hover:bg-stone-800 vc-text"
-					} ${dropZoneClass(rootDrop.dropZone ?? rootContents.dropZone)}`}
-					data-folder-row
-					{...rootDrop.dropHandlers}
-					onClick={() => onSelect(null)}
-				>
-					<span className={ROW_CHEVRON_BOX} />
-					<button
-						type="button"
-						className="flex-1 text-left"
-						aria-current={selectedFolderId === null ? "true" : undefined}
-					>
-						All visualizations
-					</button>
-				</div>
-				{rootFolders.map((folder) => (
-					<FolderTreeItem
-						key={folder.id}
-						folder={folder}
-						folders={folders}
-						visuals={visuals}
-						selectedId={selectedFolderId}
-						onSelect={onSelect}
-						onRename={renameFolder}
-						onDelete={deleteFolder}
-						onCreateChild={createFolder}
-						onMoveSibling={moveFolderBy}
-						onMoveInto={moveFolderInto}
-						collapsedFolderIds={collapsedFolderIds}
-						onToggleExpanded={toggleFolderExpanded}
-						selectedVisualIds={selectedVisualIds}
-						onVisualClick={onVisualClick}
-						onRenameVisual={renameVisual}
-						resolveDropOn={resolveDropOn}
-						resolveDropInto={resolveDropInto}
-						onDropOn={handleDropOn}
-						onVisualDragStart={onVisualDragStart}
-						depth={0}
-					/>
-				))}
-				{/* Visuals not assigned to any folder. Render flat below the
-				 *  folder tree (no indent) so they're discoverable from the
-				 *  same panel — otherwise an "in the root" visual lives only
-				 *  behind the "All visualizations" filter. The top margin sets
-				 *  them apart from the folder list (which ends on the pinned
-				 *  stock shelf). The block stretches over the panel's leftover
-				 *  space and tints on hover, so the whole "not in a folder"
-				 *  area reads as one click target (same shortcut as above). */}
-				{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- background shortcut, see above */}
-				<div
-					className="mt-3 min-h-8 shrink-0 grow rounded hover:bg-stone-100 dark:hover:bg-stone-800"
-					onClick={(e) => {
-						if (e.target === e.currentTarget) onSelect(UNFILED_FOLDER_ID)
-					}}
-				>
-					{unfiledVisuals.map((v) => (
-						<VisualTreeItem
-							key={v.id}
-							visual={v}
+				{enteredFolder ? (
+					<>
+						{/* The way back out: "All visualizations" and every
+						 *  ancestor, each a click (and a drop target) away. */}
+						<nav
+							aria-label="Folder path"
+							className="mb-1 flex flex-wrap items-center px-1 text-xs vc-muted"
+						>
+							<TrailCrumb
+								label="All visualizations"
+								onClick={() => onSelect(null)}
+								resolve={resolveDropOnRoot}
+								onDropPayload={handleDropOn(null)}
+							/>
+							{enteredTrail.map((f) => (
+								<span key={f.id} className="contents">
+									<span aria-hidden="true" className="px-0.5">
+										›
+									</span>
+									<TrailCrumb
+										label={f.name}
+										onClick={() => onSelect(f.id)}
+										resolve={resolveDropInto(f)}
+										onDropPayload={handleDropOn(f)}
+									/>
+								</span>
+							))}
+							{/* Trailing separator: the trail leads INTO the row
+							 *  below it, so it ends on an open "›" rather than
+							 *  on the parent's name. */}
+							<span aria-hidden="true" className="px-0.5">
+								›
+							</span>
+						</nav>
+						<FolderTreeItem
+							key={enteredFolder.id}
+							folder={enteredFolder}
+							folders={folders}
+							visuals={visuals}
+							selectedId={selectedFolderId}
+							onSelect={onSelect}
+							onRename={renameFolder}
+							onDelete={deleteFolder}
+							onCreateChild={createFolder}
+							onMoveSibling={moveFolderBy}
+							onMoveInto={moveFolderInto}
+							collapsedFolderIds={collapsedFolderIds}
+							onToggleExpanded={toggleFolderExpanded}
+							selectedVisualIds={selectedVisualIds}
+							onVisualClick={onVisualClick}
+							onRenameVisual={renameVisual}
+							resolveDropOn={resolveDropOn}
+							resolveDropInto={resolveDropInto}
+							onDropOn={handleDropOn}
+							onVisualDragStart={onVisualDragStart}
 							depth={0}
-							isSelected={selectedVisualIds.has(v.id)}
-							onClick={onVisualClick}
-							onRename={renameVisual}
-							onDragStart={onVisualDragStart(v.id)}
-							dropHandlers={rootContents.dropHandlers}
+							entered
 						/>
-					))}
-				</div>
+						{!folders.some((f) => f.parentId === enteredFolder.id) &&
+							!visuals.some((v) => v.folderId === enteredFolder.id) && (
+								<p className="px-5 py-0.5 text-xs italic vc-faint">
+									Empty folder
+								</p>
+							)}
+					</>
+				) : (
+					<>
+						{/* "All visualizations" root item: pointer target row, with the
+						 *  label button as its keyboard path (same shape as a folder). */}
+						{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer convenience; the label button is the keyboard path */}
+						<div
+							className={`${TREE_ROW} ${
+								selectedFolderId === null
+									? "vc-nav-active"
+									: "hover:bg-stone-100 dark:hover:bg-stone-800 vc-text"
+							} ${dropZoneClass(rootDrop.dropZone ?? rootContents.dropZone)}`}
+							data-folder-row
+							{...rootDrop.dropHandlers}
+							onClick={() => onSelect(null)}
+						>
+							<span className={ROW_CHEVRON_BOX} />
+							<button
+								type="button"
+								className="flex-1 text-left"
+								aria-current={selectedFolderId === null ? "true" : undefined}
+							>
+								All visualizations
+							</button>
+						</div>
+						{rootFolders.map((folder) => (
+							<FolderTreeItem
+								key={folder.id}
+								folder={folder}
+								folders={folders}
+								visuals={visuals}
+								selectedId={selectedFolderId}
+								onSelect={onSelect}
+								onRename={renameFolder}
+								onDelete={deleteFolder}
+								onCreateChild={createFolder}
+								onMoveSibling={moveFolderBy}
+								onMoveInto={moveFolderInto}
+								collapsedFolderIds={collapsedFolderIds}
+								onToggleExpanded={toggleFolderExpanded}
+								selectedVisualIds={selectedVisualIds}
+								onVisualClick={onVisualClick}
+								onRenameVisual={renameVisual}
+								resolveDropOn={resolveDropOn}
+								resolveDropInto={resolveDropInto}
+								onDropOn={handleDropOn}
+								onVisualDragStart={onVisualDragStart}
+								depth={0}
+							/>
+						))}
+						{/* Visuals not assigned to any folder. Render flat below the
+						 *  folder tree (no indent) so they're discoverable from the
+						 *  same panel — otherwise an "in the root" visual lives only
+						 *  behind the "All visualizations" filter. The top margin sets
+						 *  them apart from the folder list (which ends on the pinned
+						 *  stock shelf). The block stretches over the panel's leftover
+						 *  space and tints on hover, so the whole "not in a folder"
+						 *  area reads as one click target (same shortcut as above). */}
+						{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- background shortcut, see above */}
+						<div
+							className="mt-3 min-h-8 shrink-0 grow rounded hover:bg-stone-100 dark:hover:bg-stone-800"
+							onClick={(e) => {
+								if (e.target === e.currentTarget) onSelect(UNFILED_FOLDER_ID)
+							}}
+						>
+							{unfiledVisuals.map((v) => (
+								<VisualTreeItem
+									key={v.id}
+									visual={v}
+									depth={0}
+									isSelected={selectedVisualIds.has(v.id)}
+									onClick={onVisualClick}
+									onRename={renameVisual}
+									onDragStart={onVisualDragStart(v.id)}
+									dropHandlers={rootContents.dropHandlers}
+								/>
+							))}
+						</div>
+					</>
+				)}
 			</div>
 		</div>
 	)

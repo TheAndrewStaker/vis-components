@@ -106,6 +106,20 @@ describe("visibleVisualOrder", () => {
 			"vis-root",
 		])
 	})
+	it("starts at the entered folder's children and ends on its own visuals; no siblings, no unfiled", () => {
+		expect(visibleVisualOrder(FOLDERS, VISUALS, new Set(), "A")).toEqual([
+			"vis-b1",
+			"vis-a2",
+			"vis-a1",
+		])
+		// The entered folder is always open, but folders inside it still
+		// honour their own collapsed state.
+		expect(visibleVisualOrder(FOLDERS, VISUALS, new Set(["A", "B"]), "A")).toEqual([
+			"vis-a2",
+			"vis-a1",
+		])
+		expect(visibleVisualOrder(FOLDERS, VISUALS, new Set(), "D")).toEqual([])
+	})
 })
 
 describe("rangeBetween", () => {

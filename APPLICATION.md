@@ -5108,7 +5108,18 @@ are the way to re-order those.
 
 Selecting a folder in the sidebar shows the visuals of its entire
 subtree — descendant folders included — in both the grid and table
-views. "All visualizations" shows everything; clicking the sidebar's
+views. Selecting also *enters* the folder: the tree re-roots on it, so
+its row sits at the top (always open, no chevron) over its own
+subfolders and visuals, and the folders that were beside it drop out
+of view — a long top level stops competing with the folder's contents.
+A crumb trail above the row ("All visualizations › parent › …") leads
+back out one level or all the way, each crumb a click and a drop
+target. A folder's **name** is what enters it (so does the keyboard:
+the name is the row's Tab stop); its **chevron** only opens or closes
+it in place, selecting nothing, so several sibling folders can be open
+at once for comparison. The header's "+" makes a new folder where the
+user is — top level in the full tree, inside the entered folder
+otherwise. "All visualizations" shows everything; clicking the sidebar's
 empty space — below or between the rows, not on one — shows only the
 visuals that aren't in any folder (the page heading reads "Not in a
 folder"; no folder row is highlighted), so what still needs cataloguing
