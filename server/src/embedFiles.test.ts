@@ -1,17 +1,28 @@
 // @vitest-environment node
-import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs"
+import {
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	readdirSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { beforeEach, describe, expect, it } from "vitest"
 import {
 	PAYLOAD_MARKER,
+	IMAGE_FILE,
 	composePartHtml,
+	embedImagePath,
 	embedPartPath,
 	isEmbedPart,
 	isPublishId,
 	publishEmbedFiles,
+	publishEmbedImage,
 	unpublishEmbedFiles,
 } from "./embedFiles.js"
+
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02])
 
 const TEMPLATE = `<html><script type="application/json" id="embed-payload">${PAYLOAD_MARKER}</script></html>`
 const ID = "01234567-89ab-4cde-8f01-23456789abcd"
@@ -113,6 +124,16 @@ describe("publishEmbedFiles", () => {
 		expect(existsSync(join(dir, "legend.html"))).toBe(false)
 	})
 
+	it("republish deletes an existing picture so it never goes stale", async () => {
+		await publishEmbedFiles(publishDir, ID, TEMPLATE, '{"x":1}', ["full"])
+		await publishEmbedImage(publishDir, ID, PNG)
+		const dir = join(publishDir, "embeds", ID)
+		expect(existsSync(join(dir, IMAGE_FILE))).toBe(true)
+		await publishEmbedFiles(publishDir, ID, TEMPLATE, '{"x":2}', ["full"])
+		expect(existsSync(join(dir, IMAGE_FILE))).toBe(false)
+		expect(readdirSync(dir)).toEqual(["index.html"])
+	})
+
 	it("rejects an unsafe publish id before touching the filesystem", async () => {
 		await expect(
 			publishEmbedFiles(publishDir, "../../etc", TEMPLATE, "{}", ["full"])
@@ -121,7 +142,46 @@ describe("publishEmbedFiles", () => {
 	})
 })
 
+describe("publishEmbedImage", () => {
+	it("writes image.png into a published embed and returns its path", async () => {
+		await publishEmbedFiles(publishDir, ID, TEMPLATE, "{}", ["full"])
+		expect(await publishEmbedImage(publishDir, ID, PNG)).toBe(
+			`embeds/${ID}/image.png`
+		)
+		const dir = join(publishDir, "embeds", ID)
+		expect(readFileSync(join(dir, "image.png")).equals(PNG)).toBe(true)
+		// Whole-file discipline: no temp file lingers.
+		expect(readdirSync(dir).sort()).toEqual(["image.png", "index.html"])
+	})
+
+	it("signals not-published with null and creates nothing", async () => {
+		expect(await publishEmbedImage(publishDir, ID, PNG)).toBeNull()
+		expect(existsSync(join(publishDir, "embeds"))).toBe(false)
+	})
+
+	it("rejects an unsafe publish id", async () => {
+		await expect(publishEmbedImage(publishDir, "../../etc", PNG)).rejects.toThrow(
+			/Unsafe publish id/
+		)
+	})
+})
+
 describe("unpublishEmbedFiles", () => {
+	it("deletes the picture along with the parts, and the directory", async () => {
+		await publishEmbedFiles(publishDir, ID, TEMPLATE, "{}", ["full"])
+		await publishEmbedImage(publishDir, ID, PNG)
+		await unpublishEmbedFiles(publishDir, ID)
+		expect(existsSync(join(publishDir, "embeds", ID))).toBe(false)
+	})
+
+	it("sweeps a picture even when it is the only file left", async () => {
+		await publishEmbedFiles(publishDir, ID, TEMPLATE, "{}", ["full"])
+		const dir = join(publishDir, "embeds", ID)
+		writeFileSync(join(dir, IMAGE_FILE), PNG)
+		await unpublishEmbedFiles(publishDir, ID)
+		expect(existsSync(dir)).toBe(false)
+	})
+
 	it("deletes every part file and the embed directory", async () => {
 		await publishEmbedFiles(publishDir, ID, TEMPLATE, "{}", ["full", "legend"])
 		await unpublishEmbedFiles(publishDir, ID)
@@ -137,5 +197,12 @@ describe("embedPartPath", () => {
 	it("always names a file, never a directory", () => {
 		expect(embedPartPath(ID, "full")).toBe(`embeds/${ID}/index.html`)
 		expect(embedPartPath(ID, "legend")).toBe(`embeds/${ID}/legend.html`)
+	})
+})
+
+describe("embedImagePath", () => {
+	it("names image.png in the embed's folder and guards the id", () => {
+		expect(embedImagePath(ID)).toBe(`embeds/${ID}/image.png`)
+		expect(() => embedImagePath("../escape")).toThrow(/Unsafe publish id/)
 	})
 })

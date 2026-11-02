@@ -52,6 +52,7 @@ import {
 	isEmbedPart,
 	isPublishId,
 	publishEmbedFiles,
+	publishEmbedImage,
 	readEmbedTemplate,
 	unpublishEmbedFiles,
 	type EmbedPart,
@@ -66,6 +67,7 @@ import {
 import {
 	DATASET_BODY_CAP_BYTES,
 	EMBED_BODY_CAP_BYTES,
+	EMBED_IMAGE_BODY_CAP_BYTES,
 	JSON_BODY_CAP_BYTES,
 	THUMBNAIL_BODY_CAP_BYTES,
 } from "./limits.js"
@@ -158,7 +160,7 @@ const handleApi = async (
 	if (collection === "presence") {
 		return await handlePresence(req, res, identify, presence, id, rest)
 	}
-	if (rest.length > 0 && collection !== "datasets") {
+	if (rest.length > 0 && collection !== "datasets" && collection !== "embeds") {
 		throw new HttpError(404, "Not found")
 	}
 
@@ -271,7 +273,14 @@ const handleApi = async (
 	// never needs VIS_PUBLISH_BASE_URL (and /api/config stays untouched).
 	if (collection === "embeds") {
 		if (!id) throw new HttpError(404, "Not found")
+		if (rest.length > 0 && !(rest.length === 1 && rest[0] === "image")) {
+			throw new HttpError(404, "Not found")
+		}
 		if (!isPublishId(id)) throw new HttpError(400, "Invalid publish id")
+		if (rest.length === 1 && rest[0] === "image") {
+			if (method !== "PUT") throw new HttpError(405, "Method not allowed")
+			return await putEmbedImage(req, res, config, id)
+		}
 		if (method === "PUT") {
 			return await publishEmbed(req, res, config, distDir, id)
 		}
@@ -427,6 +436,40 @@ const assertClientCurrent = (
 /** The eight bytes every PNG starts with. */
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
+/** Whether `data` starts with the PNG signature. Only the signature is
+ *  checked — a part's declared type is client-controlled and says nothing a
+ *  WAF or a reader can rely on. */
+const isPng = (data: Buffer): boolean =>
+	data.length >= PNG_SIGNATURE.length &&
+	data.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+
+/** The one file part a multipart upload route accepts: a well-formed
+ *  multipart/form-data body (capped at `capBytes`) holding exactly one file
+ *  part named `name`. An extra part is not ignored — it is a request these
+ *  routes do not accept. 400 for anything else. */
+const readSingleFilePart = async (
+	req: IncomingMessage,
+	capBytes: number,
+	name: string
+): Promise<Buffer> => {
+	const boundary = multipartBoundary(req.headers["content-type"])
+	if (boundary === null) {
+		throw new HttpError(400, "Expected a multipart/form-data body")
+	}
+	const body = await readBody(req, capBytes)
+	let parts
+	try {
+		parts = parseMultipart(body, boundary)
+	} catch {
+		throw new HttpError(400, "Body is not well-formed multipart/form-data")
+	}
+	const [part] = parts
+	if (parts.length !== 1 || part?.name !== name || part.filename === null) {
+		throw new HttpError(400, `Expected exactly one "${name}" file part`)
+	}
+	return part.data
+}
+
 /** PUT /api/visuals/<id>/thumbnail — exactly one `thumbnail` file part in
  *  a well-formed multipart/form-data body, a PNG. Stored as the same `data:image/png;base64`
  *  URL the inline JSON path always kept in the thumbnail column, so every
@@ -442,32 +485,33 @@ const putVisualThumbnail = async (
 	db: DatabaseSync,
 	id: string
 ): Promise<void> => {
-	const boundary = multipartBoundary(req.headers["content-type"])
-	if (boundary === null) {
-		throw new HttpError(400, "Expected a multipart/form-data body")
-	}
-	const body = await readBody(req, THUMBNAIL_BODY_CAP_BYTES)
-	let parts
-	try {
-		parts = parseMultipart(body, boundary)
-	} catch {
-		throw new HttpError(400, "Body is not well-formed multipart/form-data")
-	}
-	// Exactly the one part the client sends — an extra part is not ignored,
-	// it is a request this route does not accept.
-	const [part] = parts
-	if (parts.length !== 1 || part?.name !== "thumbnail" || part.filename === null) {
-		throw new HttpError(400, 'Expected exactly one "thumbnail" file part')
-	}
-	if (
-		part.data.length < PNG_SIGNATURE.length ||
-		!part.data.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
-	) {
-		throw new HttpError(400, "Thumbnail must be a PNG")
-	}
-	const dataUrl = `data:image/png;base64,${part.data.toString("base64")}`
+	const png = await readSingleFilePart(req, THUMBNAIL_BODY_CAP_BYTES, "thumbnail")
+	if (!isPng(png)) throw new HttpError(400, "Thumbnail must be a PNG")
+	const dataUrl = `data:image/png;base64,${png.toString("base64")}`
 	if (!setVisualThumbnail(db, id, dataUrl)) throw new HttpError(404, "Not found")
 	return sendEmpty(res, 204)
+}
+
+/** PUT /api/embeds/<publishId>/image — the embed's picture, uploaded by the
+ *  client right after the HTML publish: exactly one `image` file part, a
+ *  PNG. Written as `image.png` beside the HTML parts and answered with its
+ *  public URL, `{ v: 1, url }`. 404 when the embed is not published — an
+ *  upload that trails an unpublish must not resurrect the embed's folder. */
+const putEmbedImage = async (
+	req: IncomingMessage,
+	res: ServerResponse,
+	config: ServerConfig,
+	publishId: string
+): Promise<void> => {
+	const png = await readSingleFilePart(req, EMBED_IMAGE_BODY_CAP_BYTES, "image")
+	if (!isPng(png)) throw new HttpError(400, "Image must be a PNG")
+	const path = await publishEmbedImage(config.publishDir, publishId, png)
+	if (path === null) throw new HttpError(404, "Not found")
+	return sendJson(
+		res,
+		200,
+		JSON.stringify({ v: 1, url: `${config.publishBaseUrl}/${path}` })
+	)
 }
 
 /** PUT /api/embeds/<publishId> — write the embed's public files and answer

@@ -146,6 +146,22 @@ describe("recordEmbedPublish", () => {
 		expect(second["ei-p"].publishedAt).toBe(9000)
 		expect(second["ei-p"].publishedVersionId).toBe("dv-3")
 	})
+
+	it("stores the linked-picture url, and a republish without it drops it", () => {
+		const image = "https://embeds.example.com/embeds/x/image.png"
+		const first = recordEmbedPublish(
+			{},
+			"v1",
+			null,
+			{ ...publish, publishedUrls: { ...publish.publishedUrls, image } },
+			5000,
+			() => "ei-p"
+		)
+		expect(first["ei-p"].publishedUrls?.image).toBe(image)
+		const second = recordEmbedPublish(first, "v1", null, publish, 9000)
+		expect(second["ei-p"].publishedUrls).toEqual(publish.publishedUrls)
+		expect(second["ei-p"].publishedUrls?.image).toBeUndefined()
+	})
 })
 
 describe("clearEmbedPublish", () => {

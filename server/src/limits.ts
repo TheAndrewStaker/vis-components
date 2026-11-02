@@ -32,3 +32,10 @@ export const THUMBNAIL_BODY_CAP_BYTES = 2 * 1024 * 1024
  *  (bounded by the dataset rule above) plus font binaries and, for ZCTA
  *  maps, an inlined topology — hence dataset parity with headroom. */
 export const EMBED_BODY_CAP_BYTES = 640 * 1024 * 1024
+
+/** Cap on a multipart embed picture upload (PUT /api/embeds/:id/image).
+ *  The picture is rasterized at export resolution for slides, so it runs far
+ *  larger than a library thumbnail — a few MB for a big high-DPI chart. 32 MB
+ *  is generous headroom for that while still bounding what one request can
+ *  park in the public dir. */
+export const EMBED_IMAGE_BODY_CAP_BYTES = 32 * 1024 * 1024

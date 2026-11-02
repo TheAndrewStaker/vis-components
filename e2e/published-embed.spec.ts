@@ -27,6 +27,11 @@ const buildMissing = !existsSync(serverMain) || !existsSync(runtimeTemplate)
 
 const PUBLISH_ID = "e2e00000-1111-4222-8333-444455556666"
 
+/** The PNG signature plus a few bytes — the picture route checks only the
+ *  signature, so this stands in for a rasterized chart. */
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+const PNG_BYTES = Buffer.concat([PNG_SIGNATURE, Buffer.from([0x00, 0x01, 0x02])])
+
 const payload = {
 	v: 1,
 	parts: ["full"],
@@ -76,7 +81,10 @@ const payload = {
  *  `python3 -m http.server` in Chris's contract. */
 const serveStatic = (dir: string): Promise<{ server: Server; port: number }> =>
 	new Promise((resolve) => {
-		const types: Record<string, string> = { ".html": "text/html" }
+		const types: Record<string, string> = {
+			".html": "text/html",
+			".png": "image/png",
+		}
 		const server = createServer((req, res) => {
 			const path = normalize(join(dir, (req.url ?? "/").split("?")[0]))
 			if (!path.startsWith(dir) || !existsSync(path)) {
@@ -165,6 +173,31 @@ test.describe("published embed (0016 contract)", () => {
 			publishedUrl = body.urls.full
 			expect(publishedUrl).toBe(
 				`http://localhost:${staticPort}/embeds/${PUBLISH_ID}/index.html`
+			)
+
+			// The picture upload that trails the HTML publish lands beside it.
+			const form = new FormData()
+			form.append(
+				"image",
+				new Blob([new Uint8Array(PNG_BYTES)], { type: "image/png" }),
+				"image.png"
+			)
+			const imageResponse = await fetch(
+				`http://localhost:${visPort}/api/embeds/${PUBLISH_ID}/image`,
+				{ method: "PUT", body: form }
+			)
+			expect(imageResponse.status).toBe(200)
+			const imageBody = (await imageResponse.json()) as { v: number; url: string }
+			expect(imageBody).toEqual({
+				v: 1,
+				url: `http://localhost:${staticPort}/embeds/${PUBLISH_ID}/image.png`,
+			})
+			const picture = await fetch(imageBody.url)
+			expect(picture.status).toBe(200)
+			expect(picture.headers.get("content-type")).toBe("image/png")
+			const pictureBytes = Buffer.from(await picture.arrayBuffer())
+			expect(pictureBytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)).toBe(
+				true
 			)
 		} finally {
 			// The headline guarantee: everything after this point happens with

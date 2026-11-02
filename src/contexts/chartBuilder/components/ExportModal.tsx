@@ -35,6 +35,7 @@ import { migrateDataTableConfig } from "../lib/dataTableConfig"
 import { usePublishEmbed, useUnpublishEmbed } from "../store/publishEmbed"
 import { useCurrentDatasetView } from "../store/useCurrentDatasetView"
 import { useEffectiveGeographyLevel } from "../store/useEffectiveGeographyLevel"
+import { LinkedPictureRow } from "./LinkedPictureRow"
 import { SaveTemplateButton } from "./SaveTemplateButton"
 import { EXPORT_TABLE_HEIGHT_MESSAGE } from "./viz/DataTableBlock"
 
@@ -744,6 +745,8 @@ const EmbedTab = ({
 					})}
 				</div>
 			)}
+
+			{published && <LinkedPictureRow url={published.publishedUrls?.image} />}
 
 			<div
 				className={`flex items-center ${

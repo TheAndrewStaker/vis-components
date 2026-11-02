@@ -74,6 +74,12 @@ a one-line reason per missing/invalid value.
 | `VIS_PUBLISH_DIR` | Directory published embeds are written into. Serve it publicly with a separate dumb static file server (e.g. `python3 -m http.server`); everything in it is fully public, and published embeds keep working with the app server off. |
 | `VIS_PUBLISH_BASE_URL` | Public base URL that static server serves `VIS_PUBLISH_DIR` at — a file at `$VIS_PUBLISH_DIR/<path>` must be reachable at `$VIS_PUBLISH_BASE_URL/<path>`. |
 
+Each published embed's folder also holds `image.png`, a picture of the chart
+that is rewritten on every republish (so it can be linked into a slide deck
+and refresh on open). The static server must serve `.png` as `image/png`, and
+should send `Cache-Control: no-cache` for everything under `embeds/` — a
+cached picture or page defeats that refresh.
+
 Operational notes: `GET /alive` answers 200 for liveness probes; logs go to
 stdout/stderr; SIGTERM drains in-flight requests and closes the database
 cleanly; run exactly one replica (SQLite is embedded). The same build served

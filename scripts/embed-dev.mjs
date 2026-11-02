@@ -97,7 +97,10 @@ const run = (tag, command, args, env = {}) => {
 
 const serveStatic = () =>
 	new Promise((done, fail) => {
-		const types = { ".html": "text/html; charset=utf-8" }
+		const types = {
+			".html": "text/html; charset=utf-8",
+			".png": "image/png",
+		}
 		const server = createServer((req, res) => {
 			const path = normalize(join(dirs.publish, (req.url ?? "/").split("?")[0]))
 			if (
@@ -109,8 +112,12 @@ const serveStatic = () =>
 				res.end()
 				return
 			}
+			// no-cache mirrors what README asks of the real static server: a
+			// linked picture in a slide deck is re-fetched on open, and a cached
+			// copy would hide a republish.
 			res.writeHead(200, {
 				"content-type": types[extname(path)] ?? "application/octet-stream",
+				"cache-control": "no-cache",
 			})
 			res.end(readFileSync(path))
 		})

@@ -45,7 +45,9 @@ export type EmbedPublishRecord = {
 	publishId: string
 	publishedAt: number
 	publishedParts: Array<"full" | "chart" | "legend">
-	publishedUrls: { full?: string; chart?: string; legend?: string }
+	/** Replaced WHOLE on each publish, so a republish whose picture step
+	 * failed drops the previous `image`. */
+	publishedUrls: { full?: string; chart?: string; legend?: string; image?: string }
 	publishedVersionId: string | null
 }
 

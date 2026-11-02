@@ -547,9 +547,12 @@ const appendHtmlCapture = (
  * lib/portableSvg.ts. */
 export const serializeEmbedCapture = (
 	doc: Document,
-	opts: { portable?: boolean } = {}
+	opts: { portable?: boolean; root?: HTMLElement | null } = {}
 ): string | null => {
-	const root = doc.querySelector<HTMLElement>("[data-export-root]")
+	// `root` lets the editor capture its own figure (`[data-chart-root]`,
+	// see ChartCanvas) with the same composition an embed page gets from
+	// `[data-export-root]`.
+	const root = opts.root ?? doc.querySelector<HTMLElement>("[data-export-root]")
 	if (!root) return serializeChartSvg(doc)
 	const rootRect = root.getBoundingClientRect()
 	if (rootRect.width === 0 || rootRect.height === 0) return null
@@ -640,10 +643,47 @@ export const serializeEmbedCapture = (
  *  library spots a capture of a collapsed frame (`thumbnailBackfill`). */
 export const MAX_THUMBNAIL_DIM = 480
 
+/** Options shared by the capture entry points. Defaults reproduce the
+ *  library-thumbnail capture exactly: 480px longest edge, cache-only fonts.
+ *  The published-embed picture lifts the cap and lets fonts hit the network. */
+export type CaptureOptions = {
+	/** Longest-edge ceiling in px. The capture never upscales. */
+	maxDim?: number
+	/** Let webfont embedding fetch uncached faces from the network. */
+	allowNetwork?: boolean
+	/** Capture the whole figure — plot panels, HTML legend and the canvas
+	 *  background (`[data-chart-root]`) — instead of the plot SVG alone. A
+	 *  thumbnail wants the bare plot (the library card paints the canvas
+	 *  colour itself); a picture that stands on its own does not. */
+	figure?: boolean
+	/** Paint white under the chart before drawing, as the PNG export does.
+	 *  Without it a theme with light text on an unset canvas colour comes
+	 *  out as white text on a transparent PNG. */
+	opaqueBackground?: boolean
+}
+
+/** The canvas size a `srcW`×`srcH` SVG rasterizes to under `maxDim`: scaled
+ *  down so the longest edge fits, never up. */
+export const rasterTargetSize = (
+	srcW: number,
+	srcH: number,
+	maxDim: number = MAX_THUMBNAIL_DIM
+): { w: number; h: number } => {
+	const scale = Math.min(1, maxDim / Math.max(srcW, srcH))
+	return {
+		w: Math.max(1, Math.round(srcW * scale)),
+		h: Math.max(1, Math.round(srcH * scale)),
+	}
+}
+
 /** Rasterize an SVG (provided as a data URL) into a PNG data URL via an
  *  offscreen canvas. Resolves `null` if the image fails to load, the SVG
  *  has zero intrinsic dimensions, or the canvas read is blocked. */
-const rasterizeSvg = (svgDataUrl: string): Promise<string | null> =>
+const rasterizeSvg = (
+	svgDataUrl: string,
+	maxDim: number = MAX_THUMBNAIL_DIM,
+	opaqueBackground = false
+): Promise<string | null> =>
 	new Promise((resolve) => {
 		const img = new Image()
 		img.onload = () => {
@@ -653,9 +693,7 @@ const rasterizeSvg = (svgDataUrl: string): Promise<string | null> =>
 				resolve(null)
 				return
 			}
-			const scale = Math.min(1, MAX_THUMBNAIL_DIM / Math.max(srcW, srcH))
-			const w = Math.max(1, Math.round(srcW * scale))
-			const h = Math.max(1, Math.round(srcH * scale))
+			const { w, h } = rasterTargetSize(srcW, srcH, maxDim)
 			const canvas = document.createElement("canvas")
 			canvas.width = w
 			canvas.height = h
@@ -664,12 +702,16 @@ const rasterizeSvg = (svgDataUrl: string): Promise<string | null> =>
 				resolve(null)
 				return
 			}
+			if (opaqueBackground) {
+				ctx.fillStyle = "#ffffff"
+				ctx.fillRect(0, 0, w, h)
+			}
 			ctx.drawImage(img, 0, 0, w, h)
 			try {
 				// PNG keeps text/lines crisp without JPEG artifacts. Charts have
 				// few colors so PNG compresses well at this size. Transparent
-				// background lets the library card's bg fill show through —
-				// the card already paints `channelConfigs.backgroundColor`.
+				// background (the default) lets the library card's bg fill show
+				// through — the card already paints `channelConfigs.backgroundColor`.
 				resolve(canvas.toDataURL("image/png"))
 			} catch {
 				// `toDataURL` throws if the canvas is tainted. Our SVGs are
@@ -692,14 +734,16 @@ const rasterizeSvg = (svgDataUrl: string): Promise<string | null> =>
  *  captures always get the real face. */
 export const thumbnailFromChartSvgText = async (
 	svgText: string,
-	opts: { allowNetwork?: boolean } = {}
+	opts: CaptureOptions = {}
 ): Promise<string | null> =>
 	rasterizeSvg(
 		toDataUrl(
 			await embedFontsInSvg(svgText, {
 				allowNetwork: opts.allowNetwork ?? false,
 			})
-		)
+		),
+		opts.maxDim ?? MAX_THUMBNAIL_DIM,
+		opts.opaqueBackground ?? false
 	)
 
 /** Capture the chart rendered in `doc` as a small PNG data URL for use as a
@@ -723,7 +767,8 @@ const withoutDisplayScale = <T>(doc: Document, fn: () => T): T => {
 }
 
 const captureThumbnailFromDocument = async (
-	doc: Document
+	doc: Document,
+	opts: CaptureOptions = {}
 ): Promise<string | null> => {
 	// Same readiness bar as the offscreen pollers. Autosave fires 800ms
 	// after an edit, which on a slow data-set load is exactly when the chart
@@ -731,13 +776,21 @@ const captureThumbnailFromDocument = async (
 	// stored a collapsed, giant-text preview with a current stamp, which the
 	// library's refresh then trusted. Null keeps the old picture and the
 	// old stamp, so the refresh re-renders it offscreen instead.
-	const svgText = withoutDisplayScale(doc, () =>
-		chartLayoutReady(doc) ? serializeChartSvg(doc) : null
-	)
+	const svgText = withoutDisplayScale(doc, () => {
+		if (!chartLayoutReady(doc)) return null
+		if (!opts.figure) return serializeChartSvg(doc)
+		// The whole figure: ChartCanvas's root carries the canvas colour and
+		// holds both the plot panels and the HTML legend. Falls back to the
+		// bare plot when the editor has no figure root (no data set yet).
+		const root = doc.querySelector<HTMLElement>("[data-chart-root]")
+		return root ? serializeEmbedCapture(doc, { root }) : serializeChartSvg(doc)
+	})
 	if (!svgText) return null
-	return thumbnailFromChartSvgText(svgText)
+	return thumbnailFromChartSvgText(svgText, opts)
 }
 
-/** Capture the editor's own chart — the autosave path. */
-export const captureThumbnail = (): Promise<string | null> =>
-	captureThumbnailFromDocument(document)
+/** Capture the editor's own chart — the autosave path (default options),
+ *  and the published-embed picture (cap lifted, network fonts allowed). */
+export const captureThumbnail = (
+	opts: CaptureOptions = {}
+): Promise<string | null> => captureThumbnailFromDocument(document, opts)

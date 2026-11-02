@@ -18,10 +18,13 @@ import {
 	buildEmbedDataset,
 	collectEmbedFonts,
 	newPublishId,
+	publishEmbedImageRequest,
 	publishEmbedRequest,
 	unpublishEmbedRequest,
 	type EmbedPublishUrls,
 } from "../lib/embedPublish"
+import { captureThumbnail } from "../lib/captureThumbnail"
+import { pngFileFromDataUrl } from "../lib/storage/thumbnailUpload"
 import { loadZctaTopology } from "../lib/geo/zctaTopology"
 import { getStorageAdapter } from "../lib/storage/registry"
 import type { Dataset, SavedTheme } from "../lib/types"
@@ -120,13 +123,25 @@ export const usePublishEmbed = () =>
 				const publishId = existing?.publishId ?? newPublishId()
 				const parts: EmbedPart[] = args.split ? ["chart", "legend"] : ["full"]
 
-				const urls = await publishEmbedRequest(publishId, parts, {
+				const htmlUrls = await publishEmbedRequest(publishId, parts, {
 					visual,
 					dataset,
 					theme,
 					fonts,
 					...(zctaTopology !== undefined ? { zctaTopology } : {}),
 				})
+
+				// The linked picture rides a second request (the server 404s it
+				// until the HTML publish exists). Best-effort: the embed is already
+				// live, so a failed capture or upload records the publish without
+				// an `image` url (the Export tab offers a retry) rather than failing
+				// it. The urls object is built fresh, so a stale `image` from an
+				// earlier publish never survives a failed picture step.
+				const image = await publishEmbedImage(publishId)
+				const urls: EmbedPublishUrls = {
+					...htmlUrls,
+					...(image !== null ? { image } : {}),
+				}
 
 				set(embedInstancesAtom, (prev) =>
 					recordEmbedPublish(prev, args.visualId, args.versionId, {
@@ -146,6 +161,29 @@ export const usePublishEmbed = () =>
 			[]
 		)
 	)
+
+/** Capture the on-screen figure (chart + legend) at full size and upload it
+ *  as the embed's picture. Resolves to its public url, or null on any
+ *  failure. */
+const EMBED_IMAGE_MAX_DIM = 4096
+const publishEmbedImage = async (publishId: string): Promise<string | null> => {
+	try {
+		const dataUrl = await captureThumbnail({
+			maxDim: EMBED_IMAGE_MAX_DIM,
+			allowNetwork: true,
+			// A picture that stands alone on a slide: legend and canvas colour
+			// included, white under an unset canvas colour.
+			figure: true,
+			opaqueBackground: true,
+		})
+		if (dataUrl === null) return null
+		const png = pngFileFromDataUrl(dataUrl, "image.png")
+		if (png === null) return null
+		return await publishEmbedImageRequest(publishId, png)
+	} catch {
+		return null
+	}
+}
 
 /** Unpublish one instance: delete its public files, then clear its publish
  *  fields (the landing row stays, shown as not published). */

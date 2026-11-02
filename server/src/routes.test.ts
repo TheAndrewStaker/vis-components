@@ -14,7 +14,7 @@ import { gzipSync } from "node:zlib"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { openDb } from "./db.js"
 import { PAYLOAD_MARKER } from "./embedFiles.js"
-import { THUMBNAIL_BODY_CAP_BYTES } from "./limits.js"
+import { EMBED_IMAGE_BODY_CAP_BYTES, THUMBNAIL_BODY_CAP_BYTES } from "./limits.js"
 import { createHandler } from "./routes.js"
 
 let server: Server
@@ -798,6 +798,102 @@ describe("published embeds over HTTP", () => {
 		).toBe(405)
 		expect((await fetch(`${base}/api/embeds`)).status).toBe(404)
 	})
+
+	describe("picture upload (PUT /api/embeds/<id>/image)", () => {
+		const PNG = Buffer.from([
+			0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02,
+		])
+
+		const publish = (id: string) =>
+			fetch(`${base}/api/embeds/${id}`, {
+				method: "PUT",
+				body: JSON.stringify({ v: 1, parts: ["full"], payload: {} }),
+			})
+
+		const upload = (id: string, bytes: Buffer, name = "image") => {
+			const form = new FormData()
+			form.append(name, new Blob([new Uint8Array(bytes)], { type: "image/png" }), "image.png")
+			return fetch(`${base}/api/embeds/${id}/image`, { method: "PUT", body: form })
+		}
+
+		const imageFile = (id: string) => join(publishDir, "embeds", id, "image.png")
+
+		it("writes image.png and answers with its public URL", async () => {
+			const id = uuid("1aaaa")
+			await publish(id)
+			const res = await upload(id, PNG)
+			expect(res.status).toBe(200)
+			expect(await res.json()).toEqual({
+				v: 1,
+				url: `https://embeds.example.com/embeds/${id}/image.png`,
+			})
+			expect(readFileSync(imageFile(id)).equals(PNG)).toBe(true)
+		})
+
+		it("rejects a wrong part name, a non-PNG, and extra parts with 400", async () => {
+			const id = uuid("1bbbb")
+			await publish(id)
+			expect((await upload(id, PNG, "thumbnail")).status).toBe(400)
+			expect((await upload(id, Buffer.from("GIF89a....."))).status).toBe(400)
+			const form = new FormData()
+			form.append("image", new Blob([new Uint8Array(PNG)], { type: "image/png" }), "image.png")
+			form.append("image", new Blob([new Uint8Array(PNG)], { type: "image/png" }), "again.png")
+			const two = await fetch(`${base}/api/embeds/${id}/image`, {
+				method: "PUT",
+				body: form,
+			})
+			expect(two.status).toBe(400)
+			const json = await fetch(`${base}/api/embeds/${id}/image`, {
+				method: "PUT",
+				headers: { "content-type": "application/json" },
+				body: "{}",
+			})
+			expect(json.status).toBe(400)
+			expect(existsSync(imageFile(id))).toBe(false)
+		})
+
+		it("404s for an embed that is not published and creates nothing", async () => {
+			const id = uuid("1cccc")
+			expect((await upload(id, PNG)).status).toBe(404)
+			expect(existsSync(join(publishDir, "embeds", id))).toBe(false)
+		})
+
+		it("413s past the picture cap", async () => {
+			const id = uuid("1dddd")
+			await publish(id)
+			const big = Buffer.concat([PNG, Buffer.alloc(EMBED_IMAGE_BODY_CAP_BYTES)])
+			const res = await upload(id, big).catch(() => null)
+			// As with thumbnails: a 413 or a reset connection; nothing lands.
+			if (res) expect(res.status).toBe(413)
+			expect(existsSync(imageFile(id))).toBe(false)
+		})
+
+		it("405s methods other than PUT, 400s a bad id, 404s other sub-paths", async () => {
+			const id = uuid("1eeee")
+			await publish(id)
+			expect((await fetch(`${base}/api/embeds/${id}/image`)).status).toBe(405)
+			expect(
+				(await fetch(`${base}/api/embeds/${id}/image`, { method: "DELETE" })).status
+			).toBe(405)
+			expect((await upload("not-a-uuid", PNG)).status).toBe(400)
+			expect(
+				(await fetch(`${base}/api/embeds/${id}/other`, { method: "PUT" })).status
+			).toBe(404)
+		})
+
+		it("a republish retires the picture; an unpublish removes it with the folder", async () => {
+			const id = uuid("1ffff")
+			await publish(id)
+			await upload(id, PNG)
+			await publish(id)
+			expect(existsSync(imageFile(id))).toBe(false)
+			await upload(id, PNG)
+			expect(
+				(await fetch(`${base}/api/embeds/${id}`, { method: "DELETE" })).status
+			).toBe(204)
+			expect(existsSync(join(publishDir, "embeds", id))).toBe(false)
+		})
+	})
 })
 
 describe("multipart thumbnail uploads", () => {
@@ -1050,6 +1146,15 @@ describe("writes from a build behind the content schema", () => {
 					method: "PUT",
 					headers: { "content-type": "application/json" },
 					body: JSON.stringify({ v: 1, parts: ["html"], payload: {} }),
+				})
+			).status
+		).toBe(409)
+		expect(
+			(
+				await fetch(`${base}/api/embeds/0b7f3c2e-4d1a-4e8b-9c6d-2f1e3a4b5c6d/image`, {
+					method: "PUT",
+					headers: { "content-type": "multipart/form-data; boundary=x" },
+					body: "--x--",
 				})
 			).status
 		).toBe(409)

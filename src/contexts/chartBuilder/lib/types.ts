@@ -571,7 +571,9 @@ export type EmbedInstance = {
 	publishId?: string
 	publishedAt?: number
 	publishedParts?: Array<"full" | "chart" | "legend">
-	publishedUrls?: { full?: string; chart?: string; legend?: string }
+	/** `image` is the linked-picture PNG; absent when that step of the
+	 * publish failed (optional, so no version bump). */
+	publishedUrls?: { full?: string; chart?: string; legend?: string; image?: string }
 	/** What the embed actually drew at publish time. For a pinned instance
 	 * this equals `versionId`; for a "latest" instance it records which
 	 * version "latest" resolved to — the landing page compares it against

@@ -18,8 +18,12 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
  *  JSON, which is the shape the WAF rejects. A File rather than a bare Blob
  *  so the filename is the File's own: the WAF classifies a part WITH a
  *  filename as an upload rather than a form argument, which is the whole
- *  point of this transport. */
-export const pngFileFromDataUrl = (dataUrl: string): File | null => {
+ *  point of this transport. `filename` defaults to the thumbnail route's;
+ *  the published-embed picture names its part `image.png`. */
+export const pngFileFromDataUrl = (
+	dataUrl: string,
+	filename = "thumbnail.png"
+): File | null => {
 	if (!dataUrl.startsWith(PNG_DATA_URL_PREFIX)) return null
 	let binary: string
 	try {
@@ -33,7 +37,7 @@ export const pngFileFromDataUrl = (dataUrl: string): File | null => {
 	const bytes = new Uint8Array(binary.length)
 	for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
 	if (!PNG_SIGNATURE.every((byte, i) => bytes[i] === byte)) return null
-	return new File([bytes], "thumbnail.png", { type: "image/png" })
+	return new File([bytes], filename, { type: "image/png" })
 }
 
 /** The one field name the server route reads. Handed to fetch as the body

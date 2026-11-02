@@ -24,7 +24,14 @@ import { userFontFaces } from "./fontRegistration"
 import { stringifyJsonDangerous } from "../../../lib/json"
 import type { Dataset, DatasetMeta } from "./types"
 
-export type EmbedPublishUrls = { full?: string; chart?: string; legend?: string }
+export type EmbedPublishUrls = {
+	full?: string
+	chart?: string
+	legend?: string
+	/** The linked-picture PNG, published by a second request after the HTML
+	 *  files (`publishEmbedImageRequest`). Absent when that step failed. */
+	image?: string
+}
 
 /** Compose the single-version Dataset an embed payload carries: the bound
  *  dataset's metadata with exactly the one drawn version's rows attached.
@@ -116,6 +123,41 @@ export const publishEmbedRequest = async (
 		throw new Error("Publishing failed (unexpected server response). Try again.")
 	}
 	return parsed.urls
+}
+
+/** PUT the published embed's linked picture (`<publishId>/image.png`). The
+ *  embed must already be published — the server 404s otherwise — so this
+ *  runs after `publishEmbedRequest`. Multipart with exactly one file part,
+ *  `image`, for the same WAF reason thumbnails travel that way
+ *  (`storage/thumbnailUpload.ts`); NO content-type header, so the browser
+ *  writes the multipart boundary. Resolves to the picture's public URL;
+ *  throws on any failure. */
+export const publishEmbedImageRequest = async (
+	publishId: string,
+	png: File
+): Promise<string> => {
+	assertNotStale("publish")
+	const form = new FormData()
+	form.append("image", png)
+	const response = await fetch(
+		`/api/embeds/${encodeURIComponent(publishId)}/image`,
+		{
+			method: "PUT",
+			headers: contentVersionHeader("embeds"),
+			body: form,
+		}
+	)
+	if (!response.ok) {
+		throw (
+			staleBuildErrorFrom(response, "publish") ??
+			new Error(`Publishing the picture failed (HTTP ${response.status}).`)
+		)
+	}
+	const parsed = (await response.json()) as { v?: number; url?: unknown }
+	if (parsed.v !== 1 || typeof parsed.url !== "string") {
+		throw new Error("Publishing the picture failed (unexpected server response).")
+	}
+	return parsed.url
 }
 
 /** DELETE the published files. Idempotent server-side. */

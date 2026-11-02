@@ -56,6 +56,62 @@ describe("serializeEmbedCapture", () => {
 	})
 })
 
+describe("serializeEmbedCapture: an explicit root (the editor's figure)", () => {
+	it("composes the canvas colour and the HTML legend around the plot from [data-chart-root]", () => {
+		// The editor has no [data-export-root]; ChartCanvas marks the figure
+		// (plot + legend + canvas colour) with [data-chart-root] instead, and
+		// the published-embed picture captures through it.
+		document.body.innerHTML = `
+			<div data-chart-root style="background-color: rgb(20, 30, 40)">
+				<svg id="${PLOT_SVG_ID}" width="400" height="300"></svg>
+				<div data-legend-root><span style="color: rgb(250, 250, 250)">up</span></div>
+			</div>`
+		const root = document.querySelector<HTMLElement>("[data-chart-root]")!
+		stubRect(root, { left: 0, top: 0, width: 520, height: 300 })
+		stubRect(root.querySelector(`#${PLOT_SVG_ID}`)!, {
+			left: 0,
+			top: 0,
+			width: 400,
+			height: 300,
+		})
+		const swatchLabel = root.querySelector("span")!
+		stubRect(swatchLabel, { left: 420, top: 20, width: 40, height: 20 })
+		const realCreateRange = document.createRange.bind(document)
+		Object.defineProperty(document, "createRange", {
+			value: () => {
+				const range = realCreateRange()
+				Object.defineProperty(range, "getBoundingClientRect", {
+					value: () => new DOMRect(420, 22, 20, 16),
+				})
+				return range
+			},
+			configurable: true,
+		})
+
+		let figure: string | null
+		let bare: string | null
+		try {
+			figure = serializeEmbedCapture(document, { root })
+			// Without the root option (and no export root) it is the plot alone.
+			bare = serializeEmbedCapture(document)
+		} finally {
+			Object.defineProperty(document, "createRange", {
+				value: realCreateRange,
+				configurable: true,
+			})
+		}
+		expect(figure).not.toBeNull()
+		expect(figure).toMatch(/width="520" height="300"/)
+		expect(figure).toMatch(
+			/<rect width="520" height="300" fill="rgb\(20, 30, 40\)"/
+		)
+		expect(figure).toContain(">up</text>")
+		expect(bare).not.toBeNull()
+		expect(bare).not.toContain("<rect")
+		expect(bare).not.toContain(">up</text>")
+	})
+})
+
 describe("serializeEmbedCapture: included data table", () => {
 	it("redraws the table's text and paints a bottom-only border as an edge, not an outline", () => {
 		document.body.innerHTML = `
