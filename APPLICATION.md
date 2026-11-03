@@ -861,9 +861,10 @@ destination folder through the same dialog New uses. The name box starts
 as "<visual name> template" (templates share the visual namespace, so
 the bare name would always collide) and the folder list starts on the
 visual's own folder. When the open visual was started from a template
-that still exists, the dialog also offers **Update template "<name>"**.
-A "Saved as template" / "Template updated" note shows beside the button
-for a few seconds. The template body is built from
+that still exists, the dialog also offers **Update template "<name>"**,
+which hands off to the header's update dialog (below). A "Saved as
+template" / "Template updated" note shows beside the button for a few
+seconds. The template body is built from
 the SAME draft the autosave reads (`buildTemplateBody`,
 `lib/templates/`), then:
 
@@ -900,12 +901,40 @@ by kind: for each surface with a bound field and a non-Auto format, the
 format string is filed under that field's kind. So a template saved from
 a date-x / dollar-y chart knows one date format and one dollar format.
 
-**Updating one** replaces the template's design with the current draft
-and MERGES format memory: the same surface + kind is overwritten, a new
-kind is added, other kinds stay. Save a visual made from the template
-with percents on y and the template now formats both dollars and
-percents on y. `sourceFields` is replaced; id, name, folder and creation
-time are kept; the thumbnail is refreshed from the visual.
+**Updating one.** The header shows **Update template** (before the data
+version chip) whenever the open visual came from, or was last saved as,
+a template that still exists live and the draft has its data set. It
+opens a dialog listing what this visual would change in the template,
+compared against the template AS IT IS NOW (templates are shared, so
+nothing is snapshotted at start; if the template was saved after this
+visual was started by someone else, a note says some differences may be
+theirs). The comparison is section by section — the sidebar's own units:
+Encodings, X axis, Y axis, Radial axis, Angle, Length, Size, Color,
+Saturation/brightness/opacity, Shape & pattern, Connection, Facets,
+Titles, Legend, Data labels, Tooltips and hover, Caption, Data table,
+Annotations, Maps, Aesthetics & theme, Accessibility — each a checkbox
+(all on) over the settings that differ, named by their path ("gridlines
+› color"), plus the formats it would learn ("Learns the percent format
+for the Y axis (.0%)"). Before comparing, the template is renamed into
+the visual's field names (same name, then former name, then whatever sits
+in the same slot), and format strings are set aside, so a snap's renames
+and per-kind formats never show as changes; custom prose was stripped by
+the template build. A visual that matches says so. Only sections with a
+difference are listed.
+
+Pushing applies the chosen sections (`applyTemplateUpdate`,
+`lib/templates/templateDiff.ts`): each chosen slice replaces the
+template's, except maps keyed by a CATEGORY VALUE (hue colors, per-value
+shape / pattern / opacity overrides, facet-title colors…), which union —
+the visual's entries win, the template's others stay, so a visual whose
+data lacks "Other" doesn't forget its color. Format memory merges per
+kind for the chosen sections' surfaces only: the same surface + kind is
+overwritten, a new kind is added, other kinds stay. Push a visual made
+from the template with percents on y and the template now formats both
+dollars and percents on y. `sourceFields` become the visual's plus any
+template field a kept section still references; id, name, folder and
+creation time are kept; the thumbnail is refreshed from the visual. With
+every section chosen this is a full update.
 
 **Starting from one.** New visualization ▾ → **New from template…**
 (disabled, with a hint, until a template exists) opens a picker: on the

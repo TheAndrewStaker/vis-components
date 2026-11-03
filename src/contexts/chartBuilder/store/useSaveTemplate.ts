@@ -7,6 +7,7 @@ import {
 	buildTemplateMeta,
 } from "../lib/templates/buildTemplateBody"
 import { mergeTemplateUpdate } from "../lib/templates/mergeTemplateUpdate"
+import type { TemplateSectionId } from "../lib/templates/templateSections"
 import type { Visual } from "../lib/types"
 import { isTemplate } from "../lib/visualTrash"
 
@@ -25,7 +26,12 @@ import { currentDatasetViewAtom } from "./useCurrentDatasetView"
 
 export type SaveTemplateArgs =
 	| { kind: "new"; name: string; folderId: string | null }
-	| { kind: "update"; templateId: string }
+	| {
+			kind: "update"
+			templateId: string
+			/** The sections to push (`TEMPLATE_SECTIONS`); absent = all. */
+			sections?: ReadonlySet<TemplateSectionId>
+	  }
 
 /** "Save as template" (Export modal). Builds the template from the SAME
  * draft a save writes (`assembleDraftVisual`), stripped to its design
@@ -35,7 +41,8 @@ export type SaveTemplateArgs =
  *  - `new` prepends a fresh template row in the chosen folder (a folder
  *    deleted meanwhile falls back to the root). Name collisions are the
  *    caller's check (`nameCollides`); the name is only trimmed here.
- *  - `update` replaces that template's design and MERGES its format memory
+ *  - `update` splices the chosen sections (all, by default) of the design
+ *    into that template and MERGES their format memory
  *    (`mergeTemplateUpdate`). Throws when the row is no longer a template.
  *
  * Either way the open visual is then linked to the saved template
@@ -83,7 +90,8 @@ export const useSaveTemplate = () =>
 									v,
 									{ body, meta, thumbnail },
 									now,
-									user ?? undefined
+									user ?? undefined,
+									args.sections
 								)
 							: v
 					)

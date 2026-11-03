@@ -19,6 +19,7 @@ import { pageTitle, useDocumentTitle } from "../../../lib/documentTitle"
 
 import { DisclosureChevron } from "../../../components/ui/Chevron"
 import { EditorActions } from "./EditorActions"
+import { UpdateTemplateButton } from "./UpdateTemplateButton"
 import { VersionBadge } from "./VersionBadge"
 
 /** "9:25 AM" for a save today, "Oct 14" for an earlier one this year,
@@ -168,6 +169,7 @@ export const SaveBar = () => {
 				{barOpen && oneRow ? (
 					<div className="flex flex-wrap items-center gap-3 px-4 py-2">
 						{nameField}
+						<UpdateTemplateButton />
 						<VersionBadge compact />
 						<EditorActions />
 						{collapseButton}
@@ -182,6 +184,7 @@ export const SaveBar = () => {
 						 *  the mobile layout viewport and let the page pan into blank
 						 *  space. */}
 						<div className="flex flex-wrap items-center justify-between gap-2">
+							<UpdateTemplateButton />
 							<VersionBadge compact />
 							<EditorActions compact />
 						</div>
@@ -211,6 +214,7 @@ export const SaveBar = () => {
 		<div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-stone-200 bg-white px-4 py-2 dark:border-stone-800 dark:bg-stone-900">
 			{pageHeading}
 			{nameField}
+			<UpdateTemplateButton />
 			<VersionBadge />
 			{/* Always mounted so screen readers hear "Saving…" / "Saved" as
 			 *  it changes; screen-reader-only below `sm` (where it used to be

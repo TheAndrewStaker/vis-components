@@ -128,5 +128,34 @@ test.describe("templates", () => {
 		await banner.getByRole("button", { name: "Dismiss" }).click()
 		await expect(page.getByRole("status").filter({ hasText: "Template applied" })).toHaveCount(0)
 		await expect(page).toHaveURL(/\/editor\/vs-/, { timeout: 15_000 })
+
+		// --- Update template (header): a freshly snapped visual matches —
+		// the snap's renames and per-kind formats are not "changes". ---
+		const updateDialog = () =>
+			page.getByRole("dialog").filter({ hasText: `Update template "${TEMPLATE_NAME}"` })
+		await page.getByRole("button", { name: "Update template" }).click()
+		await expect(updateDialog().getByText(/matches the template/)).toBeVisible()
+		await updateDialog().getByRole("button", { name: "Close" }).click()
+		await expect(updateDialog()).toHaveCount(0)
+
+		// Recolor by region: the dialog lists Encodings (checked); push it.
+		await enc.getByLabel("Color", { exact: true }).selectOption("region")
+		await page.getByRole("button", { name: "Update template" }).click()
+		await expect(updateDialog().getByRole("checkbox", { name: "Encodings" })).toBeChecked()
+		await updateDialog().getByRole("button", { name: "Update template" }).click()
+		await expect(updateDialog()).toHaveCount(0)
+		await expect(page.getByRole("status").filter({ hasText: "Template updated" })).toBeVisible()
+
+		// --- New from the updated template on the same data set: the pushed
+		// color encoding is what the template now starts with. ---
+		await page.getByRole("button", { name: "More ways to start" }).click()
+		await page.getByRole("menuitem", { name: /New from template/ }).click()
+		const picker2 = page.getByRole("dialog").filter({ hasText: "New from template" })
+		await picker2.getByRole("checkbox", { name: /Use the current data set/ }).check()
+		await picker2.getByText(TEMPLATE_NAME).dblclick()
+		await page.getByRole("button", { name: "Start", exact: true }).click()
+		await waitForChart(page)
+		await expect(enc.getByLabel("Color", { exact: true })).toHaveValue("region")
+		await expect(enc.getByLabel("X position", { exact: true })).toHaveValue("rate")
 	})
 })

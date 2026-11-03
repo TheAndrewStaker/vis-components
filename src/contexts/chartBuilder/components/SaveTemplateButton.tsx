@@ -11,13 +11,15 @@ import { useSaveTemplate, type SaveTemplateArgs } from "../store/useSaveTemplate
 import { FolderPickerModal } from "../../library/components/FolderPickerModal"
 
 import { Button } from "../../../components/ui/Button"
+import { UpdateTemplateModal } from "./UpdateTemplateModal"
 
 /** How long the "Saved as template" note stays beside the button. */
 const CONFIRMATION_MS = 3000
 
 /** Export modal → "Save as template": the name + folder dialog New uses,
  *  plus "Update template "<name>"" when the open visual came from (or was
- *  last saved as) a template that still exists live. A short confirmation
+ *  last saved as) a template that still exists live — that one hands off to
+ *  the header's section-by-section update dialog. A short confirmation
  *  shows beside the button after a save; it unmounts with the Export modal. */
 export const SaveTemplateButton = ({ visualId }: { visualId: string }) => {
 	const visuals = useAtomValue(visualsAtom)
@@ -26,6 +28,7 @@ export const SaveTemplateButton = ({ visualId }: { visualId: string }) => {
 	const templateId = useAtomValue(currentTemplateIdAtom)
 	const saveTemplate = useSaveTemplate()
 	const [open, setOpen] = useState(false)
+	const [updateOpen, setUpdateOpen] = useState(false)
 	const [busy, setBusy] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [confirmation, setConfirmation] = useState<string | null>(null)
@@ -95,8 +98,10 @@ export const SaveTemplateButton = ({ visualId }: { visualId: string }) => {
 					template
 						? {
 								label: `Update template "${template.name}"`,
-								onClick: () =>
-									run({ kind: "update", templateId: template.id }, "Template updated"),
+								onClick: () => {
+									setOpen(false)
+									setUpdateOpen(true)
+								},
 							}
 						: undefined
 				}
@@ -109,6 +114,14 @@ export const SaveTemplateButton = ({ visualId }: { visualId: string }) => {
 					)
 				}}
 			/>
+			{template && (
+				<UpdateTemplateModal
+					open={updateOpen}
+					onClose={() => setUpdateOpen(false)}
+					template={template}
+					onUpdated={() => setConfirmation("Template updated")}
+				/>
+			)}
 		</>
 	)
 }

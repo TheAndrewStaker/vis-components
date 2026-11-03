@@ -17,6 +17,17 @@ const saveTemplate = vi.fn<(args: unknown) => Promise<string>>()
 vi.mock("../store/useSaveTemplate", () => ({
 	useSaveTemplate: () => saveTemplate,
 }))
+// The update dialog's diff is its own test; here it just needs one section
+// so the push button exists.
+vi.mock("../store/useTemplateDiff", () => ({
+	useTemplateDiff: () => () => ({
+		diff: {
+			mapping: {},
+			sections: [{ id: "legend", label: "Legend", changes: ["position"], formats: [] }],
+		},
+		changedSinceStart: false,
+	}),
+}))
 
 const row = (id: string, over: Partial<Visual> = {}): Visual => ({
 	id,
@@ -97,13 +108,19 @@ describe("Save as template", () => {
 		expect((save as HTMLButtonElement).disabled).toBe(true)
 	})
 
-	it("offers Update template only while the template is live", async () => {
+	it("offers Update template only while the template is live, handing off to the update dialog", async () => {
 		renderButton([VISUAL, TEMPLATE], "tpl-1")
 		fireEvent.click(screen.getByRole("button", { name: "Save as template" }))
 		fireEvent.click(screen.getByRole("button", { name: 'Update template "Quarterly"' }))
-		await waitFor(() =>
-			expect(saveTemplate).toHaveBeenCalledWith({ kind: "update", templateId: "tpl-1" })
-		)
+		// The name dialog closes; the section picker opens in its place.
+		expect(screen.queryByLabelText("Template name")).toBeNull()
+		expect(screen.getByRole("checkbox", { name: "Legend" })).toBeTruthy()
+		fireEvent.click(screen.getByRole("button", { name: "Update template" }))
+		await waitFor(() => expect(saveTemplate).toHaveBeenCalledTimes(1))
+		expect(saveTemplate.mock.calls[0][0]).toMatchObject({
+			kind: "update",
+			templateId: "tpl-1",
+		})
 		await waitFor(() =>
 			expect(screen.getByRole("status").textContent).toBe("Template updated")
 		)
@@ -114,11 +131,12 @@ describe("Save as template", () => {
 		expect(screen.queryByRole("button", { name: /Update template/ })).toBeNull()
 	})
 
-	it("shows a failed save in the dialog and keeps it open", async () => {
+	it("shows a failed update in the dialog and keeps it open", async () => {
 		saveTemplate.mockRejectedValue(new Error("That template no longer exists."))
 		renderButton([VISUAL, TEMPLATE], "tpl-1")
 		fireEvent.click(screen.getByRole("button", { name: "Save as template" }))
 		fireEvent.click(screen.getByRole("button", { name: 'Update template "Quarterly"' }))
+		fireEvent.click(screen.getByRole("button", { name: "Update template" }))
 		await waitFor(() =>
 			expect(screen.getByRole("alert").textContent).toBe(
 				"That template no longer exists."
