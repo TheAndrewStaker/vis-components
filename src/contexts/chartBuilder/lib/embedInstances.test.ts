@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
 	clearEmbedPublish,
+	publishedInstancesOf,
 	recordEmbedPublish,
 	removeInstancesForVisual,
 	upsertEmbedInstance,
@@ -189,5 +190,22 @@ describe("clearEmbedPublish", () => {
 
 	it("is a no-op for an unknown instance", () => {
 		expect(clearEmbedPublish({}, "nope")).toEqual({})
+	})
+})
+
+describe("publishedInstancesOf", () => {
+	it("lists only this visual's published rows", () => {
+		const published = mkInstance({
+			id: "ei-p",
+			publishId: "pub",
+			publishedAt: 5,
+			publishedParts: ["full"],
+			publishedUrls: { full: "https://x/pub/index.html" },
+			publishedVersionId: null,
+		})
+		const other = mkInstance({ id: "ei-o", visualId: "v2", publishId: "p2", publishedUrls: {} })
+		const copied = mkInstance({ id: "ei-c", versionId: "ver-2" })
+		const all = { "ei-p": published, "ei-o": other, "ei-c": copied }
+		expect(publishedInstancesOf(all, "v1").map((i) => i.id)).toEqual(["ei-p"])
 	})
 })

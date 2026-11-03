@@ -9,7 +9,7 @@ import {
 	downloadVisualsBundle,
 	sanitizeVisualFilename,
 } from "../lib/downloadVisuals"
-import { upsertEmbedInstance } from "../lib/embedInstances"
+import { publishedInstancesOf, upsertEmbedInstance } from "../lib/embedInstances"
 import { embedFontsInSvg } from "../lib/fontEmbed"
 import { nameWeightedFaces } from "../lib/portableSvg"
 import {
@@ -29,7 +29,10 @@ import {
 	embedInstancesAtom,
 	exportSizesAtom,
 	exportUnitAtom,
+	republishOnSaveFor,
+	republishOnSaveVisualsAtom,
 	visualsAtom,
+	withRepublishOnSave,
 } from "../store/atoms"
 import { migrateDataTableConfig } from "../lib/dataTableConfig"
 import { usePublishEmbed, useUnpublishEmbed } from "../store/publishEmbed"
@@ -40,6 +43,7 @@ import { SaveTemplateButton } from "./SaveTemplateButton"
 import { EXPORT_TABLE_HEIGHT_MESSAGE } from "./viz/DataTableBlock"
 
 import { Button } from "../../../components/ui/Button"
+import { Checkbox } from "../../../components/ui/Checkbox"
 import { CopyButton } from "../../../components/ui/CopyButton"
 import { Modal } from "../../../components/ui/Modal"
 import { NumberInput } from "../../../components/ui/NumberInput"
@@ -435,6 +439,11 @@ const EmbedTab = ({
 	const view = useCurrentDatasetView()
 	const instances = useAtomValue(embedInstancesAtom)
 	const setEmbedInstances = useSetAtom(embedInstancesAtom)
+	// "Republish on every save": this user's, this browser's, per visual —
+	// not on the shared instances (see `republishOnSaveVisualsAtom`).
+	const [republishOnSaveVisuals, setRepublishOnSaveVisuals] = useAtom(
+		republishOnSaveVisualsAtom
+	)
 	const publishEmbed = usePublishEmbed()
 	const unpublishEmbed = useUnpublishEmbed()
 	// ZIP-level maps inline their boundary topology into the payload — the
@@ -716,6 +725,30 @@ const EmbedTab = ({
 							: "Unpublish"}
 				</Button>
 			</div>
+
+			{/* Per VISUAL (every published pin, whichever pin this tab shows)
+			    and per user on this browser: each of this user's autosaves
+			    republishes (`useAutoSave`). Only meaningful once something is
+			    published. */}
+			{publishedInstancesOf(instances, visualId).length > 0 && (
+				<div className="flex flex-col gap-1">
+					<Checkbox
+						label="Republish on every save"
+						checked={republishOnSaveFor(republishOnSaveVisuals, visualId)}
+						onChange={(on) =>
+							setRepublishOnSaveVisuals((prev) =>
+								withRepublishOnSave(prev, visualId, on)
+							)
+						}
+					/>
+					<div className="pl-6 text-sm vc-muted">
+						Every autosave you make republishes every published pin of this
+						visual, so edits reach embedded pages and decks as you make them.
+						This is your setting, on this browser — it doesn&rsquo;t change
+						what happens when someone else edits the visual.
+					</div>
+				</div>
+			)}
 
 			{publishError !== null && (
 				<div className="rounded-sm border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-700 dark:bg-red-900/20 dark:text-red-200">

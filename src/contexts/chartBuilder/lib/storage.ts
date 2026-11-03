@@ -175,6 +175,7 @@ const datasetVersionKey = (id: string, versionId: string): string =>
 const KEY_EMBED_INSTANCES = "vis-components:embedInstances"
 const KEY_CURRENT_VISUAL = "vis-components:currentVisualId"
 const KEY_PUBLISHED_EDIT_SNOOZE = "vis-components:publishedEditSnoozeUntil"
+const KEY_REPUBLISH_ON_SAVE_VISUALS = "vis-components:republishOnSaveVisuals"
 const KEY_CURRENT_DATASET = "vis-components:currentDatasetId"
 const KEY_CURRENT_VISUAL_NAME = "vis-components:currentVisualName"
 const KEY_CURRENT_ENCODINGS = "vis-components:currentEncodings"
@@ -1068,6 +1069,17 @@ export const loadPublishedEditSnoozeUntil = (): number =>
 	safeGet<number>(KEY_PUBLISHED_EDIT_SNOOZE, 0)
 export const savePublishedEditSnoozeUntil = (until: number): void =>
 	safeSet(KEY_PUBLISHED_EDIT_SNOOZE, until)
+
+/** "Republish on every save" (Export → Embed): the visuals THIS user, on
+ *  THIS browser, has set to republish every published pin on each of their
+ *  autosaves. Keyed by visual id; sparse (off deletes the key). Per device
+ *  on purpose: the embed instances are shared by every user in server
+ *  mode, and one person's choice to push edits out live must not decide
+ *  what happens when someone else edits the same visual. */
+export const loadRepublishOnSaveVisuals = (): Record<string, true> =>
+	safeGet<Record<string, true>>(KEY_REPUBLISH_ON_SAVE_VISUALS, {})
+export const saveRepublishOnSaveVisuals = (visuals: Record<string, true>): void =>
+	safeSet(KEY_REPUBLISH_ON_SAVE_VISUALS, visuals)
 
 /** The sidebar's content floor (px): what its widest canonical row needs,
  * mirrored by the wrapper's `sm:min-w-95` in Sidebar.tsx. A per-value color

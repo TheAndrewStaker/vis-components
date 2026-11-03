@@ -1,8 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { installInMemoryLocalStorage } from "../../../testSupport/localStorageShim"
-import { TestProvider } from "../../../testSupport/TestProvider"
+import { TestProvider, type TestStore } from "../../../testSupport/TestProvider"
+import { localStorageAdapter } from "../lib/storage/adapter"
+import { setStorageAdapter } from "../lib/storage/registry"
 import { EMPTY_CHANNEL_CONFIGS } from "../lib/channelConfig"
 import { SYSTEM_LIGHT_THEME } from "../lib/systemThemes"
 import { labelsFromTheme } from "../lib/themeConfig"
@@ -10,6 +12,7 @@ import { type EmbedInstance, emptyEncodings, type Visual } from "../lib/types"
 import {
 	currentVisualIdAtom,
 	embedInstancesAtom,
+	republishOnSaveVisualsAtom,
 	visualsAtom,
 } from "../store/atoms"
 import { ExportModal } from "./ExportModal"
@@ -95,5 +98,63 @@ describe("Export modal opening tab", () => {
 	it("opens on Embed when the visual is already published", () => {
 		renderModal(true, [PUBLISHED])
 		expect(screen.getByText(EMBED_PANE_TEXT)).toBeTruthy()
+	})
+})
+
+/** Embed tab, server mode: "Republish on every save" is this user's
+ *  per-visual, per-browser flag (`republishOnSaveVisualsAtom`, never the
+ *  shared instances), offered once the visual has a published pin. */
+describe("Export modal Embed tab: Republish on every save", () => {
+	const LABEL = "Republish on every save"
+
+	const renderServerMode = (instances: EmbedInstance[]) => {
+		setStorageAdapter({ ...localStorageAdapter, capabilities: { remoteLoad: true } })
+		let store!: TestStore
+		render(
+			<TestProvider
+				initializeState={(s) => {
+					store = s
+					s.set(visualsAtom, [VISUAL])
+					s.set(currentVisualIdAtom, "dv-1")
+					s.set(
+						embedInstancesAtom,
+						Object.fromEntries(instances.map((i) => [i.id, i]))
+					)
+				}}
+			>
+				<ExportModal open onClose={vi.fn()} visualId="dv-1" />
+			</TestProvider>
+		)
+		return store
+	}
+
+	afterEach(() => setStorageAdapter(localStorageAdapter))
+
+	it("offers the checkbox once a pin is published and toggles this visual's device-local flag", () => {
+		const store = renderServerMode([PUBLISHED])
+		const box = screen.getByRole("checkbox", { name: LABEL }) as HTMLInputElement
+		expect(box.checked).toBe(false)
+		fireEvent.click(box)
+		expect(store.get(republishOnSaveVisualsAtom)).toEqual({ "dv-1": true })
+		// Never written onto the shared instance.
+		expect("republishOnSave" in store.get(embedInstancesAtom)["ei-1"]).toBe(false)
+		expect((screen.getByRole("checkbox", { name: LABEL }) as HTMLInputElement).checked).toBe(true)
+		fireEvent.click(screen.getByRole("checkbox", { name: LABEL }))
+		expect(store.get(republishOnSaveVisualsAtom)).toEqual({})
+	})
+
+	it("shows the checkbox for a published pin other than the one the tab is on", () => {
+		// The tab opens on the "latest" pin; the published one is pinned to v1.
+		renderServerMode([{ ...PUBLISHED, versionId: "v1", publishedVersionId: "v1" }])
+		expect(screen.getByRole("checkbox", { name: LABEL })).toBeTruthy()
+	})
+
+	it("does not exist before the pin is published", () => {
+		// Open on the Embed tab by hand: an unpublished visual lands on Export
+		// image.
+		renderServerMode([{ ...PUBLISHED, publishId: undefined, publishedUrls: undefined }])
+		fireEvent.click(screen.getByRole("button", { name: "Embed" }))
+		expect(screen.getByRole("button", { name: "Publish embed" })).toBeTruthy()
+		expect(screen.queryByRole("checkbox", { name: LABEL })).toBeNull()
 	})
 })

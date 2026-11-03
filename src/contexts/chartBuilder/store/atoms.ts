@@ -88,6 +88,8 @@ import {
 	saveCurrentVisualId,
 	loadPublishedEditSnoozeUntil,
 	savePublishedEditSnoozeUntil,
+	loadRepublishOnSaveVisuals,
+	saveRepublishOnSaveVisuals,
 	saveCurrentVisualName,
 	saveDrawerHeight,
 	saveContrastAlgorithm,
@@ -929,6 +931,32 @@ export const publishedEditSnoozeUntilAtom = persistedAtom<number>(
 	loadPublishedEditSnoozeUntil,
 	savePublishedEditSnoozeUntil
 )
+
+/** Visuals set to "Republish on every save" — THIS user's choice on THIS
+ *  browser (device-local, like the snooze above), keyed by visual id and
+ *  sparse. Per visual, not per pin: every published pin of the visual
+ *  republishes on this user's autosaves (`useAutoSave`). Not stored on the
+ *  shared embed instances, so it never decides what another editor's saves
+ *  do. Read one visual with `republishOnSaveFor`, write with
+ *  `withRepublishOnSave`. */
+export const republishOnSaveVisualsAtom = persistedAtom<Record<string, true>>(
+	loadRepublishOnSaveVisuals,
+	saveRepublishOnSaveVisuals
+)
+export const republishOnSaveFor = (
+	visuals: Record<string, true>,
+	visualId: string | null
+): boolean => visualId !== null && visuals[visualId] === true
+export const withRepublishOnSave = (
+	visuals: Record<string, true>,
+	visualId: string,
+	on: boolean
+): Record<string, true> => {
+	if (on) return visuals[visualId] === true ? visuals : { ...visuals, [visualId]: true }
+	if (visuals[visualId] !== true) return visuals
+	const { [visualId]: _off, ...rest } = visuals
+	return rest
+}
 
 export const currentEncodingsAtom = persistedAtom<Encodings>(
 	loadCurrentEncodings,

@@ -5425,6 +5425,42 @@ each instance's pinned version and when its snippet was last exported.
 The "Pin to current version" option names the version being pinned with
 its upload date and note.
 
+**Publishing and republishing.** Publishing is explicit and server-mode
+only (a browser-local session has nowhere public to publish to, and the
+tab says so). **Publish embed** writes the pin's public files and
+becomes **Republish** once the pin has them: same URLs, fresh snapshot
+of the saved visual. Web embeds and the PowerPoint add-in only ever see
+PUBLISHED content, so after an edit the user pushes it out again — and
+a visual can have several pins (latest, plus any pinned versions),
+each its own publish. Two shortcuts cover that. The editor header
+carries a **Republish** button whenever the open visual is published
+(server mode only): one click republishes EVERY published pin of the
+visual — each with its own pin and its own combined / split choice,
+URLs unchanged — reading "Publishing…" while it runs and then
+"Republished · 9:25 AM" beside it (or the first error, if a pin
+failed; a later success clears it). Pins publish one after another,
+never at once, because each publish captures the on-screen figure for
+its picture. Clicks that land mid-run never stack: a run that is asked
+again finishes and goes once more, so a burst ends with exactly one
+up-to-date publish. Once the visual has a published pin, the Embed tab
+adds a **Republish on every save** checkbox (whichever pin the tab is
+showing): every autosave this user makes then republishes EVERY
+published pin of the visual — "so edits reach embedded pages and decks
+as you make them" — through the same coalesced run. It is PER USER
+and PER VISUAL, and it lives on this browser (device-local, like the
+"Remind me in an hour" snooze), never on the shared embed instances:
+the help says so — "This is your setting, on this browser — it
+doesn't change what happens when someone else edits the visual."
+Purging a visual drops its entry. Two badges make the setting
+visible: the editor header wears a small purple "Republishes on
+save" chip beside the Republish button (same chip as the library's
+Template chip), and the library's Pin State column appends " · auto"
+to every published pin of such a visual — "Published · latest ·
+auto" — with the title "Republishes on every save (your setting)";
+"auto", not "live", because "live" already names the latest-version
+pin there. A failed autosave republish never breaks the save — the
+error shows beside the header's Republish button.
+
 **Editing a published visual is flagged twice.** The landing page's
 Pin State column reports publish reality per instance; the editor
 adds the two signals a user in the middle of editing actually sees.
@@ -5437,7 +5473,12 @@ hour** (stay, and keep the notice quiet for every visual opened on
 this device for the next hour — for someone working through a batch
 of published visuals) and **Go back** (return to the library). While
 that visual stays open, the chart viewport wears a 4 px purple frame
-as the standing reminder; the frame never snoozes. The notice
+as the standing reminder; the frame never snoozes. When this user has
+set the visual to "Republish on every save" on this browser, the
+notice adds a second sentence — "You've set it to republish on every
+save, so your edits reach embedded pages and decks as you make them."
+— and no extra button: the choice is the same, the stakes are just
+more immediate. The notice
 re-appears on a later re-entry (once any snooze has lapsed) but not
 for a publish the user just made from the Export modal, and the frame
 costs no layout (an inset shadow, not a border) so it can't shift the

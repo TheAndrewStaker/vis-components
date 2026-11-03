@@ -88,6 +88,21 @@ export const clearEmbedPublish = (
 	return { ...instances, [instanceId]: rest }
 }
 
+/** True for an instance that is published (a publish id AND public urls)
+ * — the same test `currentVisualPublishedAtom` and the Embed tab apply.
+ * A copied-but-never-published row does not count. */
+export const isPublishedInstance = (instance: EmbedInstance): boolean =>
+	instance.publishId !== undefined && instance.publishedUrls !== undefined
+
+/** Every published instance of one visual, in record order. */
+export const publishedInstancesOf = (
+	instances: Record<string, EmbedInstance>,
+	visualId: string
+): EmbedInstance[] =>
+	Object.values(instances).filter(
+		(i) => i.visualId === visualId && isPublishedInstance(i)
+	)
+
 /** Drop every instance belonging to a given visual. Used on Visual delete
  * so the landing page doesn't keep referring to a now-missing id. */
 export const removeInstancesForVisual = (

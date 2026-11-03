@@ -8,6 +8,7 @@ import {
 	embedInstancesAtom,
 	publishedEditAckAtom,
 	publishedEditSnoozeUntilAtom,
+	republishOnSaveVisualsAtom,
 } from "../store/atoms"
 import { PublishedEditGate } from "./PublishedEditGate"
 
@@ -73,6 +74,26 @@ describe("published-visual edit gate", () => {
 		fireEvent.click(screen.getByText("Just once!"))
 		expect(screen.queryByRole("dialog")).toBeNull()
 		expect(navigate).not.toHaveBeenCalled()
+	})
+
+	it("adds the republish-on-save sentence only when this user set the visual to it", () => {
+		const LIVE_SENTENCE =
+			"You've set it to republish on every save, so your edits reach embedded pages and decks as you make them."
+		renderGate([published])
+		expect(screen.getByRole("dialog").textContent).not.toContain(LIVE_SENTENCE)
+		cleanup()
+		render(
+			<TestProvider
+				initializeState={(store) => {
+					store.set(currentVisualIdAtom, "dv-1")
+					store.set(embedInstancesAtom, { [published.id]: published })
+					store.set(republishOnSaveVisualsAtom, { "dv-1": true })
+				}}
+			>
+				<PublishedEditGate />
+			</TestProvider>
+		)
+		expect(screen.getByRole("dialog").textContent).toContain(LIVE_SENTENCE)
 	})
 
 	it("sends the user back to the library on Go back", () => {

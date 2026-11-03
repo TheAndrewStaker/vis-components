@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import { useNavigate } from "@tanstack/react-router"
-import { useAtomValue, useSetAtom } from "jotai"
+import { useAtomValue, useSetAtom, useStore } from "jotai"
 import {
 	currentAccessibilityConfigAtom,
 	currentAnnotationsAtom,
@@ -23,9 +23,15 @@ import {
 	currentTooltipConfigAtom,
 	currentVisualIdAtom,
 	currentVisualNameAtom,
+	embedInstancesAtom,
+	republishOnSaveFor,
+	republishOnSaveVisualsAtom,
 	saveStatusAtom,
 } from "./atoms"
+import { publishedInstancesOf } from "../lib/embedInstances"
+import { useRepublishVisual } from "./republishVisual"
 import { useSaveVisual } from "./saveVisual"
+import { useEffectiveGeographyLevel } from "./useEffectiveGeographyLevel"
 
 const DEBOUNCE_MS = 800
 
@@ -37,11 +43,30 @@ const DEBOUNCE_MS = 800
  *
  * Gated on `currentDatasetIdAtom` — we won't create empty visuals just because
  * the editor mounted.
+ *
+ * "Republish on every save": once the save lands, a visual THIS user has
+ * flagged on THIS browser (`republishOnSaveVisualsAtom`, device-local) and
+ * that has at least one published pin goes through the shared republish
+ * (every published pin, coalesced by `republishStateAtom`, so overlapping
+ * saves can't stack publishes). Both are read through the store at save
+ * time, not watched: a publish rewrites the instances, and watching them
+ * here would save → publish → save forever. Its errors stay in
+ * `republishStateAtom` — they never break the save.
  */
 export const useAutoSave = () => {
 	const saveVisual = useSaveVisual()
 	const navigate = useNavigate()
 	const setStatus = useSetAtom(saveStatusAtom)
+	const store = useStore()
+	const republish = useRepublishVisual()
+	// Current value in a ref so the geography level (a hook over the live
+	// atoms) is read at save time without becoming a save trigger. Synced in
+	// an effect, not during render; the read is 800 ms later anyway.
+	const geographyLevel = useEffectiveGeographyLevel()
+	const geographyLevelRef = useRef(geographyLevel)
+	useEffect(() => {
+		geographyLevelRef.current = geographyLevel
+	}, [geographyLevel])
 
 	const datasetId = useAtomValue(currentDatasetIdAtom)
 	const visualId = useAtomValue(currentVisualIdAtom)
@@ -83,7 +108,17 @@ export const useAutoSave = () => {
 			const wasNew = !visualId
 			const id = await saveVisual()
 			if (wasNew) {
+				// A brand-new visual can't be published yet — nothing to republish.
 				await navigate({ to: "/editor/$visualId", params: { visualId: id } })
+				return
+			}
+			const live =
+				republishOnSaveFor(store.get(republishOnSaveVisualsAtom), id) &&
+				publishedInstancesOf(store.get(embedInstancesAtom), id).length > 0
+			if (live) {
+				void republish(id, {
+					includeZctaTopology: geographyLevelRef.current === "zcta",
+				})
 			}
 		}, DEBOUNCE_MS)
 		return () => clearTimeout(timer)
@@ -112,5 +147,7 @@ export const useAutoSave = () => {
 		saveVisual,
 		navigate,
 		setStatus,
+		store,
+		republish,
 	])
 }

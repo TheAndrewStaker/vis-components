@@ -1,6 +1,11 @@
 import { useRef } from "react"
+import { useAtomValue } from "jotai"
 
 import { isTemplate } from "../../chartBuilder/lib/visualTrash"
+import {
+	republishOnSaveFor,
+	republishOnSaveVisualsAtom,
+} from "../../chartBuilder/store/atoms"
 
 import type {
 	DecoratedRow,
@@ -89,9 +94,12 @@ const BADGE_AMBER =
  *  rows and legacy rows from the app-served embed era, whose copied snippet
  *  URLs are dead under the publish contract. A dangling pin with a publish
  *  is NOT broken (the public file is a snapshot and keeps working); it only
- *  means the same pin can't be re-snapshotted. */
+ *  means the same pin can't be re-snapshotted. A published pin of a visual
+ *  THIS user set to "Republish on every save" on this browser gets
+ *  " · auto" (not "live" — that word is the latest-version pin here). */
 const PinStateBadge = ({ row }: { row: DecoratedRow }) => {
 	const publish = row.kind === "instance" ? row.publish : null
+	const auto = republishOnSaveFor(useAtomValue(republishOnSaveVisualsAtom), row.visual.id)
 	const badge = (() => {
 		if (publish === null) return { style: BADGE_GREY, label: "Not published", title: undefined as string | undefined }
 		const date = formatDate(publish.publishedAt)
@@ -123,12 +131,17 @@ const PinStateBadge = ({ row }: { row: DecoratedRow }) => {
 			title: `Published ${date}${publish.resolvedVersionLabel ? ` at ${publish.resolvedVersionLabel}` : ""}. Republish any time to refresh.`,
 		}
 	})()
+	const withAuto = publish !== null && auto
 	return (
 		<span
-			title={badge.title}
+			title={
+				withAuto
+					? `${badge.title ?? ""}${badge.title ? " " : ""}Republishes on every save (your setting).`
+					: badge.title
+			}
 			className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${badge.style}`}
 		>
-			{badge.label}
+			{withAuto ? `${badge.label} · auto` : badge.label}
 		</span>
 	)
 }

@@ -110,11 +110,23 @@ describe("usePublishEmbed linked picture", () => {
 		expect(recordedUrls()).toEqual(HTML_URLS)
 	})
 
-	it("a null capture still records the publish, with no upload", async () => {
+	it("a null capture still records the publish, with no upload, after retrying", async () => {
 		capture.mockResolvedValue(null)
 		const { publish, recordedUrls } = setup()
 		await publish()
+		expect(capture).toHaveBeenCalledTimes(6)
 		expect(publishImage).not.toHaveBeenCalled()
 		expect(recordedUrls()).toEqual(HTML_URLS)
+	})
+
+	it("retries a capture that declines mid-layout and keeps the picture", async () => {
+		// A republish on save lands 800 ms after an edit, often before the
+		// chart's layout settles; the first captures say "not yet".
+		capture.mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValue(PNG)
+		const { publish, recordedUrls } = setup()
+		await publish()
+		expect(capture).toHaveBeenCalledTimes(3)
+		expect(publishImage).toHaveBeenCalledTimes(1)
+		expect(recordedUrls()).toEqual({ ...HTML_URLS, image: IMAGE_URL })
 	})
 })

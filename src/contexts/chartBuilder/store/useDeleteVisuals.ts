@@ -11,7 +11,9 @@ import {
 	deleteDatasetsAtom,
 	embedInstancesAtom,
 	foldersAtom,
+	republishOnSaveVisualsAtom,
 	visualsAtom,
+	withRepublishOnSave,
 } from "./atoms"
 
 /** Move visuals to the Trash. Nothing cascades: the visual keeps its row,
@@ -67,6 +69,11 @@ export const usePurgeVisuals = () =>
 				for (const id of ids) next = removeInstancesForVisual(next, id)
 				return next
 			})
+			// This device's "Republish on every save" choices for the purged
+			// visuals have nothing left to apply to.
+			set(republishOnSaveVisualsAtom, (prev) =>
+				[...ids].reduce((acc, id) => withRepublishOnSave(acc, id, false), prev)
+			)
 			// Swept over the INDEX, not the loaded bodies: the index is the
 			// authoritative list of what exists, and orphan-ness is a question
 			// about references, which needs no rows. Sweeping the loaded map

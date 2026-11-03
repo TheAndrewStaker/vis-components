@@ -172,17 +172,28 @@ export const usePublishEmbed = () =>
 const EMBED_IMAGE_MAX_DIM = 4096
 const EMBED_IMAGE_SCALE = 2
 const CSS_DPI = 96
+/** The capture declines (null) while the chart is mid-layout — exactly where
+ *  a "Republish on every save" lands, 800 ms after an edit. The HTML publish
+ *  has already deleted the old picture at that point, so giving up would
+ *  leave a PowerPoint figure with nothing to fetch until the next save.
+ *  Retry for a moment first. */
+const CAPTURE_ATTEMPTS = 6
+const CAPTURE_RETRY_MS = 250
 const publishEmbedImage = async (publishId: string): Promise<string | null> => {
 	try {
-		const dataUrl = await captureThumbnail({
-			maxDim: EMBED_IMAGE_MAX_DIM,
-			scale: EMBED_IMAGE_SCALE,
-			allowNetwork: true,
-			// A picture that stands alone on a slide: legend and canvas colour
-			// included, white under an unset canvas colour.
-			figure: true,
-			opaqueBackground: true,
-		})
+		let dataUrl: string | null = null
+		for (let attempt = 0; attempt < CAPTURE_ATTEMPTS && dataUrl === null; attempt++) {
+			if (attempt > 0) await new Promise((r) => setTimeout(r, CAPTURE_RETRY_MS))
+			dataUrl = await captureThumbnail({
+				maxDim: EMBED_IMAGE_MAX_DIM,
+				scale: EMBED_IMAGE_SCALE,
+				allowNetwork: true,
+				// A picture that stands alone on a slide: legend and canvas colour
+				// included, white under an unset canvas colour.
+				figure: true,
+				opaqueBackground: true,
+			})
+		}
 		if (dataUrl === null) return null
 		const png = pngFileFromDataUrl(dataUrl, "image.png")
 		if (png === null) return null

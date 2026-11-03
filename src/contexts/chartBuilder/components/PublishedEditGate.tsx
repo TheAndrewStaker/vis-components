@@ -10,6 +10,8 @@ import {
 	PUBLISHED_EDIT_SNOOZE_MS,
 	publishedEditAckAtom,
 	publishedEditSnoozeUntilAtom,
+	republishOnSaveFor,
+	republishOnSaveVisualsAtom,
 } from "../store/atoms"
 
 /** Acknowledge-to-continue notice shown when the user opens a visual that is
@@ -31,6 +33,13 @@ import {
 export const PublishedEditGate = () => {
 	const visualId = useAtomValue(currentVisualIdAtom)
 	const published = useAtomValue(currentVisualPublishedAtom)
+	// This user set "Republish on every save" here: the warning then has to
+	// say their edits don't wait for a by-hand republish. (`published` is
+	// already required for the gate to open at all.)
+	const liveRepublish = republishOnSaveFor(
+		useAtomValue(republishOnSaveVisualsAtom),
+		visualId
+	)
 	const [ack, setAck] = useAtom(publishedEditAckAtom)
 	const [snoozeUntil, setSnoozeUntil] = useAtom(publishedEditSnoozeUntilAtom)
 	const navigate = useNavigate()
@@ -66,6 +75,8 @@ export const PublishedEditGate = () => {
 				<div className="text-sm vc-text">
 					This visual is already embedded. Edits you make here will affect
 					published content.
+					{liveRepublish &&
+						" You've set it to republish on every save, so your edits reach embedded pages and decks as you make them."}
 				</div>
 				<div className="flex justify-end gap-2">
 					<Button compact onClick={() => void navigate({ to: "/" })}>
