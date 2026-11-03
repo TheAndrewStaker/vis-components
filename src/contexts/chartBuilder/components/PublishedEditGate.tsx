@@ -7,7 +7,9 @@ import { Modal } from "../../../components/ui/Modal"
 import {
 	currentVisualIdAtom,
 	currentVisualPublishedAtom,
+	PUBLISHED_EDIT_SNOOZE_MS,
 	publishedEditAckAtom,
+	publishedEditSnoozeUntilAtom,
 } from "../store/atoms"
 
 /** Acknowledge-to-continue notice shown when the user opens a visual that is
@@ -21,19 +23,28 @@ import {
  *  before the publish records had arrived. `publishedEditAckAtom` keeps it
  *  from re-appearing — including right after the user publishes from inside
  *  the editor. Backdrop clicks don't dismiss it (see UploadNoticeModal for
- *  the same choice); Escape reads as "I understand" so a stray keypress
- *  can't throw away an editing session. */
+ *  the same choice); Escape reads as "Just once!" so a stray keypress
+ *  can't throw away an editing session. "Remind me in an hour" is for
+ *  someone bouncing between published visuals all afternoon: it stamps a
+ *  device-wide snooze so re-entries stay quiet for an hour, while the
+ *  viewport frame keeps standing in for the notice. */
 export const PublishedEditGate = () => {
 	const visualId = useAtomValue(currentVisualIdAtom)
 	const published = useAtomValue(currentVisualPublishedAtom)
 	const [ack, setAck] = useAtom(publishedEditAckAtom)
+	const [snoozeUntil, setSnoozeUntil] = useAtom(publishedEditSnoozeUntilAtom)
 	const navigate = useNavigate()
 
 	// Re-arm on leaving the editor so a later re-entry warns again.
 	useEffect(() => () => setAck(null), [setAck])
 
-	const open = published && visualId !== null && ack !== visualId
+	const snoozed = snoozeUntil > Date.now()
+	const open = published && visualId !== null && ack !== visualId && !snoozed
 	const acknowledge = () => setAck(visualId)
+	const snooze = () => {
+		setSnoozeUntil(Date.now() + PUBLISHED_EDIT_SNOOZE_MS)
+		acknowledge()
+	}
 
 	return (
 		<Modal
@@ -60,8 +71,11 @@ export const PublishedEditGate = () => {
 					<Button compact onClick={() => void navigate({ to: "/" })}>
 						Go back
 					</Button>
+					<Button compact onClick={snooze}>
+						Remind me in an hour
+					</Button>
 					<Button compact onClick={acknowledge}>
-						I understand
+						Just once!
 					</Button>
 				</div>
 			</div>

@@ -5403,13 +5403,16 @@ Opening a visual that has at least one PUBLISHED instance (a publish
 record with live urls — a copied-but-unpublished snippet does not
 count, its urls are dead) puts up an acknowledge-to-continue notice —
 "This visual is already embedded. Edits you make here will affect
-published content." — with **I understand** (stay) and **Go back**
-(return to the library). While that visual stays open, the chart
-viewport wears a 4 px purple frame as the standing reminder. The
-notice re-appears on a later re-entry but not for a publish the user
-just made from the Export modal, and the frame costs no layout (an
-inset shadow, not a border) so it can't shift the export/embed size
-defaults measured off the viewport.
+published content." — with **Just once!** (stay), **Remind me in an
+hour** (stay, and keep the notice quiet for every visual opened on
+this device for the next hour — for someone working through a batch
+of published visuals) and **Go back** (return to the library). While
+that visual stays open, the chart viewport wears a 4 px purple frame
+as the standing reminder; the frame never snoozes. The notice
+re-appears on a later re-entry (once any snooze has lapsed) but not
+for a publish the user just made from the Export modal, and the frame
+costs no layout (an inset shadow, not a border) so it can't shift the
+export/embed size defaults measured off the viewport.
 
 **Export image** renders the chart in a preview iframe and saves
 it as **PNG**, **JPEG**, **SVG**, or **PDF**:

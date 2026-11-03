@@ -86,6 +86,8 @@ import {
 	saveCurrentReshapeConfig,
 	saveCurrentTooltip,
 	saveCurrentVisualId,
+	loadPublishedEditSnoozeUntil,
+	savePublishedEditSnoozeUntil,
 	saveCurrentVisualName,
 	saveDrawerHeight,
 	saveContrastAlgorithm,
@@ -918,6 +920,15 @@ export const currentVisualPublishedAtom = atom((get) => {
  *  publish made from inside the editor stamps it (the user just published on
  *  purpose — warning them about their own action would be noise). */
 export const publishedEditAckAtom = atom<string | null>(null)
+
+/** "Remind me in an hour" on that gate: epoch ms the notice stays quiet
+ *  until, for every visual on this device. The session-only ack above still
+ *  covers the visual that is open; this one survives leaving the editor. */
+export const PUBLISHED_EDIT_SNOOZE_MS = 60 * 60 * 1000
+export const publishedEditSnoozeUntilAtom = persistedAtom<number>(
+	loadPublishedEditSnoozeUntil,
+	savePublishedEditSnoozeUntil
+)
 
 export const currentEncodingsAtom = persistedAtom<Encodings>(
 	loadCurrentEncodings,

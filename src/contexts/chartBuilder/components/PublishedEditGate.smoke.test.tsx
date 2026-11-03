@@ -7,6 +7,7 @@ import {
 	currentVisualIdAtom,
 	embedInstancesAtom,
 	publishedEditAckAtom,
+	publishedEditSnoozeUntilAtom,
 } from "../store/atoms"
 import { PublishedEditGate } from "./PublishedEditGate"
 
@@ -69,7 +70,7 @@ describe("published-visual edit gate", () => {
 			"This visual is already embedded. Edits you make here will affect published content."
 		)
 
-		fireEvent.click(screen.getByText("I understand"))
+		fireEvent.click(screen.getByText("Just once!"))
 		expect(screen.queryByRole("dialog")).toBeNull()
 		expect(navigate).not.toHaveBeenCalled()
 	})
@@ -98,5 +99,47 @@ describe("published-visual edit gate", () => {
 			</TestProvider>
 		)
 		expect(screen.queryByRole("dialog")).toBeNull()
+	})
+
+	it("stays quiet for an hour after Remind me in an hour", () => {
+		let store: TestStore | undefined
+		render(
+			<TestProvider
+				initializeState={(s) => {
+					store = s
+					s.set(currentVisualIdAtom, "dv-1")
+					s.set(embedInstancesAtom, { [published.id]: published })
+				}}
+			>
+				<PublishedEditGate />
+			</TestProvider>
+		)
+		const before = Date.now()
+		fireEvent.click(screen.getByText("Remind me in an hour"))
+		expect(screen.queryByRole("dialog")).toBeNull()
+		expect(navigate).not.toHaveBeenCalled()
+		const until = store!.get(publishedEditSnoozeUntilAtom)
+		expect(until).toBeGreaterThanOrEqual(before + 60 * 60 * 1000)
+		expect(until).toBeLessThanOrEqual(Date.now() + 60 * 60 * 1000)
+	})
+
+	it("stays quiet on a fresh entry while a snooze is running, and warns again once it lapses", () => {
+		const gate = (until: number) =>
+			render(
+				<TestProvider
+					initializeState={(s) => {
+						s.set(currentVisualIdAtom, "dv-1")
+						s.set(embedInstancesAtom, { [published.id]: published })
+						s.set(publishedEditSnoozeUntilAtom, until)
+					}}
+				>
+					<PublishedEditGate />
+				</TestProvider>
+			)
+		gate(Date.now() + 10 * 60 * 1000)
+		expect(screen.queryByRole("dialog")).toBeNull()
+		cleanup()
+		gate(Date.now() - 1)
+		expect(screen.getByRole("dialog")).toBeTruthy()
 	})
 })

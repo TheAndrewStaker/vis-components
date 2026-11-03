@@ -174,6 +174,7 @@ const datasetVersionKey = (id: string, versionId: string): string =>
 	`vis-components:dataset:${id}:v:${versionId}`
 const KEY_EMBED_INSTANCES = "vis-components:embedInstances"
 const KEY_CURRENT_VISUAL = "vis-components:currentVisualId"
+const KEY_PUBLISHED_EDIT_SNOOZE = "vis-components:publishedEditSnoozeUntil"
 const KEY_CURRENT_DATASET = "vis-components:currentDatasetId"
 const KEY_CURRENT_VISUAL_NAME = "vis-components:currentVisualName"
 const KEY_CURRENT_ENCODINGS = "vis-components:currentEncodings"
@@ -1058,6 +1059,15 @@ export const loadDrawerHeight = (): number =>
 	safeGet<number>(KEY_DRAWER_HEIGHT, 240)
 export const saveDrawerHeight = (h: number): void =>
 	safeSet(KEY_DRAWER_HEIGHT, h)
+
+/** Epoch ms until which the "Already embedded" notice stays quiet on
+ *  re-entry — for every visual, on this device ("Remind me in an hour").
+ *  0 = not snoozed. A per-device convenience, so it lives here and not on
+ *  the server. */
+export const loadPublishedEditSnoozeUntil = (): number =>
+	safeGet<number>(KEY_PUBLISHED_EDIT_SNOOZE, 0)
+export const savePublishedEditSnoozeUntil = (until: number): void =>
+	safeSet(KEY_PUBLISHED_EDIT_SNOOZE, until)
 
 /** The sidebar's content floor (px): what its widest canonical row needs,
  * mirrored by the wrapper's `sm:min-w-95` in Sidebar.tsx. A per-value color
