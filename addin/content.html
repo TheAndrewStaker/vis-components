@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Zafiro live figure</title>
+		<link rel="stylesheet" href="content.css" />
+		<!-- Office.js must load before any other script that touches Office. -->
+		<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+		<script src="zafiro.js"></script>
+	</head>
+	<body>
+		<!-- Setup form: shown when this instance has no embed id yet. -->
+		<form id="setup" class="setup" hidden>
+			<div class="setup-card">
+				<label class="setup-label" for="link">Paste a Zafiro link</label>
+				<div class="setup-row">
+					<input
+						id="link"
+						name="link"
+						type="text"
+						autocomplete="off"
+						spellcheck="false"
+						placeholder="https://…/embeds/…/index.html"
+					/>
+					<button id="show" type="submit">Show</button>
+				</div>
+				<p id="setup-error" class="setup-error" role="alert" hidden></p>
+			</div>
+		</form>
+
+		<!-- Live figure: the published embed in a full-size iframe plus a
+		     hover-revealed corner control. -->
+		<div id="figure" class="figure" hidden>
+			<iframe
+				id="frame"
+				class="frame"
+				title="Zafiro visual"
+				referrerpolicy="no-referrer"
+			></iframe>
+			<div class="controls" aria-label="Figure controls">
+				<button id="reload" type="button" class="ctl" title="Reload the figure">&#x27F3;</button>
+				<button id="change" type="button" class="ctl ctl-text" title="Show a different visual">change</button>
+			</div>
+			<p id="figure-error" class="figure-error" role="alert" hidden></p>
+		</div>
+
+		<script src="content.js"></script>
+	</body>
+</html>

@@ -47,3 +47,6 @@ src/seed/examples.local.json
 # Tool caches
 *.tsbuildinfo
 .eslintcache
+
+# Scratch certs for `pnpm addin:dev` (PowerPoint add-in HTTPS dev server)
+.addin-dev/

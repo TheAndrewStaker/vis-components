@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Zafiro</title>
+		<link rel="stylesheet" href="taskpane.css" />
+		<!-- Office.js must come from the CDN (Microsoft's rule for add-ins). -->
+		<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+		<script src="zafiro.js"></script>
+	</head>
+	<body>
+		<h1>Zafiro</h1>
+		<p class="hint" id="env">Loading Office…</p>
+
+		<h2>Insert</h2>
+		<input type="text" id="link" placeholder="Paste a Zafiro link" autocomplete="off" spellcheck="false" />
+		<button id="insert" disabled>Insert</button>
+		<div class="status" id="insert-status"></div>
+
+		<h2>Refresh</h2>
+		<button id="refresh" disabled>Refresh figures</button>
+		<div class="status" id="refresh-status"></div>
+		<label class="check"><input type="checkbox" id="auto-refresh" /> Keep figures current (every 30 s)</label>
+
+		<h2>Pasted links</h2>
+		<label class="check"><input type="checkbox" id="auto-convert" /> Convert pasted Zafiro links</label>
+		<p class="hint">
+			A text box whose only content is a Zafiro link becomes the picture, at the same place and width.
+		</p>
+		<div class="status" id="convert-status"></div>
+
+		<h2>Log</h2>
+		<div class="log" id="log"></div>
+
+		<script src="taskpane.js"></script>
+		<p class="hint" id="build">build 2026-11-03d · dpi-aware insert</p>
+	</body>
+</html>

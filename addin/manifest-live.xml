@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Zafiro "live figure" — a PowerPoint CONTENT add-in (SPIKE).
+
+	A content add-in is placed ON the slide as an object; its web page
+	(content.html) renders a published Zafiro embed in an iframe, so the
+	figure on the slide is always the latest Republish.
+
+	Element order follows the ContentApp schema (Microsoft Learn,
+	"How to find the proper order of manifest elements"):
+	Id, Version, ProviderName, DefaultLocale, DisplayName, Description,
+	IconUrl, HighResolutionIconUrl, SupportUrl, AppDomains, Hosts,
+	Requirements, DefaultSettings, Permissions, AllowSnapshot.
+
+	Sideload on Mac: copy this file into
+	~/Library/Containers/com.microsoft.Powerpoint/Data/Documents/wef/
+	then restart PowerPoint and use Insert > Add-ins > My Add-ins.
+-->
+<OfficeApp
+	xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:type="ContentApp">
+
+	<!-- Fixed GUID; distinct from the Zafiro task-pane add-in. -->
+	<Id>c72d8c5c-8468-4abe-8943-13ab28f2f71a</Id>
+	<Version>0.1.0.0</Version>
+	<ProviderName>Zafiro</ProviderName>
+	<DefaultLocale>en-US</DefaultLocale>
+	<DisplayName DefaultValue="Zafiro live figure" />
+	<Description DefaultValue="Shows a published Zafiro visual live on the slide. Paste a Zafiro embed link once; the figure refreshes itself whenever the visual is republished." />
+	<IconUrl DefaultValue="https://localhost:8443/addin/icon-32.png" />
+	<HighResolutionIconUrl DefaultValue="https://localhost:8443/addin/icon-80.png" />
+	<SupportUrl DefaultValue="https://localhost:8443/addin/content.html" />
+
+	<!-- Domains the add-in frame may navigate to / embed. The published
+	     embeds are reverse-proxied under the same origin, so one entry. -->
+	<AppDomains>
+		<AppDomain>https://localhost:8443</AppDomain>
+	</AppDomains>
+
+	<Hosts>
+		<Host Name="Presentation" />
+	</Hosts>
+
+	<!-- Only the common-API Settings set is needed (per-instance
+	     settings.get/set/saveAsync). Office.js 1.1 baseline. -->
+	<Requirements>
+		<Sets DefaultMinVersion="1.1">
+			<Set Name="Settings" MinVersion="1.1" />
+		</Sets>
+	</Requirements>
+
+	<DefaultSettings>
+		<SourceLocation DefaultValue="https://localhost:8443/addin/content.html" />
+		<RequestedWidth>640</RequestedWidth>
+		<RequestedHeight>400</RequestedHeight>
+	</DefaultSettings>
+
+	<!-- Restricted is enough: it covers Settings and the active view. The
+	     add-in never reads or writes the presentation itself. -->
+	<Permissions>Restricted</Permissions>
+
+	<!-- true (the default) saves a snapshot image of the add-in with the
+	     deck, so viewers without add-in support (or offline) still see the
+	     last-rendered figure instead of a blank box. -->
+	<AllowSnapshot>true</AllowSnapshot>
+</OfficeApp>

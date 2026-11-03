@@ -1,0 +1,84 @@
+:root {
+	color-scheme: light dark;
+	--accent: #4d5bff; /* Zafiro brand-500 (electric indigo) */
+	--accent-hover: #3443f7; /* brand-600 */
+	--muted: #6b7280;
+	--border: #d4d4d8;
+	--ok: #15803d;
+	--err: #b91c1c;
+}
+* {
+	box-sizing: border-box;
+}
+body {
+	margin: 0;
+	padding: 12px 14px 20px;
+	font: 13px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+h1 {
+	font-size: 15px;
+	margin: 0 0 2px;
+}
+h2 {
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--muted);
+	margin: 18px 0 6px;
+}
+.hint {
+	color: var(--muted);
+	margin: 0 0 10px;
+}
+input[type="text"] {
+	width: 100%;
+	padding: 6px 8px;
+	font: inherit;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	margin-bottom: 8px;
+}
+button {
+	font: inherit;
+	padding: 6px 12px;
+	border: 0;
+	border-radius: 4px;
+	background: var(--accent);
+	color: #fff;
+	cursor: pointer;
+}
+button:hover:not(:disabled) {
+	background: var(--accent-hover);
+}
+button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+label.check {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 6px 0;
+}
+.status {
+	margin-top: 8px;
+	min-height: 1.4em;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+.status.ok {
+	color: var(--ok);
+}
+.status.err {
+	color: var(--err);
+}
+.log {
+	margin-top: 6px;
+	max-height: 160px;
+	overflow: auto;
+	font-family: ui-monospace, Menlo, monospace;
+	font-size: 11px;
+	color: var(--muted);
+	white-space: pre-wrap;
+	word-break: break-word;
+}

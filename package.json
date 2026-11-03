@@ -16,6 +16,7 @@
 	"scripts": {
 		"dev": "vite",
 		"embed:dev": "node scripts/embed-dev.mjs",
+		"addin:dev": "node scripts/addin-dev.mjs",
 		"typecheck": "tsc --noEmit && tsc -p server/tsconfig.check.json",
 		"lint": "eslint .",
 		"notices": "node tooling/generate-third-party-notices.js",

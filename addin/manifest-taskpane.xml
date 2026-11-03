@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Zafiro task-pane add-in for PowerPoint (SPIKE). Serve with `pnpm addin:dev`
+  (https://localhost:8443) and sideload this file; see scripts/addin-dev.mjs.
+
+  Requirement sets: SharedRuntime 1.1 (long-lived runtime for the watchers +
+  Office.addin.setStartupBehavior) and PowerPointApi 1.5 (getSelectedSlides /
+  getSelectedShapes, the floor the fallback insert path needs). The preferred
+  path — ShapeFill.setImage — is PowerPointApi 1.8 and is feature-detected at
+  runtime rather than required here, so older clients still get the fallback.
+  Mac 16.113 supports PowerPointApi 1.10.
+-->
+<OfficeApp
+	xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+	xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+	xsi:type="TaskPaneApp">
+	<Id>7f3c2a9e-5b1d-4e8a-9c2f-0d6b1e4a7c31</Id>
+	<Version>1.0.0.0</Version>
+	<ProviderName>Zafiro</ProviderName>
+	<DefaultLocale>en-US</DefaultLocale>
+	<DisplayName DefaultValue="Zafiro"/>
+	<Description DefaultValue="Insert published Zafiro figures and keep them current."/>
+	<IconUrl DefaultValue="https://localhost:8443/addin/icon-32.png"/>
+	<HighResolutionIconUrl DefaultValue="https://localhost:8443/addin/icon-80.png"/>
+	<SupportUrl DefaultValue="https://localhost:8443/addin/taskpane.html"/>
+	<AppDomains>
+		<AppDomain>https://localhost:8443</AppDomain>
+	</AppDomains>
+	<Hosts>
+		<Host Name="Presentation"/>
+	</Hosts>
+	<Requirements>
+		<Sets DefaultMinVersion="1.1">
+			<Set Name="SharedRuntime" MinVersion="1.1"/>
+			<Set Name="PowerPointApi" MinVersion="1.5"/>
+		</Sets>
+	</Requirements>
+	<DefaultSettings>
+		<SourceLocation DefaultValue="https://localhost:8443/addin/taskpane.html"/>
+	</DefaultSettings>
+	<Permissions>ReadWriteDocument</Permissions>
+	<VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+		<Hosts>
+			<Host xsi:type="Presentation">
+				<!-- lifetime="long" = shared runtime; resid must match the task pane URL everywhere. -->
+				<Runtimes>
+					<Runtime resid="Taskpane.Url" lifetime="long"/>
+				</Runtimes>
+				<DesktopFormFactor>
+					<GetStarted>
+						<Title resid="GetStarted.Title"/>
+						<Description resid="GetStarted.Description"/>
+						<LearnMoreUrl resid="Taskpane.Url"/>
+					</GetStarted>
+					<FunctionFile resid="Taskpane.Url"/>
+					<ExtensionPoint xsi:type="PrimaryCommandSurface">
+						<OfficeTab id="TabHome">
+							<Group id="Zafiro.Group">
+								<Label resid="Group.Label"/>
+								<Icon>
+									<bt:Image size="16" resid="Icon.16"/>
+									<bt:Image size="32" resid="Icon.32"/>
+									<bt:Image size="80" resid="Icon.80"/>
+								</Icon>
+								<Control xsi:type="Button" id="Zafiro.TaskpaneButton">
+									<Label resid="Button.Label"/>
+									<Supertip>
+										<Title resid="Button.Label"/>
+										<Description resid="Button.Tooltip"/>
+									</Supertip>
+									<Icon>
+										<bt:Image size="16" resid="Icon.16"/>
+										<bt:Image size="32" resid="Icon.32"/>
+										<bt:Image size="80" resid="Icon.80"/>
+									</Icon>
+									<!-- No TaskpaneID: a shared runtime supports exactly one task pane. -->
+									<Action xsi:type="ShowTaskpane">
+										<SourceLocation resid="Taskpane.Url"/>
+									</Action>
+								</Control>
+							</Group>
+						</OfficeTab>
+					</ExtensionPoint>
+				</DesktopFormFactor>
+			</Host>
+		</Hosts>
+		<Resources>
+			<bt:Images>
+				<bt:Image id="Icon.16" DefaultValue="https://localhost:8443/addin/icon-16.png"/>
+				<bt:Image id="Icon.32" DefaultValue="https://localhost:8443/addin/icon-32.png"/>
+				<bt:Image id="Icon.80" DefaultValue="https://localhost:8443/addin/icon-80.png"/>
+			</bt:Images>
+			<bt:Urls>
+				<bt:Url id="Taskpane.Url" DefaultValue="https://localhost:8443/addin/taskpane.html"/>
+			</bt:Urls>
+			<bt:ShortStrings>
+				<bt:String id="GetStarted.Title" DefaultValue="Zafiro figures"/>
+				<bt:String id="Group.Label" DefaultValue="Zafiro"/>
+				<bt:String id="Button.Label" DefaultValue="Zafiro"/>
+			</bt:ShortStrings>
+			<bt:LongStrings>
+				<bt:String id="GetStarted.Description" DefaultValue="Paste a Zafiro link to insert its picture, and keep every inserted figure current."/>
+				<bt:String id="Button.Tooltip" DefaultValue="Insert and refresh Zafiro figures"/>
+			</bt:LongStrings>
+		</Resources>
+	</VersionOverrides>
+</OfficeApp>
