@@ -5539,6 +5539,20 @@ This is the other half of the points convention in §7: physical export
 sizing + DPI stamping is what makes a size-12 label land as true 12pt
 in the destination document.
 
+**Export mode (scripts, no dialog).** `/embed/<id>?export=png|jpeg|svg|pdf`
+runs the same pipeline (`lib/exportImage.ts`, `renderExport`) on the
+embed page's own document, with no one at the dialog. Optional `width` /
+`height` (CSS px) and `ratio` (1× = 96 dpi) clamp exactly as the dialog
+clamps; absent, the size is the visual's fixed canvas size, else
+650×400, at 4×; `v` pins a dataset version as for any embed. The chart
+lays out at that size with the data table off, and when the capture
+settles the page appends `<pre id="export-result">` holding the file as
+base64, with `data-mime`, `data-bytes`, `data-width`, `data-height`,
+`data-pixel-ratio` and `data-ms`. An unknown format, a missing visual or
+version, or a failed capture appends `<pre id="export-error">` with the
+message instead. Nothing is saved or uploaded; without `export` the
+embed page behaves exactly as before.
+
 ### Single-file distribution & library bundles
 
 `pnpm build` emits ONE self-contained `dist/index.html` (JS + CSS

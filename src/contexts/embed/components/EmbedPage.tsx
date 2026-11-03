@@ -3,6 +3,12 @@ import { useParams, useSearch } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
 import { resolveDatasetVersionStrict } from "../../chartBuilder/lib/resolveDatasetVersion"
 import {
+	renderExport,
+	resolveExportSize,
+} from "../../chartBuilder/lib/exportImage"
+import type { ImageFormat } from "../../chartBuilder/lib/exportImage"
+import {
+	currentChannelConfigsAtom,
 	currentDataTableConfigAtom,
 	datasetIndexAtom,
 	previewVersionIdAtom,
@@ -110,6 +116,9 @@ export const EmbedPage = () => {
 		setPreviewVersionId,
 	])
 
+	if (search.export !== undefined) {
+		return <ExportMode format={search.export} state={state} search={search} />
+	}
 	if (state.status === "loading") {
 		return (
 			<div className="flex h-screen items-center justify-center text-sm vc-muted">
@@ -157,5 +166,119 @@ export const EmbedPage = () => {
 		<div data-export-root className="h-screen w-screen">
 			{body}
 		</div>
+	)
+}
+
+type ExportResult =
+	| { status: "working" }
+	| { status: "done"; blob: Blob; base64: string; ms: number }
+	| { status: "failed"; message: string }
+
+const blobToBase64 = (blob: Blob): Promise<string> =>
+	new Promise((resolve, reject) => {
+		const reader = new FileReader()
+		reader.addEventListener("load", () =>
+			resolve(String(reader.result).replace(/^data:[^,]*,/, ""))
+		)
+		reader.addEventListener("error", () => reject(reader.error))
+		reader.readAsDataURL(blob)
+	})
+
+const ExportError = ({ message }: { message: string }) => (
+	<pre id="export-error">{message}</pre>
+)
+
+/** `?export=png|jpeg|svg|pdf`: lay the chart out at the export size (data
+ *  table off), run the Export dialog's pipeline on this page's own
+ *  document, and write the file into `#export-result` as base64 with its
+ *  mime type, byte count, size, resolution and render time as data
+ *  attributes. Any failure lands in `#export-error`. Nothing is saved. */
+const ExportMode = ({
+	format,
+	state,
+	search,
+}: {
+	format: ImageFormat | null
+	state: LoadState
+	search: { width?: number; height?: number; ratio?: number }
+}) => {
+	const canvasSize = useAtomValue(currentChannelConfigsAtom).canvasSize
+	const { width, height, pixelRatio } = resolveExportSize({
+		canvasSize,
+		width: search.width,
+		height: search.height,
+		ratio: search.ratio,
+	})
+	const ready = format !== null && state.status === "ready"
+	const [result, setResult] = useState<ExportResult>({ status: "working" })
+
+	useEffect(() => {
+		if (!ready) return
+		let cancelled = false
+		const started = Date.now()
+		;(async () => {
+			try {
+				const blob = await renderExport(
+					document,
+					format,
+					width,
+					height,
+					pixelRatio
+				)
+				const base64 = await blobToBase64(blob)
+				if (cancelled) return
+				setResult({
+					status: "done",
+					blob,
+					base64,
+					ms: Math.round(Date.now() - started),
+				})
+			} catch (error) {
+				if (cancelled) return
+				setResult({
+					status: "failed",
+					message: error instanceof Error ? error.message : String(error),
+				})
+			}
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [ready, format, width, height, pixelRatio])
+
+	if (format === null) return <ExportError message="Unknown format." />
+	if (state.status === "loading") return null
+	if (state.status === "missing-visual") {
+		return <ExportError message="Visualization not found." />
+	}
+	if (state.status === "missing-version") {
+		return (
+			<ExportError
+				message={`Pinned version no longer exists: ${state.requestedVersionId}`}
+			/>
+		)
+	}
+	// The capture boundary at exactly the export size, as the dialog's
+	// preview iframe lays it out; the result sits outside it.
+	return (
+		<>
+			<div data-export-root style={{ width, height }}>
+				<ChartCanvas />
+			</div>
+			{result.status === "done" && (
+				<pre
+					id="export-result"
+					data-mime={result.blob.type}
+					data-bytes={result.blob.size}
+					data-width={width}
+					data-height={height}
+					data-pixel-ratio={pixelRatio}
+					data-ms={result.ms}
+				>
+					{result.base64}
+				</pre>
+			)}
+			{result.status === "failed" && <ExportError message={result.message} />}
+		</>
 	)
 }
