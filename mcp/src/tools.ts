@@ -1,0 +1,341 @@
+/** The MCP tools. Handlers stay thin: chart logic is the editor's own lib
+ *  (`chartSpec.ts`, `datasetFromRows.ts`); this file resolves what those
+ *  functions need from the API and writes their result back. */
+
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
+import { z } from "zod"
+
+import {
+	chartSpecVocabulary,
+	composeVisual,
+	editVisual,
+	SPEC_KEYS,
+	type ChartSpec,
+	type ChartSpecEdit,
+	type ComposeDeps,
+	type SpecProblem,
+} from "../../src/contexts/chartBuilder/lib/chartSpec"
+import { datasetsEqual } from "../../src/contexts/chartBuilder/lib/datasetDedupe"
+import { datasetFromRows } from "../../src/contexts/chartBuilder/lib/datasetFromRows"
+import { themeOf } from "../../src/contexts/chartBuilder/lib/systemThemes"
+import type {
+	DatasetMeta,
+	FieldType,
+	SavedTheme,
+	Visual,
+} from "../../src/contexts/chartBuilder/lib/types"
+import type { Api } from "./api"
+
+const UNDO_DEPTH = 20
+
+/** The collections a chart write reads from and writes to. */
+const CHART_COLLECTIONS = ["visuals", "datasets", "themes"] as const
+
+const ok = (value: unknown): CallToolResult => ({
+	content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
+})
+
+const refused = (message: string, problems?: SpecProblem[]): CallToolResult => ({
+	isError: true,
+	content: [{ type: "text", text: JSON.stringify(problems ? { message, problems } : { message }, null, 2) }],
+})
+
+/** A thrown error (HTTP failure, content-version mismatch) as tool output. */
+const guarded =
+	<A>(handler: (args: A) => Promise<CallToolResult>) =>
+	async (args: A): Promise<CallToolResult> => {
+		try {
+			return await handler(args)
+		} catch (error) {
+			return refused(error instanceof Error ? error.message : String(error))
+		}
+	}
+
+/** A data set's fields at its latest version, with their effective types. */
+const fieldsOf = (meta: DatasetMeta): Array<{ name: string; type: FieldType }> => {
+	const latest = meta.versions.find((v) => v.id === meta.latestVersionId)
+	return (latest?.fields ?? meta.fields).map((f) => ({ name: f.name, type: f.inferredType }))
+}
+
+const datasetSummary = (meta: DatasetMeta) => ({
+	id: meta.id,
+	name: meta.name,
+	fields: fieldsOf(meta),
+	rowCount: meta.versions.find((v) => v.id === meta.latestVersionId)?.rowCount ?? 0,
+	latestVersionId: meta.latestVersionId,
+})
+
+/** A theme name with case, spaces and punctuation taken out. */
+const nameKey = (name: string) => name.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")
+
+export const createHandlers = (api: Api) => {
+	const undo = new Map<string, Visual[]>()
+
+	const links = async (id: string) => {
+		const base = await api.baseUrl()
+		return {
+			editorUrl: `${base}/editor/${encodeURIComponent(id)}`,
+			embedUrl: `${base}/embed/${encodeURIComponent(id)}`,
+			pictureUrl: `${base}/embed/${encodeURIComponent(id)}?export=png`,
+		}
+	}
+
+	const chartResult = async (visual: Visual, warnings: string[]) =>
+		ok({ id: visual.id, name: visual.name, ...(await links(visual.id)), warnings })
+
+	/** The theme a spec names (id, else a unique name match), else the
+	 *  server's default-theme row, else the first system theme. A name that
+	 *  matches nothing is a problem. */
+	const resolveTheme = async (wanted: string | undefined): Promise<SavedTheme | SpecProblem> => {
+		const themes = await api.themes()
+		if (wanted !== undefined) {
+			const byName = themes.filter((t) => nameKey(t.name) === nameKey(wanted))
+			const hit = themes.find((t) => t.id === wanted) ?? (byName.length === 1 ? byName[0] : undefined)
+			if (hit) return hit
+			return {
+				path: "themeId",
+				message: `no theme "${wanted}"; themes are ${themes.map((t) => `"${t.name}" (${t.id})`).join(", ")}`,
+			}
+		}
+		return defaultTheme(themes)
+	}
+
+	const defaultTheme = async (themes?: SavedTheme[]): Promise<SavedTheme> => {
+		const [all, defaultId] = await Promise.all([themes ?? api.themes(), api.defaultThemeId()])
+		return all.find((t) => t.id === defaultId) ?? all[0]
+	}
+
+	const datasetMeta = async (datasetId: string | null): Promise<DatasetMeta | undefined> =>
+		datasetId ? (await api.datasetIndex())[datasetId] : undefined
+
+	const saveEdit = async (base: Visual, next: Visual, warnings: string[]) => {
+		await api.putVisual(next)
+		const stack = undo.get(base.id) ?? []
+		stack.push(base)
+		if (stack.length > UNDO_DEPTH) stack.shift()
+		undo.set(base.id, stack)
+		return chartResult(next, warnings)
+	}
+
+	return {
+		chart_vocabulary: guarded(async () => {
+			const [folders, themes] = await Promise.all([api.folders(), api.themes()])
+			const fallback = (await defaultTheme(themes)).id
+			return ok({
+				...chartSpecVocabulary(),
+				folders: folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId })),
+				themes: themes.map((t) => ({ id: t.id, name: t.name, default: t.id === fallback })),
+			})
+		}),
+
+		list_datasets: guarded(async () =>
+			ok(Object.values(await api.datasetIndex()).map(datasetSummary))
+		),
+
+		create_dataset: guarded(
+			async (args: { name: string; rows: Record<string, unknown>[]; types?: Record<string, FieldType> }) => {
+				await api.assertCurrent(["datasets"])
+				const index = await api.datasetIndex()
+				const { dataset, problems, duplicateOf } = datasetFromRows(args, {
+					existing: Object.values(index),
+				})
+				if (problems.length > 0) return refused("the rows can't be stored as a data set", problems)
+				// The hash is a PROBABLE match; reuse only once the stored body
+				// proves equal, as the editor's upload does.
+				if (duplicateOf && index[duplicateOf]) {
+					const stored = await api.dataset(duplicateOf)
+					if (datasetsEqual(stored, dataset))
+						return ok({ ...datasetSummary(index[duplicateOf]), reused: true })
+				}
+				await api.putDataset(dataset)
+				return ok({
+					id: dataset.id,
+					name: dataset.name,
+					fields: dataset.fields.map((f) => ({ name: f.name, type: f.inferredType })),
+					rowCount: dataset.versions[0]?.rows.length ?? 0,
+				})
+			}
+		),
+
+		create_chart: guarded(async (spec: ChartSpec) => {
+			await api.assertCurrent(CHART_COLLECTIONS)
+			const [meta, theme, folders] = await Promise.all([
+				datasetMeta(typeof spec.datasetId === "string" ? spec.datasetId : null),
+				resolveTheme(spec.themeId),
+				api.folders(),
+			])
+			const pre: SpecProblem[] = []
+			if (!meta) pre.push({ path: "datasetId", message: `no data set with id "${spec.datasetId}"; see list_datasets` })
+			if (!("id" in theme)) pre.push(theme)
+			if (pre.length > 0 || !meta || !("id" in theme)) return refused("the chart wasn't created", pre)
+			const deps: ComposeDeps = {
+				fields: fieldsOf(meta),
+				theme: themeOf(theme),
+				folderIds: new Set(folders.map((f) => f.id)),
+				latestVersionId: meta.latestVersionId,
+			}
+			const { visual, problems, warnings } = composeVisual({ ...spec, themeId: theme.id }, deps)
+			if (problems.length > 0) return refused("the chart wasn't created", problems)
+			await api.putVisual(visual)
+			return chartResult(visual, warnings)
+		}),
+
+		get_chart: guarded(async ({ id }: { id: string }) => {
+			const visual = await api.visual(id)
+			if (!visual) return refused(`no chart with id "${id}"`)
+			const encodings = Object.fromEntries(
+				Object.entries(visual.encodings ?? {}).flatMap(([ch, enc]) =>
+					enc?.field ? [[ch, enc.field]] : []
+				)
+			)
+			return ok({
+				id: visual.id,
+				name: visual.name,
+				folderId: visual.folderId,
+				datasetId: visual.datasetId,
+				themeId: visual.themeId ?? null,
+				encodings,
+				fieldTypes: visual.fieldTypeOverrides ?? {},
+				title: visual.labelsConfig?.title ?? "",
+				subtitle: visual.labelsConfig?.subtitle ?? "",
+				...(visual.deletedAt ? { trashed: true } : {}),
+				...(await links(visual.id)),
+			})
+		}),
+
+		edit_chart: guarded(async ({ id, patch }: { id: string; patch: ChartSpecEdit }) => {
+			await api.assertCurrent(CHART_COLLECTIONS)
+			const base = await api.visual(id)
+			if (!base) return refused(`no chart with id "${id}"`)
+			const meta = await datasetMeta(base.datasetId)
+			// A visual whose theme is gone renders under the default; edit
+			// against that too.
+			const named = await resolveTheme(base.themeId)
+			const theme = "id" in named ? named : await defaultTheme()
+			const { visual, problems, warnings } = editVisual(base, patch, {
+				fields: meta ? fieldsOf(meta) : [],
+				theme: themeOf(theme),
+				latestVersionId: meta?.latestVersionId ?? null,
+			})
+			if (problems.length > 0) return refused("the chart wasn't changed", problems)
+			return saveEdit(base, visual, warnings)
+		}),
+
+		undo_chart_edit: guarded(async ({ id }: { id: string }) => {
+			const previous = undo.get(id)?.pop()
+			if (!previous) return refused(`nothing to undo for "${id}" in this session`)
+			await api.assertCurrent(CHART_COLLECTIONS)
+			const restored = { ...previous, updatedAt: Date.now() }
+			try {
+				await api.putVisual(restored)
+			} catch (error) {
+				undo.get(id)?.push(previous)
+				throw error
+			}
+			return chartResult(restored, [])
+		}),
+	}
+}
+
+export type Handlers = ReturnType<typeof createHandlers>
+
+const ENCODINGS_FIRST =
+	"Zafiro is encodings-first: you say which field goes to which channel (x, y, hue, length, …) and the chart type follows from that."
+
+const specShape = {
+	datasetId: z.string().describe(SPEC_KEYS.datasetId),
+	folderId: z.string().nullable().describe(SPEC_KEYS.folderId),
+	name: z.string().optional().describe(SPEC_KEYS.name),
+	family: z.string().optional().describe(SPEC_KEYS.family),
+	variation: z.string().optional().describe(SPEC_KEYS.variation),
+	encodings: z.record(z.string(), z.string()).describe(SPEC_KEYS.encodings),
+	fieldTypes: z.record(z.string(), z.string()).optional().describe(SPEC_KEYS.fieldTypes),
+	title: z.string().optional().describe(SPEC_KEYS.title),
+	subtitle: z.string().optional().describe(SPEC_KEYS.subtitle),
+	axes: z.record(z.string(), z.record(z.string(), z.unknown())).optional().describe(SPEC_KEYS.axes),
+	stack: z.string().optional().describe(SPEC_KEYS.stack),
+	themeId: z.string().optional().describe(`${SPEC_KEYS.themeId} A theme name works too.`),
+}
+
+const { datasetId: _d, folderId: _f, variation: _v, themeId: _t, ...editShape } = specShape
+
+/** Register every tool on `server`. Unknown keys pass through to the lib,
+ *  whose problems name them (with a did-you-mean) instead of zod dropping
+ *  them silently. */
+export const registerTools = (server: McpServer, handlers: Handlers): void => {
+	server.registerTool(
+		"chart_vocabulary",
+		{
+			description: `What a chart spec can say: channels with the field types they accept, chart families and their variations, spec keys, folders and themes. ${ENCODINGS_FIRST} Call this first.`,
+		},
+		() => handlers.chart_vocabulary(undefined)
+	)
+	server.registerTool(
+		"list_datasets",
+		{
+			description:
+				"The data sets on this Zafiro server: id, name, fields with their types, row count and latest version. Charts are built from these fields.",
+		},
+		() => handlers.list_datasets(undefined)
+	)
+	server.registerTool(
+		"create_dataset",
+		{
+			description:
+				"Store rows (an array of flat objects) as a new Zafiro data set and return its id and inferred field types; identical data already stored under the same name is reused instead.",
+			inputSchema: {
+				name: z.string().describe("The data set's name."),
+				rows: z.array(z.record(z.string(), z.unknown())).describe("Rows as objects: column → text, number, boolean or null."),
+				types: z
+					.record(z.string(), z.enum(["quantitative", "categorical", "temporal", "ordinal"]))
+					.optional()
+					.describe("Column → type, overriding inference."),
+			},
+		},
+		(args) => handlers.create_dataset(args)
+	)
+	server.registerTool(
+		"create_chart",
+		{
+			description: `Create a Zafiro chart from a spec and return its editor, embed and picture links. ${ENCODINGS_FIRST} Problems come back as an error and nothing is saved.`,
+			inputSchema: z.object(specShape).passthrough(),
+		},
+		(args) => handlers.create_chart(args as unknown as ChartSpec)
+	)
+	server.registerTool(
+		"get_chart",
+		{
+			description: "A Zafiro chart's summary: name, folder, data set, channel → field encodings, titles and links.",
+			inputSchema: { id: z.string().describe("The chart id.") },
+		},
+		(args) => handlers.get_chart(args)
+	)
+	server.registerTool(
+		"edit_chart",
+		{
+			description: `Change a Zafiro chart: only the keys the patch names change (a null encoding unmaps the channel, a null axis bound clears it). ${ENCODINGS_FIRST}`,
+			inputSchema: {
+				id: z.string().describe("The chart id."),
+				patch: z
+					.object({
+						...editShape,
+						encodings: z
+							.record(z.string(), z.string().nullable())
+							.optional()
+							.describe(SPEC_KEYS.encodings),
+					})
+					.passthrough(),
+			},
+		},
+		(args) => handlers.edit_chart(args as unknown as { id: string; patch: ChartSpecEdit })
+	)
+	server.registerTool(
+		"undo_chart_edit",
+		{
+			description: "Undo the last edit_chart on this chart made in this session (up to 20 deep).",
+			inputSchema: { id: z.string().describe("The chart id.") },
+		},
+		(args) => handlers.undo_chart_edit(args)
+	)
+}

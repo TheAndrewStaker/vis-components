@@ -67,13 +67,17 @@ import type {
 	Visual,
 } from "../types"
 import type { StorageContentAdapter } from "./adapter"
+import {
+	putDatasetMeta,
+	syncDatasetVersionsVia,
+	writeDatasetTriplet,
+} from "./datasetTriplet"
 import { CONTENT_MIGRATIONS } from "./migrations"
 import {
 	assertNotStale,
 	contentVersionHeader,
 	staleBuildErrorFrom,
 } from "./staleBuild"
-import { syncDatasetVersions } from "./syncDatasetVersions"
 import { pngFileFromDataUrl, thumbnailFormData } from "./thumbnailUpload"
 import { migrateVersioned } from "./versioning"
 
@@ -238,31 +242,6 @@ const fetchContentVersions = async (): Promise<Record<string, number>> => {
 	return (await response.json()) as Record<string, number>
 }
 
-/** Store one dataset's derived metadata. Sub-resource routes go through
- *  `request()` like everything else (the path prefix carries the parent id),
- *  so any future hardening of the shared helper covers these writes too. */
-const putDatasetMeta = (id: string, meta: DatasetMeta): Promise<void> =>
-	request(
-		"PUT",
-		`datasets/${encodeURIComponent(id)}`,
-		"meta",
-		serialize(meta),
-		JSON_HEADERS
-	)
-
-const putDatasetVersion = async (
-	datasetId: string,
-	version: { id: string; rows: Array<Record<string, string>> }
-): Promise<void> => {
-	await request(
-		"PUT",
-		`datasets/${encodeURIComponent(datasetId)}/versions`,
-		version.id,
-		serialize(version),
-		JSON_HEADERS
-	)
-}
-
 /** Run `work` over `items` at most `limit` at a time. The hydration pass
  *  downloads full dataset bodies — unbounded parallelism would inflate the
  *  whole corpus at once, and strictly serial made the first post-deploy boot
@@ -372,19 +351,6 @@ export const createHttpStorageAdapter = (): StorageContentAdapter => {
 			if (typeof v.thumbnail === "string") uploadedThumbnails.set(v.id, v.thumbnail)
 		}
 	}
-	const putDataset = async (id: string, serialized: string): Promise<void> => {
-		// The header tells the server this client manages the per-version
-		// bodies itself (the PUTs/DELETEs that follow this write). Without it —
-		// a body PUT from the previous bundle during a rolling deploy — the
-		// server purges the stored per-version rows, because they describe the
-		// PREVIOUS body and would otherwise keep serving versions the write
-		// may have removed.
-		await request("PUT", "datasets", id, serialized, {
-			...JSON_HEADERS,
-			"x-vis-versions-managed": "1",
-		})
-	}
-
 	// One fetch per session, shared by every collection's load.
 	let versionsCache: Promise<Record<string, number>> | null = null
 	const contentVersions = (): Promise<Record<string, number>> =>
@@ -491,32 +457,14 @@ export const createHttpStorageAdapter = (): StorageContentAdapter => {
 	 *  repaired on the next boot, never as fresh-meta-over-stale-versions.
 	 *  The ordering is load-bearing; both the normal save and the migration
 	 *  write-back go through here so it can't drift. */
-	const putDatasetTriplet = async (
-		dataset: Dataset,
-		serialized: string
-	): Promise<void> => {
-		await putDataset(dataset.id, serialized)
-		await splitDatasetVersions(dataset)
-		await putDatasetMeta(dataset.id, datasetMetaFrom(dataset))
-	}
+	const putDatasetTriplet = (dataset: Dataset, serialized: string): Promise<void> =>
+		writeDatasetTriplet(request, dataset, serialized, splitDatasetVersions)
 
 	const splitDatasetVersions = async (dataset: Dataset): Promise<void> => {
-		await syncDatasetVersions(
+		await syncDatasetVersionsVia(
+			request,
 			dataset,
 			knownVersionIds.get(dataset.id),
-			{
-				putVersion: async (version) => {
-					await putDatasetVersion(dataset.id, version)
-					return true
-				},
-				deleteVersion: async (versionId) => {
-					await request(
-						"DELETE",
-						`datasets/${encodeURIComponent(dataset.id)}/versions`,
-						versionId
-					)
-				},
-			},
 			writtenVersions
 		)
 		knownVersionIds.set(
@@ -554,7 +502,7 @@ export const createHttpStorageAdapter = (): StorageContentAdapter => {
 		const meta = datasetMetaFrom(whole)
 		try {
 			await splitDatasetVersions(whole)
-			await putDatasetMeta(id, meta)
+			await putDatasetMeta(request, id, meta)
 		} catch (error) {
 			// eslint-disable-next-line no-console
 			console.warn(

@@ -94,6 +94,37 @@ above 25 MB and are rejected above 100 MB (browser performance is the real
 constraint). Note: Node prints an `ExperimentalWarning` for `node:sqlite` on
 startup; it's expected.
 
+## MCP server
+
+`mcp/` is an MCP server (stdio) that lets Claude make and edit charts on a
+running self-host server through its existing HTTP API. Build it with
+`pnpm mcp:build` (also part of `pnpm build`): the output, `mcp/dist/main.js`,
+is one file with no runtime dependencies beyond Node 22. It needs one
+environment variable, `VIS_API_URL`, the self-host server's URL. For Claude
+Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "zafiro": {
+      "command": "node",
+      "args": ["/path/to/vis-components/mcp/dist/main.js"],
+      "env": { "VIS_API_URL": "http://localhost:8080" }
+    }
+  }
+}
+```
+
+Tools:
+
+- `chart_vocabulary`: channels, chart families and variations, spec keys, folders and themes.
+- `list_datasets`: data sets with their fields, types and row counts.
+- `create_dataset`: store rows as a new data set (an identical one is reused).
+- `create_chart`: make a chart from an encodings-first spec; returns editor, embed and picture links.
+- `get_chart`: a chart's encodings, titles and links.
+- `edit_chart`: change only the keys a patch names.
+- `undo_chart_edit`: undo this session's last `edit_chart` on a chart.
+
 ## Verifying changes
 
 ```
