@@ -97,6 +97,41 @@
 	}
 }
 
+/* Caution under white — pink, the SOFT warning: for "proceed anyway"
+ * actions that deserve a nudge but aren't destructive (the red error
+ * variant is for deletes). pink-600 on white is 4.6:1. */
+.bg-caution-text-aa {
+	@apply border-y border-t-pink-500 border-b-pink-700 bg-pink-600 text-white;
+}
+
+.bg-caution-text-aa:hover:not(:disabled) {
+	background-color: color-mix(in srgb, var(--color-pink-600), black 10%);
+	border-top-color: color-mix(in srgb, var(--color-pink-500), black 10%);
+}
+
+.bg-caution-text-aa:active:not(:disabled) {
+	background-color: color-mix(in srgb, var(--color-pink-600), black 20%);
+	border-top-color: color-mix(in srgb, var(--color-pink-500), black 20%);
+}
+
+:global(.dark) {
+	/* Caution under stone-200 */
+
+	.bg-caution-text-aa {
+		@apply border-y border-t-pink-700 border-b-pink-900 bg-pink-800 text-stone-200;
+	}
+
+	.bg-caution-text-aa:hover:not(:disabled) {
+		background-color: color-mix(in srgb, var(--color-pink-800), black 10%);
+		border-top-color: color-mix(in srgb, var(--color-pink-700), black 10%);
+	}
+
+	.bg-caution-text-aa:active:not(:disabled) {
+		background-color: color-mix(in srgb, var(--color-pink-800), black 20%);
+		border-top-color: color-mix(in srgb, var(--color-pink-700), black 20%);
+	}
+}
+
 /* Warning under white */
 .bg-warning-text-aa {
 	@apply border-y border-t-warning-300 border-b-warning-500 bg-warning-400 text-stone-700;
@@ -175,6 +210,12 @@
 .bg-warning-text-aa[aria-disabled]:hover,
 .bg-warning-text-aa:disabled,
 .bg-warning-text-aa[aria-disabled],
+.bg-caution-text-aa:disabled:active,
+.bg-caution-text-aa[aria-disabled]:active,
+.bg-caution-text-aa:disabled:hover,
+.bg-caution-text-aa[aria-disabled]:hover,
+.bg-caution-text-aa:disabled,
+.bg-caution-text-aa[aria-disabled],
 .bg-error-text-aa:disabled:active,
 .bg-error-text-aa[aria-disabled]:active,
 .bg-error-text-aa:disabled:hover,

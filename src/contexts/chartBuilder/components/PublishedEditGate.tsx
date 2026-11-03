@@ -71,10 +71,12 @@ export const PublishedEditGate = () => {
 					<Button compact onClick={() => void navigate({ to: "/" })}>
 						Go back
 					</Button>
-					<Button compact onClick={snooze}>
+					{/* The two "edit anyway" choices are pink — a soft warning,
+					    not the brand purple of the safe "Go back". */}
+					<Button compact caution onClick={snooze}>
 						Remind me in an hour
 					</Button>
-					<Button compact onClick={acknowledge}>
+					<Button compact caution onClick={acknowledge}>
 						Just once!
 					</Button>
 				</div>

@@ -170,6 +170,25 @@ const useViewportSize = () => {
 
 export const ExportModal = ({ open, onClose, visualId }: Props) => {
 	const [tab, setTab] = useState<Tab>("export")
+	// Each open lands on the tab with work in it: Embed when this visual is
+	// already published (its snippets and republish live there, and the
+	// editor is showing the published-content warning), Export image
+	// otherwise. Tab state survives while the modal sits mounted but closed,
+	// so the choice is remade on the open transition — and only then, so
+	// publishing or unpublishing from the Embed tab never yanks the user off
+	// it. Same adjust-state-on-prop-change pattern as the snippet drafts.
+	const embedInstances = useAtomValue(embedInstancesAtom)
+	const isPublished = Object.values(embedInstances).some(
+		(i) =>
+			i.visualId === visualId &&
+			i.publishId !== undefined &&
+			i.publishedUrls !== undefined
+	)
+	const [seenOpen, setSeenOpen] = useState(false)
+	if (open !== seenOpen) {
+		setSeenOpen(open)
+		if (open) setTab(isPublished ? "embed" : "export")
+	}
 	const [width, setWidth] = useState(DEFAULT_WIDTH)
 	const [height, setHeight] = useState(DEFAULT_HEIGHT)
 	const [aspectLocked, setAspectLocked] = useState(false)
@@ -682,9 +701,11 @@ const EmbedTab = ({
 					{publishLabel}
 				</Button>
 				{/* Always present so the row doesn't reflow on publish; greyed
-				    until there is something to unpublish. */}
+				    until there is something to unpublish. Red: it kills the
+				    public URL. */}
 				<Button
 					compact
+					danger
 					disabled={busy !== null || !published}
 					onClick={() => void onUnpublish()}
 				>
@@ -714,18 +735,24 @@ const EmbedTab = ({
 								>
 									{s.label}
 								</label>
-								<Textarea
-									id={`${snippetIdBase}-${s.key}`}
-									value={value}
-									onChange={(e) =>
-										setDrafts((prev) => ({ ...prev, [s.key]: e.target.value }))
-									}
-									rows={3}
-									className="font-mono"
-									onFocus={(e) => e.currentTarget.select()}
-								/>
-								<div className="flex items-center justify-end">
-									<CopyButton value={value} label="Copy snippet" onCopied={onCopied} />
+								{/* Copy is a purple chip in the field's corner, shown on hover. */}
+								<div className="relative group/copy">
+									<Textarea
+										id={`${snippetIdBase}-${s.key}`}
+										value={value}
+										onChange={(e) =>
+											setDrafts((prev) => ({ ...prev, [s.key]: e.target.value }))
+										}
+										rows={3}
+										className="w-full font-mono pr-9"
+										onFocus={(e) => e.currentTarget.select()}
+									/>
+									<CopyButton
+										value={value}
+										label="Copy snippet"
+										onCopied={onCopied}
+										ghost
+									/>
 								</div>
 							</div>
 						)

@@ -13,6 +13,10 @@ export type ButtonProps = Omit<JSX.IntrinsicElements["button"], "ref"> & {
 	 * style paints brand-colored top and bottom BORDERS, so a background-only
 	 * override leaves a red button with purple edges. */
 	danger?: boolean
+	/** Soft warning — pink fill. For "proceed anyway" choices that deserve
+	 * a nudge but aren't destructive (e.g. editing already-published
+	 * content). `danger` stays for deletes. */
+	caution?: boolean
 }
 
 const spacing = {
@@ -33,10 +37,21 @@ const filled =
 const dangerStyles =
 	"bg-error-text-aa transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
 
+// `bg-caution-text-aa` is the pink sibling (same file).
+const cautionStyles =
+	"bg-caution-text-aa transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-	function Button({ className, compact, danger, themeInfo, ...p }, ref) {
+	function Button(
+		{ className, compact, danger, caution, themeInfo, ...p },
+		ref
+	) {
 		const sizeClass = compact ? spacing.compact : spacing.regular
-		const themeClass = danger ? dangerStyles : filled
+		const themeClass = danger
+			? dangerStyles
+			: caution
+				? cautionStyles
+				: filled
 		return (
 			<button
 				ref={ref}
