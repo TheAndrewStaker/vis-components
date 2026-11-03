@@ -1,3 +1,4 @@
+import { max } from "d3-array"
 import { inferFieldType } from "./inferFieldType"
 import type { DatasetView, Field } from "./types"
 
@@ -240,7 +241,7 @@ export const meltDataset = (
 ): ReshapedData => {
 	const idFields = presentIdFields(fields, config)
 	const groups = presentGroups(fields, config)
-	const depth = Math.max(0, ...groups.map((g) => g.fields.length))
+	const depth = Math.max(0, max(groups, (g) => g.fields.length) ?? 0)
 	const outRows: Array<Record<string, string>> = []
 	for (const row of rows) {
 		const base: Record<string, string> = {}

@@ -1,3 +1,4 @@
+import { max } from "d3-array"
 import { DEFAULT_SHAPE_CONFIG } from "../../../lib/channelConfig"
 import { GlyphMark, resolveGlyph, stripNudge } from "../../../lib/customGlyphs"
 import { orderCategories } from "../../../lib/legendSections"
@@ -71,7 +72,7 @@ export const ShapeLegend = ({
 		stripNudge(resolveGlyph(indexer(v), configs.shape?.customGlyphs))
 	const side = Math.max(
 		16,
-		...unique.map((v) => swatchGlyphBox(glyphOf(v), r, 1)),
+		max(unique, (v) => swatchGlyphBox(glyphOf(v), r, 1)) ?? 16,
 	)
 	const rows = unique.map((v) => {
 		const fillOverride = fillOverrides[v]

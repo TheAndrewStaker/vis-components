@@ -13,6 +13,7 @@
  *  caller may pre-measure widths via canvas.measureText and pass them in
  *  to tighten the result. */
 
+import { max, min } from "d3-array"
 import { DEFAULT_TICKMARK_CONFIG } from "./channelConfig"
 import {
 	estimateExtraBottomMargin,
@@ -1044,8 +1045,8 @@ const estimateNaturalDims = (
 	// can then differ within that envelope via colWeights/rowWeights).
 	const xWeights = input.panels.map((p) => Math.max(1, p.xWeight))
 	const yWeights = input.panels.map((p) => Math.max(1, p.yWeight))
-	const maxXWeight = xWeights.length > 0 ? Math.max(...xWeights) : 1
-	const maxYWeight = yWeights.length > 0 ? Math.max(...yWeights) : 1
+	const maxXWeight = max(xWeights) ?? 1
+	const maxYWeight = max(yWeights) ?? 1
 	const weightedInnerW = maxXWeight * minPxPerCat
 	const weightedInnerH = maxYWeight * minPxPerCat
 	// When scroll mode is on (minPanelPx > 0), enforce BOTH the per-panel
@@ -1911,18 +1912,14 @@ export const solveFacetLayout = (rawInput: SolverInput): FacetLayoutSpec => {
 
 	// Shared title rects, anchored to the plot-grid spans (so left/right
 	// alignment matches the actual plot edges, not the canvas edges).
-	const plotLeft = panels.length > 0
-		? Math.min(...panels.map((p) => p.inner.x))
-		: gridOriginX + cellMargin.left + leftFloor
-	const plotRight = panels.length > 0
-		? Math.max(...panels.map((p) => p.inner.x + p.inner.width))
-		: canvasW - cellMargin.right
-	const plotTop = panels.length > 0
-		? Math.min(...panels.map((p) => p.inner.y))
-		: gridOriginY + facetLabelHeight + cellMargin.top
-	const plotBottom = panels.length > 0
-		? Math.max(...panels.map((p) => p.inner.y + p.inner.height))
-		: canvasH - cellMargin.bottom
+	const plotLeft =
+		min(panels, (p) => p.inner.x) ?? gridOriginX + cellMargin.left + leftFloor
+	const plotRight =
+		max(panels, (p) => p.inner.x + p.inner.width) ?? canvasW - cellMargin.right
+	const plotTop =
+		min(panels, (p) => p.inner.y) ?? gridOriginY + facetLabelHeight + cellMargin.top
+	const plotBottom =
+		max(panels, (p) => p.inner.y + p.inner.height) ?? canvasH - cellMargin.bottom
 
 	// Title positions use the font-derived base reserves (titleReserve,
 	// etc. — the same bands computeOuterReserves reserved)

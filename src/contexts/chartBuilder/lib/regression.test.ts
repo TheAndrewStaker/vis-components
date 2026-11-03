@@ -227,3 +227,10 @@ describe("sampleRange", () => {
 		expect(sampleRange(Number.NaN, 1)).toEqual([])
 	})
 })
+
+describe("fitPolynomial — large inputs", () => {
+	it("reports the x extent of more points than a call takes arguments", () => {
+		const pts = Array.from({ length: 200_000 }, (_, i): [number, number] => [i - 5, 2 * i])
+		expect(fitPolynomial(pts, 1)?.xExtent).toEqual([-5, 199_994])
+	})
+})

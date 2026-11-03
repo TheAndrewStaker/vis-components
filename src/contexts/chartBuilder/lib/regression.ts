@@ -1,12 +1,14 @@
 /** Polynomial least-squares regression (linear = degree 1) with pointwise
  * confidence intervals for the mean response. Powers the scatter plot's
- * regression-line overlay. Self-contained — no dependency beyond stdlib.
+ * regression-line overlay. Self-contained — no dependency beyond d3-array.
  *
  * Numerical approach: x values are centered and scaled to unit variance
  * before building the Vandermonde design matrix, so the normal equations stay
  * well-conditioned even for offset data (e.g. years 2000–2026) and higher
  * degrees. The reported `coefficients` are mapped back to original x units;
  * `predict`/`ciAt` evaluate in the stable centered basis. */
+
+import { extent } from "d3-array"
 
 export type RegressionFit = {
 	/** Polynomial coefficients in ORIGINAL x units: y = c0 + c1·x + c2·x² … */
@@ -116,7 +118,7 @@ export const fitPolynomial = (
 		coefficients: uncenterCoefficients(coefT, meanX, sdX),
 		predict,
 		ciAt,
-		xExtent: [Math.min(...xs), Math.max(...xs)],
+		xExtent: extent(xs) as [number, number],
 		n,
 	}
 }

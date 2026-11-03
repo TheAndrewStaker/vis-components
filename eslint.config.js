@@ -36,6 +36,7 @@ export default tseslint.config(
 
 			'@vc/use-wrapped-json-functions': 'error',
 			'@vc/no-storage-outside-try': 'error',
+			'@vc/no-unbounded-argument-spread': 'error',
 
 			'@typescript-eslint/ban-ts-comment': 'off',
 			'@typescript-eslint/no-explicit-any': 'off',
@@ -122,6 +123,8 @@ export default tseslint.config(
 		rules: {
 			// non-null assertions are legit in tests
 			'@typescript-eslint/no-non-null-assertion': 'off',
+			// fixtures are small and hand-built; the row-count cap can't bite
+			'@vc/no-unbounded-argument-spread': 'off',
 		},
 	},
 	{
@@ -133,6 +136,8 @@ export default tseslint.config(
 		},
 		rules: {
 			'no-console': 'off',
+			// specs measure a handful of on-page elements, never dataset rows
+			'@vc/no-unbounded-argument-spread': 'off',
 		},
 	},
 )

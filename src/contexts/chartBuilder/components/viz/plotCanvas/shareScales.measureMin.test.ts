@@ -108,3 +108,10 @@ describe("computeGroupMeasureMin (shared measure floor)", () => {
 		expect(run(AreasXMode, "all").size).toBe(0)
 	})
 })
+
+describe("computePanelMeasureMin — large panels", () => {
+	it("bounds more stacks than a call takes arguments", () => {
+		const rows = Array.from({ length: 200_000 }, (_, i) => ({ c: `c${i}`, v: -i }))
+		expect(computePanelMeasureMin(rows, "c", "v", [], [])).toBe(-199_999)
+	})
+})

@@ -21,6 +21,7 @@
 // bins and hex lattices take their edges from ALL rows, matching the default
 // shared category / position axes.
 
+import { max } from "d3-array"
 import { aggregateDistributions } from "./aggregators/distributions"
 import {
 	aggregateStacks,
@@ -711,7 +712,7 @@ const hierarchyData = (input: PlottedDataInput): PlottedData => {
 				valueField,
 			}).root
 		)
-	const maxDepth = Math.max(1, ...built(view.rows as Row[]).map((n) => n.depth))
+	const maxDepth = Math.max(1, max(built(view.rows as Row[]), (n) => n.depth) ?? 1)
 	const levelCols: PlottedColumn[] = Array.from({ length: maxDepth }, (_, i) => ({
 		name: `Level ${i + 1}`,
 		type: "categorical",

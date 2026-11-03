@@ -20,6 +20,8 @@ const CANONICAL_WEIGHTS = [
 
 /** One @font-face the css2 stylesheet declared: a single subset (latin,
  * cyrillic, …) of one style at one weight (or a variable-weight range). */
+import { extent } from "d3-array"
+
 export type GoogleFontFace = {
 	style: "normal" | "italic"
 	/** css2 `font-weight` descriptor — "400" or a variable range "300 700". */
@@ -60,9 +62,9 @@ export const rangeDownloadUrl = (
 	weights: number[],
 	hasItalic: boolean
 ): string | null => {
-	const min = Math.min(...weights)
-	const max = Math.max(...weights)
-	if (!Number.isFinite(min) || min === max) return null
+	const [min, max] = extent(weights)
+	if (min === undefined || max === undefined || !Number.isFinite(min) || min === max)
+		return null
 	const range = `${min}..${max}`
 	return hasItalic
 		? `${CSS2_BASE}?family=${familyParam(family)}:ital,wght@0,${range};1,${range}`

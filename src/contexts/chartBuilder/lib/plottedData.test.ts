@@ -408,6 +408,16 @@ describe("plottedRows — trees", () => {
 		const byKey = (a: unknown[], b: unknown[]) => String(a[0]).localeCompare(String(b[0]))
 		expect(ours.sort(byKey)).toEqual(d3Totals.sort(byKey))
 	})
+
+	it("tabulates more nodes than a call takes arguments", () => {
+		const cfg = {
+			...EMPTY_CHANNEL_CONFIGS,
+			connection: { hierarchyLayout: "treemap" },
+		} as ChannelConfigs
+		const many = Array.from({ length: 200_000 }, (_, i) => ({ parent: "Root", child: `c${i}`, value: "1" }))
+		const { data } = plotted(many, types, enc({ connection: "parent", area: "value" }), cfg)
+		expect(agg(data).header).toEqual(["Level 1", "Level 2", "value (sum)"])
+	})
 })
 
 describe("plottedRows — flows", () => {

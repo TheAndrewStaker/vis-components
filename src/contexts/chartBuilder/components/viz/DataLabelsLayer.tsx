@@ -1,3 +1,4 @@
+import { max } from "d3-array"
 import { useAtomValue } from "jotai"
 import {
 	DEFAULT_DATA_LABELS_CONFIG,
@@ -544,7 +545,7 @@ const renderPieceBackgrounds = (
 			if (run.length > 0 && bg) {
 				const x0 = run[0].x
 				const x1 = run[run.length - 1].x + run[run.length - 1].width
-				const tallest = Math.max(...run.map((r) => r.piece.fontSize))
+				const tallest = max(run, (r) => r.piece.fontSize) as number
 				const h = tallest * 1.1 + bg.padY * 2
 				rects.push(
 					<rect
@@ -638,10 +639,8 @@ const renderLabels = (
 					// with mixed-size pieces measures its pieces individually.
 					const w =
 						(segmented
-							? Math.max(...pieceLines.map((l) => l.width))
-							: Math.max(
-									...lines.map((l) => labelWidth({ text: l, fontSize: b.fontSize }))
-								)) +
+							? (max(pieceLines, (l) => l.width) as number)
+							: (max(lines, (l) => labelWidth({ text: l, fontSize: b.fontSize })) as number)) +
 						padX * 2
 					const h = labelBlockHeight({ text: lines.join("\n"), fontSize: b.fontSize }) + padY * 2
 					// Align the rect's left edge to the text's start the same way
@@ -1059,7 +1058,7 @@ export const DataLabelsLayer = ({
 		return {
 			label,
 			segments: pieces,
-			fontSize: Math.max(baseFontSize, ...pieces.map((p) => p.fontSize)),
+			fontSize: Math.max(baseFontSize, max(pieces, (p) => p.fontSize) ?? baseFontSize),
 		}
 	}
 	// The labels each anchor carries: multi-field, one per composed label

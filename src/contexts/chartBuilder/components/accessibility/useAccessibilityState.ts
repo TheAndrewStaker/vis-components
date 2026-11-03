@@ -1,3 +1,4 @@
+import { min } from "d3-array"
 import { useMemo } from "react"
 import { useAtomValue } from "jotai"
 import {
@@ -241,7 +242,7 @@ export const useAccessibilityState = (): AccessibilityState | null => {
 					opacity !== null && opacity < 0.4
 						? { value: opacity }
 						: null,
-				lineThicknessPx: thicknesses.length > 0 ? Math.min(...thicknesses) : null,
+				lineThicknessPx: min(thicknesses) ?? null,
 				dataOutlineWidthPx: encodings.outlineHue?.field
 					? (configs.shape?.outlineWidth ?? null)
 					: null,

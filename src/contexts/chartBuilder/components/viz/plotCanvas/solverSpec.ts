@@ -1,3 +1,4 @@
+import { max } from "d3-array"
 import type { AnnotationReserve } from "./annotationReserve"
 import {
 	colSizingMeaningful,
@@ -177,7 +178,7 @@ export const buildSolverInput = ({
 	// the tallest label.
 	const facetLabelLines = Math.max(
 		1,
-		...panelInputs.map((p) => lineCount(panelLabelTextOf(panelData, p.key))),
+		max(panelInputs, (p) => lineCount(panelLabelTextOf(panelData, p.key))) ?? 1,
 	)
 	const facetLabelInput = {
 		fontSize: facetTitleFont.size,

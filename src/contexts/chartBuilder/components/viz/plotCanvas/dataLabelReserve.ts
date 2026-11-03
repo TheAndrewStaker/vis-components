@@ -1,3 +1,4 @@
+import { max } from "d3-array"
 import { axisFieldsFor } from "../../../lib/axisFields"
 import { barTotalFieldName, withBarTotals } from "../../../lib/barTotalLabel"
 import {
@@ -420,7 +421,7 @@ export const computeDataLabelOverflow = ({
 		: []
 	const perVariableMax = Math.max(
 		0,
-		...sizeKeys.map((k) => labelEntry(dataLabels, "fieldSizes", k) ?? 0)
+		max(sizeKeys, (k) => labelEntry(dataLabels, "fieldSizes", k) ?? 0) ?? 0
 	)
 	const fontSizeForEstimate = ptToPx(
 		Math.max(

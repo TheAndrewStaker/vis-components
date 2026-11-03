@@ -1,3 +1,4 @@
+import { max } from "d3-array"
 import { useId, useMemo, useState } from "react"
 import { scaleBand, scaleLinear } from "d3-scale"
 import { useAtomValue } from "jotai"
@@ -1012,7 +1013,7 @@ const buildAreas = ({
 				drawOrderLevels
 			)
 			layerKeys.length = 0
-			layerKeys.push(...ordered)
+			for (const k of ordered) layerKeys.push(k)
 		} else {
 			// Default: sort by peak value descending — largest layers go behind,
 			// smallest on top — so every layer stays visible (smaller ones sit
@@ -1339,24 +1340,23 @@ const buildAreas = ({
 					effThickness
 				)
 				const pts = top.map(([x, y]) => ({ x: x ?? 0, y: y ?? 0 }))
-				lineEls.push(
-					...lineEndTicks(pts, len).map((t, i) => (
-						<line
-							// eslint-disable-next-line react/no-array-index-key -- at most two ticks per layer (first / last end); index is stable per render
-							key={`${layerKey || "__layer__"}__tick-${i}`}
-							className="vc-line-end-tick"
-							x1={t.x1}
-							y1={t.y1}
-							x2={t.x2}
-							y2={t.y2}
-							stroke={effStroke}
-							strokeWidth={effThickness}
-							strokeLinecap="butt"
-							opacity={borderOpacity * mh.opacityMul}
-							pointerEvents="none"
-						/>
-					))
-				)
+				const ticks = lineEndTicks(pts, len).map((t, i) => (
+					<line
+						// eslint-disable-next-line react/no-array-index-key -- at most two ticks per layer (first / last end); index is stable per render
+						key={`${layerKey || "__layer__"}__tick-${i}`}
+						className="vc-line-end-tick"
+						x1={t.x1}
+						y1={t.y1}
+						x2={t.x2}
+						y2={t.y2}
+						stroke={effStroke}
+						strokeWidth={effThickness}
+						strokeLinecap="butt"
+						opacity={borderOpacity * mh.opacityMul}
+						pointerEvents="none"
+					/>
+				))
+				for (const tick of ticks) lineEls.push(tick)
 			}
 			// Point markers — filtered by the user's `pointSampling`
 			// preference (mirrors ScatterPlot's behavior). The line
@@ -1388,9 +1388,9 @@ const buildAreas = ({
 				]
 			})
 			if (effectiveStackMode === "overlay") {
-				interleaved.push(...lineEls, ...pointEls)
+				for (const el of [...lineEls, ...pointEls]) interleaved.push(el)
 			} else {
-				fills.push(...lineEls, ...pointEls)
+				for (const el of [...lineEls, ...pointEls]) fills.push(el)
 			}
 			return
 		}
@@ -1694,8 +1694,8 @@ export const computeAreaMeasureMax = (
 	if (stackMode === "stack") {
 		return Math.max(
 			1,
-			...stacks.map((s) => s.slices.reduce((acc, sl) => acc + sl.value, 0))
+			max(stacks, (s) => s.slices.reduce((acc, sl) => acc + sl.value, 0)) ?? 1
 		)
 	}
-	return Math.max(1, ...stacks.flatMap((s) => s.slices.map((sl) => sl.value)))
+	return Math.max(1, max(stacks, (s) => max(s.slices, (sl) => sl.value)) ?? 1)
 }

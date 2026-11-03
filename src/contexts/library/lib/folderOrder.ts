@@ -1,3 +1,4 @@
+import { max } from "d3-array"
 import { isStockFolderId } from "../../chartBuilder/lib/stockFolders"
 import type { Folder } from "../../chartBuilder/lib/types"
 
@@ -109,7 +110,7 @@ export const nextSortIndex = (
 	const placed = folders
 		.filter((f) => f.parentId === parentId && f.sortIndex !== undefined)
 		.map((f) => f.sortIndex as number)
-	return placed.length === 0 ? undefined : Math.max(...placed) + 1
+	return placed.length === 0 ? undefined : (max(placed) as number) + 1
 }
 
 /** Translate a before/after drop on the `anchor` row into the insertion

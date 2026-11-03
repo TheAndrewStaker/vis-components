@@ -1,3 +1,4 @@
+import { min } from "d3-array"
 import { CHANNELS, channelAccepts } from "../channels"
 import { typeCompatible } from "../datasetCompat"
 import {
@@ -56,7 +57,7 @@ const encodingChannelsOf = (
 const restrictiveness = (channels: readonly EncodingChannel[]): number =>
 	channels.length === 0
 		? Number.POSITIVE_INFINITY
-		: Math.min(...channels.map((ch) => CHANNELS[ch].accepts.length))
+		: (min(channels, (ch) => CHANNELS[ch].accepts.length) as number)
 
 type Source = {
 	field: TemplateSourceField

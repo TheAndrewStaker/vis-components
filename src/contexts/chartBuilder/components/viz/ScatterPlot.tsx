@@ -1,3 +1,4 @@
+import { max } from "d3-array"
 import { useMemo, useState } from "react"
 import { useAtomValue } from "jotai"
 import { computeKde } from "../../lib/aggregators/distributions"
@@ -464,7 +465,7 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 								}),
 							}))
 							const globalPeak = perGroup.reduce(
-								(m, g) => Math.max(m, ...g.density),
+								(m, g) => Math.max(m, max(g.density) ?? m),
 								0
 							)
 							if (!(globalPeak > 0)) return null

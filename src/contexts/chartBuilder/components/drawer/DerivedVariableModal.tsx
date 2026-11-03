@@ -408,10 +408,10 @@ const DerivedVariableEditor = ({
 	)
 
 	const issues = useMemo(() => {
-		const list = derivedVariableIssues(draft, editIndex, upstreamNames)
+		let list = derivedVariableIssues(draft, editIndex, upstreamNames)
 		// Math over a text column is an error here, not a blank row — the
 		// view seam stays lenient, the editor refuses to mint it.
-		list.push(...derivedMathTypeIssues(draft, upstreamNames, nonNumeric))
+		list = list.concat(derivedMathTypeIssues(draft, upstreamNames, nonNumeric))
 		// A variable the reshape uses runs on the wide table, so it can't
 		// reach the columns the melt creates — refuse rather than silently
 		// dropping it out of the Reshape lists.

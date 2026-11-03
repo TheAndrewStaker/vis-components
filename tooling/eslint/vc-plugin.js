@@ -1,4 +1,4 @@
-// The two custom ESLint rules this codebase registers under the `@vc/`
+// The custom ESLint rules this codebase registers under the `@vc/`
 // namespace (see eslint.config.js).
 
 /** @type {(x: any) => boolean} */
@@ -9,6 +9,16 @@ const identifiedAsAnyOf = (x, names) => isIdentifier(x) && names.includes(x.name
 
 /** @type {(x: any, name: string) => boolean} */
 const identifiedAs = (x, name) => identifiedAsAnyOf(x, [name])
+
+/** @type {(callee: any) => boolean} */
+function isArgCappedCall(callee) {
+	if (!callee || callee.type !== "MemberExpression" || callee.computed) return false
+	if (identifiedAsAnyOf(callee.property, ["push", "unshift", "apply"])) return true
+	return (
+		identifiedAs(callee.object, "Math") &&
+		identifiedAsAnyOf(callee.property, ["min", "max"])
+	)
+}
 
 /** @type {(node: any) => boolean} */
 function inTry(node) {
@@ -66,6 +76,24 @@ export default {
 							message:
 								"Do not use `JSON.stringify` directly due to misleading types. Use the wrapped json functions in src/lib/json.ts instead.",
 						})
+					},
+				}
+			},
+		},
+		"no-unbounded-argument-spread": {
+			meta: {},
+			create(context) {
+				return {
+					CallExpression(node) {
+						if (!isArgCappedCall(node.callee)) return
+						for (const arg of node.arguments) {
+							if (arg.type !== "SpreadElement") continue
+							context.report({
+								node: arg,
+								message:
+									"Do not spread an array into the arguments of `Math.min`/`Math.max`/`.push`/`.unshift`/`.apply`. Arrays can hold hundreds of thousands of rows and call-argument spread caps at ~123k (stack overflow). Use `min`/`max`/`extent` from d3-array or a loop instead.",
+							})
+						}
 					},
 				}
 			},

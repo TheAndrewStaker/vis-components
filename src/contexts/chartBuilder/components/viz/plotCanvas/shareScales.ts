@@ -1,3 +1,4 @@
+import { max, min } from "d3-array"
 import {
 	migratePolarShareValue,
 	type ChannelConfigs,
@@ -113,7 +114,7 @@ if (isBarOrArea) {
 						)
 					: new Map<string, number>()
 				const maxCount =
-					counts.size > 0 ? Math.max(0, ...counts.values()) : 0
+					Math.max(0, max(counts.values()) ?? 0)
 				// Density: bars are bin shares (count / panel total), so the
 				// panel max is the largest share (≤1). The shared-axis floor
 				// below (Math.max(1, …)) then pins the density axis to 0–1,
@@ -158,7 +159,7 @@ if (isBarOrArea) {
 			// zero-floored domain would go degenerate ([0, 0]) on all-negative
 			// data. The cost is a unit of headroom on a faceted, shared-axis,
 			// ALL-negative bar chart — cosmetic, and only in that corner.
-			const allMax = Math.max(1, ...panelMeasureMax.values())
+			const allMax = Math.max(1, max(panelMeasureMax.values()) ?? 1)
 			for (const key of panelData.values)
 				groupMeasureMaxByKey.set(key, allMax)
 		} else {
@@ -268,7 +269,7 @@ export const computeGroupMeasureMin = ({
 	})
 
 	if (measureShareMode === "all") {
-		const allMin = Math.min(0, ...panelMeasureMin.values())
+		const allMin = Math.min(0, min(panelMeasureMin.values()) ?? 0)
 		for (const key of panelData.values) groupMeasureMinByKey.set(key, allMin)
 	} else {
 		// perGroup: same folding as the max path — vertical bars share Y per
@@ -422,7 +423,7 @@ if (isPolar && facetCfg.proportionalPanelSizing === true && isFaceted) {
 	// apply — leave their per-panel slice totals as-is.
 	if (mode.canvas.polarUnit === "rAxisMax" && shareRModeForSize !== "none") {
 		if (shareRModeForSize === "all") {
-			const globalMax = Math.max(0, ...panelUnit.values())
+			const globalMax = Math.max(0, max(panelUnit.values()) ?? 0)
 			for (const key of panelData.values) panelUnit.set(key, globalMax)
 		} else if (shareRModeForSize === "perRow") {
 			// Group by share-group key (facet value in grid mode) so the
@@ -452,7 +453,7 @@ if (isPolar && facetCfg.proportionalPanelSizing === true && isFaceted) {
 			})
 		}
 	}
-	const maxUnit = Math.max(0, ...panelUnit.values())
+	const maxUnit = Math.max(0, max(panelUnit.values()) ?? 0)
 	if (maxUnit > 0) {
 		for (const [key, unit] of panelUnit) {
 			panelRadiusScale.set(key, unit / maxUnit)

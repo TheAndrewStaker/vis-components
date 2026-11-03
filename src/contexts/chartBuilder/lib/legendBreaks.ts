@@ -1,4 +1,4 @@
-import { ticks as d3Ticks } from "d3-array"
+import { extent, ticks as d3Ticks } from "d3-array"
 import { scaleLinear } from "d3-scale"
 
 import { buildTickFormatter, parseFormatSpec, YEAR_ENDS_FORMAT } from "./formatTick"
@@ -128,8 +128,7 @@ export const resolveLegendDomain = (
 ): [number, number] | null => {
 	const merged = resolveLegendChannelConfig(cfg)
 	if (merged.breaks.length >= 2) {
-		const lo = Math.min(...merged.breaks)
-		const hi = Math.max(...merged.breaks)
+		const [lo, hi] = extent(merged.breaks) as [number, number]
 		if (Number.isFinite(lo) && Number.isFinite(hi) && lo !== hi) return [lo, hi]
 	}
 	return legendDataExtent(rawValues, type)

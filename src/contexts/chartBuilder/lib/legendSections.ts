@@ -1,3 +1,4 @@
+import { max } from "d3-array"
 import type { CSSProperties } from "react"
 import type {
 	ChannelConfigs,
@@ -885,13 +886,13 @@ export const planLegendSections = ({
 		const indexer = makeShapeIndexer(s.values, s.type, configs.shape)
 		return Math.max(
 			0,
-			...uniqueValues(s.values, { type: s.type }).map((v) =>
+			max(uniqueValues(s.values, { type: s.type }), (v) =>
 				swatchGlyphBox(
 					resolveGlyph(indexer(v), configs.shape?.customGlyphs),
 					r,
 					strokeWidth,
 				),
-			),
+			) ?? 0,
 		)
 	}
 	// Shape-channel glyph box (ShapeLegend / combined shape glyphs), scaled

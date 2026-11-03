@@ -1,3 +1,4 @@
+import { max } from "d3-array"
 import { useEffect, useRef } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import {
@@ -592,7 +593,7 @@ export const swatchColumnWidth = (
 	sizes: ReadonlyArray<{ w: number }>,
 ): number | null => {
 	const widths = sizes.map((s) => s.w)
-	return new Set(widths).size > 1 ? Math.max(...widths) : null
+	return new Set(widths).size > 1 ? (max(widths) as number) : null
 }
 
 export const ComposedSwatch = (props: ComposedSwatchProps) => {

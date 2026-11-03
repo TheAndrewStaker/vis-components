@@ -22,6 +22,8 @@ const getMeasureContext = (): CanvasRenderingContext2D | null => {
  *
  *  Multi-line (wrapped, `\n`-joined) labels measure their widest LINE —
  *  the rendered bounding box of stacked tspans is the widest line. */
+import { max } from "d3-array"
+
 export const measureMaxLabelWidth = (
 	labels: readonly string[],
 	fontFamily: string | null | undefined,
@@ -120,5 +122,5 @@ export const measureTitleWidth = (
 		)
 		widths[0] = prefixWidth + firstWithGap
 	}
-	return Math.max(...widths)
+	return max(widths) as number
 }

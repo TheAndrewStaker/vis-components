@@ -181,7 +181,7 @@ const diffPaths = (a: unknown, b: unknown, prefix: string[]): string[][] => {
 	if (!isPlainObject(a) || !isPlainObject(b)) return [prefix]
 	const keys = new Set([...Object.keys(a), ...Object.keys(b)])
 	const out: string[][] = []
-	for (const k of keys) out.push(...diffPaths(a[k], b[k], [...prefix, k]))
+	for (const k of keys) for (const p of diffPaths(a[k], b[k], [...prefix, k])) out.push(p)
 	return out
 }
 

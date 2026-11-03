@@ -576,3 +576,14 @@ describe("buildSolverPanelInputs — temporal axes", () => {
 		expect(inputs[0].xLabels.every((l) => /^'\d{2}$/.test(l))).toBe(true)
 	})
 })
+
+describe("buildSolverPanelInputs — large datasets", () => {
+	it("measures a quantitative axis over more rows than a call takes arguments", () => {
+		const row = (i: number) => ({ cat: "a", val: String(i), g: "g1" })
+		const big = Array.from({ length: 200_000 }, (_, i) => row(i))
+		const ends = [row(0), row(199_999)]
+		const labels = (rows: typeof big) =>
+			build({ rows, encodings: xyEncodings("val", "cat") })[0].xLabels
+		expect(labels(big)).toEqual(labels(ends))
+	})
+})

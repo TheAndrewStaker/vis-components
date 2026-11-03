@@ -194,3 +194,14 @@ describe("editGrid", () => {
 		expect(columnWidths(renameColumn(grid, 0, "x".repeat(200)), { max: 100 })[0]).toBe(100)
 	})
 })
+
+describe("pasteBlock — large blocks", () => {
+	it("sizes a block with more lines than a call takes arguments", () => {
+		// Seeded tall enough that the paste fills rows rather than adding them.
+		const rows = Array.from({ length: 200_000 }, () => ({ city: "x", sales: "1" }))
+		const block = rows.map((_, i) => (i === 7 ? ["a", "b"] : ["a"]))
+		const at = { top: 0, bottom: 0, left: 0, right: 0 }
+		const { rect } = pasteBlock(gridFromView({ ...view(), rows }), at, block)
+		expect(rect).toEqual({ top: 0, bottom: 199_999, left: 0, right: 1 })
+	})
+})

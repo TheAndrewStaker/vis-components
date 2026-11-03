@@ -1,3 +1,4 @@
+import { max, min } from "d3-array"
 import { buildLinePath } from "../../../lib/linePath"
 import {
 	DEFAULT_CONNECTION_CONFIG,
@@ -675,8 +676,8 @@ export const renderAxisStems = (
 	// (largest y pixel), the y-axis along the left (smallest x pixel).
 	// Reading the edge off the scale's range keeps us agnostic to range
 	// direction (the y-scale's range is inverted top-to-bottom).
-	const baselineY = Math.max(...yScale.range())
-	const baselineX = Math.min(...xScale.range())
+	const baselineY = max(yScale.range()) as number
+	const baselineX = min(xScale.range()) as number
 	// Custom-threshold stems land on a DATA value instead of the plot edge —
 	// e.g. stems from y = 1 on a ratio chart whose axis still sits at 0. The
 	// typed value runs through the position scale as a quantitative; the
@@ -684,7 +685,7 @@ export const renderAxisStems = (
 	// draw past the panel. A value the scale can't place (categorical axis)
 	// falls back to the edge, matching the plain axis-stem look.
 	const clampToRange = (px: number, range: number[]): number =>
-		Math.min(Math.max(px, Math.min(...range)), Math.max(...range))
+		Math.min(Math.max(px, min(range) as number), max(range) as number)
 	const customPx = (scale: PositionScale, value: number | null): number | null => {
 		const px = applyPositionScale(scale, value ?? 0, "quantitative")
 		return px !== null && Number.isFinite(px)

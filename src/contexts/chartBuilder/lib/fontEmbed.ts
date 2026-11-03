@@ -150,7 +150,7 @@ export const selectFaces = (
 		const weightMatched = ofStyle.filter((f) =>
 			weightMatches(f.weight, usage.weights)
 		)
-		out.push(...(weightMatched.length > 0 ? weightMatched : ofStyle))
+		for (const f of weightMatched.length > 0 ? weightMatched : ofStyle) out.push(f)
 	}
 	return out
 }
