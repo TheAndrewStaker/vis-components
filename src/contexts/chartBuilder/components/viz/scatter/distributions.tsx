@@ -401,7 +401,23 @@ const BoxShape = ({
 			// stroke-opacity and stroke-width are inherited by every stroked
 			// child below; the median line overrides width for emphasis.
 			<g strokeOpacity={strokeOpacity} strokeWidth={strokeWidth}>
-				<line x1={center} y1={loPx} x2={center} y2={hiPx} stroke={color} />
+				{/* The whisker stems stop at the box edges rather than running
+				    through the box: a translucent or empty fill would otherwise
+				    show the stem bisecting the body. */}
+				<line
+					x1={center}
+					y1={Math.min(loPx, hiPx)}
+					x2={center}
+					y2={yTop}
+					stroke={color}
+				/>
+				<line
+					x1={center}
+					y1={yBot}
+					x2={center}
+					y2={Math.max(loPx, hiPx)}
+					stroke={color}
+				/>
 				<line
 					x1={lo + halfWidth * 0.4}
 					y1={loPx}
@@ -462,7 +478,21 @@ const BoxShape = ({
 		// stroke-opacity and stroke-width are inherited by every stroked
 		// child below; the median line overrides width for emphasis.
 		<g strokeOpacity={strokeOpacity} strokeWidth={strokeWidth}>
-			<line x1={loPx} y1={center} x2={hiPx} y2={center} stroke={color} />
+			{/* Stems stop at the box edges — see the vertical branch. */}
+			<line
+				x1={Math.min(loPx, hiPx)}
+				y1={center}
+				x2={xLeft}
+				y2={center}
+				stroke={color}
+			/>
+			<line
+				x1={xRight}
+				y1={center}
+				x2={Math.max(loPx, hiPx)}
+				y2={center}
+				stroke={color}
+			/>
 			<line
 				x1={loPx}
 				y1={lo + halfWidth * 0.4}

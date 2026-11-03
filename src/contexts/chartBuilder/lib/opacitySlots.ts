@@ -78,7 +78,7 @@ export const OPACITY_SLOT_REGISTRY: readonly OpacitySlotDef[] = [
 		label: "Violin / box fill",
 		modes: m("scatter"),
 		isApplicable: (_encodings, configs) => overlayOn(configs),
-		defaultLevel: 0.45,
+		defaultLevel: 1,
 		acceptsFieldMapping: true,
 	},
 	{
