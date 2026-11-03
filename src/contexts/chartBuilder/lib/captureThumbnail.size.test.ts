@@ -24,6 +24,11 @@ describe("rasterTargetSize", () => {
 	it("a larger maxDim still scales a bigger source down to fit", () => {
 		expect(rasterTargetSize(8192, 4096, 4096)).toEqual({ w: 4096, h: 2048 })
 	})
+
+	it("upscales by `scale` for the published picture, still under the cap", () => {
+		expect(rasterTargetSize(1100, 854, 4096, 2)).toEqual({ w: 2200, h: 1708 })
+		expect(rasterTargetSize(3000, 1000, 4096, 2)).toEqual({ w: 4096, h: 1365 })
+	})
 })
 
 describe("thumbnailFromChartSvgText size option", () => {

@@ -647,8 +647,11 @@ export const MAX_THUMBNAIL_DIM = 480
  *  library-thumbnail capture exactly: 480px longest edge, cache-only fonts.
  *  The published-embed picture lifts the cap and lets fonts hit the network. */
 export type CaptureOptions = {
-	/** Longest-edge ceiling in px. The capture never upscales. */
+	/** Longest-edge ceiling in px. Applied after `scale`. */
 	maxDim?: number
+	/** Raster pixels per CSS px (default 1). The published picture uses 2 so
+	 *  it stays crisp on a projector; thumbnails never upscale. */
+	scale?: number
 	/** Let webfont embedding fetch uncached faces from the network. */
 	allowNetwork?: boolean
 	/** Capture the whole figure — plot panels, HTML legend and the canvas
@@ -662,14 +665,16 @@ export type CaptureOptions = {
 	opaqueBackground?: boolean
 }
 
-/** The canvas size a `srcW`×`srcH` SVG rasterizes to under `maxDim`: scaled
- *  down so the longest edge fits, never up. */
+/** The canvas size a `srcW`×`srcH` SVG rasterizes to: `scale` raster px per
+ *  CSS px (default 1 — thumbnails never upscale), then scaled down so the
+ *  longest edge fits `maxDim`. */
 export const rasterTargetSize = (
 	srcW: number,
 	srcH: number,
-	maxDim: number = MAX_THUMBNAIL_DIM
+	maxDim: number = MAX_THUMBNAIL_DIM,
+	scale = 1
 ): { w: number; h: number } => {
-	const scale = Math.min(1, maxDim / Math.max(srcW, srcH))
+	scale = Math.min(scale, maxDim / Math.max(srcW, srcH))
 	return {
 		w: Math.max(1, Math.round(srcW * scale)),
 		h: Math.max(1, Math.round(srcH * scale)),
@@ -682,7 +687,8 @@ export const rasterTargetSize = (
 const rasterizeSvg = (
 	svgDataUrl: string,
 	maxDim: number = MAX_THUMBNAIL_DIM,
-	opaqueBackground = false
+	opaqueBackground = false,
+	scale = 1
 ): Promise<string | null> =>
 	new Promise((resolve) => {
 		const img = new Image()
@@ -693,7 +699,7 @@ const rasterizeSvg = (
 				resolve(null)
 				return
 			}
-			const { w, h } = rasterTargetSize(srcW, srcH, maxDim)
+			const { w, h } = rasterTargetSize(srcW, srcH, maxDim, scale)
 			const canvas = document.createElement("canvas")
 			canvas.width = w
 			canvas.height = h
@@ -743,7 +749,8 @@ export const thumbnailFromChartSvgText = async (
 			})
 		),
 		opts.maxDim ?? MAX_THUMBNAIL_DIM,
-		opts.opaqueBackground ?? false
+		opts.opaqueBackground ?? false,
+		opts.scale ?? 1
 	)
 
 /** Capture the chart rendered in `doc` as a small PNG data URL for use as a

@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { ReactNode } from "react"
 
+import { readPngDpi } from "../lib/pngDpi"
 import { EMPTY_CHANNEL_CONFIGS } from "../lib/channelConfig"
 import { SYSTEM_LIGHT_THEME } from "../lib/systemThemes"
 import { labelsFromTheme } from "../lib/themeConfig"
@@ -85,12 +86,17 @@ describe("usePublishEmbed linked picture", () => {
 		await publish()
 		expect(capture).toHaveBeenCalledWith({
 			maxDim: 4096,
+			scale: 2,
 			allowNetwork: true,
 			figure: true,
 			opaqueBackground: true,
 		})
 		const [, png] = publishImage.mock.calls[0]
 		expect(png.name).toBe("image.png")
+		// Stamped with the dpi of the 2× capture so a consumer (PowerPoint, the
+		// add-in) places it at its true size. No figure root in this DOM, so
+		// the requested scale stands in for the achieved one.
+		expect(readPngDpi(new Uint8Array(await png.arrayBuffer()))).toBeCloseTo(192, 0)
 		expect(recordedUrls()).toEqual({ ...HTML_URLS, image: IMAGE_URL })
 	})
 

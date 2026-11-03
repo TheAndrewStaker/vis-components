@@ -24,6 +24,7 @@ import {
 	type EmbedPublishUrls,
 } from "../lib/embedPublish"
 import { captureThumbnail } from "../lib/captureThumbnail"
+import { stampPngDpi } from "../lib/pngDpi"
 import { pngFileFromDataUrl } from "../lib/storage/thumbnailUpload"
 import { loadZctaTopology } from "../lib/geo/zctaTopology"
 import { getStorageAdapter } from "../lib/storage/registry"
@@ -162,14 +163,20 @@ export const usePublishEmbed = () =>
 		)
 	)
 
-/** Capture the on-screen figure (chart + legend) at full size and upload it
- *  as the embed's picture. Resolves to its public url, or null on any
- *  failure. */
+/** Capture the on-screen figure (chart + legend) and upload it as the
+ *  embed's picture. Rasterized at 2 raster px per CSS px so it stays crisp
+ *  projected, and stamped with the matching dpi (`pHYs`, 96 × the scale
+ *  actually achieved under the cap) so a consumer places it at its true
+ *  size — 12pt in the app is 12pt on the slide. Resolves to its public url,
+ *  or null on any failure. */
 const EMBED_IMAGE_MAX_DIM = 4096
+const EMBED_IMAGE_SCALE = 2
+const CSS_DPI = 96
 const publishEmbedImage = async (publishId: string): Promise<string | null> => {
 	try {
 		const dataUrl = await captureThumbnail({
 			maxDim: EMBED_IMAGE_MAX_DIM,
+			scale: EMBED_IMAGE_SCALE,
 			allowNetwork: true,
 			// A picture that stands alone on a slide: legend and canvas colour
 			// included, white under an unset canvas colour.
@@ -179,7 +186,21 @@ const publishEmbedImage = async (publishId: string): Promise<string | null> => {
 		if (dataUrl === null) return null
 		const png = pngFileFromDataUrl(dataUrl, "image.png")
 		if (png === null) return null
-		return await publishEmbedImageRequest(publishId, png)
+		// The scale actually achieved: the cap may have pulled it under 2.
+		// Layout width (offsetWidth) ignores the editor's display-only zoom.
+		const bytes = new Uint8Array(await png.arrayBuffer())
+		const root = document.querySelector<HTMLElement>("[data-chart-root]")
+		const pngWidth = new DataView(bytes.buffer).getUint32(16)
+		const scale = root && root.offsetWidth > 0 ? pngWidth / root.offsetWidth : EMBED_IMAGE_SCALE
+		const stampedBytes = stampPngDpi(bytes, CSS_DPI * scale)
+		// `slice` yields a plain ArrayBuffer (BlobPart); the typed array's
+		// buffer is ArrayBufferLike and TS 5.7+ rejects it.
+		const stamped = new File(
+			[stampedBytes.buffer.slice(stampedBytes.byteOffset, stampedBytes.byteOffset + stampedBytes.byteLength) as ArrayBuffer],
+			"image.png",
+			{ type: "image/png" }
+		)
+		return await publishEmbedImageRequest(publishId, stamped)
 	} catch {
 		return null
 	}
