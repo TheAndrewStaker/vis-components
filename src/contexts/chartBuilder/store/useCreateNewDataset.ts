@@ -1,24 +1,19 @@
 import { useAtomCallback } from "jotai/utils"
 import { useCallback } from "react"
+import { datasetsEqual, findDuplicateByHash } from "../lib/datasetDedupe"
 import {
-	datasetContentHash,
-	datasetsEqual,
-	findDuplicateByHash,
-} from "../lib/datasetDedupe"
+	inferFields,
+	newDatasetRecord,
+	PASTED_DATA_FILENAME,
+} from "../lib/datasetFromRows"
 import {
 	datasetPerformanceWarning,
 	datasetRejectMessage,
 	datasetSizeIssue,
 	datasetWarnMessage,
 } from "../lib/datasetLimits"
-import { inferFieldType } from "../lib/inferFieldType"
 import { parseCsvFile, parseCsvText } from "../lib/parseCsv"
-import {
-	type Dataset,
-	type DatasetVersion,
-	type Field,
-	type ParsedUpload,
-} from "../lib/types"
+import type { ParsedUpload } from "../lib/types"
 
 import {
 	datasetIndexAtom,
@@ -41,31 +36,17 @@ const datasetCompareError = (message: string): Error => {
 
 export type { ParsedUpload }
 
-export const newDatasetId = () =>
-	`ds-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-
-export const newDatasetVersionId = () =>
-	`dv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-
-const inferFields = (
-	fieldNames: string[],
-	rows: Array<Record<string, string>>
-): Field[] =>
-	fieldNames.map((name) => ({
-		name,
-		inferredType: inferFieldType(rows.map((r) => r[name] ?? "")),
-	}))
+export {
+	newDatasetId,
+	newDatasetVersionId,
+	PASTED_DATA_FILENAME,
+} from "../lib/datasetFromRows"
 
 /** Parse a CSV file into the shape consumed by `useCreateNewDataset`. */
 const parseUpload = async (file: File): Promise<ParsedUpload> => {
 	const { fieldNames, rows } = await parseCsvFile(file)
 	return { filename: file.name, fields: inferFields(fieldNames, rows), rows }
 }
-
-/** The stand-in "filename" for data that arrived by paste rather than as a
- *  file: it labels the version in the history list and heads the Add-data
- *  prompt, where a real upload would show its file name. */
-export const PASTED_DATA_FILENAME = "Pasted data"
 
 /** Parse delimited text the user pasted (from a spreadsheet, a terminal, an
  *  email…) into the same shape a CSV upload produces. The delimiter is
@@ -97,18 +78,15 @@ export const useCreateNewDataset = () =>
 	useAtomCallback(
 		useCallback(async (get, set, parsed: ParsedUpload, name: string): Promise<string> => {
 			const finalName = name.trim() || parsed.filename
-			const candidate = {
-				name: finalName,
-				fields: parsed.fields,
-				versions: [
-					{
-						id: "candidate",
-						filename: parsed.filename,
-						rows: parsed.rows,
-						createdAt: 0,
-					},
-				],
-			}
+			// The record a new data set is stored as (`lib/datasetFromRows`,
+			// shared with the API path); it is also the dedupe candidate,
+			// whose ids and timestamps the comparison ignores.
+			const candidate = newDatasetRecord(
+				finalName,
+				parsed.filename,
+				parsed.fields,
+				parsed.rows
+			)
 			// Dedupe against the INDEX — the loaded-bodies map only holds what
 			// this session opened, so checking it alone re-stored byte-identical
 			// uploads after every reload. The hash match is then confirmed
@@ -140,31 +118,9 @@ export const useCreateNewDataset = () =>
 						`couldn't be compared against it. Check your connection and try again.`
 				)
 			}
-			const id = newDatasetId()
-			const versionId = newDatasetVersionId()
-			const now = Date.now()
-			const version: DatasetVersion = {
-				id: versionId,
-				filename: parsed.filename,
-				rows: parsed.rows,
-				createdAt: now,
-			}
-			const dataset: Dataset = {
-				id,
-				name: finalName,
-				fields: parsed.fields,
-				versions: [version],
-				latestVersionId: versionId,
-				createdAt: now,
-				contentHash: datasetContentHash({
-					name: finalName,
-					fields: parsed.fields,
-					versions: [version],
-				}),
-			}
-			set(loadedDatasetsAtom, (prev) => ({ ...prev, [id]: dataset }))
-			bindDatasetToDraft(get, set, id, dataset)
-			return id
+			set(loadedDatasetsAtom, (prev) => ({ ...prev, [candidate.id]: candidate }))
+			bindDatasetToDraft(get, set, candidate.id, candidate)
+			return candidate.id
 		}, [])
 	)
 
