@@ -3,6 +3,7 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { channelAccepts, conflictsFor } from "../../lib/channels"
 import { effectiveType } from "../../lib/fieldType"
 import { buildQuantHueConfigFromTheme } from "../../lib/hueDefaults"
+import { seedHueChannel } from "../../lib/seedColorSlot"
 import {
 	HEXBIN_COUNT_LABEL,
 	HEXBIN_MEASURE_OPTION_VALUE,
@@ -225,29 +226,7 @@ export const EncodingShelf = ({ channel }: Props) => {
 		// encoding round-trip instead of re-seeding from the theme.
 		if (channel === "hue" && newField && dataset) {
 			const t = effectiveType(dataset, newField, overrides)
-			const isQuant = t === "quantitative" || t === "temporal"
-			setConfigs((prev) => {
-				if (isQuant) {
-					return prev.hue?.kind === "quantitative"
-						? prev
-						: {
-								...prev,
-								hue: prev.hueQuantStash ?? buildQuantHueConfigFromTheme(theme),
-								...(prev.hue?.kind === "categorical"
-									? { hueCategoricalStash: prev.hue }
-									: {}),
-							}
-				}
-				return prev.hue?.kind === "categorical"
-					? prev
-					: {
-							...prev,
-							hue: prev.hueCategoricalStash,
-							...(prev.hue?.kind === "quantitative"
-								? { hueQuantStash: prev.hue }
-								: {}),
-						}
-			})
+			setConfigs((prev) => seedHueChannel(prev, t, theme))
 		}
 	}
 

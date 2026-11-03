@@ -1,47 +1,20 @@
 import type { Getter, Setter } from "jotai"
 import { useAtomCallback } from "jotai/utils"
 import { useCallback } from "react"
-import { DEFAULT_ANNOTATIONS_CONFIG } from "../lib/annotationsConfig"
-import { DEFAULT_CAPTION_CONFIG } from "../lib/captionConfig"
-import {
-	DEFAULT_DATA_TABLE_CONFIG,
-	migrateDataTableConfig,
-} from "../lib/dataTableConfig"
-import {
-	DEFAULT_ACCESSIBILITY_CONFIG,
-	migrateAccessibilityConfig,
-} from "../lib/accessibilityConfig"
 import { knownFacetPanels, resolveFacetPanels } from "../lib/resolveFacetPanels"
 import { structureVisualKeys } from "../lib/savedKeyStructure"
 import { UNTITLED_VISUAL_NAME } from "../lib/nameUniqueness"
 import { currentDatasetViewAtom } from "./useCurrentDatasetView"
 import { captureThumbnail } from "../lib/captureThumbnail"
-import {
-	DEFAULT_DATA_LABELS_CONFIG,
-	DEFAULT_FACET_CONFIG,
-	EMPTY_CHANNEL_CONFIGS,
-} from "../lib/channelConfig"
-import {
-	DEFAULT_LEGEND_CONFIG,
-	DEFAULT_TOOLTIP_CONFIG,
-	migrateLabelsConfig,
-} from "../lib/labelsConfig"
-import { DEFAULT_DERIVED_VARIABLES_CONFIG } from "../lib/derivedVariables"
-import { DEFAULT_MAP_CONFIG } from "../lib/mapConfig"
-import { DEFAULT_RESHAPE_CONFIG } from "../lib/reshape"
-import {
-	configsFromTheme,
-	captionConfigFromTheme,
-	dataLabelsConfigFromTheme,
-	labelsFromTheme,
-	legendConfigFromTheme,
-} from "../lib/themeConfig"
+import { DEFAULT_FACET_CONFIG } from "../lib/channelConfig"
 import { foldFlowNodeTitles } from "../lib/foldFlowNodeTitles"
+import type { Visual } from "../lib/types"
 import {
-	emptyDataLabelsEncodings,
-	emptyEncodings,
-	type Visual,
-} from "../lib/types"
+	hydrateVisual,
+	newVisualDraft,
+	newVisualId,
+	type VisualDraft,
+} from "../lib/visualDefaults"
 import { isTemplate, isTrashed } from "../lib/visualTrash"
 import { getCurrentUser } from "../../../lib/currentUser"
 import { editorHistoryEpochAtom } from "./editorHistory"
@@ -81,9 +54,6 @@ import {
 	userDefaultThemeIdAtom,
 	visualsAtom,
 } from "./atoms"
-
-export const newVisualId = () =>
-	`vs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 /** The editor draft as the visual row a save writes, minus the save-time
  * bookkeeping (id, timestamps, thumbnail, saver). `folderId` and
@@ -290,6 +260,28 @@ export const useLoadVisual = () => {
 	)
 }
 
+/** Fan a draft's design slices into their editor atoms. */
+const setDraftSlices = (set: Setter, draft: VisualDraft): void => {
+	set(currentEncodingsAtom, draft.encodings)
+	set(currentFieldOverridesAtom, draft.fieldTypeOverrides)
+	set(currentChannelConfigsAtom, draft.channelConfigs)
+	set(currentLabelsAtom, draft.labelsConfig)
+	set(currentLegendConfigAtom, draft.legendConfig)
+	set(currentTooltipConfigAtom, draft.tooltipConfig)
+	set(currentDataLabelsEncodingsAtom, draft.dataLabelsEncodings)
+	set(currentDataLabelsConfigAtom, draft.dataLabelsConfig)
+	set(currentFieldLevelOrdersAtom, draft.fieldLevelOrders)
+	set(currentFieldLevelOrderSpecsAtom, draft.fieldLevelOrderSpecs)
+	set(currentFieldOrderAtom, draft.fieldOrder)
+	set(currentAnnotationsAtom, draft.annotationsConfig)
+	set(currentCaptionConfigAtom, draft.captionConfig)
+	set(currentDataTableConfigAtom, draft.dataTableConfig)
+	set(currentAccessibilityConfigAtom, draft.accessibilityConfig)
+	set(currentMapConfigAtom, draft.mapConfig)
+	set(currentReshapeConfigAtom, draft.reshapeConfig)
+	set(currentDerivedVariablesAtom, draft.derivedVariablesConfig)
+}
+
 /** Write a stored visual row into every editor draft atom: the default
  * merges and migrations an older row needs, its dataset binding, and its
  * template link. Bumps the undo epoch when the visual id changes. The
@@ -321,111 +313,12 @@ export const hydrateDraftFromVisual = (
 	// Loading a different visual always returns to "latest" view; lingering
 	// preview state from a prior visual would be confusing.
 	set(previewVersionIdAtom, null)
-	// Back-compat: merge with emptyEncodings() so newly-added channels
-	// (e.g. "opacity" added after the visual was saved) get a default
-	// `{ field: null }` instead of leaving the slot undefined.
-	set(currentEncodingsAtom, {
-		...emptyEncodings(),
-		...visual.encodings,
-	})
-	set(currentFieldOverridesAtom, visual.fieldTypeOverrides)
-	set(
-		currentChannelConfigsAtom,
-		visual.channelConfigs ?? EMPTY_CHANNEL_CONFIGS
-	)
-	// Back-compat: migrate older visuals whose labelsConfig predates the
-	// Titles/Text base-font split (or lacks legendTitles altogether).
-	set(currentLabelsAtom, migrateLabelsConfig(visual.labelsConfig))
-	// Back-compat: legend / tooltip configs were added later; older
-	// visuals don't carry them. Default-merge so missing fields don't
-	// blow up the renderer.
-	set(currentLegendConfigAtom, {
-		...DEFAULT_LEGEND_CONFIG,
-		...visual.legendConfig,
-	})
-	set(currentTooltipConfigAtom, {
-		...DEFAULT_TOOLTIP_CONFIG,
-		...visual.tooltipConfig,
-	})
-	// Back-compat: data-labels state was added later. Older visuals don't
-	// carry these blobs at all; default-merge so the fields exist on the
-	// atoms even when the saved visual is silent.
-	set(currentDataLabelsEncodingsAtom, {
-		...emptyDataLabelsEncodings(),
-		...visual.dataLabelsEncodings,
-	})
-	set(currentDataLabelsConfigAtom, {
-		...DEFAULT_DATA_LABELS_CONFIG,
-		...visual.dataLabelsConfig,
-	})
+	setDraftSlices(set, hydrateVisual(visual))
 	// Theme tracking: if the visual was saved with a themeId, mirror it
 	// into the editor atom so the sidebar's Theme dropdown highlights
 	// the correct entry. Older visuals without a themeId leave the atom
 	// at `null` (the dropdown shows no current selection).
 	set(currentThemeIdAtom, visual.themeId ?? null)
-	// Per-field level orderings — added after first release. Older
-	// visuals leave this undefined; the renderer treats missing entries
-	// as "no override" → smart-sort fallback.
-	set(currentFieldLevelOrdersAtom, visual.fieldLevelOrders ?? {})
-	// What the "Order by" picker was set to for each of those orders —
-	// added after level ordering shipped. Older visuals leave it
-	// undefined; the panel then shows an unset picker over an order it
-	// can't explain, exactly as it always did.
-	set(currentFieldLevelOrderSpecsAtom, visual.fieldLevelOrderSpecs ?? {})
-	// The column order — added after drag reorder moved from the data set
-	// to the visual. Absent = the data set's own order.
-	set(currentFieldOrderAtom, visual.fieldOrder ?? [])
-	// Per-visual annotations — added after first release. Older visuals
-	// (and any saved before this field was bound into the save cycle)
-	// leave it undefined; fall back to an empty annotation set so a prior
-	// visual's rectangles don't linger on the global atom.
-	set(
-		currentAnnotationsAtom,
-		visual.annotationsConfig ?? DEFAULT_ANNOTATIONS_CONFIG
-	)
-	// Per-visual caption — added after first release. Older visuals leave
-	// it undefined; default-merge so missing fields exist on the atom and
-	// a prior visual's caption doesn't linger.
-	set(currentCaptionConfigAtom, {
-		...DEFAULT_CAPTION_CONFIG,
-		...visual.captionConfig,
-	})
-	// Per-visual data table — added after first release. Older visuals
-	// leave it undefined, which normalizes to the disabled default; a
-	// prior visual's table settings never linger.
-	set(
-		currentDataTableConfigAtom,
-		migrateDataTableConfig(visual.dataTableConfig)
-	)
-	// Per-visual screen-reader description — added after first release.
-	// Absent normalizes to "follow the title and subtitle"; a prior
-	// visual's override never lingers.
-	set(
-		currentAccessibilityConfigAtom,
-		migrateAccessibilityConfig(visual.accessibilityConfig)
-	)
-	// Per-visual map config — added after maps shipped. Older visuals (and
-	// any saved before mapConfig was bound into the save cycle) leave it
-	// undefined; default-merge so the coordinate system / projection / focus
-	// persist per visual and a prior visual's map state doesn't linger.
-	set(currentMapConfigAtom, {
-		...DEFAULT_MAP_CONFIG,
-		...visual.mapConfig,
-	})
-	// Per-visual wide→long reshape — added after first release. Older
-	// visuals leave it undefined; default-merge so the fields exist on
-	// the atom and a prior visual's reshape doesn't linger.
-	set(currentReshapeConfigAtom, {
-		...DEFAULT_RESHAPE_CONFIG,
-		...visual.reshapeConfig,
-	})
-	// Per-visual derived variables — added after first release. Older
-	// visuals leave it undefined; default-merge so a prior visual's
-	// derived columns don't linger.
-	set(currentDerivedVariablesAtom, {
-		...DEFAULT_DERIVED_VARIABLES_CONFIG,
-		...visual.derivedVariablesConfig,
-	})
 	// The template this visual came from (in-memory, never persisted as a
 	// draft key — the row carries it). Absent → no link, so a prior
 	// visual's link never lingers.
@@ -454,24 +347,7 @@ export const useResetVisual = () => {
 			set(editorHistoryEpochAtom, (n) => n + 1)
 			set(currentVisualIdAtom, null)
 			set(currentVisualNameAtom, UNTITLED_VISUAL_NAME)
-			set(currentEncodingsAtom, emptyEncodings())
-			set(currentFieldOverridesAtom, {})
-			set(currentChannelConfigsAtom, configsFromTheme(defaultTheme))
-			set(currentLabelsAtom, labelsFromTheme(defaultTheme))
-			set(currentLegendConfigAtom, legendConfigFromTheme(defaultTheme))
-			set(currentTooltipConfigAtom, DEFAULT_TOOLTIP_CONFIG)
-			set(currentDataLabelsEncodingsAtom, emptyDataLabelsEncodings())
-			set(currentDataLabelsConfigAtom, dataLabelsConfigFromTheme(defaultTheme))
-			set(currentFieldLevelOrdersAtom, {})
-			set(currentFieldLevelOrderSpecsAtom, {})
-			set(currentFieldOrderAtom, [])
-			set(currentAnnotationsAtom, DEFAULT_ANNOTATIONS_CONFIG)
-			set(currentCaptionConfigAtom, captionConfigFromTheme(defaultTheme))
-			set(currentDataTableConfigAtom, DEFAULT_DATA_TABLE_CONFIG)
-			set(currentAccessibilityConfigAtom, DEFAULT_ACCESSIBILITY_CONFIG)
-			set(currentMapConfigAtom, DEFAULT_MAP_CONFIG)
-			set(currentReshapeConfigAtom, DEFAULT_RESHAPE_CONFIG)
-			set(currentDerivedVariablesAtom, DEFAULT_DERIVED_VARIABLES_CONFIG)
+			setDraftSlices(set, newVisualDraft(defaultTheme))
 			set(currentThemeIdAtom, userDefaultThemeId)
 			set(previewVersionIdAtom, null)
 			// "New visualization" must land on a truly fresh editor — the only path

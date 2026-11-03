@@ -6,7 +6,7 @@ import {
 } from "../../../lib/channelConfig"
 import { channelAccepts } from "../../../lib/channels"
 import { effectiveType } from "../../../lib/fieldType"
-import { buildQuantHueConfigFromTheme } from "../../../lib/hueDefaults"
+import { seedOutlineHueChannel } from "../../../lib/seedColorSlot"
 import { shapeConfigFromTheme } from "../../../lib/themeConfig"
 import {
 	CATEGORICAL_HUE_PALETTE,
@@ -65,17 +65,7 @@ const useOutlineHueField = () => {
 		setEncodings((prev) => ({ ...prev, outlineHue: { field: newField } }))
 		if (newField && dataset) {
 			const t = effectiveType(dataset, newField, overrides)
-			const isQuant = t === "quantitative" || t === "temporal"
-			setConfigs((prev) => {
-				if (isQuant) {
-					return prev.outlineHue?.kind === "quantitative"
-						? prev
-						: { ...prev, outlineHue: buildQuantHueConfigFromTheme(theme) }
-				}
-				return prev.outlineHue?.kind === "categorical"
-					? prev
-					: { ...prev, outlineHue: undefined }
-			})
+			setConfigs((prev) => seedOutlineHueChannel(prev, t, theme))
 		}
 	}
 
