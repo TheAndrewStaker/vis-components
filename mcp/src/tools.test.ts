@@ -251,6 +251,25 @@ describe("settings", () => {
 		expect(settings).not.toHaveProperty("id")
 	})
 
+	it("refuses to create in, or edit inside, the stock Examples folder", async () => {
+		const s = await withDataset()
+		const create = await s.tools.create_chart({
+			datasetId: s.datasetId,
+			folderId: "fl-ms6awf8l-cx47b8",
+			encodings: { x: "year", y: "sales" },
+		})
+		expect(create.isError).toBe(true)
+		expect(parsed(create).problems[0]).toMatchObject({ path: "folderId" })
+		const made = parsed(
+			await s.tools.create_chart({ datasetId: s.datasetId, folderId: null, encodings: { x: "year", y: "sales" } })
+		)
+		const stored = s.visuals.get(made.id as string) as Visual
+		s.visuals.set(made.id as string, { ...stored, folderId: "fl-ms6awf8l-cx47b8" })
+		const edit = await s.tools.edit_chart({ id: made.id as string, patch: { title: "No" } })
+		expect(edit.isError).toBe(true)
+		expect(parsed(edit).problems[0].message).toMatch(/read-only/)
+	})
+
 	it("agent_guide returns the bundled guide", async () => {
 		const s = setup()
 		const out = await s.tools.agent_guide(undefined)

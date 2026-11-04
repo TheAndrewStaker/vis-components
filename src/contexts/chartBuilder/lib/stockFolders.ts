@@ -15,6 +15,11 @@
 
 import type { Folder } from "./types"
 
+/** The public seed's folder ids, for code that runs without the seed (the
+ *  MCP server refuses writes into them). A test keeps this equal to
+ *  `src/seed/examples.json`. */
+export const PUBLIC_SEED_FOLDER_IDS: readonly string[] = ["fl-ms6awf8l-cx47b8"]
+
 let names = new Map<string, string>()
 
 /** Register the public seed's folders. Call once, before the app renders. */

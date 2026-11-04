@@ -8,6 +8,7 @@ import { z } from "zod"
 
 import { SETTING_CATALOG } from "../../src/contexts/chartBuilder/lib/applySettings"
 import { settingsReadRows } from "../../src/contexts/chartBuilder/lib/settingEffects"
+import { PUBLIC_SEED_FOLDER_IDS } from "../../src/contexts/chartBuilder/lib/stockFolders"
 import {
 	chartSpecVocabulary,
 	composeVisual,
@@ -202,6 +203,8 @@ export const createHandlers = (api: Api) => {
 			])
 			const pre: SpecProblem[] = []
 			if (!meta) pre.push({ path: "datasetId", message: `no data set with id "${spec.datasetId}"; see list_datasets` })
+			if (typeof spec.folderId === "string" && PUBLIC_SEED_FOLDER_IDS.includes(spec.folderId))
+				pre.push({ path: "folderId", message: STOCK_FOLDER })
 			if (!("id" in theme)) pre.push(theme)
 			if (pre.length > 0 || !meta || !("id" in theme)) return refused("the chart wasn't created", pre)
 			const deps: ComposeDeps = {
@@ -291,6 +294,8 @@ export const createHandlers = (api: Api) => {
 			await api.assertCurrent(CHART_COLLECTIONS)
 			const base = await api.visual(id)
 			if (!base) return refused(`no chart with id "${id}"`)
+			if (PUBLIC_SEED_FOLDER_IDS.includes(base.folderId ?? ""))
+				return refused("the chart wasn't changed", [{ path: "", message: STOCK_FOLDER }])
 			const meta = await datasetMeta(base.datasetId)
 			// A new theme must exist; a visual whose stored theme is gone
 			// renders under the default, so edit against that too.
@@ -330,6 +335,9 @@ export const createHandlers = (api: Api) => {
 }
 
 export type Handlers = ReturnType<typeof createHandlers>
+
+const STOCK_FOLDER =
+	"the stock Examples folder is read-only; create the chart in another folder (or null), or duplicate the example in the editor first"
 
 const ENCODINGS_FIRST =
 	"Zafiro is encodings-first: you say which field goes to which channel (x, y, hue, length, …) and the chart type follows from that."
