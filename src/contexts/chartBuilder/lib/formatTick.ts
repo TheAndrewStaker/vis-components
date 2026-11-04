@@ -2,6 +2,7 @@ import { format as d3Format, formatSpecifier } from "d3-format"
 import { timeFormat } from "d3-time-format"
 
 import type { AxisConfig } from "./channelConfig"
+import { parseLocalDate } from "./localDate"
 import { literalDateText } from "./timeTickFormat"
 import type { FieldType } from "./types"
 
@@ -76,9 +77,11 @@ const safeTimeFormat = (spec: string): ((v: unknown) => string) => {
 			// Plenty of pipelines (CSV imports, JSON dates) hand us a numeric
 			// or string timestamp instead of a Date. Coerce if it parses to a
 			// valid Date so the temporal preset still applies — otherwise the
-			// user picks "%Y" and sees raw numbers, which reads as broken.
+			// user picks "%Y" and sees raw numbers, which reads as broken. A
+			// string reads on the local clock like every data cell, so "%b %d"
+			// on a "2020-01-01" cell prints Jan 01, not the UTC evening before.
 			if (typeof v === "number" || typeof v === "string") {
-				const d = new Date(v)
+				const d = new Date(typeof v === "string" ? parseLocalDate(v) : v)
 				if (!Number.isNaN(d.getTime())) return f(d)
 			}
 			return String(v ?? "")

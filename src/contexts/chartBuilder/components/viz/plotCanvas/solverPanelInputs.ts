@@ -18,6 +18,7 @@ import type { SolverPanelInput } from "../../../lib/facetLayoutSolver"
 import { effectiveType } from "../../../lib/fieldType"
 import { parseValue } from "../../../lib/scales"
 import { resolveTickFontSizePx } from "../../../lib/fontUnit"
+import { parseLocalDate } from "../../../lib/localDate"
 import { buildTickFormatter } from "../../../lib/formatTick"
 import { uniformTimeFormat, uniformTimeLiteral } from "../../../lib/timeTickFormat"
 import { type DateColumnText, dateColumnText, literalTimeLabel } from "../../../lib/rawTextByTime"
@@ -403,7 +404,7 @@ export const buildSolverPanelInputs = ({
 			if (raw === null || raw === undefined || raw === "") continue
 			const n =
 				type === "temporal"
-					? new Date(String(raw)).getTime()
+					? parseLocalDate(String(raw))
 					: Number(raw)
 			if (Number.isFinite(n)) nums.push(n)
 		}

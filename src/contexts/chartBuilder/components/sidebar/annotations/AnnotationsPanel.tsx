@@ -19,6 +19,7 @@ import {
 	type FacetConfig,
 } from "../../../lib/channelConfig"
 import { effectiveType } from "../../../lib/fieldType"
+import { parseLocalDate } from "../../../lib/localDate"
 import {
 	facetPanelOptions,
 	resolveFacetPanels,
@@ -133,7 +134,7 @@ export const AnnotationsPanel = () => {
 				if (raw === null || raw === undefined || raw === "") continue
 				const n =
 					type === "temporal"
-						? new Date(String(raw)).getTime()
+						? parseLocalDate(String(raw))
 						: Number(raw)
 				if (Number.isFinite(n)) nums.push(n)
 			}

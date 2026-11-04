@@ -518,9 +518,26 @@ describe("parseValue / applyPositionScale — temporal", () => {
 		// Stringified, `new Date("1593561600000")` is an Invalid Date.
 		const ms = Date.UTC(2020, 6, 1)
 		expect(parseValue(ms, "temporal")).toEqual(new Date(ms))
-		// Date strings — every data cell — parse as before.
-		expect(parseValue("2020-07-01", "temporal")).toEqual(new Date("2020-07-01"))
+		// Date strings — every data cell — read on the LOCAL clock the time
+		// scale lays ticks on, never as UTC midnight (the evening before in
+		// the Americas, which floored `nice()` a whole empty year early).
+		expect(parseValue("2020-07-01", "temporal")).toEqual(new Date(2020, 6, 1))
+		expect(parseValue("2020-07", "temporal")).toEqual(new Date(2020, 6, 1))
+		expect(parseValue("2020", "temporal")).toEqual(new Date(2020, 0, 1))
 		expect(parseValue("not a date", "temporal")).toBeNull()
+	})
+
+	it("starts a yearly axis at the first year, not an empty one before it", () => {
+		const scale = makePositionScale(
+			["2010", "2011", "2020", "2021"],
+			"temporal",
+			[0, 1100]
+		)
+		// Nice'd to whole local years: the first cell sits ON the left edge
+		// and the last ON the right, about 100 px per (leap-adjusted) year.
+		expect(applyPositionScale(scale, "2010", "temporal")).toBe(0)
+		expect(applyPositionScale(scale, "2021", "temporal")).toBe(1100)
+		expect(applyPositionScale(scale, "2011", "temporal")).toBeCloseTo(100, 0)
 	})
 
 	it("places an epoch-ms coordinate where the same date lands on the time scale", () => {
@@ -529,7 +546,7 @@ describe("parseValue / applyPositionScale — temporal", () => {
 			"temporal",
 			[0, 400]
 		)
-		const ms = Date.UTC(2020, 6, 1)
+		const ms = new Date(2020, 6, 1).getTime()
 		const viaDate = (scale as unknown as (d: Date) => number)(new Date(ms))
 		expect(applyPositionScale(scale, ms, "temporal")).toBe(viaDate)
 		expect(applyPositionScale(scale, "2020-07-01", "temporal")).toBe(viaDate)

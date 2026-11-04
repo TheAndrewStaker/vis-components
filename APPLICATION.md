@@ -2754,7 +2754,12 @@ The X-axis and Y-axis panels (under Encodings) configure:
 ### 5.2 Position scales
 Built per-axis from the data: linear for quantitative, time for
 temporal, point scale for categorical and string-ordinal, linear over
-numbers for numeric-ordinal. Across facets, panels with shared axes
+numbers for numeric-ordinal. Date cells read on the LOCAL clock
+(`lib/localDate.ts`: a bare year, year-month or ISO date is local
+midnight — the clock the time scale, its `nice()`, the ticks and the
+Scale-range pins all use), never as UTC midnight, which in the Americas
+is the evening before: that floored a yearly axis a whole empty year
+early on the left while its last point touched the right edge. Across facets, panels with shared axes
 are aligned by their **axis spines** (the inner plot edges), so axis
 labels and gridlines line up regardless of panel pixel width.
 

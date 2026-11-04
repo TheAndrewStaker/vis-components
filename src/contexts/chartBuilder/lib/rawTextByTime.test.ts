@@ -41,7 +41,8 @@ describe("dateColumnText / literalTimeLabel", () => {
 
 	it("keys cells by the SAME parse the scale uses, trimmed, first cell wins", () => {
 		const col = dateColumnText(rowsOf(["1949", " 1969 ", "1949", "not a date"]), "d")
-		expect(col.byTime.get(new Date("1949").getTime())).toBe("1949")
+		// Local midnight — the clock every data cell reads on (`parseLocalDate`).
+		expect(col.byTime.get(new Date(1949, 0, 1).getTime())).toBe("1949")
 		const padded = parseValue(" 1969 ", "temporal") as Date
 		expect(col.byTime.get(padded.getTime())).toBe("1969")
 		expect(col.byTime.size).toBe(2)

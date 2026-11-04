@@ -69,6 +69,7 @@ import {
 	DEFAULT_SATURATION_CONFIG,
 } from "./channelConfig"
 import { gradientInterpolator } from "./colorInterpolate"
+import { parseLocalDate } from "./localDate"
 import { applyLevelOrder } from "./smartSort"
 import type { FieldType } from "./types"
 
@@ -121,7 +122,10 @@ export const parseValue = (raw: unknown, type: FieldType): ParsedValue => {
 		// cells are always strings (`rows: Record<string, string>`), so a bare
 		// year never arrives here as a number. Stringifying first would make
 		// `new Date("1577836800000")`, an Invalid Date, and drop the value.
-		const d = typeof raw === "number" ? new Date(raw) : new Date(s)
+		// Cells read on the LOCAL clock (`parseLocalDate`), the one the time
+		// scale, its `nice()`, the ticks and the pins all use — plain
+		// `new Date("2020-01-01")` is UTC midnight, the evening before here.
+		const d = typeof raw === "number" ? new Date(raw) : new Date(parseLocalDate(s))
 		return Number.isNaN(d.getTime()) ? null : d
 	}
 	// ordinal: try numeric, else string
