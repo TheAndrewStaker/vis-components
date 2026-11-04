@@ -1504,7 +1504,17 @@ variable. Hue can be replaced or combined with opacity, saturation,
 brightness, or pattern.
 
 ### 3.4 Quickstart bar
-The icon bar above the encoding shelves gives one-click scaffolds for
+The icon bar sits above the encoding shelves in its own collapsible
+purple panel titled **Quickstart charts (optional)**, open by default.
+The box and the "(optional)" label are deliberate: an unlabeled grid of
+chart-type icons reads as a required chart picker, and users were
+choosing one every time before adjusting. With a data set loaded and no
+encodings mapped, the editor canvas says so: "Assign variables to visual
+elements in the Encodings section, or use a Quickstart chart to get
+started." The hint is editor-only (`EditorCanvasContext`), so embeds,
+exports and thumbnails never show it.
+
+The bar gives one-click scaffolds for
 each chart family (bar, combo, scatter, hexbin, dumbbell, line, area,
 pie, radar, violin, density curve, tile, map, packed circles, treemap,
 sunburst, sankey, chord) — every registered chart mode has a button.

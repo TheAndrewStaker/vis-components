@@ -1,4 +1,5 @@
 import { ALL_ENCODING_CHANNELS } from "../../lib/types"
+import { CollapsibleSubsection } from "../../../../components/ui/CollapsibleSubsection"
 
 import { EncodingShelf } from "./EncodingShelf"
 import { QuickStartIconBar } from "./QuickStartIconBar"
@@ -25,7 +26,17 @@ const HIDDEN_FROM_MAIN_SHELF = new Set<string>(["text", "outlineHue"])
 export const EncodingShelves = () => {
 	return (
 		<div className="flex flex-col gap-2">
-			<QuickStartIconBar />
+			{/* Boxed and labeled optional so the icon grid reads as a
+			    convenience, not a required chart-type picker. */}
+			<div className="vc-option-panel">
+				<CollapsibleSubsection
+					title="Quickstart charts (optional)"
+					defaultOpen
+					boxed={false}
+				>
+					<QuickStartIconBar />
+				</CollapsibleSubsection>
+			</div>
 			<div className="flex flex-col gap-1.5">
 				{ALL_ENCODING_CHANNELS.filter(
 					(channel) => !HIDDEN_FROM_MAIN_SHELF.has(channel),

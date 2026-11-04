@@ -542,7 +542,7 @@ export const QuickStartIconBar = () => {
 			{/* Auto-fill grid instead of a flex row: tracks shrink a touch
 			    (2rem → 1.75rem) as the sidebar narrows, then buttons wrap to
 			    the next line rather than squishing. Scales to more buttons. */}
-			<div className="grid grid-cols-[repeat(auto-fill,minmax(1.75rem,2rem))] gap-1">
+			<div className="grid grid-cols-[repeat(auto-fill,minmax(1.75rem,2rem))] gap-1.5">
 				{QUICK_START_CHART_TYPES.map((chartType) => {
 					const Icon = ICONS[chartType]
 					const satisfiable = satisfiableByType.get(chartType) ?? []
@@ -582,7 +582,7 @@ export const QuickStartIconBar = () => {
 							}}
 							onBlur={() => setHovered(null)}
 							aria-label={LABELS[chartType]}
-							className={`flex h-8 w-full items-center justify-center rounded border border-stone-300 bg-white transition disabled:cursor-not-allowed disabled:opacity-40 dark:border-stone-700 dark:bg-stone-800 vc-text ${
+							className={`flex h-8 w-full items-center justify-center rounded border border-stone-300 bg-white ring-2 ring-white dark:ring-stone-900 transition disabled:cursor-not-allowed disabled:opacity-40 dark:border-stone-700 dark:bg-stone-800 vc-text ${
 								unavailable
 									? "cursor-not-allowed opacity-40"
 									: "hover:enabled:scale-125"

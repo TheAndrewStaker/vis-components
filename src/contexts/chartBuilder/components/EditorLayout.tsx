@@ -26,6 +26,7 @@ import { CanvasZoomControls } from "./CanvasZoomControls"
 import { SaveBar } from "./SaveBar"
 import { Sidebar } from "./sidebar/Sidebar"
 import { ChartCanvas } from "./viz/ChartCanvas"
+import { EditorCanvasContext } from "./viz/EditorCanvasContext"
 import {
 	ChartWithDataTable,
 	DataTableBlock,
@@ -312,134 +313,136 @@ export const EditorLayout = () => {
 					{/* Above the scroll region (never inside it), so exports,
 					 *  thumbnails and the solver don't see it. */}
 					<TemplateRebindBanner />
-					<ErrorBoundary>
-						{/* data-editor-chart-viewport marks the element whose size the
-						 *  Export modal defaults its output dimensions to — the export
-						 *  embed then solves an identical layout, so absolute-pixel
-						 *  title offsets land where the user sees them (rather than
-						 *  shifting under a reflow at a different size). With a fixed
-						 *  canvas size the marker moves to the white canvas rectangle
-						 *  itself, so exports default to the prescribed dimensions. */}
-						{fixedCanvas ? (
-							// Fixed canvas size (Aesthetics → Canvas size): the chart
-							// draws inside a white width × height rectangle centered in
-							// the viewport; the rest of the viewport is shaded gray and
-							// scrolls when the rectangle exceeds it. `w-max min-w-full`
-							// keeps the gray backdrop covering the full scroll range,
-							// and `m-auto` (not justify/align-center) keeps the
-							// rectangle's top-left reachable when it overflows.
-							// The relative wrapper pins the zoom pill to the viewport's
-							// corner while the gray host beneath it scrolls.
-							<div className="relative flex min-h-0 flex-1 flex-col">
-								<div
-									ref={setChartHost}
-									// Focusable so a keyboard user can scroll a canvas larger
-									// than the viewport (arrow keys / Page Up/Down).
-									// eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- scrollable region must be focusable (WCAG 2.1.1)
-									tabIndex={0}
-									role="region"
-									aria-label="Chart canvas"
-									className={`min-h-0 flex-1 overflow-auto bg-stone-200 dark:bg-stone-800${publishedFrame}`}
-									style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
-								>
+					<EditorCanvasContext.Provider value>
+						<ErrorBoundary>
+							{/* data-editor-chart-viewport marks the element whose size the
+							 *  Export modal defaults its output dimensions to — the export
+							 *  embed then solves an identical layout, so absolute-pixel
+							 *  title offsets land where the user sees them (rather than
+							 *  shifting under a reflow at a different size). With a fixed
+							 *  canvas size the marker moves to the white canvas rectangle
+							 *  itself, so exports default to the prescribed dimensions. */}
+							{fixedCanvas ? (
+								// Fixed canvas size (Aesthetics → Canvas size): the chart
+								// draws inside a white width × height rectangle centered in
+								// the viewport; the rest of the viewport is shaded gray and
+								// scrolls when the rectangle exceeds it. `w-max min-w-full`
+								// keeps the gray backdrop covering the full scroll range,
+								// and `m-auto` (not justify/align-center) keeps the
+								// rectangle's top-left reachable when it overflows.
+								// The relative wrapper pins the zoom pill to the viewport's
+								// corner while the gray host beneath it scrolls.
+								<div className="relative flex min-h-0 flex-1 flex-col">
 									<div
-										className={`flex min-h-full w-max min-w-full p-6${dataTableUnderCanvas ? " flex-col" : ""}`}
+										ref={setChartHost}
+										// Focusable so a keyboard user can scroll a canvas larger
+										// than the viewport (arrow keys / Page Up/Down).
+										// eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- scrollable region must be focusable (WCAG 2.1.1)
+										tabIndex={0}
+										role="region"
+										aria-label="Chart canvas"
+										className={`min-h-0 flex-1 overflow-auto bg-stone-200 dark:bg-stone-800${publishedFrame}`}
+										style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
 									>
-										{/* Outer box takes the SCALED footprint so centering
-										 *  and scrolling see the shrunken size; the inner
-										 *  canvas keeps its true dimensions and is
-										 *  transformed from its top-left corner. */}
 										<div
-											// overflow-hidden: the inner canvas's LAYOUT box is
-											// still true-size (transforms don't change layout),
-											// and without clipping it would widen the `w-max`
-											// wrapper and make the host scroll into blank space.
-											className={`${dataTableUnderCanvas ? "mx-auto" : "m-auto"} shrink-0 overflow-hidden`}
-											style={{
-												width: fixedCanvas.width * fixedScale,
-												height: fixedCanvas.height * fixedScale,
-											}}
+											className={`flex min-h-full w-max min-w-full p-6${dataTableUnderCanvas ? " flex-col" : ""}`}
 										>
+											{/* Outer box takes the SCALED footprint so centering
+											 *  and scrolling see the shrunken size; the inner
+											 *  canvas keeps its true dimensions and is
+											 *  transformed from its top-left corner. */}
 											<div
-												data-editor-chart-viewport
-												className="overflow-hidden bg-white shadow-md"
+												// overflow-hidden: the inner canvas's LAYOUT box is
+												// still true-size (transforms don't change layout),
+												// and without clipping it would widen the `w-max`
+												// wrapper and make the host scroll into blank space.
+												className={`${dataTableUnderCanvas ? "mx-auto" : "m-auto"} shrink-0 overflow-hidden`}
 												style={{
-													width: fixedCanvas.width,
-													height: fixedCanvas.height,
-													transform:
-														fixedScale < 1 ? `scale(${fixedScale})` : undefined,
-													transformOrigin: "top left",
+													width: fixedCanvas.width * fixedScale,
+													height: fixedCanvas.height * fixedScale,
 												}}
 											>
-												<DataTableTabs className="h-full">
-													<ChartWithDataTable inCanvas>
-														<ChartCanvas />
-													</ChartWithDataTable>
-												</DataTableTabs>
+												<div
+													data-editor-chart-viewport
+													className="overflow-hidden bg-white shadow-md"
+													style={{
+														width: fixedCanvas.width,
+														height: fixedCanvas.height,
+														transform:
+															fixedScale < 1 ? `scale(${fixedScale})` : undefined,
+														transformOrigin: "top left",
+													}}
+												>
+													<DataTableTabs className="h-full">
+														<ChartWithDataTable inCanvas>
+															<ChartCanvas />
+														</ChartWithDataTable>
+													</DataTableTabs>
+												</div>
 											</div>
+											{/* Under the white canvas, at its displayed width —
+											 *  not scaled with it (the zoom is display-only for
+											 *  the figure; the table stays readable). */}
+											{dataTableUnderCanvas && (
+												<div
+													className="mx-auto mt-4 shrink-0 bg-white shadow-md"
+													style={{ width: fixedCanvas.width * fixedScale }}
+												>
+													<DataTableBlock underCanvas />
+												</div>
+											)}
 										</div>
-										{/* Under the white canvas, at its displayed width —
-										 *  not scaled with it (the zoom is display-only for
-										 *  the figure; the table stays readable). */}
-										{dataTableUnderCanvas && (
-											<div
-												className="mx-auto mt-4 shrink-0 bg-white shadow-md"
-												style={{ width: fixedCanvas.width * fixedScale }}
-											>
-												<DataTableBlock underCanvas />
-											</div>
-										)}
 									</div>
+									<CanvasZoomControls
+										zoom={canvasZoom}
+										scale={fixedScale}
+										onChange={setCanvasZoom}
+									/>
 								</div>
-								<CanvasZoomControls
-									zoom={canvasZoom}
-									scale={fixedScale}
-									onChange={setCanvasZoom}
-								/>
-							</div>
-						) : (
-							<DataTableTabs className="min-h-0 flex-1">
-								{fluid ? (
-									<div
-										ref={setChartHost}
-										className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto${publishedFrame}`}
-										style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
-									>
-										{/* Footprint box: the scaled size, clipping the true-size
-										 *  layout box so only the host's vertical scroll sees it. */}
+							) : (
+								<DataTableTabs className="min-h-0 flex-1">
+									{fluid ? (
 										<div
-											className="overflow-hidden"
-											style={{ height: fluid.footprintHeight }}
+											ref={setChartHost}
+											className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto${publishedFrame}`}
+											style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
 										>
+											{/* Footprint box: the scaled size, clipping the true-size
+											 *  layout box so only the host's vertical scroll sees it. */}
 											<div
-												data-editor-chart-viewport
-												style={{
-													width: fluid.layoutWidth,
-													height: fluid.layoutHeight,
-													transform: `scale(${fluid.scale})`,
-													transformOrigin: "top left",
-												}}
+												className="overflow-hidden"
+												style={{ height: fluid.footprintHeight }}
 											>
-												<ChartCanvas />
+												<div
+													data-editor-chart-viewport
+													style={{
+														width: fluid.layoutWidth,
+														height: fluid.layoutHeight,
+														transform: `scale(${fluid.scale})`,
+														transformOrigin: "top left",
+													}}
+												>
+													<ChartCanvas />
+												</div>
 											</div>
+											<DataTableBlock />
 										</div>
-										<DataTableBlock />
-									</div>
-								) : (
-									<div
-										ref={setChartHost}
-										data-editor-chart-viewport
-										className={`min-h-0 flex-1 overflow-auto${publishedFrame}`}
-										style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
-									>
-										<ChartWithDataTable>
-											<ChartCanvas />
-										</ChartWithDataTable>
-									</div>
-								)}
-							</DataTableTabs>
-						)}
-					</ErrorBoundary>
+									) : (
+										<div
+											ref={setChartHost}
+											data-editor-chart-viewport
+											className={`min-h-0 flex-1 overflow-auto${publishedFrame}`}
+											style={blackAndWhite ? { filter: "grayscale(1)" } : undefined}
+										>
+											<ChartWithDataTable>
+												<ChartCanvas />
+											</ChartWithDataTable>
+										</div>
+									)}
+								</DataTableTabs>
+							)}
+						</ErrorBoundary>
+					</EditorCanvasContext.Provider>
 					<ErrorBoundary>
 						<DataDrawer />
 					</ErrorBoundary>

@@ -21,8 +21,10 @@ import {
 import { INSIDE_AUTO_X_INSET } from "../../lib/legendSections"
 import { BASE_MARGIN, subtitleReserve, titleReserve } from "../../lib/plotLayout"
 import { resolveCanvasMargins } from "../../lib/themeConfig"
+import { ALL_ENCODING_CHANNELS } from "../../lib/types"
 import { useCurrentTheme } from "../../store/useCurrentTheme"
 import {
+	currentEncodingsAtom,
 	renderedLabelsAtom,
 	currentRenderedCanvasSlackAtom,
 	currentRenderedFigureSlackAtom,
@@ -38,6 +40,7 @@ import {
 	useCurrentDatasetView,
 } from "../../store/useCurrentDatasetView"
 
+import { useInEditorCanvas } from "./EditorCanvasContext"
 import { Legend, type InsideExtras } from "./Legend"
 import { PlotCanvas } from "./PlotCanvas"
 
@@ -76,6 +79,8 @@ export const ChartBody = ({
 	const dataset = useCurrentDatasetView()
 	const status = useCurrentDatasetStatus()
 	const channelConfigs = useAtomValue(renderChannelConfigsAtom)
+	const encodings = useAtomValue(currentEncodingsAtom)
+	const inEditor = useInEditorCanvas()
 	const bgStyle: React.CSSProperties | undefined =
 		channelConfigs.backgroundColor
 			? { backgroundColor: channelConfigs.backgroundColor }
@@ -136,12 +141,26 @@ export const ChartBody = ({
 			</div>
 		)
 	}
+	// Data but nothing mapped yet: point the editor user at the two ways in.
+	// An overlay, not a replacement — the (blank) plot stays mounted so
+	// layout readiness behaves as it does for any other chart.
+	const showHint =
+		inEditor && ALL_ENCODING_CHANNELS.every((ch) => encodings[ch]?.field == null)
 	// PlotCanvas handles BOTH faceted and single-panel cases — single is
 	// just a 1×1 facet grid.
-	if (!bgStyle) return <PlotCanvas titleOverhang={titleOverhang} />
+	if (!bgStyle && !showHint) return <PlotCanvas titleOverhang={titleOverhang} />
 	return (
-		<div className="h-full w-full" style={bgStyle}>
+		<div
+			className={showHint ? "relative h-full w-full" : "h-full w-full"}
+			style={bgStyle}
+		>
 			<PlotCanvas titleOverhang={titleOverhang} />
+			{showHint && (
+				<div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-center text-sm vc-muted">
+					Assign variables to visual elements in the Encodings section, or
+					use a Quickstart chart to get started.
+				</div>
+			)}
 		</div>
 	)
 }
