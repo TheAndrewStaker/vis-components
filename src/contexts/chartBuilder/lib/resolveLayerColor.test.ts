@@ -682,20 +682,16 @@ describe("patterns tile over the mark's own fill when hue is unmapped", () => {
 		expect(def?.inkColor).toBe("#ffffff")
 	})
 
-	it("the Background override replaces the fill, pairs its own ink and modulates like the fill", () => {
+	it("a stored legacy Background override is inert: the tile stays the mark's fill with its paired ink", () => {
+		// The Pattern panel's Background swatch is gone (2026-11-04); call
+		// sites still thread a stored `pattern.backgroundColor` through, and
+		// it must change nothing — the visual follows its Color-menu fill.
 		const def = resolvePatternDefForItem(item, emptyScales, configs, "#118ab2", optIn)
-		expect(def?.bgColor).toBe("#118ab2")
-		expect(def?.inkColor).toBe("#073b55")
-		const modulated = resolvePatternDefForItem(
-			{ ...item, briUnit: 0.9 },
-			emptyScales,
-			configs,
-			"#118ab2",
-			optIn
+		expect(def?.bgColor).toBe("#ef476f")
+		expect(def?.inkColor).toBe("#8a0023")
+		expect(def).toEqual(
+			resolvePatternDefForItem(item, emptyScales, configs, null, optIn)
 		)
-		expect(modulated?.bgColor).not.toBe("#118ab2")
-		// The ink still keys on the un-modulated override.
-		expect(modulated?.inkColor).toBe("#073b55")
 	})
 
 	it("a field-mapped pattern tiles over the fill the same way", () => {

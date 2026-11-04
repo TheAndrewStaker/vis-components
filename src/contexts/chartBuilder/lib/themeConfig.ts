@@ -448,12 +448,14 @@ export const chordAxisConfigFromTheme = (t: Theme): ChordAxisConfig => ({
 })
 
 /** Theme-seeded `pattern` slice — see `shapeConfigFromTheme` for why this is a
- * shared builder. Only `backgroundColor` is theme-driven: the theme's
- * Background override, or `null` (the system themes) so patterns tile over
- * each mark's own fill. */
-export const patternConfigFromTheme = (t: Theme): PatternConfig => ({
+ * shared builder. Nothing in it is theme-driven any more: the theme's
+ * `patternBackgroundColor` used to seed `backgroundColor`, but the Pattern
+ * panel's Background swatch is gone (2026-11-04) and the stored value is
+ * inert, so it is never seeded. The theme parameter stays so callers and
+ * the changed-dot baseline keep one shape with the other builders. */
+export const patternConfigFromTheme = (_t: Theme): PatternConfig => ({
 	...DEFAULT_PATTERN_CONFIG,
-	backgroundColor: t.patternBackgroundColor ?? null,
+	backgroundColor: null,
 })
 
 /** Theme-seeded `angle` slice — see `shapeConfigFromTheme` for why this is a

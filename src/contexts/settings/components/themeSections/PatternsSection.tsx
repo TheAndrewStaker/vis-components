@@ -1,4 +1,4 @@
-import { ColorInput, Section, SectionGroup, THEME_LABEL_CLASS } from "./controls"
+import { ColorInput, Section, SectionGroup } from "./controls"
 import { ColorInput as UiColorInput } from "../../../../components/ui/ColorInput"
 import { updateCategoricalPalette } from "./paletteHelpers"
 import type { ThemeSectionProps } from "./types"
@@ -14,23 +14,11 @@ export const PatternsSection = ({
 			<p className="text-sm vc-muted">
 				Patterns sit on each mark&apos;s own color; the ink pairs with that
 				color through the per-palette overrides below, else the Ink color.
-				Background, when set, replaces the mark color under the pattern on
-				marks with no hue mapping.
 			</p>
 			<ColorInput
 				label="Ink color"
 				value={theme.patternInkColor}
 				onChange={(v) => set("patternInkColor", v)}
-			/>
-			{/* Inherit mode: empty = the mark's fill, previewed in the swatch. */}
-			<UiColorInput
-				label="Background"
-				labelClassName={THEME_LABEL_CLASS}
-				showPalettePicker={false}
-				value={theme.patternBackgroundColor ?? null}
-				onChange={(v) => set("patternBackgroundColor", v)}
-				onClear={() => set("patternBackgroundColor", null)}
-				placeholder={theme.defaultFill}
 			/>
 			{theme.categoricalPalettes.length > 0 && (
 				<div className="mt-2 flex flex-col gap-3">

@@ -246,11 +246,7 @@ export const CombinedGroupLegend = ({
 	// Pattern menu's Background override, then what the marks draw — their
 	// default fill. Only consumed when hue does NOT drive the swatch (see
 	// `bg` in buildEntry).
-	const patBg =
-		patternLegendBgColor ??
-		configs.pattern?.backgroundColor ??
-		configs.defaultFill ??
-		DEFAULT_FILL
+	const patBg = patternLegendBgColor ?? configs.defaultFill ?? DEFAULT_FILL
 	// Line dash overlay only meaningful when connection is mapped AND a
 	// pattern field shares this section's variable. Auto-cycle through
 	// DASH_CYCLE by category position; per-category overrides win.
@@ -350,16 +346,16 @@ export const CombinedGroupLegend = ({
 		if (patCategories) {
 			const catIdx = patCategories.indexOf(v)
 			if (catIdx !== -1) {
-				// No-hue pattern tiles modulate their background by the
-				// category's sat/bri level, mirroring the marks (see
-				// `modulatedPatternBg` in lib/resolveLayerColor) — otherwise a
-				// sat/bri + pattern combined section shows only the pattern.
+				// No-hue pattern tiles modulate their background (the marks'
+				// fill) by the category's sat/bri level, mirroring the marks
+				// (`patternTile` in lib/resolveLayerColor) — otherwise a sat/bri
+				// + pattern combined section shows only the pattern.
 				// With hue mapped, `color` already carries the modulation.
 				const bg = hasHue ? color : modulateColor(patBg, satU, briU)
 				// Mirror the marks' preferredInk lookup so the legend swatch's
 				// ink matches the mark's: the palette-paired ink for the color
 				// under the tile (the hue color, or the no-hue tile color —
-				// default fill or Background override). A standalone (no-hue)
+				// the default fill). A standalone (no-hue)
 				// pattern section's own default-ink override wins first;
 				// per-category inks still win inside `resolvePatternForMark`.
 				const huePalette = inkPaletteForHue(configs, type)

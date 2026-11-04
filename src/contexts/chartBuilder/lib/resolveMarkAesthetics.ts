@@ -26,9 +26,9 @@ export type MarkAesthetics = {
 	/** Sat/bri unit values applied to `fill` (scale value when mapped and
 	 *  resolvable, else the channel's default), `null` when no modulation
 	 *  applied. The
-	 *  pattern-defs pass uses these to modulate the NO-HUE pattern
-	 *  background the same way the fill is modulated (see
-	 *  `modulatedPatternBg` in lib/resolveLayerColor). */
+	 *  pattern-defs pass carries them on each item so the legend can
+	 *  modulate its tiles the same way (see `patternTile` in
+	 *  lib/resolveLayerColor). */
 	satUnit: number | null
 	briUnit: number | null
 }

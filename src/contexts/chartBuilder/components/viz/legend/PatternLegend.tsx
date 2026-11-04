@@ -46,8 +46,7 @@ export const PatternLegend = ({
 	// what the marks draw: the Background override when set, else the mark's
 	// default fill — and the ink pairs on that color through the palette,
 	// exactly as `resolvePatternDefForItem` does for the marks.
-	const bgColor =
-		configs.pattern?.backgroundColor ?? configs.defaultFill ?? DEFAULT_FILL
+	const bgColor = configs.defaultFill ?? DEFAULT_FILL
 	const themeInkFallback = useThemeInkFallback()
 	const huePalette = inkPaletteForHue(configs, "categorical")
 	const preferredInk = inkForHueColor(

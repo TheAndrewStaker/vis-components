@@ -352,7 +352,7 @@ describe("resolveGeoPatternDef / geoPatternFill", () => {
 		).toBe(`url(#${def!.svgId})`)
 	})
 
-	it("without hue, the tile sits on the mark's own fill unless the Pattern Background overrides it", () => {
+	it("without hue, the tile sits on the mark's own fill — a stored legacy Background is inert", () => {
 		const scales = patternScales(false)
 		const def = resolveGeoPatternDef(
 			{ p: "A" },
@@ -363,11 +363,13 @@ describe("resolveGeoPatternDef / geoPatternFill", () => {
 		expect(def).not.toBeNull()
 		// The shared `patternTile` rule: a patterned region keeps its color.
 		expect(def!.bgColor).toBe("#123456")
-		const overridden = resolveGeoPatternDef({ p: "A" }, "#123456", scales, {
+		// The Pattern panel's Background swatch is gone; a value an older
+		// save still carries must not replace the region's color.
+		const legacy = resolveGeoPatternDef({ p: "A" }, "#123456", scales, {
 			...EMPTY_CHANNEL_CONFIGS,
 			pattern: { ...DEFAULT_PATTERN_CONFIG, backgroundColor: "#e2e8f0" },
 		})
-		expect(overridden!.bgColor).toBe("#e2e8f0")
+		expect(legacy!.bgColor).toBe("#123456")
 	})
 
 	it("cycles the pattern palette by category index", () => {

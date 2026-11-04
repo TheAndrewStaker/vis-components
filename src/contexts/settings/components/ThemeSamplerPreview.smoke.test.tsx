@@ -41,10 +41,11 @@ describe("ThemeSamplerPreview", () => {
 		expect(svg.querySelectorAll("linearGradient")).toHaveLength(1)
 		expect(svg.querySelectorAll("stop")[0]?.getAttribute("stop-color")).toBe("#d00001")
 		expect(svg.querySelectorAll("pattern")).toHaveLength(6)
-		// The first pattern tile sits on the theme's pattern background.
+		// The first pattern tile sits on the theme's default fill (the
+		// pattern-background theme field is inert).
 		expect(
 			svg.querySelector("pattern rect")?.getAttribute("fill")
-		).toBe("#e00002")
+		).toBe(theme.defaultFill)
 	})
 
 	it("puts the second row of pattern tiles on the default palette's colors", () => {
@@ -56,9 +57,9 @@ describe("ThemeSamplerPreview", () => {
 			p.querySelector("rect")?.getAttribute("fill")
 		)
 		expect(tileBackgrounds).toEqual([
-			"#e00002",
-			"#e00002",
-			"#e00002",
+			theme.defaultFill,
+			theme.defaultFill,
+			theme.defaultFill,
 			"#b00001",
 			"#b00002",
 			"#b00003",

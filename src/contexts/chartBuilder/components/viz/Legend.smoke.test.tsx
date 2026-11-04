@@ -1590,7 +1590,7 @@ describe("CombinedGroupLegend — standalone pattern section", () => {
 		expect(container.innerHTML.toLowerCase()).not.toContain("#00ff00")
 	})
 
-	it("PATTERN_NONE category renders a plain tile in the pattern background color", () => {
+	it("PATTERN_NONE category renders a plain tile in the marks' fill color", () => {
 		const { container } = render(
 			<CombinedGroupLegend
 				channels={["pattern"]}
@@ -1598,19 +1598,22 @@ describe("CombinedGroupLegend — standalone pattern section", () => {
 				values={values}
 				configs={{
 					...EMPTY_CHANNEL_CONFIGS,
+					defaultFill: "#654321",
 					pattern: {
 						...DEFAULT_PATTERN_CONFIG,
 						overrides: { B: "none" },
-						backgroundColor: "#654321",
+						// Inert since the Background swatch went away: a stored
+						// value must not paint the tile.
+						backgroundColor: "#abcdef",
 					},
 				}}
 				reverseCategorical={false}
 				auxSwatchColor="#00ff00"
 			/>
 		)
-		// B's swatch is the plain rect span — painted with the pattern
-		// BACKGROUND (matching its unpatterned marks), not the section's base
-		// swatch color and never the aux color.
+		// B's swatch is the plain rect span — painted with the marks' FILL
+		// (matching its unpatterned marks), not the section's base swatch
+		// color and never the aux color.
 		const spans = [
 			...container.querySelectorAll<HTMLElement>("span"),
 		].filter((s) => s.style.backgroundColor !== "")
@@ -1632,10 +1635,8 @@ describe("CombinedGroupLegend — standalone pattern section", () => {
 				values={values}
 				configs={{
 					...EMPTY_CHANNEL_CONFIGS,
-					pattern: {
-						...DEFAULT_PATTERN_CONFIG,
-						backgroundColor: "#888888",
-					},
+					defaultFill: "#888888",
+					pattern: { ...DEFAULT_PATTERN_CONFIG },
 				}}
 				reverseCategorical={false}
 			/>

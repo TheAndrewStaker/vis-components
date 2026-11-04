@@ -1243,8 +1243,7 @@ matching what its legend shows. The modulation applies to whatever the
 measure resolved to — a hue color, the opacity-only base fill, or (with
 no measure mapped) the no-data fill for matched rows. Un-joined regions
 never modulate: they stay on the flat no-data paint. Pattern-ink lookup
-still keys on the PRE-modulation color, and a pattern's Background
-override (when hue isn't driving the fill) modulates like the fill does.
+still keys on the PRE-modulation color.
 
 Data labels on maps anchor to REGIONS via the Data Labels section's
 **Geography** row (which replaces its X/Y position rows in geo modes) —
@@ -1331,8 +1330,7 @@ different palette slot than the drawn arc). Mapping **pattern to
 either endpoint column** likewise means "pattern by node" over the
 same union: node arcs / rects fill with the node's pattern tile
 (background = the node's drawn color — its hue color when hue is also
-on the nodes, else the default fill — unless no hue is on the nodes and
-the Pattern panel's Background override replaces it), and ribbons / links take
+on the nodes, else the default fill), and ribbons / links take
 their SOURCE node's tile. Node and ribbon opacity are two flow-only
 slots in the **Opacity menu** — **Nodes** (default 1) and **Ribbons**
 (default 0.45), level-only (flow marks aggregate rows, so a per-row
@@ -1394,9 +1392,8 @@ group" / "Nesting depth", offered in the Pattern shelf dropdown like
 the other styling channels) resolve from tree position, so any styled
 mark patterns, implicit containers included when a derived color
 styles them. The pattern tile's background is the mark's drawn fill
-(whether or not a field hue or a derived source varies it), unless no
-color does and the Pattern panel's Background override replaces it;
-ink pairing keys on the pre-modulation color per the palette-ink invariant
+(whether or not a field hue or a derived source varies it); ink
+pairing keys on the pre-modulation color per the palette-ink invariant
 (`useHierarchyScaffold.makeStyleResolvers` → `patternFor`). The
 Pattern panel lists the derived categories (group names / "Level N"
 rows) with the same auto-cycled glyph defaults the marks draw.
@@ -1812,12 +1809,14 @@ Behavior depends on chart context:
   sits on the mark's OWN fill — a patterned bar keeps its color —
   whether hue drives that fill or not, and the ink pairs with the
   fill's palette swatch (the theme's per-hue ink overrides, then the
-  cross-palette table), else the theme's Ink color. **Ink color** and
-  **Background** are inherit-mode swatches: empty = that pairing / the
-  mark fill, previewed in the swatch; a pick is an explicit override.
-  Background applies only while hue is unmapped (with hue mapped the
-  tile is the hue color regardless) and seeds from the theme's Pattern
-  ▸ Background, which the system themes leave empty.
+  cross-palette table), else the theme's Ink color. **Ink color** is
+  an inherit-mode swatch: empty = that pairing, previewed in the
+  swatch; a pick is an explicit override. There is no Background
+  swatch: the tile IS the mark's fill, which the Color menu already
+  owns. A `backgroundColor` an older save still carries (or the
+  theme field that used to seed it) is inert everywhere — renderers,
+  legends, chips — so such visuals follow their Color-menu fill like
+  any other; the panel's reset also clears it.
   A **Scale** box under each Color picker zooms that category's tile
   (×0–×4 by 0.1; blank = ×1). Dots and stripes swell by the full
   factor while their spacing grows a little less (tile side ∝
@@ -1866,8 +1865,7 @@ Behavior depends on chart context:
   `defaultPolygonPatternInk`); variable mapped → per-category swatches
   + ink (`pattern.polygonOverrides` / `polygonInkColors`), defaulting
   to "None" until picked. The pattern tile's background is the
-  polygon's fill (or the shared Background override when hue is
-  unmapped).
+  polygon's fill.
   Stays available with "No points" (the polygons remain); hidden while
   the polygon is unfilled (nothing to pattern). Radar points read the
   ordinary Point-fill state, defaulting to none like any line chart.

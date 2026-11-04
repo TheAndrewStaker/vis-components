@@ -278,7 +278,7 @@ export const buildThemeSamplerModel = (theme: Theme): ThemeSamplerModel => {
 	// The no-hue tile sits on the mark fill (unless the theme overrides the
 	// Background), inked with that color's paired ink when it is a palette
 	// swatch — what a patterned bar with no color mapping draws.
-	const tileBackground = theme.patternBackgroundColor ?? theme.defaultFill
+	const tileBackground = theme.defaultFill
 	const tileInk =
 		inkForHueColor(
 			tileBackground,

@@ -57,9 +57,9 @@ export type ResolveLayerColorArgs = {
 	groupValues: GroupValues
 	/** Color to fall back to when hue isn't mapped (or maps to null). */
 	defaultFill: string
-	/** The Pattern panel's Background override (`pattern.backgroundColor`),
-	 *  or `null` to tile the pattern over the mark's own fill. Only read
-	 *  when hue does NOT drive the fill. */
+	/** INERT since 2026-11-04: the pattern always tiles over the mark's own
+	 *  fill (the Color menu owns it). Call sites still thread the stored
+	 *  `pattern.backgroundColor` through; `patternTile` ignores it. */
 	patternBgOverride: string | null
 	aestheticScales: AestheticScales
 	channelConfigs: ChannelConfigs
@@ -158,22 +158,6 @@ export const resolveGroupFill = (
 	return { fill: color, preModulationHue, satUnit, briUnit }
 }
 
-/** The background tile color for a pattern when the Pattern panel's
- *  Background OVERRIDE replaces the mark's fill: the override modulated by
- *  the SAME sat/bri units the fill used. One rule everywhere — "the pattern
- *  background modulates exactly like the fill" — so mapping saturation/
- *  brightness alongside pattern stays visible on the marks (and the legend
- *  mirrors this). The pattern-INK lookup deliberately keeps keying on the
- *  un-modulated override (palette-ink invariant). */
-export const modulatedPatternBg = (
-	patternBgOverride: string,
-	satUnit: number | null,
-	briUnit: number | null
-): string =>
-	satUnit !== null || briUnit !== null
-		? modulateColor(patternBgOverride, satUnit, briUnit)
-		: patternBgOverride
-
 /** One mark's inputs to the pattern-def resolution, with the fill colors
  *  already resolved. Renderers with per-row pipelines (ScatterPlot) build
  *  these from `resolveMarkAesthetics`; GroupValues-based renderers go
@@ -203,27 +187,23 @@ export type PatternDefItem = {
 	briUnit?: number | null
 }
 
-/** The tile color under one mark's pattern and the un-modulated color its
- *  ink pairs on. `hueMapped`: the mark's fill is hue-driven, so the
- *  Background override never applies. */
+/** The tile a pattern draws over and the color its ink pairs on: ALWAYS the
+ *  mark's own fill (hue mapped or not — default fill, fill rules, sat/bri
+ *  modulation), with the ink keyed on the pre-modulation color (the
+ *  palette's exact swatch hex). The Pattern panel's Background swatch was
+ *  removed on 2026-11-04 ("the point color is already addressed in the
+ *  Color encoding"); a `backgroundColor` an older save still carries is
+ *  ignored here, so such visuals follow their Color-menu fill like any
+ *  other. `hueMapped` and `patternBgOverride` stay in the signature for the
+ *  many call sites that thread them; both are inert. */
 export const patternTile = (
 	item: Pick<PatternDefItem, "fill" | "preModulationHue" | "satUnit" | "briUnit">,
-	hueMapped: boolean,
-	patternBgOverride: string | null
-): { bgColor: string; inkKeyColor: string } => {
-	const override = hueMapped ? null : patternBgOverride
-	if (override === null) {
-		return { bgColor: item.fill, inkKeyColor: item.preModulationHue }
-	}
-	return {
-		bgColor: modulatedPatternBg(
-			override,
-			item.satUnit ?? null,
-			item.briUnit ?? null
-		),
-		inkKeyColor: override,
-	}
-}
+	_hueMapped: boolean,
+	_patternBgOverride: string | null
+): { bgColor: string; inkKeyColor: string } => ({
+	bgColor: item.fill,
+	inkKeyColor: item.preModulationHue,
+})
 
 export type PatternDefOptions = {
 	/** Line-chart context (a connection field is mapped): treat the ABSENCE

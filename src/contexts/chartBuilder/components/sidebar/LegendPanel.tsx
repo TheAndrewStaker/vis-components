@@ -1634,7 +1634,6 @@ export const LegendPanel = () => {
 												labelClassName={LABEL_COL}
 												value={
 													merged.patternLegendBgColor ??
-													configs.pattern?.backgroundColor ??
 													configs.defaultFill ??
 													DEFAULT_FILL
 												}
