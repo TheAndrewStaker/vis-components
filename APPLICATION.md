@@ -5564,6 +5564,14 @@ version, or a failed capture appends `<pre id="export-error">` with the
 message instead. Nothing is saved or uploaded; without `export` the
 embed page behaves exactly as before.
 
+**Edits through the API.** A chart written by a program (the MCP
+server's `create_chart` / `edit_chart`, over the same per-item routes
+the editor uses) is a saved visual like any other, but it is not an
+editor autosave: it does not republish any published pin, "Republish on
+every save" does not see it, and the published-visual edit gate is not
+asked. A published chart changed through the API shows the change in the
+editor and at its embed URL only after someone republishes it there.
+
 ### Single-file distribution & library bundles
 
 `pnpm build` emits ONE self-contained `dist/index.html` (JS + CSS
