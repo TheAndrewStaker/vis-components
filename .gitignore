@@ -3,6 +3,7 @@
 coverage
 dist
 mcp/dist
+cli/dist
 node_modules
 .DS_Store
 *.log

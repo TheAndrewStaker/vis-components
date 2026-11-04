@@ -1,0 +1,332 @@
+// @vitest-environment node
+// Nancy's scenarios (mcp/src/scenarios.test.ts) run through the commands
+// instead of mcp/src/tools.ts, against the real self-host server: each tool
+// a scenario calls is the command that tool would call. The bodies below are
+// hers unchanged; only `tools` differs.
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
+
+import type { SpecProblem } from "../../src/contexts/chartBuilder/lib/chartSpec"
+import type { Visual } from "../../src/contexts/chartBuilder/lib/types"
+import { createApi } from "../../mcp/src/api"
+import { startTestServer, type TestServer } from "../../mcp/src/testServer"
+import { CommandError, memoryUndo, run } from "./commands"
+
+let server: TestServer
+let tools: ReturnType<typeof commandTools>
+
+/** The handlers the scenarios call, each as the command it maps to, with
+ *  a refusal as an isError result the way the MCP returns one. */
+const commandTools = (base: string) => {
+	const deps = { api: createApi(base), undo: memoryUndo() }
+	const call = async (name: string, input: unknown): Promise<CallToolResult> => {
+		try {
+			return { content: [{ type: "text", text: JSON.stringify(await run(name, input, deps)) }] }
+		} catch (error) {
+			if (!(error instanceof CommandError)) throw error
+			const body = { message: error.message, problems: error.problems ?? [] }
+			return { isError: true, content: [{ type: "text", text: JSON.stringify(body) }] }
+		}
+	}
+	return {
+		create_dataset: (args: { name: string; rows: Record<string, unknown>[] }) => call("dataset create", args),
+		create_chart: (spec: Record<string, unknown>) => call("chart create", { spec }),
+		edit_chart: (args: { id: string; patch: Record<string, unknown> }) =>
+			call("chart edit", { ...args, caller: "scenarios" }),
+		undo_chart_edit: (args: { id: string }) => call("chart undo", { ...args, caller: "scenarios" }),
+		list_settings: (args: Record<string, unknown>) => call("settings list", args),
+	}
+}
+
+beforeAll(async () => {
+	server = await startTestServer()
+	tools = commandTools(server.base)
+})
+afterAll(() => server.close())
+
+type ToolOutput = { id: string; message: string; problems: SpecProblem[]; warnings?: string[]; [key: string]: unknown }
+
+const parsed = (result: CallToolResult) => {
+	expect(result.isError, (result.content[0] as { text: string }).text).toBeFalsy()
+	return JSON.parse((result.content[0] as { text: string }).text) as ToolOutput
+}
+const refusal = (result: CallToolResult) => {
+	expect(result.isError).toBe(true)
+	return JSON.parse((result.content[0] as { text: string }).text) as ToolOutput
+}
+
+const stored = async (id: string): Promise<Visual> => {
+	const all = (await (await fetch(`${server.base}/api/visuals?thumbnails=0`)).json()) as Visual[]
+	const v = all.find((x) => x.id === id)
+	if (!v) throw new Error(`no stored visual ${id}`)
+	return v
+}
+
+const dataset = async (name: string, rows: Record<string, unknown>[]) =>
+	parsed(await tools.create_dataset({ name, rows })).id
+
+describe("scenarios: what a model should be able to do", () => {
+	it("01 grouped bars from a pasted table, then only the title changes", async () => {
+		const ds = await dataset("ED visits", [
+			{ Quarter: "Q1", Hospital: "Riverside", "ED visits": 4100 },
+			{ Quarter: "Q1", Hospital: "Lakeview", "ED visits": 3800 },
+			{ Quarter: "Q2", Hospital: "Riverside", "ED visits": 4300 },
+			{ Quarter: "Q2", Hospital: "Lakeview", "ED visits": 3900 },
+		])
+		const chart = parsed(
+			await tools.create_chart({
+				datasetId: ds,
+				folderId: null,
+				encodings: { x: "Quarter", length: "ED visits", hue: "Hospital" },
+				stack: "group",
+			})
+		)
+		const before = await stored(chart.id)
+		expect(before.channelConfigs.hue?.stackMode).toBe("group")
+		parsed(await tools.edit_chart({ id: chart.id, patch: { title: "ED visits by quarter, 2025" } }))
+		const after = await stored(chart.id)
+		expect(after.labelsConfig.title).toBe("ED visits by quarter, 2025")
+		expect({ ...after, labelsConfig: null, name: null, updatedAt: 0 }).toEqual({
+			...before,
+			labelsConfig: null,
+			name: null,
+			updatedAt: 0,
+		})
+	})
+
+	it("08 pie, then a donut, then undo", async () => {
+		const ds = await dataset("icecream", [
+			{ flavor: "Vanilla", scoops: 12 },
+			{ flavor: "Chocolate", scoops: 9 },
+		])
+		const chart = parsed(
+			await tools.create_chart({ datasetId: ds, folderId: null, encodings: { angle: "scoops", hue: "flavor" } })
+		)
+		const pie = await stored(chart.id)
+		parsed(
+			await tools.edit_chart({
+				id: chart.id,
+				patch: { settings: { channelConfigs: { angle: { donutHoleRadius: 50 } } } },
+			})
+		)
+		expect((await stored(chart.id)).channelConfigs.angle?.donutHoleRadius).toBe(50)
+		parsed(await tools.undo_chart_edit({ id: chart.id }))
+		expect({ ...(await stored(chart.id)), updatedAt: 0 }).toEqual({ ...pie, updatedAt: 0 })
+	})
+
+	it("09 a US map shaded by state, then the legend hidden", async () => {
+		const ds = await dataset("state_choropleth_data", [
+			{ state: "Alabama", abbr: "AL", value: 3 },
+			{ state: "Alaska", abbr: "AK", value: 7 },
+		])
+		const chart = parsed(
+			await tools.create_chart({
+				datasetId: ds,
+				folderId: null,
+				encodings: { connection: "state", hue: "value" },
+				settings: { mapConfig: { coordSystem: "geographic", geographyLevel: "states" } },
+			})
+		)
+		const map = await stored(chart.id)
+		expect(map.mapConfig).toMatchObject({ coordSystem: "geographic", geographyLevel: "states" })
+		expect(map.channelConfigs.hue?.kind).toBe("quantitative")
+		parsed(await tools.edit_chart({ id: chart.id, patch: { settings: { legendConfig: { enabled: false } } } }))
+		expect((await stored(chart.id)).legendConfig?.enabled).toBe(false)
+	})
+
+	it("11 a sankey from Parent, Child and Value", async () => {
+		const ds = await dataset("sankey_data", [
+			{ Parent: "Primary care", Child: "Cardiology", Value: 40 },
+			{ Parent: "Primary care", Child: "Orthopedics", Value: 25 },
+		])
+		const chart = parsed(
+			await tools.create_chart({
+				datasetId: ds,
+				folderId: null,
+				encodings: { connection: "Parent", area: "Value" },
+				settings: { channelConfigs: { connection: { hierarchyLayout: "sankey", flowTargetField: "Child" } } },
+			})
+		)
+		const v = await stored(chart.id)
+		expect(v.channelConfigs.connection).toMatchObject({ hierarchyLayout: "sankey", flowTargetField: "Child" })
+	})
+
+	it("14 a stacked area over dates, then the x axis starts in March", async () => {
+		const ds = await dataset("visits", [
+			{ date: "2025-01-01", setting: "inpatient", visits: 320 },
+			{ date: "2025-02-01", setting: "inpatient", visits: 310 },
+			{ date: "2025-03-01", setting: "inpatient", visits: 335 },
+			{ date: "2025-01-01", setting: "outpatient", visits: 540 },
+			{ date: "2025-02-01", setting: "outpatient", visits: 560 },
+			{ date: "2025-03-01", setting: "outpatient", visits: 575 },
+		])
+		const chart = parsed(
+			await tools.create_chart({
+				datasetId: ds,
+				folderId: null,
+				encodings: { x: "date", length: "visits", connection: "setting", hue: "setting" },
+			})
+		)
+		parsed(await tools.edit_chart({ id: chart.id, patch: { axes: { x: { min: "2025-03-01" } } } }))
+		const min = (await stored(chart.id)).channelConfigs.x?.min
+		expect(typeof min).toBe("number")
+		expect(new Date(min as number).toISOString().slice(0, 7)).toBe("2025-03")
+	})
+
+	it("16 one line thicker than another: thickness by field seeds every level, then one level changes", async () => {
+		const ds = await dataset("rates", [
+			{ month: "2025-01", payer: "Aetna", rate: 410 },
+			{ month: "2025-02", payer: "Aetna", rate: 425 },
+			{ month: "2025-01", payer: "Cigna", rate: 390 },
+			{ month: "2025-02", payer: "Cigna", rate: 400 },
+		])
+		const chart = parsed(
+			await tools.create_chart({
+				datasetId: ds,
+				folderId: null,
+				encodings: { x: "month", y: "rate", connection: "payer", hue: "payer" },
+			})
+		)
+		parsed(
+			await tools.edit_chart({
+				id: chart.id,
+				patch: { settings: { channelConfigs: { connection: { thicknessField: "payer" } } } },
+			})
+		)
+		const seeded = (await stored(chart.id)).channelConfigs.connection
+		expect(Object.keys(seeded?.thicknessByValue ?? {}).sort()).toEqual(["Aetna", "Cigna"])
+		parsed(
+			await tools.edit_chart({
+				id: chart.id,
+				patch: { settings: { channelConfigs: { connection: { thicknessByValue: { Aetna: 5 } } } } },
+			})
+		)
+		const thick = (await stored(chart.id)).channelConfigs.connection?.thicknessByValue
+		expect(thick?.Aetna).toBe(5)
+		expect(thick?.Cigna).toBe(seeded?.thickness)
+		const listed = parsed(await tools.list_settings({ chartId: chart.id, query: "thicknessByValue" }))
+		expect((listed.keys as { levels: Record<string, string[]> }).levels.payer).toEqual(["Aetna", "Cigna"])
+	})
+
+	it("25 a dumbbell from two periods needs nothing on shape or area", async () => {
+		const ds = await dataset("waits", [
+			{ Hospital: "Riverside", Period: "Before", "Median wait": 48 },
+			{ Hospital: "Riverside", Period: "After", "Median wait": 31 },
+			{ Hospital: "Lakeview", Period: "Before", "Median wait": 42 },
+			{ Hospital: "Lakeview", Period: "After", "Median wait": 37 },
+		])
+		const chart = parsed(
+			await tools.create_chart({
+				datasetId: ds,
+				folderId: null,
+				family: "dumbbell",
+				encodings: { y: "Hospital", x: "Median wait", hue: "Period" },
+			})
+		)
+		const v = await stored(chart.id)
+		expect(v.encodings.shape.field).toBeNull()
+		expect(v.encodings.area.field).toBeNull()
+		expect(v.encodings.connection.field).toBe("Hospital")
+	})
+
+	it("26 a lollipop is a scatter with stems; the stems can start at a baseline", async () => {
+		const ds = await dataset("readmissions", [
+			{ Hospital: "Riverside", rate: 14.2 },
+			{ Hospital: "Lakeview", rate: 11.8 },
+		])
+		const chart = parsed(
+			await tools.create_chart({
+				datasetId: ds,
+				folderId: null,
+				encodings: { x: "Hospital", y: "rate" },
+				settings: { channelConfigs: { connection: { axisStem: "x-axis" } } },
+			})
+		)
+		expect((await stored(chart.id)).channelConfigs.connection?.axisStem).toBe("x-axis")
+		parsed(
+			await tools.edit_chart({
+				id: chart.id,
+				patch: { settings: { channelConfigs: { connection: { axisStem: "custom-y", axisStemCustomY: 13 } } } },
+			})
+		)
+		expect((await stored(chart.id)).channelConfigs.connection).toMatchObject({ axisStem: "custom-y", axisStemCustomY: 13 })
+	})
+
+	it("32 a theme by name, and the themes listed for a name that doesn't exist", async () => {
+		const ds = await dataset("ed", [{ Hospital: "Riverside", "ED visits": 17210 }])
+		const chart = parsed(
+			await tools.create_chart({
+				datasetId: ds,
+				folderId: null,
+				encodings: { x: "Hospital", length: "ED visits" },
+				themeId: "System Dark",
+			})
+		)
+		expect((await stored(chart.id)).themeId).toBe("system-dark")
+		const missing = refusal(
+			await tools.create_chart({ datasetId: ds, folderId: null, encodings: { x: "Hospital", length: "ED visits" }, themeId: "Neon" })
+		)
+		expect(missing.problems[0].message).toMatch(/system-dark/)
+	})
+
+	it("34 threshold colors, with a palette color, and no redundant legend", async () => {
+		const ds = await dataset("aba", [
+			{ state: "Alabama", change: 81.7 },
+			{ state: "Georgia", change: 267.4 },
+		])
+		const chart = parsed(
+			await tools.create_chart({
+				datasetId: ds,
+				folderId: null,
+				encodings: { y: "state", length: "change" },
+			})
+		)
+		const palettes = parsed(await tools.list_settings({ chartId: chart.id, query: "fillColorRules" })).palettes as {
+			categorical: Array<{ colors: string[] }>
+		}
+		const [purple, orange] = palettes.categorical[0].colors
+		parsed(
+			await tools.edit_chart({
+				id: chart.id,
+				patch: {
+					settings: {
+						channelConfigs: {
+							fillColorRules: [
+								{ condition: "> 135", color: purple },
+								{ condition: "<= 135", color: orange },
+							],
+						},
+						legendConfig: { hidden: { hue: true } },
+					},
+				},
+			})
+		)
+		const v = await stored(chart.id)
+		expect(v.channelConfigs.fillColorRules).toEqual([
+			{ condition: "> 135", color: purple },
+			{ condition: "<= 135", color: orange },
+		])
+		expect(v.legendConfig?.hidden).toEqual({ hue: true })
+	})
+
+	it("a settings refusal names the setting that unlocks it", async () => {
+		const ds = await dataset("facets", [
+			{ region: "West", year: 2020, sales: 5 },
+			{ region: "East", year: 2021, sales: 9 },
+		])
+		const chart = parsed(
+			await tools.create_chart({
+				datasetId: ds,
+				folderId: null,
+				encodings: { x: "year", y: "sales", facet: "region" },
+			})
+		)
+		const out = refusal(
+			await tools.edit_chart({
+				id: chart.id,
+				patch: { settings: { channelConfigs: { facet: { panelAxisOverrides: { West: { yMax: 10 } } } } } },
+			})
+		)
+		expect(out.problems[0].message).toContain('"channelConfigs.facet.shareY"')
+	})
+})
