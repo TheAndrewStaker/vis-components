@@ -76,6 +76,45 @@ describe("buildThemePreviewModel", () => {
 })
 
 describe("buildThemeSamplerModel", () => {
+	it("resolves the tooltip box from the theme's Tooltips defaults", () => {
+		const theme: Theme = {
+			...base,
+			tooltipMaxWidth: 300,
+			tooltipCornerRadius: 2,
+			tooltipBackgroundColor: "#101010",
+			tooltipOutlineColor: null,
+			tooltipShadowSize: 0,
+		}
+		expect(buildThemeSamplerModel(theme).tooltipBox).toEqual({
+			maxWidth: 300,
+			cornerRadius: 2,
+			outlineColor: null,
+			backgroundColor: "#101010",
+			backgroundOpacity: theme.tooltipBackgroundOpacity,
+			shadowSize: 0,
+			shadowColor: theme.tooltipShadowColor,
+			shadowOpacity: theme.tooltipShadowOpacity,
+		})
+	})
+
+	it("resolves the data table from the theme's Data tables defaults, nulls following the text", () => {
+		const theme: Theme = {
+			...base,
+			dataTableHeaderBackground: "#abcdef",
+			dataTableStriped: false,
+			dataTableNumberAlign: "center",
+			dataTableTextColor: null,
+			textFontColor: "#222222",
+			dataTableTitleColor: null,
+		}
+		const dt = buildThemeSamplerModel(theme).dataTable
+		expect(dt.headerBackground).toBe("#abcdef")
+		expect(dt.striped).toBe(false)
+		expect(dt.numberAlign).toBe("center")
+		expect(dt.textColor).toBe("#222222")
+		expect(dt.titleColor).toBe("#222222")
+	})
+
 	it("lists every palette with the DEFAULT one first", () => {
 		const theme: Theme = {
 			...base,

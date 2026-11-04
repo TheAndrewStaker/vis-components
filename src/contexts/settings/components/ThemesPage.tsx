@@ -42,6 +42,7 @@ import { DataTablesSection } from "./themeSections/DataTablesSection"
 import { Button } from "../../../components/ui/Button"
 import { ThemePreview } from "./ThemePreview"
 import { ThemeSamplerPreview } from "./ThemeSamplerPreview"
+import { ThemeTooltipTablePreview } from "./ThemeTooltipTablePreview"
 import { Input } from "../../../components/ui/Input"
 
 /** What the Save-as dialog offers for a single-theme export. */
@@ -69,11 +70,12 @@ const draftOf = (saved: SavedTheme): ThemeDraft => ({
  *  what renders then) so the hooks above the early return stay unconditional. */
 const MISSING_THEME_DRAFT = draftOf(SYSTEM_LIGHT_THEME)
 
-/** The editor's live previews: the gallery card's bar chart plus a sampler
- *  of what it leaves out. Both draw the DRAFT, so every edit below redraws
- *  them at once — before anything is saved. */
+/** The editor's live previews: the gallery card's bar chart, a sampler of
+ *  what it leaves out, and (editor only) the HTML tooltip box and data
+ *  table. All draw the DRAFT, so every edit below redraws them at once —
+ *  before anything is saved. */
 const EditorPreviews = ({ theme, name }: { theme: Theme; name: string }) => (
-	<div className="mb-6 grid gap-4 sm:grid-cols-2">
+	<div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 		<div className="min-w-0 overflow-hidden rounded-card border border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-900">
 			<ThemePreview theme={theme} name={name} className="block aspect-[4/3] w-full" />
 		</div>
@@ -82,6 +84,13 @@ const EditorPreviews = ({ theme, name }: { theme: Theme; name: string }) => (
 				theme={theme}
 				name={name}
 				className="block aspect-[4/3] w-full"
+			/>
+		</div>
+		<div className="min-w-0 overflow-hidden rounded-card border border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-900">
+			<ThemeTooltipTablePreview
+				theme={theme}
+				name={name}
+				className="aspect-[4/3] w-full"
 			/>
 		</div>
 	</div>

@@ -109,8 +109,9 @@ const clampToViewport = (
  * PROPERTIES stay in the stylesheet so the Custom CSS rule, which comes
  * later in the cascade, still overrides them per property. Auto colors
  * leave their property unset so the stylesheet's light / dark fallbacks
- * apply. */
-const boxVars = (box: ResolvedTooltipBox): Record<string, string> => {
+ * apply. Exported for the Settings → Themes preview, which draws the same
+ * box. */
+export const boxVars = (box: ResolvedTooltipBox): Record<string, string> => {
 	const vars: Record<string, string> = {
 		"--vc-tooltip-max-width": `${box.maxWidth}px`,
 		"--vc-tooltip-radius": `${box.cornerRadius}px`,

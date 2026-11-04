@@ -4995,7 +4995,11 @@ default palette's own colors with their paired pattern inks, the default
 mark beside the connection / regression / distribution strokes, the
 three annotation kinds (rectangle with inner label, text annotation
 with its box, line), and the data-label, legend-swatch and map
-leader-line styles. Both redraw live as fields are edited.
+leader-line styles. A third panel, editor only, is HTML: a sample hover
+tooltip and a three-row data table drawn with the live renderers' own
+classes and style helpers, so the theme's Tooltips box and Data tables
+look (and the Auto colors' light / dark fallbacks) match a real chart.
+All three redraw live as fields are edited.
 Theme settings:
 
 - **Categorical palettes** — list of named palettes, each with colors

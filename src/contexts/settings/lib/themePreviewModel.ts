@@ -2,7 +2,9 @@ import {
 	resolveLegendTextFont,
 	resolveTextFont,
 	resolveTitleFont,
+	resolveTooltipBox,
 	type FontConfig,
+	type ResolvedTooltipBox,
 	type TextFontConfig,
 } from "../../chartBuilder/lib/labelsConfig"
 import type {
@@ -16,6 +18,11 @@ import type {
 	PaletteName,
 } from "../../chartBuilder/lib/channelConfig"
 import { dashArrayFor } from "../../chartBuilder/lib/dashPatterns"
+import {
+	DEFAULT_DATA_TABLE_CONFIG,
+	resolveDataTableStyle,
+	type ResolvedDataTableStyle,
+} from "../../chartBuilder/lib/dataTableConfig"
 import { ptToPx } from "../../chartBuilder/lib/fontUnit"
 import { buildThemeInkFallback, inkForHueColor } from "../../chartBuilder/lib/patterns"
 import { PALETTE_INTERPOLATORS } from "../../chartBuilder/lib/scales"
@@ -197,6 +204,14 @@ export type ThemeSamplerModel = {
 	box: BoxAnnotationStyle & RectangleTextStyle
 	textBox: TextAnnotationBoxStyle & RectangleTextStyle
 	line: LineAnnotationStyle
+	/** The hover tooltip box a visual that pins nothing renders with
+	 *  (Settings → Themes → Tooltips). Auto colors stay `null` so the
+	 *  preview, like the live tooltip, falls back to the UI's light / dark
+	 *  surface. */
+	tooltipBox: ResolvedTooltipBox
+	/** The data table's look for a visual that sets nothing (Settings →
+	 *  Themes → Data tables). */
+	dataTable: ResolvedDataTableStyle
 }
 
 /** Resolve an annotation dash the way the renderer does: a custom dasharray
@@ -338,5 +353,8 @@ export const buildThemeSamplerModel = (theme: Theme): ThemeSamplerModel => {
 		box: rectangleStyleFromTheme(theme),
 		textBox: textAnnotationStyleFromTheme(theme),
 		line: lineAnnotationStyleFromTheme(theme),
+		// Same resolvers the live renderers call, with an untouched visual.
+		tooltipBox: resolveTooltipBox({}, theme),
+		dataTable: resolveDataTableStyle(DEFAULT_DATA_TABLE_CONFIG, theme),
 	}
 }

@@ -49,8 +49,9 @@ export const DATA_TABLE_SAFETY_ROWS = 1000
 /** The table's colors / font, every null resolved against the live theme
  *  (`resolveDataTableStyle`). Exposed as CSS custom properties on the block;
  *  `.vc-data-table` in vis-components.css reads them (one inline style for
- *  the user's choices, everything structural stays in classes). */
-const tableStyle = (look: ResolvedDataTableStyle): CSSProperties =>
+ *  the user's choices, everything structural stays in classes). Exported
+ *  for the Settings → Themes preview, which draws the same table. */
+export const tableStyle = (look: ResolvedDataTableStyle): CSSProperties =>
 	({
 		fontFamily: look.fontFamily,
 		fontSize: `${ptToPx(look.fontSize)}px`,
