@@ -11,6 +11,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import { version } from "../../package.json"
 import { createApi } from "./api"
+import { SERVER_INSTRUCTIONS } from "./guide"
 import { createHandlers, registerTools } from "./tools"
 
 const fail = (message: string): never => {
@@ -31,7 +32,7 @@ const apiUrl = (): string => {
 }
 
 const main = async (): Promise<void> => {
-	const server = new McpServer({ name: "zafiro", version })
+	const server = new McpServer({ name: "zafiro", version }, { instructions: SERVER_INSTRUCTIONS })
 	registerTools(server, createHandlers(createApi(apiUrl())))
 	await server.connect(new StdioServerTransport())
 }

@@ -121,6 +121,7 @@ Tools:
 - `list_datasets`: data sets with their fields, types and row counts.
 - `create_dataset`: store rows as a new data set (an identical one is reused).
 - `create_chart`: make a chart from an encodings-first spec; returns editor, embed and picture links.
+- `agent_guide`: the guide the model reads before its first chart (`mcp/guide/agent-guide.md`, bundled; also summarized in the server's instructions).
 - `get_chart`: a chart's encodings, titles, links and stored settings.
 - `edit_chart`: change only the keys a patch names (refused if the chart changed in the editor since it was read).
 - `undo_chart_edit`: undo this session's last `edit_chart` on a chart.

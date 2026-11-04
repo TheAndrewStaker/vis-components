@@ -251,6 +251,14 @@ describe("settings", () => {
 		expect(settings).not.toHaveProperty("id")
 	})
 
+	it("agent_guide returns the bundled guide", async () => {
+		const s = setup()
+		const out = await s.tools.agent_guide(undefined)
+		const text = (out.content[0] as { text: string }).text
+		expect(text).toContain("# Zafiro agent guide")
+		expect(text).toContain("Bar axes start at zero")
+	})
+
 	it("list_settings filters by slice and query, and refuses an unknown slice", async () => {
 		const s = setup()
 		const out = parsed(await s.tools.list_settings({ slice: "channelConfigs", query: "GRIDLINES.enabled" }))

@@ -30,6 +30,7 @@ import type {
 	Visual,
 } from "../../src/contexts/chartBuilder/lib/types"
 import type { Api } from "./api"
+import { AGENT_GUIDE } from "./guide"
 
 const UNDO_DEPTH = 20
 
@@ -151,6 +152,8 @@ export const createHandlers = (api: Api) => {
 	}
 
 	return {
+		agent_guide: guarded(async () => ({ content: [{ type: "text", text: AGENT_GUIDE }] })),
+
 		chart_vocabulary: guarded(async () => {
 			const [folders, themes] = await Promise.all([api.folders(), api.themes()])
 			const fallback = (await defaultTheme(themes)).id
@@ -356,6 +359,14 @@ const SETTINGS_RULES =
  *  whose problems name them (with a did-you-mean) instead of zod dropping
  *  them silently. */
 export const registerTools = (server: McpServer, handlers: Handlers): void => {
+	server.registerTool(
+		"agent_guide",
+		{
+			description:
+				"The guide for making charts in Zafiro: the primary comparison, encodings by data type, what each set of encodings draws, titles, colors and the refusals to make. Read all of it before the first chart.",
+		},
+		() => handlers.agent_guide(undefined)
+	)
 	server.registerTool(
 		"chart_vocabulary",
 		{
