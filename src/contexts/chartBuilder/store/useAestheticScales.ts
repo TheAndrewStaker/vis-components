@@ -76,6 +76,11 @@ export type AestheticScales = {
 		field: AestheticFieldInfo
 	} | null
 	pattern: { categories: string[]; field: AestheticFieldInfo } | null
+	/** The violin / box body's OWN pattern categories when its "Vary by"
+	 * names a variable (`PatternConfig.violinField`); null when it follows
+	 * the Pattern variable or varies by nothing. Optional so fixture scales
+	 * in tests don't have to supply it. */
+	violinPattern?: { categories: string[]; field: AestheticFieldInfo } | null
 	/** Color scales for the generic color slots (line / rug / violin / stem /
 	 * spine). Each entry is present only when that slot maps a field; renderers
 	 * fall back to the slot's single color (or a legacy field) otherwise. */
@@ -177,6 +182,18 @@ export const useAestheticScales = (): AestheticScales => {
 		const length = build("length")
 		const angle = build("angle")
 		const pattern = build("pattern")
+		// The violin / box body's own pattern variable lives on the pattern
+		// config (`violinField`), not in `encodings` — same shape as a color
+		// slot's field. Only a NAME builds a scale; absent / null don't.
+		const violinPattern = (() => {
+			const field = channelConfigs.pattern?.violinField
+			if (typeof field !== "string" || !field) return null
+			const type = effectiveType(dataset, field, overrides)
+			return {
+				field: { name: field, type } as AestheticFieldInfo,
+				values: rows.map((r) => r[field]),
+			}
+		})()
 
 		const hueLegendCfg = legendChannelCfgs.hue
 		const hueDomain = hue
@@ -397,6 +414,15 @@ export const useAestheticScales = (): AestheticScales => {
 							pattern.field.type
 						),
 						field: pattern.field,
+					}
+				: null,
+			violinPattern: violinPattern
+				? {
+						categories: patternCategoriesFor(
+							violinPattern.values,
+							violinPattern.field.type
+						),
+						field: violinPattern.field,
 					}
 				: null,
 			colorSlots,

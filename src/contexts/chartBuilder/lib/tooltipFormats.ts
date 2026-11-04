@@ -82,16 +82,20 @@ export const formatTooltipValue = (
 	stored: string | undefined,
 ): string => (stored ? formatField(raw, stored, null) : String(raw ?? ""))
 
-/** Apply the inherited formats across a tooltip's field list. Identity
- * preserving when nothing applies. */
-export const applyTooltipFormats = <T extends { name: string; value: unknown }>(
+/** Apply the inherited formats across a tooltip's field list. An entry
+ * that isn't a variable of its own (a box's "Median") names the variable
+ * whose format it borrows in `formatAs`. Identity preserving when nothing
+ * applies. */
+export const applyTooltipFormats = <
+	T extends { name: string; value: unknown; formatAs?: string },
+>(
 	fields: ReadonlyArray<T>,
 	formats: TooltipFormats,
 ): ReadonlyArray<T> => {
 	if (formats.size === 0) return fields
 	let changed = false
 	const out = fields.map((f) => {
-		const stored = formats.get(f.name)
+		const stored = formats.get(f.formatAs ?? f.name)
 		if (!stored) return f
 		changed = true
 		return { ...f, value: formatTooltipValue(f.value, stored) }

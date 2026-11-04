@@ -1910,6 +1910,15 @@ const DistributionTypeControls = ({
 						checked={overlay.showPoints}
 						onChange={(showPoints) => setOverlay({ showPoints })}
 					/>
+					{/* With the points visible the mean would be lost among them, so
+					    the option only offers itself while they're hidden. */}
+					{selected === "box" && !overlay.showPoints && (
+						<Checkbox
+							label="Mark mean"
+							checked={overlay.markMean === true}
+							onChange={(markMean) => setOverlay({ markMean })}
+						/>
+					)}
 					{selected === "box" && (
 						<label className="flex items-center gap-2 text-sm">
 							<span className={LABEL_COL}>
@@ -1936,8 +1945,22 @@ const DistributionTypeControls = ({
 						<SidebarJumpText target={channelJump("hue", "color:violinFill")}>Color → Violin / box fill</SidebarJumpText> and{" "}
 						<SidebarJumpText target={channelJump("hue", "color:violinStroke")}>Violin / box outline</SidebarJumpText>, and the
 						border width under{" "}
-						<SidebarJumpText target={channelJump("shape")}>Shape → Violin / box outline</SidebarJumpText>.
+						<SidebarJumpText target={channelJump("shape")}>Shape → Violin / box outline</SidebarJumpText>. A fill
+						pattern lives under{" "}
+						<SidebarJumpText target={channelJump("pattern")}>Pattern → Violin / box fill</SidebarJumpText>.
 					</p>
+					{selected === "box" && !overlay.showPoints && overlay.markMean === true && (
+						<p className="vc-help">
+							The mean point is styled like a data point: its shape and
+							border width under{" "}
+							<SidebarJumpText target={channelJump("shape")}>Shape</SidebarJumpText>, its fill and
+							outline colors under{" "}
+							<SidebarJumpText target={channelJump("hue")}>Color</SidebarJumpText> and{" "}
+							<SidebarJumpText target={channelJump("opacity")}>Opacity</SidebarJumpText>, and its
+							size under{" "}
+							<SidebarJumpText target={channelJump("area")}>Area</SidebarJumpText>.
+						</p>
+					)}
 				</>
 			)}
 		</div>

@@ -2,36 +2,357 @@ import {
 	aggregateDistributions,
 	coerceCategory,
 	type DistributionAggregation,
+	type DistributionStats,
 } from "../../../lib/aggregators/distributions"
-import type { ChannelConfigs } from "../../../lib/channelConfig"
+import {
+	DEFAULT_DISTRIBUTION_OVERLAY_CONFIG,
+	type ChannelConfigs,
+	type DistributionOverlayConfig,
+} from "../../../lib/channelConfig"
+import type { PatternDefSpec } from "../../../lib/patternDefs"
 import {
 	resolveSlotColor,
 	resolveSlotOpacity,
+	resolveViolinPatternDef,
+	slotModulationResolver,
+	slotModulationUnitsResolver,
 } from "../../../lib/resolveLayerColor"
 import { OPACITY_SLOT_DEFS } from "../../../lib/opacitySlots"
 import {
 	applyHueScale,
 	applyPositionScale,
+	modulateColor,
 	type PositionScale,
 } from "../../../lib/scales"
-import type { FieldType } from "../../../lib/types"
+import type { Encodings, FieldType } from "../../../lib/types"
 import type { AestheticScales } from "../../../store/useAestheticScales"
+import {
+	rowHighlight,
+	type LegendHighlight,
+} from "../../../store/useLegendHighlight"
+import type { TooltipField } from "../HoverTooltip"
 import type { StripAxes } from "./strip"
+import type { HoverState } from "./types"
+
+type Row = Record<string, unknown>
+
+/** One violin / box body's resolved paint. */
+export type OverlayStyle = {
+	/** Outline color, after the Violin / box outline sat/bri slots. */
+	stroke: string
+	/** Body color as drawn, after the Violin / box fill sat/bri slots. */
+	fill: string
+	/** The fill before modulation — what the pattern ink pairs on (the
+	 * palette's exact swatch hex; see `PatternDefItem.preModulationHue`). */
+	preModulationFill: string
+	/** The fill slots' unit levels (null = untouched), so a pattern tile
+	 * modulates like the body (`patternTile`). */
+	satUnit: number | null
+	briUnit: number | null
+	fillOpacity: number
+	strokeOpacity: number
+	/** The representative row the slots resolved against (see
+	 * `overlayStyler`); the fill pattern's category value reads off it too. */
+	slotRow: Row
+}
+
+/** The distinct categories of `categoryField` in first-seen order, keyed
+ * exactly as the aggregation keys them. An empty field = the single-variable
+ * case: one group, keyed `""` like `aggregateDistributions` does. */
+const overlayCategories = (rows: ReadonlyArray<Row>, categoryField: string) => {
+	if (!categoryField) return [""]
+	const seen = new Set<string>()
+	for (const r of rows) {
+		const cat = coerceCategory(r[categoryField])
+		if (cat !== null) seen.add(cat)
+	}
+	return [...seen]
+}
+
+/** Per-category stroke / fill / opacity resolution for the violin and box
+ * shapes — ONE implementation shared by the renderer and the upfront
+ * `<pattern>` defs pass (`buildOverlayPatternDefs`), so a patterned body's
+ * tile color is exactly the fill it would otherwise draw. */
+export const overlayStyler = (args: {
+	rowsForChart: ReadonlyArray<Row>
+	categoryField: string
+	overlay: DistributionOverlayConfig
+	channelConfigs: ChannelConfigs
+	aestheticScales: AestheticScales
+}): ((category: string) => OverlayStyle) => {
+	const { rowsForChart, categoryField, overlay, channelConfigs } = args
+	const { hue: hueScale, colorSlots, opacitySlots } = args.aestheticScales
+	// Inherit per-category colors from the hue encoding when it's mapped to
+	// the same field as the strip's category axis. Any hue field is selectable
+	// while the overlay is on, so a mismatched hue falls back to the global
+	// stroke/fill instead of mis-keying colors (to vary by a different field,
+	// map it on the Violin / Box Fill or Outline color slot).
+	const inheritFromHue =
+		hueScale &&
+		hueScale.field.name === categoryField &&
+		hueScale.scale.kind === "categorical"
+	// A violin/box is an aggregate, but color/opacity slots resolve per-row —
+	// so resolve each shape against a representative row: the first data row
+	// of its category. This lets a slot vary by any field that's constant
+	// within a category (e.g. a facet field, constant across the whole panel),
+	// not just the category-axis field. A field that varies within a category
+	// resolves from that first row (ambiguous for a single shape by
+	// construction). The single-variable path has no category field, so its
+	// lone group takes the panel's first row.
+	const firstRowByCategory = new Map<string, Row>()
+	if (categoryField) {
+		for (const r of rowsForChart) {
+			const cat = coerceCategory(r[categoryField])
+			if (cat !== null && !firstRowByCategory.has(cat)) {
+				firstRowByCategory.set(cat, r)
+			}
+		}
+	}
+	const slotRowFor = (category: string): Row =>
+		categoryField
+			? (firstRowByCategory.get(category) ?? { [categoryField]: category })
+			: (rowsForChart[0] ?? {})
+	// The Saturation / Brightness menus' Violin / box slots — absolute per
+	// part, like the points' Outline slot (identity when untouched).
+	const modulateStroke = slotModulationResolver(
+		"violinStroke",
+		channelConfigs,
+		args.aestheticScales
+	)
+	const fillUnits = slotModulationUnitsResolver(
+		"violinFill",
+		channelConfigs,
+		args.aestheticScales
+	)
+	return (category) => {
+		const inheritedColor = inheritFromHue
+			? (applyHueScale(hueScale.scale, category, "categorical") ?? null)
+			: null
+		// Resolution order for stroke/fill (highest priority first):
+		//   1. per-category override
+		//   2. hue inheritance when applicable
+		//   3. single fallback color / fillColor
+		const legacyStroke =
+			overlay.colorOverrides[category] ?? inheritedColor ?? overlay.color
+		const legacyFill =
+			overlay.fillColorOverrides[category] ?? inheritedColor ?? overlay.fillColor
+		// The violinStroke / violinFill color slots, when configured, own
+		// the color (independent field mapping or single color). Absent
+		// slots fall through to the legacy resolution above (back-compat).
+		const slotRow = slotRowFor(category)
+		const stroke = channelConfigs.colorSlots?.violinStroke
+			? resolveSlotColor(
+					colorSlots.violinStroke,
+					channelConfigs.colorSlots.violinStroke,
+					slotRow,
+					legacyStroke
+				)
+			: legacyStroke
+		const preModulationFill = channelConfigs.colorSlots?.violinFill
+			? resolveSlotColor(
+					colorSlots.violinFill,
+					channelConfigs.colorSlots.violinFill,
+					slotRow,
+					legacyFill
+				)
+			: legacyFill
+		const units = fillUnits?.(slotRow) ?? { sat: null, bri: null }
+		const fill =
+			units.sat === null && units.bri === null
+				? preModulationFill
+				: modulateColor(preModulationFill, units.sat, units.bri)
+		// Per-part opacity from the Violin Fill / Outline opacity slots,
+		// resolved per category (a field-mapped slot keys off the category
+		// value, mirroring the color slots above).
+		const fillOpacity = resolveSlotOpacity(
+			opacitySlots.violinFill,
+			channelConfigs.opacitySlots?.violinFill,
+			slotRow,
+			OPACITY_SLOT_DEFS.violinFill.defaultLevel
+		)
+		const strokeOpacity = resolveSlotOpacity(
+			opacitySlots.violinStroke,
+			channelConfigs.opacitySlots?.violinStroke,
+			slotRow,
+			OPACITY_SLOT_DEFS.violinStroke.defaultLevel
+		)
+		return {
+			stroke: modulateStroke(stroke, slotRow),
+			fill,
+			preModulationFill,
+			satUnit: units.sat,
+			briUnit: units.bri,
+			fillOpacity,
+			strokeOpacity,
+			slotRow,
+		}
+	}
+}
+
+/** The `<pattern>` def a violin / box body references, or null for a plain
+ * fill — the Pattern menu's separate "Violin / box fill" pick
+ * (`resolveViolinPatternDef`). The tile sits on the body's own fill; the
+ * pattern category (with a pattern variable mapped) reads off the body's
+ * representative row, like its color slots. The ink pairs on the fill
+ * BEFORE the Violin / box fill sat/bri slots, and the tile modulates by the
+ * same units, exactly as a mark's does. */
+export const overlayPatternDef = (
+	style: OverlayStyle,
+	aestheticScales: AestheticScales,
+	channelConfigs: ChannelConfigs
+): PatternDefSpec | null => {
+	const scales = bodyPatternScales(aestheticScales, channelConfigs)
+	const bodyField = scales.pattern?.field.name ?? null
+	return resolveViolinPatternDef(
+		{
+			patternValue: bodyField ? style.slotRow[bodyField] : undefined,
+			fill: style.fill,
+			preModulationHue: style.preModulationFill,
+			satUnit: style.satUnit,
+			briUnit: style.briUnit,
+		},
+		scales,
+		channelConfigs,
+		channelConfigs.pattern?.backgroundColor ?? null
+	)
+}
+
+/** The scales the body's pattern resolves against, per its "Vary by"
+ * (`PatternConfig.violinField`): absent = the Pattern variable's scale, as
+ * for the points; null = no variable (the default violin pattern alone); a
+ * name = the body's own scale (`AestheticScales.violinPattern`). */
+const bodyPatternScales = (
+	aestheticScales: AestheticScales,
+	channelConfigs: ChannelConfigs
+): AestheticScales => {
+	const varyBy = channelConfigs.pattern?.violinField
+	if (varyBy === undefined) return aestheticScales
+	return {
+		...aestheticScales,
+		pattern: varyBy === null ? null : (aestheticScales.violinPattern ?? null),
+	}
+}
+
+/** Every `<pattern>` def the violin / box bodies will reference, for the
+ * renderer's upfront `<defs>` pass (a body must never reference a def that
+ * wasn't emitted). Walks each position axis carrying an active overlay —
+ * the category field is the OTHER axis's field (none = the single-variable
+ * overlay) — and resolves one item per category through the same styler
+ * the renderer uses. A stale overlay on a non-value axis only adds unused
+ * defs. Empty unless a pattern variable or a default violin pattern is
+ * set. */
+export const buildOverlayPatternDefs = (args: {
+	rowsForChart: ReadonlyArray<Row>
+	encodings: Encodings
+	channelConfigs: ChannelConfigs
+	aestheticScales: AestheticScales
+}): PatternDefSpec[] => {
+	const { rowsForChart, encodings, channelConfigs, aestheticScales } = args
+	const bodyMapped =
+		bodyPatternScales(aestheticScales, channelConfigs).pattern !== null
+	if (
+		!bodyMapped &&
+		(channelConfigs.pattern?.defaultViolinPattern ?? null) === null
+	) {
+		return []
+	}
+	const defs = new Map<string, PatternDefSpec>()
+	for (const valueAxis of ["x", "y"] as const) {
+		const cfg = channelConfigs[valueAxis]?.distributionOverlay
+		if (!cfg || (!cfg.showDensityViolin && !cfg.showBoxPlot)) continue
+		const overlay = { ...DEFAULT_DISTRIBUTION_OVERLAY_CONFIG, ...cfg }
+		const categoryField =
+			(valueAxis === "x" ? encodings.y?.field : encodings.x?.field) ?? ""
+		const styleFor = overlayStyler({
+			rowsForChart,
+			categoryField,
+			overlay,
+			channelConfigs,
+			aestheticScales,
+		})
+		for (const category of overlayCategories(rowsForChart, categoryField)) {
+			const d = overlayPatternDef(styleFor(category), aestheticScales, channelConfigs)
+			if (d && !defs.has(d.svgId)) defs.set(d.svgId, d)
+		}
+	}
+	return [...defs.values()]
+}
+
+/** A summary statistic's tooltip row: the value variable summarized, so it
+ * prints with that variable's format and shows while its "Fields shown"
+ * checkbox is on. */
+const statField = (
+	name: string,
+	value: number,
+	valueField: string
+): TooltipField => ({ name, value, formatAs: valueField, shownWith: valueField })
+
+/** The category row every violin / box element's tooltip leads with (none
+ * for the single-variable shape). */
+const categoryFields = (categoryField: string, category: unknown): TooltipField[] =>
+	categoryField ? [{ name: categoryField, value: category }] : []
+
+/** The hover tooltip for one violin / box body: its category, then the same
+ * summary the data table lists for it (Min … Max, N). N is a count, so it
+ * only follows the value variable's checkbox, never its format. */
+export const distributionTooltipFields = (
+	s: DistributionStats,
+	categoryField: string,
+	valueField: string
+): TooltipField[] => {
+	const b = s.box
+	return [
+		...categoryFields(categoryField, s.category),
+		statField("Min", b.min, valueField),
+		statField("Lower whisker", b.lowerWhisker, valueField),
+		statField("Q1", b.q1, valueField),
+		statField("Median", b.median, valueField),
+		statField("Q3", b.q3, valueField),
+		statField("Upper whisker", b.upperWhisker, valueField),
+		statField("Max", b.max, valueField),
+		{ name: "N", value: s.values.length, shownWith: valueField },
+	]
+}
+
+/** The hover tooltip for a box's "Mark mean" point, read off its synthetic
+ * row (`buildMeanMarks`: the category and the mean). */
+export const meanTooltipFields = (
+	row: Record<string, unknown>,
+	categoryField: string,
+	valueField: string
+): TooltipField[] => [
+	...categoryFields(categoryField, row[categoryField]),
+	{ ...statField("Mean", Number(row[valueField]), valueField) },
+]
+
+/** Single-element hover keys for a violin / box chart's aggregate parts
+ * (`rowHighlight`'s `nodeKey`), before the caller's per-panel scope. */
+export const overlayElementKey = {
+	violin: (category: string) => `violin:${category}`,
+	box: (category: string) => `box:${category}`,
+	mean: (category: string) => `mean:${category}`,
+	outlier: (category: string, i: number) => `outlier:${category}:${i}`,
+	point: (i: number) => `point:${i}`,
+}
 
 export const renderDistributionOverlays = (args: {
 	rowsForChart: Array<Record<string, unknown>>
 	stripAxes: StripAxes
 	channelConfigs: ChannelConfigs
-	hueScale: AestheticScales["hue"]
-	colorSlots: AestheticScales["colorSlots"]
-	opacitySlots: AestheticScales["opacitySlots"]
+	aestheticScales: AestheticScales
 	/** Whether the underlying scatter marks are rendered alongside the
 	 * overlay. When they are, the box's own outlier circles would duplicate
-	 * the real data points underneath them, so BoxShape suppresses them. */
+	 * the real data points underneath them, so they're suppressed. */
 	pointsShown: boolean
+	setHovered: (h: HoverState | null) => void
+	highlight: LegendHighlight | null
+	publishHover: (row: Record<string, unknown>, node?: string) => void
+	/** Scopes an `overlayElementKey` to this panel, so hovering a box lights
+	 * that box alone and not its twin in the next facet panel. */
+	elementKey: (local: string) => string
 }): React.ReactNode => {
-	const { rowsForChart, stripAxes, hueScale, channelConfigs, colorSlots, opacitySlots } =
-		args
+	const { rowsForChart, stripAxes, channelConfigs, aestheticScales } = args
+	const { setHovered, highlight, publishHover, elementKey } = args
 	const { overlay } = stripAxes
 	if (!overlay.showDensityViolin && !overlay.showBoxPlot) return null
 
@@ -52,135 +373,166 @@ export const renderDistributionOverlays = (args: {
 	// horizontal box gets taller, a vertical one gets wider (same knob, since
 	// the fat dimension just tracks orientation).
 	const boxHalfWidth = step * 0.18 * (overlay.boxWidthScale ?? 1)
-	// Inherit per-category colors from the hue encoding when it's mapped to
-	// the same field as the strip's category axis. Any hue field is selectable
-	// while the overlay is on, so a mismatched hue falls back to the global
-	// stroke/fill instead of mis-keying colors (to vary by a different field,
-	// map it on the Violin / Box Fill or Outline color slot).
-	const inheritFromHue =
-		hueScale &&
-		hueScale.field.name === stripAxes.categoryField &&
-		hueScale.scale.kind === "categorical"
-	// A violin/box is an aggregate, but color/opacity slots resolve per-row —
-	// so resolve each shape against a representative row: the first data row
-	// of its category. This lets a slot vary by any field that's constant
-	// within a category (e.g. a facet field, constant across the whole panel),
-	// not just the category-axis field. A field that varies within a category
-	// resolves from that first row (ambiguous for a single shape by
-	// construction). The single-variable path has no category field, so its
-	// lone group takes the panel's first row.
-	const firstRowByCategory = new Map<string, Record<string, unknown>>()
-	if (stripAxes.categoryField) {
-		for (const r of rowsForChart) {
-			const cat = coerceCategory(r[stripAxes.categoryField])
-			if (cat !== null && !firstRowByCategory.has(cat)) {
-				firstRowByCategory.set(cat, r)
-			}
-		}
-	}
-	const slotRowFor = (category: string): Record<string, unknown> =>
-		stripAxes.categoryField
-			? (firstRowByCategory.get(category) ?? {
-					[stripAxes.categoryField]: category,
-				})
-			: (rowsForChart[0] ?? {})
+	const styleFor = overlayStyler({
+		rowsForChart,
+		categoryField: stripAxes.categoryField,
+		overlay,
+		channelConfigs,
+		aestheticScales,
+	})
 	// Border thickness from the Shape panel's "Violin / box outline" knob —
 	// deliberately independent of `shape.outlineWidth` (which the point marks
 	// read). 0 hides.
 	const strokeWidth = channelConfigs.shape?.distributionOutlineWidth ?? 1
+	const { categoryField, valueField } = stripAxes
+	const toPx = (v: number) =>
+		applyPositionScale(stripAxes.valueScale, v, stripAxes.valueType)
 
 	return (
 		<g aria-hidden>
 			{aggregation.stats.map((s) => {
 				const catCenter = stripAxes.categoryScale(s.category)
 				if (catCenter === undefined) return null
-				const inheritedColor = inheritFromHue
-					? (applyHueScale(hueScale.scale, s.category, "categorical") ?? null)
+				const style = styleFor(s.category)
+				// The category is what an aggregate part publishes as its series
+				// (any other variable can vary inside it), so a legend hover on
+				// the category fades the other categories' parts and one on any
+				// other variable leaves them untouched.
+				const identity: Row = categoryField ? { [categoryField]: s.category } : {}
+				// A "Violin / box fill" pattern tiles over the body's fill
+				// (`<PatternDefs>` emitted the def upfront, see
+				// `buildOverlayPatternDefs`).
+				const pattern = overlayPatternDef(style, aestheticScales, channelConfigs)
+				const baseFill = pattern ? `url(#${pattern.svgId})` : style.fill
+				/** One hoverable part: its own highlight (a direct hover on it
+				 * lights it alone) and its own tooltip, tracking the pointer. `i:
+				 * null` — no part is a single data row, so the per-point dim
+				 * stays off. `visible`: the whole drawn footprint hovers, the
+				 * body included even with a "none" fill. */
+				const part = (local: string, fields: TooltipField[]) => {
+					const key = elementKey(local)
+					const mh = rowHighlight(highlight, identity, key)
+					const onHover = (e: React.MouseEvent) =>
+						setHovered({
+							i: null,
+							row: identity,
+							clientX: e.clientX,
+							clientY: e.clientY,
+							fields,
+						})
+					return {
+						mh,
+						// The highlight recolor wins over a pattern, as on a point.
+						fill: mh.fill ?? baseFill,
+						stroke: mh.outline ?? style.stroke,
+						strokeOpacity: mh.outline ? 1 : style.strokeOpacity,
+						strokeWidth: mh.outline
+							? Math.max(strokeWidth, mh.outlineWidth)
+							: strokeWidth,
+						hoverProps: {
+							opacity: mh.opacityMul,
+							pointerEvents: "visible",
+							onMouseEnter: (e: React.MouseEvent) => {
+								onHover(e)
+								publishHover(identity, key)
+							},
+							onMouseMove: onHover,
+						} as const,
+					}
+				}
+				const summary = distributionTooltipFields(s, categoryField, valueField)
+				const violin = overlay.showDensityViolin
+					? part(overlayElementKey.violin(s.category), summary)
 					: null
-				// Resolution order for stroke/fill (highest priority first):
-				//   1. per-category override
-				//   2. hue inheritance when applicable
-				//   3. single fallback color / fillColor
-				const legacyStroke =
-					overlay.colorOverrides[s.category] ?? inheritedColor ?? overlay.color
-				const legacyFill =
-					overlay.fillColorOverrides[s.category] ??
-					inheritedColor ??
-					overlay.fillColor
-				// The violinStroke / violinFill color slots, when configured, own
-				// the color (independent field mapping or single color). Absent
-				// slots fall through to the legacy resolution above (back-compat).
-				const slotRow = slotRowFor(s.category)
-				const stroke = channelConfigs.colorSlots?.violinStroke
-					? resolveSlotColor(
-							colorSlots.violinStroke,
-							channelConfigs.colorSlots.violinStroke,
-							slotRow,
-							legacyStroke
-						)
-					: legacyStroke
-				const fill = channelConfigs.colorSlots?.violinFill
-					? resolveSlotColor(
-							colorSlots.violinFill,
-							channelConfigs.colorSlots.violinFill,
-							slotRow,
-							legacyFill
-						)
-					: legacyFill
-				// Per-part opacity from the Violin Fill / Outline opacity slots,
-				// resolved per category (a field-mapped slot keys off the category
-				// value, mirroring the color slots above).
-				const fillOpacity = resolveSlotOpacity(
-					opacitySlots.violinFill,
-					channelConfigs.opacitySlots?.violinFill,
-					slotRow,
-					OPACITY_SLOT_DEFS.violinFill.defaultLevel
-				)
-				const strokeOpacity = resolveSlotOpacity(
-					opacitySlots.violinStroke,
-					channelConfigs.opacitySlots?.violinStroke,
-					slotRow,
-					OPACITY_SLOT_DEFS.violinStroke.defaultLevel
-				)
+				const box = overlay.showBoxPlot
+					? part(overlayElementKey.box(s.category), summary)
+					: null
+				// The box's Tukey outliers, each its own hover target — only while
+				// the data points are hidden (the points already mark them).
+				const outliers =
+					overlay.showBoxPlot && !args.pointsShown ? s.box.outliers : []
 				return (
 					<g key={s.category}>
-						{overlay.showDensityViolin && (
-							<ViolinShape
-								stats={s}
-								center={catCenter}
-								halfWidth={violinHalfWidth}
-								axis={stripAxes.categoryAxis}
-								valueScale={stripAxes.valueScale}
-								valueType={stripAxes.valueType}
-								color={stroke}
-								fillColor={fill}
-								fillOpacity={fillOpacity}
-								strokeOpacity={strokeOpacity}
-								strokeWidth={strokeWidth}
-							/>
+						{violin && (
+							<g {...violin.hoverProps}>
+								<ViolinShape
+									stats={s}
+									center={catCenter}
+									halfWidth={violinHalfWidth}
+									axis={stripAxes.categoryAxis}
+									valueScale={stripAxes.valueScale}
+									valueType={stripAxes.valueType}
+									color={violin.stroke}
+									fillColor={violin.fill}
+									fillOpacity={style.fillOpacity}
+									strokeOpacity={violin.strokeOpacity}
+									strokeWidth={violin.strokeWidth}
+								/>
+							</g>
 						)}
-						{overlay.showBoxPlot && (
-							<BoxShape
-								box={s.box}
-								center={catCenter}
-								halfWidth={boxHalfWidth}
-								axis={stripAxes.categoryAxis}
-								valueScale={stripAxes.valueScale}
-								valueType={stripAxes.valueType}
-								color={stroke}
-								fillColor={fill}
-								fillOpacity={fillOpacity}
-								strokeOpacity={strokeOpacity}
-								strokeWidth={strokeWidth}
-								showOutliers={!args.pointsShown}
-							/>
+						{box && (
+							<g {...box.hoverProps}>
+								<BoxShape
+									box={s.box}
+									center={catCenter}
+									halfWidth={boxHalfWidth}
+									axis={stripAxes.categoryAxis}
+									valueScale={stripAxes.valueScale}
+									valueType={stripAxes.valueType}
+									color={box.stroke}
+									fillColor={box.fill}
+									fillOpacity={style.fillOpacity}
+									strokeOpacity={box.strokeOpacity}
+									strokeWidth={box.strokeWidth}
+								/>
+							</g>
 						)}
+						{outliers.map((o, i) => {
+							const valuePx = toPx(o)
+							if (valuePx === null) return null
+							const [cx, cy] =
+								stripAxes.categoryAxis === "x"
+									? [catCenter, valuePx]
+									: [valuePx, catCenter]
+							const dot = part(overlayElementKey.outlier(s.category, i), [
+								...categoryFields(categoryField, s.category),
+								statField("Outlier", o, valueField),
+							])
+							return (
+								<g
+									// Outliers are raw values, not unique on their own, so we
+									// disambiguate with the index — purely a stable React key,
+									// not an ordering signal.
+									// eslint-disable-next-line react/no-array-index-key
+									key={`${i}-${o}`}
+									{...dot.hoverProps}
+								>
+									{/* A 2px ring is unhoverable; a transparent disc around
+									    it takes the pointer. */}
+									<circle cx={cx} cy={cy} r={OUTLIER_HIT_R} fill="transparent" />
+									<circle
+										cx={cx}
+										cy={cy}
+										r={OUTLIER_R}
+										fill={dot.mh.fill ?? "none"}
+										stroke={dot.stroke}
+										strokeOpacity={dot.strokeOpacity}
+										strokeWidth={dot.strokeWidth}
+									/>
+								</g>
+							)
+						})}
 					</g>
 				)
 			})}
 		</g>
 	)
 }
+
+/** Outlier ring radius, and the radius of the transparent disc that takes
+ * the pointer around it. */
+const OUTLIER_R = 2
+const OUTLIER_HIT_R = 6
 
 const ViolinShape = ({
 	stats,
@@ -349,7 +701,6 @@ const BoxShape = ({
 	fillOpacity,
 	strokeOpacity,
 	strokeWidth,
-	showOutliers,
 }: {
 	box: {
 		q1: number
@@ -357,7 +708,6 @@ const BoxShape = ({
 		median: number
 		lowerWhisker: number
 		upperWhisker: number
-		outliers: number[]
 	}
 	center: number
 	halfWidth: number
@@ -369,9 +719,6 @@ const BoxShape = ({
 	fillOpacity: number
 	strokeOpacity: number
 	strokeWidth: number
-	/** The outlier circles duplicate real data points when "Show points" is
-	 * on, so the caller turns them off in that case. */
-	showOutliers: boolean
 }) => {
 	const v = (n: number) => applyPositionScale(valueScale, n, valueType)
 	const q1Px = v(box.q1)
@@ -391,7 +738,6 @@ const BoxShape = ({
 
 	const lo = center - halfWidth
 	const hi = center + halfWidth
-	const outlierR = 2
 
 	if (axis === "x") {
 		// Vertical orientation: value goes top-to-bottom, category across.
@@ -449,25 +795,6 @@ const BoxShape = ({
 					stroke={color}
 					strokeWidth={strokeWidth * 1.5}
 				/>
-				{showOutliers &&
-					box.outliers.map((o, i) => {
-						const oy = v(o)
-						if (oy === null) return null
-						return (
-							<circle
-								// Outliers are raw values, not unique on their own, so we
-								// disambiguate with the index — purely a stable React key,
-								// not an ordering signal.
-								// eslint-disable-next-line react/no-array-index-key
-								key={`${i}-${o}`}
-								cx={center}
-								cy={oy}
-								r={outlierR}
-								fill="none"
-								stroke={color}
-							/>
-						)
-					})}
 			</g>
 		)
 	}
@@ -524,25 +851,6 @@ const BoxShape = ({
 				stroke={color}
 				strokeWidth={strokeWidth * 1.5}
 			/>
-			{showOutliers &&
-				box.outliers.map((o, i) => {
-					const ox = v(o)
-					if (ox === null) return null
-					return (
-						<circle
-							// Outliers are raw values, not unique on their own, so we
-							// disambiguate with the index — purely a stable React key,
-							// not an ordering signal.
-							// eslint-disable-next-line react/no-array-index-key
-							key={`${i}-${o}`}
-							cx={ox}
-							cy={center}
-							r={outlierR}
-							fill="none"
-							stroke={color}
-						/>
-					)
-				})}
 		</g>
 	)
 }

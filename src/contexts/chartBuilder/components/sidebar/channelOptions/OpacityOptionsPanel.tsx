@@ -31,7 +31,7 @@ import {
 	isFlowModeId,
 	isHierarchyModeId,
 } from "../../../lib/chartModes/families"
-import { filledRadarOn } from "../../../lib/colorSlots"
+import { filledRadarOn, overlayOn } from "../../../lib/colorSlots"
 import { valueChanged } from "../../../lib/themeConfig"
 import { makeOpacityScale } from "../../../lib/scales"
 import { preserveStackMode } from "../../../lib/stackMode"
@@ -109,7 +109,13 @@ export const OpacityOptionsPanel = () => {
 	return (
 		<div className="vc-option-panel">
 			{!hideFill && (
-				<CollapsibleSubsection title="Fill" defaultOpen changed={fillChanged}>
+				<CollapsibleSubsection
+					// Beside the Violin / box subheaders the marks' fill is the
+					// POINT fill — named so, as the Pattern menu names it.
+					title={overlayOn(configs) ? "Point fill" : "Fill"}
+					defaultOpen
+					changed={fillChanged}
+				>
 					<div className="flex flex-col gap-2">
 						<FillOpacityControls hideVaryBy={linkedOutline} />
 						{/* Opacity can drive bar layout (group/stack/overlay) when 2+ stack
@@ -121,7 +127,13 @@ export const OpacityOptionsPanel = () => {
 			{slots.map((def) => (
 				<OpacitySlotSubsection
 					key={def.key}
-					def={def}
+					// Beside "Violin / box outline" the marks' outline is the POINT
+					// outline — titled so, like the Point fill above.
+					def={
+						def.key === "border" && overlayOn(configs)
+							? { ...def, label: "Point outline" }
+							: def
+					}
 					hideVaryBy={linkedOutline}
 				/>
 			))}

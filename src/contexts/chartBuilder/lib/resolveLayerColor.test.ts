@@ -13,6 +13,7 @@ import {
 	resolvePatternDefForItem,
 	resolvePolygonPatternDef,
 	resolveSlotColor,
+	resolveViolinPatternDef,
 } from "./resolveLayerColor"
 
 /** AestheticScales with every channel un-mapped (the "no encoding"
@@ -731,5 +732,63 @@ describe("patterns tile over the mark's own fill when hue is unmapped", () => {
 		})
 		expect(r.fill).toBe("#118ab2")
 		expect(r.patternId).toContain("118ab2-073b55")
+	})
+})
+
+describe("resolveViolinPatternDef (violin / box body fill)", () => {
+	const item = {
+		patternValue: undefined,
+		fill: "#fff",
+		preModulationHue: "#fff",
+		satUnit: null,
+		briUnit: null,
+	}
+
+	it("returns null when no violin pattern is configured — a POINT default pattern or a POLYGON pick must not leak", () => {
+		const configs = {
+			...EMPTY_CHANNEL_CONFIGS,
+			defaultPattern: 2,
+			pattern: { ...DEFAULT_PATTERN_CONFIG, defaultPolygonPattern: 3 },
+		}
+		expect(resolveViolinPatternDef(item, emptyScales, configs, "#fff")).toBeNull()
+	})
+
+	it("honors pattern.defaultViolinPattern (+ its ink and scale) with no pattern variable mapped", () => {
+		const configs = {
+			...EMPTY_CHANNEL_CONFIGS,
+			pattern: {
+				...DEFAULT_PATTERN_CONFIG,
+				defaultViolinPattern: 4,
+				defaultViolinPatternInk: "#123456",
+				defaultViolinScale: 2,
+			},
+		}
+		const d = resolveViolinPatternDef(item, emptyScales, configs, "#fff")
+		expect(d?.paletteIdx).toBe(4)
+		expect(d?.inkColor).toBe("#123456")
+		expect(d?.scale).toBe(2)
+	})
+
+	it("with a pattern variable mapped, only categories with a violin pick get a def (opt-in)", () => {
+		const scales: AestheticScales = {
+			...emptyScales,
+			pattern: {
+				field: { name: "p", type: "categorical" },
+				categories: ["A", "B"],
+			},
+		}
+		const configs = {
+			...EMPTY_CHANNEL_CONFIGS,
+			pattern: {
+				...DEFAULT_PATTERN_CONFIG,
+				// A POINT-fill pick for B must not leak onto the body.
+				overrides: { B: 1 },
+				violinOverrides: { A: 3 },
+			},
+		}
+		const a = resolveViolinPatternDef({ ...item, patternValue: "A" }, scales, configs, "#fff")
+		const b = resolveViolinPatternDef({ ...item, patternValue: "B" }, scales, configs, "#fff")
+		expect(a?.paletteIdx).toBe(3)
+		expect(b).toBeNull()
 	})
 })

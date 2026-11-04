@@ -1,4 +1,5 @@
 import type { ResolvedGlyph } from "../../../lib/customGlyphs"
+import type { TooltipField } from "../HoverTooltip"
 
 /** Hover state carries the mark index (for dimming siblings) plus the
  * hovered row and the pointer's viewport coordinates so the shared
@@ -14,7 +15,7 @@ export type HoverState = {
 	row: Record<string, unknown>
 	clientX: number
 	clientY: number
-	fields?: Array<{ name: string; value: unknown }>
+	fields?: Array<TooltipField>
 	/** Set on a LINE-level hover under "Show tooltips only at points":
 	 * `fields` is the line's connection value alone, and the tooltip shows
 	 * nothing at all when that variable isn't among the Fields shown. */

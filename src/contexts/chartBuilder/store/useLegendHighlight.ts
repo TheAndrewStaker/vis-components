@@ -131,11 +131,16 @@ export const useMarkHoverHighlight = (
 			(cfg.hoverFade ?? true))
 	return {
 		enter: (value: unknown, node?: string) => {
-			if (active && value !== undefined && value !== null) {
+			// A node hover publishes even without a series value: the node
+			// alone decides what lights up (a box spans every value of a hue
+			// field other than its own category).
+			const hasValue = value !== undefined && value !== null
+			if (active && (hasValue || node !== undefined)) {
+				const text = hasValue ? String(value) : ""
 				const next =
 					node === undefined
-						? { field: field as string, value: String(value) }
-						: { field: field as string, value: String(value), node }
+						? { field: field as string, value: text }
+						: { field: field as string, value: text, node }
 				// Idempotent: re-publishing the entry that's already hovered
 				// returns the SAME object, so jotai skips the write and the
 				// whole chart doesn't re-render. Matters because hover handlers
@@ -159,14 +164,22 @@ export const useMarkHoverHighlight = (
 
 /** Per-ROW mark highlight (Scatter / Radar / hierarchy leaf), guarding on the
  * hovered field being a column of the row so an unrelated legend hover leaves
- * the mark untouched. */
+ * the mark untouched. A mark that passes its own `nodeKey` takes part in
+ * single-element hover: when the hover names a node, only the mark with
+ * that key lights up and every other keyed mark recedes. */
 export const rowHighlight = (
 	highlight: LegendHighlight | null,
-	row: Record<string, unknown>
-): MarkHighlight =>
-	highlight && highlight.field in row
+	row: Record<string, unknown>,
+	nodeKey?: string
+): MarkHighlight => {
+	if (highlight?.node !== undefined && nodeKey !== undefined)
+		return nodeKey === highlight.node
+			? highlight.resolve(highlight.value)
+			: unmatchedHighlight(highlight)
+	return highlight && highlight.field in row
 		? highlight.resolve(row[highlight.field])
 		: NEUTRAL_HIGHLIGHT
+}
 
 /** Highlight for a mark that can never MATCH the hovered entry but must still
  * recede with the rest of the chart — a choropleth's no-data regions (absent

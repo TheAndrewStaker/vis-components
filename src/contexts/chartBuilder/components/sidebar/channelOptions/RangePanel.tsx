@@ -38,6 +38,7 @@ import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleS
 import { SelectInput } from "../../../../../components/ui/SelectInput"
 import type { ModulationSlotConfig } from "../../../lib/channelConfig"
 import { channelAccepts } from "../../../lib/channels"
+import { overlayOn } from "../../../lib/colorSlots"
 import type { ChartMode } from "../../../lib/chartMode"
 import {
 	MODULATION_SLOTS_KEY,
@@ -338,12 +339,28 @@ const ModulationPartsPanel = ({
 
 	return (
 		<div className="vc-option-panel">
-			<CollapsibleSubsection title="Fill" defaultOpen changed={fillChanged}>
+			<CollapsibleSubsection
+				// Beside the Violin / box subheaders the marks' fill is the POINT
+				// fill — named so, as the Pattern menu names it.
+				title={overlayOn(configs) ? "Point fill" : "Fill"}
+				defaultOpen
+				changed={fillChanged}
+			>
 				<FillVaryBy channel={channel} />
 				{fill}
 			</CollapsibleSubsection>
 			{slots.map((def) => (
-				<ModulationSlotSubsection key={def.key} channel={channel} def={def} />
+				<ModulationSlotSubsection
+					key={def.key}
+					channel={channel}
+					// Beside "Violin / box outline" the marks' outline is the POINT
+					// outline — titled so, like the Point fill above.
+					def={
+						def.key === "outline" && overlayOn(configs)
+							? { ...def, label: "Point outline" }
+							: def
+					}
+				/>
 			))}
 		</div>
 	)

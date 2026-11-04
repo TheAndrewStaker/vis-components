@@ -1799,7 +1799,21 @@ category resolves from that first row.
 The Opacity panel mirrors this structure with its own registry
 (`lib/opacitySlots.ts`): a universal Outline (border) slot plus
 per-part slots matching the color registry's gates; Fill opacity
-reuses the overall `opacity` encoding.
+reuses the overall `opacity` encoding. The Saturation and Brightness
+panels mirror it too (`lib/modulationSlots.ts`, scatter only — the
+one renderer that reads the parts): **Outline**, **Line** (with a
+connection) and, while a violin / box overlay is on, **Violin / box
+fill** and **Violin / box outline**; the Fill subheader reuses the
+overall encoding. A part's modulation is absolute (its slot alone,
+independent of the Fill); the overlay body's fill modulates BEFORE a
+body pattern tiles over it, and the pattern ink still pairs on the
+pre-modulation fill, exactly as a mark does.
+
+While a violin / box overlay is on, the Color, Opacity, Saturation and
+Brightness panels title their marks' Fill and Outline subheaders
+**Point fill** and **Point outline** (as the Pattern menu always names
+its point target beside its body subsection), so the point and body
+targets read as peers.
 
 ### 4.2 Pattern panel
 Behavior depends on chart context:
@@ -1887,6 +1901,32 @@ Behavior depends on chart context:
   swatches tile with the polygon pattern (default or per-category
   pick) over the hue color and drop the line-dash overlay, since
   radar polygons don't dash.
+- **Violin / box overlay** (a violin or box plot on a strip plot or a
+  lone quantitative variable): a **Violin / box fill** subsection joins
+  the panel with its OWN pattern pick for the overlay's body — the
+  target the Color panel's "Violin / box fill" slot colors — separate
+  from the point fill, exactly as the radar polygon is. While it shows,
+  the point rows sit in their own **Point fill** subsection so the two
+  targets read as peers; that subsection leads with a **Vary by**
+  two-way bound to the shelf's Pattern variable (as Color's and
+  Opacity's Fill are), so the two targets' variables read side by side. The body subsection leads with its own **Vary
+  by** (`pattern.violinField`, the analogue of a color slot's field):
+  **Auto** (absent) follows the Pattern variable as the points do;
+  **none** (`null`) makes one default pattern fill every body whatever
+  the points vary by; a variable makes that variable's levels drive the
+  body's picks, independent of the points. Whichever variable is in
+  force: no variable → a default pattern swatch row + ink + scale
+  (`pattern.defaultViolinPattern` / `defaultViolinPatternInk` /
+  `defaultViolinScale`); a variable → per-level swatches + ink + scale
+  (`pattern.violinOverrides` / `violinInkColors` / `violinScales`),
+  defaulting to "None" until picked. The tile sits on
+  the body's own resolved fill (per-category override, hue inheritance,
+  the Violin / box fill color slot); the ink pairs on that fill before
+  the Violin / box fill sat/bri slots modulate it. With a pattern variable mapped,
+  each body's category reads off the same representative row its color
+  slots resolve against (the first row of its category). Hidden while
+  no overlay is on. The legend does not mirror the overlay's pattern
+  (it doesn't mirror the overlay's fill color either).
 - **Geo and STRUCTURE modes** (choropleth / bubble map, hierarchy
   trees, chord / sankey): always the FILL form, even though
   `connection` is mapped — there it's a KEY (region join / parent
@@ -2656,7 +2696,32 @@ The X-axis and Y-axis panels (under Encodings) configure:
   outline and all box strokes (body, whiskers, caps, outlier circles) —
   a separate knob from that panel's point **Outline width**; width 0
   hides the borders. The median line stays 1.5× that width for
-  emphasis.
+  emphasis. The body's fill pattern is the Pattern menu's **Violin /
+  box fill** pick (see the Pattern menu), separate from the points'.
+  **Mark mean** (box only; offered only while "Show points"
+  is off, since among visible points the mean would be lost) draws one
+  point per box at the category's arithmetic mean. That point IS a
+  scatter mark, built through the same pipeline as the hidden data
+  points: glyph and border width from the Shape panel, fill and
+  outline colors from the Color panel (per category when hue is
+  mapped to the category field), opacity from the Opacity panel and
+  size from the Area panel's point size. It sits on the box's center
+  line (never jittered), draws over the box and fades with its
+  category on legend hover.
+  **Every part hovers on its own.** On a violin / box chart the box,
+  the violin, each data point, each mean point and each outlier ring
+  is a separate hover target with its own tooltip (see §10), and a
+  direct hover lights THAT element alone: it takes the Hover options'
+  recolor / outline, and everything else — the other parts of its own
+  category included — fades. The box sits inside the violin, so the
+  pointer over the box reads the box and the band around it reads the
+  violin; a point or mean drawn over a shape wins over the shape. In a
+  faceted chart the twin element in another panel recedes with the
+  rest. This holds with or without a Color variable (the category is
+  what the parts are keyed on). A LEGEND hover still highlights by
+  category: on the category variable it fades the other categories'
+  shapes, means and points; on any other variable the shapes stay
+  untouched (a shape spans its values).
 - **Regression** (X position only) — offered when BOTH position axes
   are quantitative (the exact complement of the violin/box situation;
   the two sections never co-occur). "Add regression line" fits y-on-x
@@ -4146,6 +4211,17 @@ time specs, `literal`, and the Before / After text around them (§5.1)
 "$1,235" too. The dollar / percent cell hints reach the tooltip on the
 same read-time terms they reach the axis; nothing is written back to
 any Format box.
+
+**Violin / box parts show their own value.** Hovering a box or a
+violin shows its category, then **Min**, **Lower whisker**, **Q1**,
+**Median**, **Q3**, **Upper whisker**, **Max** and **N** — the same
+statistics the data table lists for it (§10b). A "Mark mean" point
+shows its category and **Mean**; an outlier ring its category and
+**Outlier** (its value); a data point its full row, as anywhere. The
+statistics are the value variable summarized, so they print with that
+variable's format and appear while ITS "Fields shown" checkbox is on;
+N follows the same checkbox but prints as a plain count. A custom HTML
+template reaches them by name (`{{Median}}`).
 
 **Line charts snap to the nearest point.** On a connection (line)
 chart the user doesn't have to land on a marker: pointing anywhere

@@ -97,7 +97,7 @@ export const renderMarkPaths = (args: {
 				// entry OR another mark's series is hovered), the atom drives the
 				// fade — skip the ad-hoc per-point dim so they don't compound.
 				const nodeKey = nodeKeyOf?.(m)
-				const mh = rowHighlight(highlight, m.row)
+				const mh = rowHighlight(highlight, m.row, nodeKey)
 				const localDim = highlight
 					? 1
 					: hoveredIdx === null || hoveredIdx === m.i
@@ -207,7 +207,7 @@ export const renderMarkPaths = (args: {
 								clientX: e.clientX,
 								clientY: e.clientY,
 							})
-							publishHover(m.row)
+							publishHover(m.row, nodeKey)
 						}}
 					/>
 				)
@@ -277,7 +277,7 @@ export const renderTextLabels = (
  * overrides the user's chosen ordering across levels. */
 export const drawOrderSizeTieBreak = (a: Mark, b: Mark): number => b.r - a.r
 
-type BuildMarksArgs = {
+export type BuildMarksArgs = {
 	rowsForChart: Array<Record<string, unknown>>
 	encodings: Encodings
 	channelConfigs: ChannelConfigs

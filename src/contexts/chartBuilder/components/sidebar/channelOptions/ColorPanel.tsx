@@ -12,6 +12,7 @@ import {
 	legacySlotColor,
 	type ColorSlotDef,
 	filledRadarOn,
+	overlayOn,
 } from "../../../lib/colorSlots"
 import { isAreaModeId } from "../../../lib/chartModes/families"
 import { effectiveType } from "../../../lib/fieldType"
@@ -117,7 +118,13 @@ export const ColorPanel = () => {
 	return (
 		<div className="vc-option-panel">
 			{!pureDensityCurve && (
-				<CollapsibleSubsection title="Fill" defaultOpen changed={fillChanged}>
+				<CollapsibleSubsection
+					// Beside the Violin / box subheaders the marks' fill is the
+					// POINT fill — named so, as the Pattern menu names it.
+					title={overlayOn(configs) ? "Point fill" : "Fill"}
+					defaultOpen
+					changed={fillChanged}
+				>
 					<ColorOptionsPanel hideVaryBy={useLinkedOutline} />
 				</CollapsibleSubsection>
 			)}
@@ -127,7 +134,11 @@ export const ColorPanel = () => {
 				</CollapsibleSubsection>
 			)}
 			{showIndependentOutline && (
-				<CollapsibleSubsection title="Outline" changed={outlineScatterChanged}>
+				<CollapsibleSubsection
+					// Beside "Violin / box outline" this is the POINT outline.
+					title={overlayOn(configs) ? "Point outline" : "Outline"}
+					changed={outlineScatterChanged}
+				>
 					<OutlineColorRow />
 				</CollapsibleSubsection>
 			)}

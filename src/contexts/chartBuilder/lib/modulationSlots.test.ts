@@ -52,6 +52,17 @@ describe("applicableModulationSlots", () => {
 	it("offers nothing on modes whose renderers don't read the slots", () => {
 		expect(applicableModulationSlots("bars-x", enc("series"), {})).toEqual([])
 	})
+	it("offers the Violin / box fill + outline pair only while an overlay is on", () => {
+		const boxOn = {
+			y: { distributionOverlay: { showBoxPlot: true } },
+		} as unknown as ChannelConfigs
+		expect(
+			applicableModulationSlots("scatter", enc(null), boxOn).map((d) => d.key)
+		).toEqual(["outline", "violinFill", "violinStroke"])
+		expect(
+			applicableModulationSlots("bars-x", enc(null), boxOn).map((d) => d.key)
+		).toEqual([])
+	})
 })
 
 describe("slotModulationResolver", () => {

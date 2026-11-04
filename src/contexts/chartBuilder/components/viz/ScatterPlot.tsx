@@ -1,5 +1,5 @@
 import { max } from "d3-array"
-import { useMemo, useState } from "react"
+import { useId, useMemo, useState } from "react"
 import { useAtomValue } from "jotai"
 import { computeKde } from "../../lib/aggregators/distributions"
 import { dateColumnText } from "../../lib/rawTextByTime"
@@ -27,7 +27,7 @@ import {
 	maxMeaningfulTicks,
 	overrideLinearDomain,
 } from "../../lib/scales"
-import type { Encodings } from "../../lib/types"
+import type { Encodings, FieldType } from "../../lib/types"
 import {
 	currentEncodingsAtom,
 	currentFieldLevelOrdersAtom,
@@ -55,7 +55,10 @@ import { renderAxisStems, renderConnectionLines } from "./scatter/connections"
 import {
 	DensityCurveShape,
 	linearDomain,
+	meanTooltipFields,
+	overlayElementKey,
 	renderDistributionOverlays,
+	buildOverlayPatternDefs,
 } from "./scatter/distributions"
 import {
 	buildMarks,
@@ -69,7 +72,8 @@ import {
 	resolveStripAxes,
 	type StripAxes,
 } from "./scatter/strip"
-import type { HoverState } from "./scatter/types"
+import { buildMeanMarks, meanMarked } from "./scatter/meanMarks"
+import type { HoverState, Mark } from "./scatter/types"
 
 // ScatterPlot.tsx stays the import entry point for the scatter renderer: the
 // mark building, connection/stem lines, strip-plot packing, regression layer,
@@ -102,17 +106,6 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 	const dataset = useCurrentDatasetView()
 	const aestheticScales = useAestheticScales()
 	const legendHighlight = useLegendHighlight()
-	// Direct mark hover highlights the point's series (by the hue field), so
-	// hovering a point recolors / outlines / fades like hovering its legend.
-	// With no hue mapped, the CONNECTION field is the series identity — that's
-	// the plain line chart (x + y + connection, no color encoding), where the
-	// thing the user points at is one line among several. Same fallback the
-	// radar renderer uses for its polygons.
-	const markHoverField =
-		aestheticScales.hue?.field.name ?? encodings.connection?.field ?? null
-	const markHover = useMarkHoverHighlight(markHoverField)
-	const publishHover = (row: Record<string, unknown>) =>
-		markHover.enter(markHoverField ? row[markHoverField] : undefined)
 	// Theme source for the connection / stem default single color — the color
 	// a "single color" line/stem draws when the slot isn't varying by a field.
 	const liveTheme = useCurrentTheme()
@@ -163,6 +156,54 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 			: yField && !xField && yType === "quantitative" && overlayOn(channelConfigs.y?.distributionOverlay)
 				? { valueAxis: "y" }
 				: null
+	// A violin / box on a strip plot: its category variable, the field the
+	// shapes are keyed on. The overlay lives on the VALUE axis's config.
+	const isCategoryType = (t: FieldType | null) =>
+		t === "categorical" || t === "ordinal"
+	const boxOrViolin = (d: DistributionOverlayConfig | undefined) =>
+		!!d && (d.showDensityViolin || d.showBoxPlot)
+	const overlayCategoryField =
+		isCategoryType(xType) &&
+		yType === "quantitative" &&
+		boxOrViolin(channelConfigs.y?.distributionOverlay)
+			? xField
+			: isCategoryType(yType) &&
+				  xType === "quantitative" &&
+				  boxOrViolin(channelConfigs.x?.distributionOverlay)
+				? yField
+				: null
+	// The single-variable violin / box: its value variable stands in as the
+	// highlight field (there's no category), so its parts still hover alone.
+	const singleVarShapeField =
+		singleVarDist &&
+		boxOrViolin(channelConfigs[singleVarDist.valueAxis]?.distributionOverlay)
+			? singleVarDist.valueAxis === "x"
+				? xField
+				: yField
+			: null
+	// Direct mark hover highlights the point's series (by the hue field), so
+	// hovering a point recolors / outlines / fades like hovering its legend.
+	// With no hue mapped, the CONNECTION field is the series identity — that's
+	// the plain line chart (x + y + connection, no color encoding), where the
+	// thing the user points at is one line among several. Same fallback the
+	// radar renderer uses for its polygons. Failing both, a violin / box
+	// plot's category is the identity: the shape and its points.
+	const markHoverField =
+		aestheticScales.hue?.field.name ??
+		encodings.connection?.field ??
+		overlayCategoryField ??
+		singleVarShapeField ??
+		null
+	const markHover = useMarkHoverHighlight(markHoverField)
+	const publishHover = (row: Record<string, unknown>, node?: string) =>
+		markHover.enter(markHoverField ? row[markHoverField] : undefined, node)
+	// On a violin / box chart every part hovers on its own — a point, the
+	// mean, an outlier, the box, the violin each light up alone and carry
+	// their own tooltip (a legend hover still lights the whole category).
+	// The keys are scoped to this panel so a facet twin stays out of it.
+	const hoverScope = useId()
+	const elementKey = (local: string) => `${hoverScope}${local}`
+	const pointKey = (m: Mark) => elementKey(overlayElementKey.point(m.i))
 	const xMaxTicks = xRaw && xType ? maxMeaningfulTicks(xRaw, xType) : undefined
 	const yMaxTicks = yRaw && yType ? maxMeaningfulTicks(yRaw, yType) : undefined
 
@@ -240,10 +281,18 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 	// re-traverse every row to rebuild defs. Items resolve through the same
 	// `resolveMarkAesthetics` pipeline `buildMarks` uses, so the emitted
 	// defs' svgIds always match the marks'.
+	// The violin / box bodies' defs join the points' (their own "Violin / box
+	// fill" pick, see `buildOverlayPatternDefs`); the union dedups by svgId.
 	const patternDefs = useMemo(() => {
 		const patternField = aestheticScales.pattern?.field.name ?? null
-		if (!patternField && channelConfigs.defaultPattern == null) return []
-		return buildPatternDefsFromItems(
+		const overlayDefs = buildOverlayPatternDefs({
+			rowsForChart,
+			encodings,
+			channelConfigs,
+			aestheticScales,
+		})
+		if (!patternField && channelConfigs.defaultPattern == null) return overlayDefs
+		const pointDefs = buildPatternDefsFromItems(
 			rowsForChart.map((row) => {
 				const aes = resolveMarkAesthetics(row, aestheticScales, channelConfigs)
 				return {
@@ -262,7 +311,11 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 				includeDefaultPattern: true,
 			}
 		)
-	}, [rowsForChart, aestheticScales, channelConfigs, encodings.connection?.field])
+		if (overlayDefs.length === 0) return pointDefs
+		const defs = new Map(pointDefs.map((d) => [d.svgId, d] as const))
+		for (const d of overlayDefs) if (!defs.has(d.svgId)) defs.set(d.svgId, d)
+		return [...defs.values()]
+	}, [rowsForChart, aestheticScales, channelConfigs, encodings])
 
 	const missing = !encodings.x?.field && !encodings.y?.field
 
@@ -291,7 +344,8 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 					clientX: hovered.clientX,
 					clientY: hovered.clientY,
 					// Line hovers supply their own fields (connection value +
-					// series-constant fields); point hovers show the full row.
+					// series-constant fields), violin / box hovers their
+					// summary statistics; point hovers show the full row.
 					fields:
 						hovered.fields ??
 						dataset.fields.map((f) => ({
@@ -301,6 +355,48 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 					seriesOnly: hovered.seriesOnly,
 				}}
 			/>
+		)
+
+	// The box plot's "Mark mean" points. Drawn through the same mark renderer
+	// as the data points (same glyph / border / colors / size), each its own
+	// hover target: the tooltip shows the category and the mean, and a direct
+	// hover lights that point alone. The legend hover fades them with their
+	// category.
+	const renderMeanMarks = (
+		meanMarks: Mark[],
+		categoryField: string,
+		valueField: string
+	) =>
+		meanMarks.length === 0 ? null : (
+			<g aria-hidden data-box-mean="">
+				{renderMarkPaths({
+					marks: meanMarks,
+					markedIndices: null,
+					channelConfigs,
+					hoveredIdx: null,
+					borderOpacity: slotOpacityResolver(
+						"border",
+						channelConfigs,
+						aestheticScales
+					),
+					setHovered: (h) =>
+						setHovered(
+							h && {
+								...h,
+								i: null,
+								fields: meanTooltipFields(h.row, categoryField, valueField),
+							}
+						),
+					highlight: legendHighlight,
+					publishHover,
+					nodeKeyOf: (m) =>
+						elementKey(
+							overlayElementKey.mean(
+								categoryField ? String(m.row[categoryField]) : ""
+							)
+						),
+				})}
+			</g>
 		)
 
 	const marksBody = (ctx: PlotContext) => {
@@ -377,6 +473,25 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 							yScale: valueIsX ? constCenterScale : valueScale,
 							xType: valueIsX ? "quantitative" : "categorical",
 							yType: valueIsX ? "categorical" : "quantitative",
+						})
+					: []
+			// "Mark mean": one point at the lone box's mean, built the same way
+			// as the dots above so it styles like one. Only while the box is on
+			// and the points are off (see `meanMarked`); the density display
+			// has no box.
+			const meanMarks =
+				!densityCurveOn && meanMarked(overlay)
+					? buildMeanMarks({
+							rowsForChart,
+							encodings: syntheticEncodings,
+							channelConfigs,
+							aestheticScales,
+							xScale: valueIsX ? valueScale : constCenterScale,
+							yScale: valueIsX ? constCenterScale : valueScale,
+							xType: valueIsX ? "quantitative" : "categorical",
+							yType: valueIsX ? "categorical" : "quantitative",
+							categoryField: "",
+							valueField,
 						})
 					: []
 			// The curve's outline and fill resolve from separate slots (one
@@ -578,14 +693,17 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 						rowsForChart,
 						stripAxes,
 						channelConfigs,
-						hueScale: aestheticScales.hue,
-						colorSlots: aestheticScales.colorSlots,
-						opacitySlots: aestheticScales.opacitySlots,
+						aestheticScales,
 						// Mirrors the `marks` gate above: the density display swaps
 						// points for a rug, so points are only on screen when the
 						// curve is off.
 						pointsShown: !densityCurveOn && overlay.showPoints,
+						setHovered,
+						highlight: legendHighlight,
+						publishHover,
+						elementKey,
 					})}
+					{renderMeanMarks(meanMarks, "", valueField)}
 					{densityNode}
 					{densityRugNode}
 					{renderMarkPaths({
@@ -608,6 +726,8 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 						setHovered,
 						highlight: legendHighlight,
 						publishHover,
+						// The density display shows a rug, never points.
+						nodeKeyOf: pointKey,
 					})}
 				</g>
 			)
@@ -644,12 +764,14 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 					rowsForChart,
 					stripAxes,
 					channelConfigs,
-					hueScale: aestheticScales.hue,
-					colorSlots: aestheticScales.colorSlots,
-					opacitySlots: aestheticScales.opacitySlots,
+					aestheticScales,
 					// Same condition as `showPoints` below: an active overlay
 					// respects the "Show points" checkbox.
 					pointsShown: stripAxes.overlay.showPoints,
+					setHovered,
+					highlight: legendHighlight,
+					publishHover,
+					elementKey,
 				})
 			: null
 		// When an overlay is on AND the user has unchecked "Show points",
@@ -660,6 +782,24 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 			(stripAxes.overlay.showDensityViolin || stripAxes.overlay.showBoxPlot)
 		const showPoints = overlayActive ? stripAxes.overlay.showPoints : true
 		const jitteredMarks = showPoints ? applyJitter(marks, stripAxes) : []
+		// "Mark mean": one point per box at its category's mean, built through
+		// `buildMarks` so it styles like the (hidden) data points. Never
+		// jittered — it sits on the box's center line.
+		const meanMarks =
+			stripAxes && meanMarked(stripAxes.overlay)
+				? buildMeanMarks({
+						rowsForChart,
+						encodings,
+						channelConfigs,
+						aestheticScales,
+						xScale,
+						yScale,
+						xType,
+						yType,
+						categoryField: stripAxes.categoryField,
+						valueField: stripAxes.valueField,
+					})
+				: []
 
 		const hoveredIdx = hovered?.i ?? null
 
@@ -711,6 +851,11 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 			>
 				{!regressionInFront && regressionNode}
 				{overlays}
+				{renderMeanMarks(
+					meanMarks,
+					stripAxes?.categoryField ?? "",
+					stripAxes?.valueField ?? ""
+				)}
 				{renderAxisStems(
 					jitteredMarks,
 					channelConfigs,
@@ -765,6 +910,7 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 					setHovered,
 					highlight: legendHighlight,
 					publishHover,
+					nodeKeyOf: overlayActive ? pointKey : undefined,
 				})}
 				{regressionInFront && regressionNode}
 				{renderTextLabels(

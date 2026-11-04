@@ -23,9 +23,7 @@ import {
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 
-export const useUniqueValuesForChannel = (
-	channel: "shape" | "pattern" | "hue"
-): {
+export type UniqueValues = {
 	values: string[]
 	type: FieldType
 	labels?: string[]
@@ -33,7 +31,32 @@ export const useUniqueValuesForChannel = (
 	 *  Undefined for derived / flow sources — those have no single backing
 	 *  field, so their rows stay in the renderer's discovery/union order. */
 	order?: readonly string[]
-} | null => {
+}
+
+/** The levels of a bare dataset field (no channel semantics: no derived
+ *  hierarchy sources, no flow-node union) — for sidebar targets that carry
+ *  their own variable outside `encodings`, such as the Pattern menu's
+ *  "Violin / box fill" Vary by. `null` field = null. */
+export const useUniqueValuesForField = (
+	fieldName: string | null
+): UniqueValues | null => {
+	const overrides = useAtomValue(currentFieldOverridesAtom)
+	const levelOrders = useAtomValue(currentFieldLevelOrdersAtom)
+	const dataset = useCurrentDatasetView()
+	if (!dataset || !fieldName) return null
+	const field = dataset.fields.find((f) => f.name === fieldName)
+	const type: FieldType =
+		overrides[fieldName] ?? field?.inferredType ?? "categorical"
+	return {
+		values: uniqueFieldValues(dataset.rows, fieldName, { type }),
+		type,
+		order: levelOrders[fieldName],
+	}
+}
+
+export const useUniqueValuesForChannel = (
+	channel: "shape" | "pattern" | "hue"
+): UniqueValues | null => {
 	const overrides = useAtomValue(currentFieldOverridesAtom)
 	const encodings = useAtomValue(currentEncodingsAtom)
 	const configs = useAtomValue(currentChannelConfigsAtom)

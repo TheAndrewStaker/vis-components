@@ -4,6 +4,7 @@ import type {
 	ModulationSlotKey,
 } from "./channelConfig"
 import type { ChartMode } from "./chartMode"
+import { overlayOn } from "./colorSlots"
 import type { Encodings } from "./types"
 
 /** The two color modulations that split by mark part. */
@@ -29,8 +30,10 @@ const m = (...modes: ChartMode[]): ReadonlySet<ChartMode> => new Set(modes)
 
 /** Registry of every modulation slot, in display order. Fill is NOT here — it
  * reuses the overall `saturation` / `brightness` encoding. Only the scatter
- * renderer (points + connection lines) reads these parts today, so the gates
- * keep the menu from offering a control that would do nothing elsewhere. */
+ * renderer (points, connection lines, the violin / box overlay) reads these
+ * parts today, so the gates keep the menu from offering a control that would
+ * do nothing elsewhere. The violin / box pair mirrors the Color and Opacity
+ * menus' slots of the same names (`overlayOn` gate). */
 export const MODULATION_SLOT_REGISTRY: readonly ModulationSlotDef[] = [
 	{
 		key: "outline",
@@ -43,6 +46,18 @@ export const MODULATION_SLOT_REGISTRY: readonly ModulationSlotDef[] = [
 		label: "Line",
 		modes: m("scatter"),
 		isApplicable: (encodings) => !!encodings.connection?.field,
+	},
+	{
+		key: "violinFill",
+		label: "Violin / box fill",
+		modes: m("scatter"),
+		isApplicable: (_encodings, configs) => overlayOn(configs),
+	},
+	{
+		key: "violinStroke",
+		label: "Violin / box outline",
+		modes: m("scatter"),
+		isApplicable: (_encodings, configs) => overlayOn(configs),
 	},
 ]
 

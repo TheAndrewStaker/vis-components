@@ -289,65 +289,133 @@ export const resolvePatternDefForItem = (
 	)
 }
 
-/** Channel configs re-pointed at the RADAR POLYGON FILL pattern state
- *  (`PatternConfig.polygonOverrides` / `polygonInkColors` / `polygonScales`
- *  / `defaultPolygonPattern` / `defaultPolygonPatternInk` /
- *  `defaultPolygonScale`) so the ordinary per-mark resolver reads the
- *  polygon's separate picks in place of the point-fill ones. Palettes,
- *  background, and sat/bri stay shared. */
-export const polygonPatternView = (
-	configs: Partial<Pick<ChannelConfigs, "pattern" | "defaultPatternInk">>
-): {
+/** Which `PatternConfig` fields hold a fill target's SEPARATE pattern
+ *  state — the radar polygon body or the violin / box body — stored beside
+ *  the point fill's `overrides` / `inkColors` / `scales` / `defaultPattern`
+ *  so no two targets ever share an index. */
+export type FillTargetPatternKeys = {
+	overrides: "polygonOverrides" | "violinOverrides"
+	inkColors: "polygonInkColors" | "violinInkColors"
+	scales: "polygonScales" | "violinScales"
+	defaultPattern: "defaultPolygonPattern" | "defaultViolinPattern"
+	defaultInk: "defaultPolygonPatternInk" | "defaultViolinPatternInk"
+	defaultScale: "defaultPolygonScale" | "defaultViolinScale"
+}
+export const POLYGON_PATTERN_KEYS: FillTargetPatternKeys = {
+	overrides: "polygonOverrides",
+	inkColors: "polygonInkColors",
+	scales: "polygonScales",
+	defaultPattern: "defaultPolygonPattern",
+	defaultInk: "defaultPolygonPatternInk",
+	defaultScale: "defaultPolygonScale",
+}
+export const VIOLIN_PATTERN_KEYS: FillTargetPatternKeys = {
+	overrides: "violinOverrides",
+	inkColors: "violinInkColors",
+	scales: "violinScales",
+	defaultPattern: "defaultViolinPattern",
+	defaultInk: "defaultViolinPatternInk",
+	defaultScale: "defaultViolinScale",
+}
+
+type FillTargetPatternView = {
 	pattern: PatternConfig
 	defaultPattern: number | null
-	/** Explicit polygon ink, else the explicit point-fill ink, else `null`
+	/** Explicit target ink, else the explicit point-fill ink, else `null`
 	 *  — the palette-paired / theme ink (`resolveDefaultPatternInk`). */
 	defaultPatternInk: string | null
-} => {
+}
+
+/** Channel configs re-pointed at one fill target's pattern state so the
+ *  ordinary per-mark resolver reads that target's separate picks in place
+ *  of the point-fill ones. Palettes, background, and sat/bri stay shared. */
+const fillTargetPatternView = (
+	configs: Partial<Pick<ChannelConfigs, "pattern" | "defaultPatternInk">>,
+	keys: FillTargetPatternKeys
+): FillTargetPatternView => {
 	const pat = configs.pattern
 	return {
 		pattern: {
 			...DEFAULT_PATTERN_CONFIG,
 			...pat,
-			overrides: pat?.polygonOverrides ?? {},
-			inkColors: pat?.polygonInkColors ?? {},
-			scales: pat?.polygonScales ?? {},
-			defaultScale: pat?.defaultPolygonScale ?? null,
+			overrides: pat?.[keys.overrides] ?? {},
+			inkColors: pat?.[keys.inkColors] ?? {},
+			scales: pat?.[keys.scales] ?? {},
+			defaultScale: pat?.[keys.defaultScale] ?? null,
 		},
-		defaultPattern: pat?.defaultPolygonPattern ?? null,
+		defaultPattern: pat?.[keys.defaultPattern] ?? null,
 		defaultPatternInk:
-			pat?.defaultPolygonPatternInk ?? configs.defaultPatternInk ?? null,
+			pat?.[keys.defaultInk] ?? configs.defaultPatternInk ?? null,
 	}
 }
-/** The same re-pointing over a full `ChannelConfigs` (the renderer's
- *  input). The legend uses `polygonPatternView` directly, since its
- *  swatch renderers hold only a partial configs object. */
-const polygonPatternConfigs = (channelConfigs: ChannelConfigs): ChannelConfigs => ({
-	...channelConfigs,
-	...polygonPatternView(channelConfigs),
-})
 
-/** Resolve the `<pattern>` def (or null) for a radar series POLYGON body.
- *  The polygon fill has its own pattern pick, separate from the points'
- *  (the Pattern menu's "Polygon fill" vs "Point fill" subsections), so the
- *  same series can carry, say, a hatched body under plain dots. Semantics
- *  mirror point fills in line-chart context: with a pattern variable
- *  mapped, a category renders NO pattern until the user picks a swatch for
- *  it; with none mapped, `defaultPolygonPattern` fills every polygon.
- *  Callers gate on `connection.fillPolygon` — an unfilled polygon has no
- *  body to pattern. */
+/** The RADAR POLYGON FILL view (`PatternConfig.polygonOverrides` /
+ *  `polygonInkColors` / `polygonScales` / `defaultPolygonPattern` /
+ *  `defaultPolygonPatternInk` / `defaultPolygonScale`). The legend uses it
+ *  directly, since its swatch renderers hold only a partial configs
+ *  object. */
+export const polygonPatternView = (
+	configs: Partial<Pick<ChannelConfigs, "pattern" | "defaultPatternInk">>
+): FillTargetPatternView => fillTargetPatternView(configs, POLYGON_PATTERN_KEYS)
+
+/** The VIOLIN / BOX FILL view (`PatternConfig.violinOverrides` et al.). */
+export const violinPatternView = (
+	configs: Partial<Pick<ChannelConfigs, "pattern" | "defaultPatternInk">>
+): FillTargetPatternView => fillTargetPatternView(configs, VIOLIN_PATTERN_KEYS)
+
+/** Resolve the `<pattern>` def (or null) for a fill target's body with the
+ *  re-pointed configs. Semantics mirror point fills in line-chart context:
+ *  with a pattern variable mapped, a category renders NO pattern until the
+ *  user picks a swatch for it; with none mapped, the target's default
+ *  pattern fills every body. */
+const resolveFillTargetPatternDef = (
+	item: PatternDefItem,
+	aestheticScales: AestheticScales,
+	channelConfigs: ChannelConfigs,
+	patternBgOverride: string | null,
+	keys: FillTargetPatternKeys
+): PatternDefSpec | null =>
+	resolvePatternDefForItem(
+		item,
+		aestheticScales,
+		{ ...channelConfigs, ...fillTargetPatternView(channelConfigs, keys) },
+		patternBgOverride,
+		{ defaultToNone: true, includeDefaultPattern: true }
+	)
+
+/** The def for a radar series POLYGON body. The polygon fill has its own
+ *  pattern pick, separate from the points' (the Pattern menu's "Polygon
+ *  fill" vs "Point fill" subsections), so the same series can carry, say,
+ *  a hatched body under plain dots. Callers gate on
+ *  `connection.fillPolygon` — an unfilled polygon has no body to pattern. */
 export const resolvePolygonPatternDef = (
 	item: PatternDefItem,
 	aestheticScales: AestheticScales,
 	channelConfigs: ChannelConfigs,
 	patternBgOverride: string | null
 ): PatternDefSpec | null =>
-	resolvePatternDefForItem(
+	resolveFillTargetPatternDef(
 		item,
 		aestheticScales,
-		polygonPatternConfigs(channelConfigs),
+		channelConfigs,
 		patternBgOverride,
-		{ defaultToNone: true, includeDefaultPattern: true }
+		POLYGON_PATTERN_KEYS
+	)
+
+/** The def for a VIOLIN / BOX body (the Pattern menu's "Violin / box fill"
+ *  subsection). Callers gate on an active overlay (`overlayOn`). */
+export const resolveViolinPatternDef = (
+	item: PatternDefItem,
+	aestheticScales: AestheticScales,
+	channelConfigs: ChannelConfigs,
+	patternBgOverride: string | null
+): PatternDefSpec | null =>
+	resolveFillTargetPatternDef(
+		item,
+		aestheticScales,
+		channelConfigs,
+		patternBgOverride,
+		VIOLIN_PATTERN_KEYS
 	)
 
 /** Single source of truth for "what color does this slice/layer/row draw
@@ -553,16 +621,35 @@ export const slotModulationResolver = (
 	channelConfigs: ChannelConfigs,
 	aestheticScales: AestheticScales
 ): ((color: string, row: Record<string, unknown>) => string) => {
-	const satCfg = channelConfigs.saturationSlots?.[key]
-	const briCfg = channelConfigs.brightnessSlots?.[key]
-	if (!modulationSlotEdited(satCfg) && !modulationSlotEdited(briCfg))
-		return (color) => color
-	const satSlot = aestheticScales.saturationSlots?.[key]
-	const briSlot = aestheticScales.brightnessSlots?.[key]
+	const units = slotModulationUnitsResolver(key, channelConfigs, aestheticScales)
+	if (!units) return (color) => color
 	return (color, row) => {
 		if (color === "none") return color
-		const sat = resolveSlotModulation(satSlot, satCfg, row)
-		const bri = resolveSlotModulation(briSlot, briCfg, row)
+		const { sat, bri } = units(row)
 		return sat === null && bri === null ? color : modulateColor(color, sat, bri)
 	}
+}
+
+/** The per-row saturation / brightness UNIT levels for one mark part, or
+ *  `null` when neither slot is set (the part is untouched). The color form
+ *  above wraps this; callers that also tile a pattern over the part (the
+ *  violin / box body) need the units themselves, so the tile modulates like
+ *  the fill (`PatternDefItem.satUnit` / `briUnit`). */
+export const slotModulationUnitsResolver = (
+	key: ModulationSlotKey,
+	channelConfigs: ChannelConfigs,
+	aestheticScales: AestheticScales
+): ((row: Record<string, unknown>) => {
+	sat: number | null
+	bri: number | null
+}) | null => {
+	const satCfg = channelConfigs.saturationSlots?.[key]
+	const briCfg = channelConfigs.brightnessSlots?.[key]
+	if (!modulationSlotEdited(satCfg) && !modulationSlotEdited(briCfg)) return null
+	const satSlot = aestheticScales.saturationSlots?.[key]
+	const briSlot = aestheticScales.brightnessSlots?.[key]
+	return (row) => ({
+		sat: resolveSlotModulation(satSlot, satCfg, row),
+		bri: resolveSlotModulation(briSlot, briCfg, row),
+	})
 }

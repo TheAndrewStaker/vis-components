@@ -1224,6 +1224,114 @@
 				"stack"
 			]
 		},
+		"channelConfigs.brightnessSlots.violinFill": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinFill.field": {
+			"kinds": [
+				"null",
+				"string"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinFill.level": {
+			"kinds": [
+				"null",
+				"number"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinFill.range": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinFill.range.max": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinFill.range.min": {
+			"doc": "Anchored levels, NOT absolute HSL components: 0.5 leaves the base color's saturation alone, 0 is fully gray, 1 fully saturated. See `anchoredComponent` in lib/scales.",
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinFill.range.overrides": {
+			"doc": "Per-value overrides, keyed by the value's string form: a category of a categorical/ordinal field mapped to the channel, or a packed-circles derived value (a depth level \"1\"/\"2\"/… or a top-level group name). An unset value falls back to the even min→max spread.",
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinFill.range.overrides.*": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinFill.range.stackMode": {
+			"kinds": [
+				"string"
+			],
+			"values": [
+				"group",
+				"overlay",
+				"stack"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinStroke": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinStroke.field": {
+			"kinds": [
+				"null",
+				"string"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinStroke.level": {
+			"kinds": [
+				"null",
+				"number"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinStroke.range": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinStroke.range.max": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinStroke.range.min": {
+			"doc": "Anchored levels, NOT absolute HSL components: 0.5 leaves the base color's saturation alone, 0 is fully gray, 1 fully saturated. See `anchoredComponent` in lib/scales.",
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinStroke.range.overrides": {
+			"doc": "Per-value overrides, keyed by the value's string form: a category of a categorical/ordinal field mapped to the channel, or a packed-circles derived value (a depth level \"1\"/\"2\"/… or a top-level group name). An unset value falls back to the even min→max spread.",
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinStroke.range.overrides.*": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.brightnessSlots.violinStroke.range.stackMode": {
+			"kinds": [
+				"string"
+			],
+			"values": [
+				"group",
+				"overlay",
+				"stack"
+			]
+		},
 		"channelConfigs.canvasSize": {
 			"doc": "Aesthetics → Canvas size (see CanvasSizeConfig). Absent = off: the chart fills the editor viewport as before.",
 			"kinds": [
@@ -6309,6 +6417,24 @@
 				"number"
 			]
 		},
+		"channelConfigs.pattern.defaultViolinPattern": {
+			"kinds": [
+				"null",
+				"number"
+			]
+		},
+		"channelConfigs.pattern.defaultViolinPatternInk": {
+			"kinds": [
+				"null",
+				"string"
+			]
+		},
+		"channelConfigs.pattern.defaultViolinScale": {
+			"kinds": [
+				"null",
+				"number"
+			]
+		},
 		"channelConfigs.pattern.inkColors": {
 			"doc": "Per-category ink color (hex). Missing categories fall back to DEFAULT_PATTERN_INK.",
 			"kinds": [
@@ -6406,6 +6532,49 @@
 				"stack"
 			]
 		},
+		"channelConfigs.pattern.violinField": {
+			"doc": "What the violin / box body's pattern VARIES BY — the subsection's \"Vary by\", the analogue of a color slot's field. Absent = Auto: the Pattern variable, as for the points (per-level picks in `violinOverrides` keyed by its levels, none mapped = the default pattern).",
+			"kinds": [
+				"null",
+				"string"
+			]
+		},
+		"channelConfigs.pattern.violinInkColors": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.pattern.violinInkColors.*": {
+			"color": true,
+			"kinds": [
+				"string"
+			]
+		},
+		"channelConfigs.pattern.violinOverrides": {
+			"doc": "VIOLIN / BOX FILL — the distribution overlay's body (what the Color panel's \"Violin / box fill\" slot colors) takes its own pattern pick, separate from the point fill, the way the radar polygon does. Read only while a violin or box overlay is on (`overlayOn`).",
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.pattern.violinOverrides.*": {
+			"kinds": [
+				"number",
+				"string"
+			],
+			"values": [
+				"none"
+			]
+		},
+		"channelConfigs.pattern.violinScales": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.pattern.violinScales.*": {
+			"kinds": [
+				"number"
+			]
+		},
 		"channelConfigs.patternInkColor": {
 			"color": true,
 			"kinds": [
@@ -6487,6 +6656,12 @@
 		"channelConfigs.r.distributionOverlay.fillColorOverrides.*": {
 			"kinds": [
 				"string"
+			]
+		},
+		"channelConfigs.r.distributionOverlay.markMean": {
+			"doc": "Box plot only, and only while `showPoints` is false: draw one point per box at the category's arithmetic mean.",
+			"kinds": [
+				"boolean"
 			]
 		},
 		"channelConfigs.r.distributionOverlay.showBoxPlot": {
@@ -7138,6 +7313,114 @@
 				"stack"
 			]
 		},
+		"channelConfigs.saturationSlots.violinFill": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.saturationSlots.violinFill.field": {
+			"kinds": [
+				"null",
+				"string"
+			]
+		},
+		"channelConfigs.saturationSlots.violinFill.level": {
+			"kinds": [
+				"null",
+				"number"
+			]
+		},
+		"channelConfigs.saturationSlots.violinFill.range": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.saturationSlots.violinFill.range.max": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.saturationSlots.violinFill.range.min": {
+			"doc": "Anchored levels, NOT absolute HSL components: 0.5 leaves the base color's saturation alone, 0 is fully gray, 1 fully saturated. See `anchoredComponent` in lib/scales.",
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.saturationSlots.violinFill.range.overrides": {
+			"doc": "Per-value overrides, keyed by the value's string form: a category of a categorical/ordinal field mapped to the channel, or a packed-circles derived value (a depth level \"1\"/\"2\"/… or a top-level group name). An unset value falls back to the even min→max spread.",
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.saturationSlots.violinFill.range.overrides.*": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.saturationSlots.violinFill.range.stackMode": {
+			"kinds": [
+				"string"
+			],
+			"values": [
+				"group",
+				"overlay",
+				"stack"
+			]
+		},
+		"channelConfigs.saturationSlots.violinStroke": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.saturationSlots.violinStroke.field": {
+			"kinds": [
+				"null",
+				"string"
+			]
+		},
+		"channelConfigs.saturationSlots.violinStroke.level": {
+			"kinds": [
+				"null",
+				"number"
+			]
+		},
+		"channelConfigs.saturationSlots.violinStroke.range": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.saturationSlots.violinStroke.range.max": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.saturationSlots.violinStroke.range.min": {
+			"doc": "Anchored levels, NOT absolute HSL components: 0.5 leaves the base color's saturation alone, 0 is fully gray, 1 fully saturated. See `anchoredComponent` in lib/scales.",
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.saturationSlots.violinStroke.range.overrides": {
+			"doc": "Per-value overrides, keyed by the value's string form: a category of a categorical/ordinal field mapped to the channel, or a packed-circles derived value (a depth level \"1\"/\"2\"/… or a top-level group name). An unset value falls back to the even min→max spread.",
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.saturationSlots.violinStroke.range.overrides.*": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.saturationSlots.violinStroke.range.stackMode": {
+			"kinds": [
+				"string"
+			],
+			"values": [
+				"group",
+				"overlay",
+				"stack"
+			]
+		},
 		"channelConfigs.scrollMode": {
 			"doc": "Global chart-canvas behavior when natural content would exceed the available container: \"fit\" (default): canvas matches container; panels / inner rects shrink to fit, no scrollbar. Best for dashboards and fixed embeds. \"scroll\": preserve minimum per-panel size and per-category spacing.",
 			"kinds": [
@@ -7405,6 +7688,12 @@
 		"channelConfigs.x.distributionOverlay.fillColorOverrides.*": {
 			"kinds": [
 				"string"
+			]
+		},
+		"channelConfigs.x.distributionOverlay.markMean": {
+			"doc": "Box plot only, and only while `showPoints` is false: draw one point per box at the category's arithmetic mean.",
+			"kinds": [
+				"boolean"
 			]
 		},
 		"channelConfigs.x.distributionOverlay.showBoxPlot": {
@@ -7980,6 +8269,12 @@
 		"channelConfigs.y.distributionOverlay.fillColorOverrides.*": {
 			"kinds": [
 				"string"
+			]
+		},
+		"channelConfigs.y.distributionOverlay.markMean": {
+			"doc": "Box plot only, and only while `showPoints` is false: draw one point per box at the category's arithmetic mean.",
+			"kinds": [
+				"boolean"
 			]
 		},
 		"channelConfigs.y.distributionOverlay.showBoxPlot": {

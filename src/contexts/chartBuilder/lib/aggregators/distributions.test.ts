@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { aggregateDistributions } from "./distributions"
+import { aggregateDistributions, meanByCategory } from "./distributions"
 
 const rowsForCategory = (category: string, values: number[]) =>
 	values.map((v) => ({ group: category, val: String(v) }))
@@ -167,5 +167,37 @@ describe("aggregateDistributions", () => {
 		if ("error" in result) throw new Error("unexpected error: " + result.error)
 		const peak = Math.max(...(result.stats[0]?.kde.density ?? [0]))
 		expect(peak).toBeCloseTo(1)
+	})
+})
+
+describe("meanByCategory", () => {
+	it("averages each category's values in first-seen order", () => {
+		const rows = [
+			...rowsForCategory("B", [1, 2, 3]),
+			...rowsForCategory("A", [10, 20, 30, 40]),
+		]
+		expect(meanByCategory(rows, "group", "val")).toEqual([
+			{ category: "B", mean: 2 },
+			{ category: "A", mean: 25 },
+		])
+	})
+
+	it("pools every row into one group when categoryField is empty", () => {
+		const rows = [1, 2, 3, 4].map((v) => ({ val: String(v) }))
+		expect(meanByCategory(rows, "", "val")).toEqual([{ category: "", mean: 2.5 }])
+	})
+
+	it("skips blank and non-numeric cells, and drops a category with none left", () => {
+		const rows = [
+			{ group: "A", val: "4" },
+			{ group: "A", val: "" },
+			{ group: "A", val: "n/a" },
+			{ group: "A", val: "6" },
+			{ group: "B", val: null },
+			{ group: " ", val: "9" },
+		]
+		expect(meanByCategory(rows, "group", "val")).toEqual([
+			{ category: "A", mean: 5 },
+		])
 	})
 })

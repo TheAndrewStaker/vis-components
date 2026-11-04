@@ -25,6 +25,17 @@ const inkFor = (background: string): string =>
 		? INK_LIGHT
 		: INK_DARK
 
+/** One tooltip row. A summary statistic (a box's "Median") isn't a variable
+ * of its own: it names the variable it summarizes, so it prints with that
+ * variable's format (`formatAs`) and follows that variable's "Fields shown"
+ * checkbox (`shownWith`). Both default to the entry's own name. */
+export type TooltipField = {
+	name: string
+	value: unknown
+	formatAs?: string
+	shownWith?: string
+}
+
 export type TooltipState = {
 	/** Viewport-relative pointer X (from `event.clientX`). The tooltip
 	 * renders portaled to `document.body` and positioned with `position:
@@ -39,7 +50,7 @@ export type TooltipState = {
 	 * cells — the tooltip prints each one through the format its variable
 	 * carries elsewhere on the chart (`lib/tooltipFormats.ts`), so a
 	 * renderer must never pre-format them. */
-	fields: Array<{ name: string; value: unknown }>
+	fields: Array<TooltipField>
 	/** A LINE-level hover under "Show tooltips only at points": `fields`
 	 * carries the line's connection value alone. Nothing is shown when that
 	 * variable isn't among the Fields shown — not even a custom template,
@@ -142,7 +153,7 @@ export const HoverTooltip = ({ state }: { state: TooltipState }) => {
 	const filtered =
 		visible.length === 0
 			? fields
-			: fields.filter((f) => visible.includes(f.name))
+			: fields.filter((f) => visible.includes(f.shownWith ?? f.name))
 	if (
 		filtered.length === 0 &&
 		(state.seriesOnly || !(cfg.useCustomHtml && cfg.customHtml.trim()))

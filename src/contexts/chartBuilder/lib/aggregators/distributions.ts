@@ -73,6 +73,38 @@ const coerceValue = (raw: unknown): number | null => {
 	return Number.isFinite(n) ? n : null
 }
 
+/** Arithmetic mean of `valueField` per category, in first-seen category
+ * order — the box plot's "Mark mean" point. Groups rows exactly as
+ * `aggregateDistributions` does (same category / value coercion, blank or
+ * non-numeric cells skipped) so each mean lands on the box it belongs to. An
+ * empty `categoryField` pools every row into one group keyed `""`. */
+export const meanByCategory = (
+	rows: ReadonlyArray<Row>,
+	categoryField: string,
+	valueField: string
+): Array<{ category: string; mean: number }> => {
+	const sums = new Map<string, { sum: number; n: number }>()
+	const order: string[] = []
+	for (const row of rows) {
+		const cat = categoryField ? coerceCategory(row[categoryField]) : ""
+		if (cat === null) continue
+		const v = coerceValue(row[valueField])
+		if (v === null) continue
+		const acc = sums.get(cat)
+		if (acc) {
+			acc.sum += v
+			acc.n += 1
+		} else {
+			sums.set(cat, { sum: v, n: 1 })
+			order.push(cat)
+		}
+	}
+	return order.map((category) => {
+		const acc = sums.get(category) as { sum: number; n: number }
+		return { category, mean: acc.sum / acc.n }
+	})
+}
+
 /** Linear interpolation at a fractional rank in a sorted array — matches
  * the type-7 quantile definition (numpy/R default). */
 const quantile = (sorted: number[], p: number): number => {

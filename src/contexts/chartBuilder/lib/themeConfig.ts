@@ -794,6 +794,13 @@ const CHANNEL_DOT_CONTROLS: Record<string, (ctx: DotCtx) => DotControl[]> = {
 		{ label: "default pattern", changed: differs(configs.defaultPattern, null) },
 		{ label: "default pattern ink", changed: differs(configs.defaultPatternInk ?? null, null) },
 		{ label: "pattern ink color", changed: differs(configs.patternInkColor, theme.patternInkColor) },
+		// The violin / box body's "Vary by": absent = Auto. An explicit `null`
+		// ("none") is a real pick `differs` would read as unset, so it's
+		// tested by presence.
+		{
+			label: "violin / box pattern vary-by",
+			changed: configs.pattern?.violinField !== undefined,
+		},
 		// Line-dash state the Pattern menu writes onto the CONNECTION config
 		// (the line renderers' source): the no-field default dash, the
 		// "Fill dash gaps" choice, and the "Apply pattern to range" window.

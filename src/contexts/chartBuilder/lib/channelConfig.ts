@@ -86,6 +86,13 @@ export type DistributionOverlayConfig = {
 	 * stands alone (classic violin-only / box-only plot). Defaults to true so
 	 * enabling an overlay on a strip plot keeps the dots visible. */
 	showPoints: boolean
+	/** Box plot only, and only while `showPoints` is false: draw one point per
+	 * box at the category's arithmetic mean. The point is a regular scatter
+	 * mark, so its glyph and border come from the Shape panel, its colors from
+	 * the Color / Opacity panels and its size from the Area panel — the same
+	 * controls the hidden data points would use. Off by default; optional so
+	 * visuals saved before it existed load unchanged. */
+	markMean?: boolean
 	/** Stroke color used when hue isn't mapped (so there's no per-category
 	 * palette to inherit from) and no per-category override exists. */
 	color: string
@@ -105,6 +112,7 @@ export const DEFAULT_DISTRIBUTION_OVERLAY_CONFIG: DistributionOverlayConfig = {
 	boxWidthScale: 1,
 	showDensityCurve: false,
 	showPoints: true,
+	markMean: false,
 	color: "#475569", // slate-600
 	fillColor: "#cbd5e1", // slate-300
 	colorOverrides: {},
@@ -789,7 +797,11 @@ export type OpacitySlots = Partial<Record<OpacitySlotKey, OpacitySlotConfig>>
  * subheaders in those menus. Fill is NOT a slot — it reuses the overall
  * `saturation` / `brightness` encoding + `defaultSaturation` /
  * `defaultBrightness`. */
-export type ModulationSlotKey = "outline" | "line"
+export type ModulationSlotKey =
+	| "outline"
+	| "line"
+	| "violinFill"
+	| "violinStroke"
 
 /** One saturation / brightness target's state. Levels are anchored like
  * `SaturationConfig` (0.5 = the part's color untouched). `level: null` = off
@@ -955,6 +967,29 @@ export type PatternConfig = {
 	/** The polygon-fill twins of `scales` / `defaultScale` (filled radar). */
 	polygonScales?: Record<string, number>
 	defaultPolygonScale?: number | null
+	/** VIOLIN / BOX FILL — the distribution overlay's body (what the Color
+	 * panel's "Violin / box fill" slot colors) takes its own pattern pick,
+	 * separate from the point fill, the way the radar polygon does. Read
+	 * only while a violin or box overlay is on (`overlayOn`). The Pattern
+	 * menu's "Violin / box fill" subsection writes these six; all sparse:
+	 * absent = the body draws its plain fill. Same semantics as the polygon
+	 * fields above: per pattern-category picks (opt-in per category with a
+	 * pattern variable mapped), ink, tile scale, and the no-variable default
+	 * trio. */
+	violinOverrides?: Record<string, PatternOverride>
+	violinInkColors?: Record<string, string>
+	violinScales?: Record<string, number>
+	defaultViolinPattern?: number | null
+	defaultViolinPatternInk?: string | null
+	defaultViolinScale?: number | null
+	/** What the violin / box body's pattern VARIES BY — the subsection's
+	 * "Vary by", the analogue of a color slot's field. Absent = Auto: the
+	 * Pattern variable, as for the points (per-level picks in
+	 * `violinOverrides` keyed by its levels, none mapped = the default
+	 * pattern). `null` = none: one `defaultViolinPattern` fills every body
+	 * whatever the points vary by. A name = that variable's levels drive the
+	 * per-level picks, independent of the points. */
+	violinField?: string | null
 	/** How Pattern paints a scatter LINE SEGMENT (Length / Angle marks).
 	 * `"fill"` strokes the segment with the pattern tile, as a bar would be
 	 * filled; `"dash"` makes Pattern the segment's dash style (the same
