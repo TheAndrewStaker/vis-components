@@ -26,6 +26,7 @@ import {
 	inkPaletteForHue,
 	patternCategoriesFor,
 	resolveDefaultPatternForMark,
+	resolveDefaultPatternInk,
 	resolvePatternForMark,
 	type ThemeInkFallback,
 } from "../../../lib/patterns"
@@ -242,10 +243,14 @@ export const CombinedGroupLegend = ({
 		areaSizeScale ? applyAreaScale(areaSizeScale, v, type) : null
 	const patCategories = hasPat ? patternCategoriesFor(values, type) : null
 	// Standalone-pattern tile background: the legend override wins, then the
-	// Pattern menu's chart-wide Background, then the historical gray. Only
-	// consumed when hue does NOT drive the swatch (see `bg` in buildEntry).
+	// Pattern menu's Background override, then what the marks draw — their
+	// default fill. Only consumed when hue does NOT drive the swatch (see
+	// `bg` in buildEntry).
 	const patBg =
-		patternLegendBgColor ?? configs.pattern?.backgroundColor ?? "#e2e8f0"
+		patternLegendBgColor ??
+		configs.pattern?.backgroundColor ??
+		configs.defaultFill ??
+		DEFAULT_FILL
 	// Line dash overlay only meaningful when connection is mapped AND a
 	// pattern field shares this section's variable. Auto-cycle through
 	// DASH_CYCLE by category position; per-category overrides win.
@@ -334,6 +339,9 @@ export const CombinedGroupLegend = ({
 		if (fillRuleColor) color = fillRuleColor
 		const satU = satScale ? satScale(v) : null
 		const briU = briScale ? briScale(v) : null
+		// Pattern inks pair on the PRE-modulation color (the palette's exact
+		// swatch hex), as the marks do — see `PatternDefItem.preModulationHue`.
+		const preModulationColor = color
 		if (satU !== null || briU !== null) {
 			color = modulateColor(color, satU, briU)
 		}
@@ -348,21 +356,21 @@ export const CombinedGroupLegend = ({
 				// sat/bri + pattern combined section shows only the pattern.
 				// With hue mapped, `color` already carries the modulation.
 				const bg = hasHue ? color : modulateColor(patBg, satU, briU)
-				// Mirror ScatterPlot's preferredInk lookup so the legend
-				// swatch's ink matches the mark's ink when the categorical
-				// palette pairs a hue color with a custom pattern ink. A
-				// standalone (no-hue) pattern section instead offers its own
-				// default-ink override; per-category inks still win inside
-				// `resolvePatternForMark`.
+				// Mirror the marks' preferredInk lookup so the legend swatch's
+				// ink matches the mark's: the palette-paired ink for the color
+				// under the tile (the hue color, or the no-hue tile color —
+				// default fill or Background override). A standalone (no-hue)
+				// pattern section's own default-ink override wins first;
+				// per-category inks still win inside `resolvePatternForMark`.
 				const huePalette = inkPaletteForHue(configs, type)
-				const preferredInk = hasHue
-					? inkForHueColor(
-							bg,
-							huePalette.palette,
-							huePalette.inks,
-							themeInkFallback
-						)
-					: (patternLegendInkColor ?? null)
+				const preferredInk =
+					(hasHue ? null : patternLegendInkColor) ??
+					inkForHueColor(
+						hasHue ? preModulationColor : patBg,
+						huePalette.palette,
+						huePalette.inks,
+						themeInkFallback
+					)
 				const resolved = resolvePatternForMark(
 					v,
 					catIdx,
@@ -404,7 +412,12 @@ export const CombinedGroupLegend = ({
 			const resolved = resolveDefaultPatternForMark(
 				color,
 				patView.defaultPattern,
-				patView.defaultPatternInk,
+				resolveDefaultPatternInk(
+					{ ...configs, defaultPatternInk: patView.defaultPatternInk },
+					preModulationColor,
+					type,
+					themeInkFallback
+				),
 				patView.pattern.defaultScale
 			)
 			if (resolved !== null) {

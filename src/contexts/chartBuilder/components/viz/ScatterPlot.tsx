@@ -256,7 +256,7 @@ export const ScatterPlot = (props: ScatterPlotProps = {}) => {
 			}),
 			aestheticScales,
 			channelConfigs,
-			channelConfigs.pattern?.backgroundColor ?? "#e2e8f0",
+			channelConfigs.pattern?.backgroundColor ?? null,
 			{
 				defaultToNone: !!encodings.connection?.field,
 				includeDefaultPattern: true,

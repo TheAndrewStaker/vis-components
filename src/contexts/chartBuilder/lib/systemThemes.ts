@@ -196,7 +196,7 @@ export const LIGHT_THEME_BASE: Theme = {
 	defaultTextPaletteId: "cat-mohtmuv1-dcxj",
 	defaultGradientPalette: "migrated-linear",
 	patternInkColor: "#000000",
-	patternBackgroundColor: "#EFEFEF",
+	patternBackgroundColor: null,
 	gridlineColor: "#cfcfcf",
 	gridlineThickness: 1,
 	tickmarkColor: "#ffffff",

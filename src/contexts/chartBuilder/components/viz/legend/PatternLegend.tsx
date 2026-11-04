@@ -1,11 +1,15 @@
+import { DEFAULT_FILL } from "../../../lib/channelConfig"
 import { orderCategories } from "../../../lib/legendSections"
 import { PatternTile } from "../../../lib/patternDefs"
 import {
+	inkForHueColor,
+	inkPaletteForHue,
 	patternCategoriesFor,
 	resolvePatternForMark,
 } from "../../../lib/patterns"
 import { polygonPatternView } from "../../../lib/resolveLayerColor"
 import { LEGEND_SWATCH_OUTLINE } from "../../../lib/previewInk"
+import { useThemeInkFallback } from "../../../store/useThemeInkFallback"
 import { EntryHoverWrap, renderEntryList, SwatchCell } from "./swatches"
 import type { ReversibleLegendProps } from "./types"
 
@@ -38,7 +42,20 @@ export const PatternLegend = ({
 		i: rawCategories.indexOf(v),
 	}))
 	const display = reverseCategorical ? [...entries].reverse() : entries
-	const bgColor = configs.pattern?.backgroundColor ?? "#e2e8f0"
+	// A standalone pattern section draws with no hue, so its tiles sit on
+	// what the marks draw: the Background override when set, else the mark's
+	// default fill — and the ink pairs on that color through the palette,
+	// exactly as `resolvePatternDefForItem` does for the marks.
+	const bgColor =
+		configs.pattern?.backgroundColor ?? configs.defaultFill ?? DEFAULT_FILL
+	const themeInkFallback = useThemeInkFallback()
+	const huePalette = inkPaletteForHue(configs, "categorical")
+	const preferredInk = inkForHueColor(
+		bgColor,
+		huePalette.palette,
+		huePalette.inks,
+		themeInkFallback
+	)
 	const isHorizontal = orientation === "horizontal"
 	// `vc-legend-hentry` / `vc-legend-label` let a fixed-width legend
 	// (`.vc-legend-fixed-width`) shrink the cell and wrap the label.
@@ -54,7 +71,7 @@ export const PatternLegend = ({
 					i,
 					bgColor,
 					patternCfg,
-					null,
+					preferredInk,
 					polygonPatternFill
 				)
 				// When the category is opted out via PATTERN_NONE, render a plain

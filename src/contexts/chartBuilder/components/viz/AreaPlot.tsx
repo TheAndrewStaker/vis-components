@@ -352,7 +352,7 @@ export const AreaPlot = (props: AreaPlotProps = {}) => {
 			aestheticScales,
 			channelConfigs,
 			channelConfigs.defaultFill ?? FALLBACK_FILL,
-			channelConfigs.pattern?.backgroundColor ?? "#e2e8f0",
+			channelConfigs.pattern?.backgroundColor ?? null,
 			{ defaultToNone: connectionMapped, includeDefaultPattern: true }
 		)
 	}, [aggregation, aestheticScales, channelConfigs, connectionMapped])
@@ -785,7 +785,7 @@ const buildAreas = ({
 		groupValues: Partial<Record<string, string>>
 	): MarkHighlight => groupHighlight(highlight, groupValues, aestheticScales)
 	const defaultFill = channelConfigs.defaultFill ?? FALLBACK_FILL
-	const patternBgFallback = channelConfigs.pattern?.backgroundColor ?? "#e2e8f0"
+	const patternBgOverride = channelConfigs.pattern?.backgroundColor ?? null
 	const thickness =
 		channelConfigs.connection?.thickness ?? DEFAULT_CONNECTION_CONFIG.thickness
 	// "square" / "tick" map to SVG's butt cap so line ends and dash segments
@@ -897,7 +897,10 @@ const buildAreas = ({
 		aestheticScales.hue?.field?.type
 	)
 	const patternInkColors = channelConfigs.pattern?.inkColors ?? {}
-	const defaultPatternInk = channelConfigs.defaultPatternInk ?? null
+	// Dash-gap fallback ink: the explicit default-pattern pick, else the
+	// theme's global pattern ink (the paired inks are tried first).
+	const defaultPatternInk =
+		channelConfigs.defaultPatternInk ?? channelConfigs.patternInkColor ?? null
 	// Whether dash gaps get the alternate-color underlay (connected
 	// two-color line) or stay empty (truly dashed). Auto unless the user
 	// chose: filled, except when pattern and hue map the same field.
@@ -1065,7 +1068,7 @@ const buildAreas = ({
 				>
 			>,
 			defaultFill,
-			patternBgFallback,
+			patternBgOverride,
 			aestheticScales,
 			channelConfigs,
 			patternOptions,

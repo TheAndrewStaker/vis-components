@@ -717,7 +717,9 @@ export type Theme = {
 	categoricalPalette?: string[]
 	// Pattern defaults
 	patternInkColor: string
-	patternBackgroundColor: string
+	/** Tile color under a pattern on marks with no hue mapping; `null` = the
+	 * mark's own fill (new visuals seed `pattern.backgroundColor` from it). */
+	patternBackgroundColor: string | null
 	// Gridline defaults. Count is intentionally omitted — it defaults to
 	// "one gridline per axis tick" and is adjusted per-visualization only.
 	// `gridlineColor` / `gridlineThickness` are the LEGACY shared fields;

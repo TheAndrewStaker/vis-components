@@ -233,7 +233,10 @@ export const renderConnectionLines = (
 		hueType
 	)
 	const patternInkColors = channelConfigs.pattern?.inkColors ?? {}
-	const defaultPatternInk = channelConfigs.defaultPatternInk ?? null
+	// Dash-gap fallback ink: the explicit default-pattern pick, else the
+	// theme's global pattern ink (the paired inks are tried first).
+	const defaultPatternInk =
+		channelConfigs.defaultPatternInk ?? channelConfigs.patternInkColor ?? null
 	const dashGapColor = cfg.dashGapColor ?? null
 	// The panel's gap swatches key `dashAlternateColors` by HUE value (the
 	// color encoding's categories); each line samples its hue value from its

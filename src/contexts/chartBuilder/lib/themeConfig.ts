@@ -448,10 +448,12 @@ export const chordAxisConfigFromTheme = (t: Theme): ChordAxisConfig => ({
 })
 
 /** Theme-seeded `pattern` slice — see `shapeConfigFromTheme` for why this is a
- * shared builder. Only `backgroundColor` is theme-driven. */
+ * shared builder. Only `backgroundColor` is theme-driven: the theme's
+ * Background override, or `null` (the system themes) so patterns tile over
+ * each mark's own fill. */
 export const patternConfigFromTheme = (t: Theme): PatternConfig => ({
 	...DEFAULT_PATTERN_CONFIG,
-	backgroundColor: t.patternBackgroundColor,
+	backgroundColor: t.patternBackgroundColor ?? null,
 })
 
 /** Theme-seeded `angle` slice — see `shapeConfigFromTheme` for why this is a
@@ -497,7 +499,9 @@ export const configsFromTheme = (t: Theme): ChannelConfigs => ({
 	defaultGradientId: t.defaultGradientPalette,
 	defaultGradientColors: resolveGradientColors(t),
 	patternInkColor: t.patternInkColor,
-	defaultPatternInk: t.patternInkColor,
+	// No explicit default-pattern ink: the mark's tile color finds its
+	// palette-paired ink, else `patternInkColor` (`resolveDefaultPatternInk`).
+	defaultPatternInk: null,
 	text: textConfigFromTheme(t),
 	length: { minLength: t.lengthMin, maxLength: t.lengthMax },
 	angle: angleConfigFromTheme(t),
@@ -786,7 +790,7 @@ const CHANNEL_DOT_CONTROLS: Record<string, (ctx: DotCtx) => DotControl[]> = {
 	pattern: ({ configs, theme }) => [
 		{ label: "pattern config", changed: differs(configs.pattern, patternConfigFromTheme(theme)) },
 		{ label: "default pattern", changed: differs(configs.defaultPattern, null) },
-		{ label: "default pattern ink", changed: differs(configs.defaultPatternInk, theme.patternInkColor) },
+		{ label: "default pattern ink", changed: differs(configs.defaultPatternInk ?? null, null) },
 		{ label: "pattern ink color", changed: differs(configs.patternInkColor, theme.patternInkColor) },
 		// Line-dash state the Pattern menu writes onto the CONNECTION config
 		// (the line renderers' source): the no-field default dash, the

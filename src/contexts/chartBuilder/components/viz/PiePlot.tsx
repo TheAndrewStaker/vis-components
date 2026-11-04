@@ -353,7 +353,7 @@ export const PiePlot = (props: PiePlotProps = {}) => {
 			aestheticScales,
 			channelConfigs,
 			channelConfigs.defaultFill ?? FALLBACK_FILL,
-			channelConfigs.pattern?.backgroundColor ?? "#e2e8f0",
+			channelConfigs.pattern?.backgroundColor ?? null,
 			{ defaultToNone: connectionMapped, includeDefaultPattern: true }
 		)
 	}, [aggregation, aestheticScales, channelConfigs, connectionMapped])
@@ -1029,7 +1029,7 @@ type WedgeDeps = {
 	outlineColor: string
 	outlineWidth: number
 	defaultFill: string
-	patternBgFallback: string
+	patternBgOverride: string | null
 	/** Per-slice fill / pattern / opacity resolves through the shared
 	 *  `resolveLayerColor` pipeline, which consumes these two directly. */
 	aestheticScales: AestheticScales
@@ -1084,7 +1084,7 @@ const resolveWedgeDeps = (
 		channelConfigs.shape?.outlineColor ?? DEFAULT_SHAPE_CONFIG.outlineColor,
 	outlineWidth: channelConfigs.shape?.outlineWidth ?? 1,
 	defaultFill: channelConfigs.defaultFill ?? FALLBACK_FILL,
-	patternBgFallback: channelConfigs.pattern?.backgroundColor ?? "#e2e8f0",
+	patternBgOverride: channelConfigs.pattern?.backgroundColor ?? null,
 	aestheticScales,
 	channelConfigs,
 	borderOpacity: slotOpacityResolver("border", channelConfigs, aestheticScales)({}),
@@ -1130,7 +1130,7 @@ const renderWedgesForStack = (
 		const resolved = resolveLayerColor({
 			groupValues: slice.groupValues,
 			defaultFill: deps.defaultFill,
-			patternBgFallback: deps.patternBgFallback,
+			patternBgOverride: deps.patternBgOverride,
 			aestheticScales: deps.aestheticScales,
 			channelConfigs: deps.channelConfigs,
 			patternOptions: deps.patternOptions,

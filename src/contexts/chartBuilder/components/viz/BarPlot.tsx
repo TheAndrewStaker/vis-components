@@ -560,7 +560,7 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 			aestheticScales,
 			channelConfigs,
 			channelConfigs.defaultFill ?? FALLBACK_FILL,
-			channelConfigs.pattern?.backgroundColor ?? "#e2e8f0",
+			channelConfigs.pattern?.backgroundColor ?? null,
 			patternOptions
 		)
 		if (!aggregation.overlayField) return barDefs
@@ -583,7 +583,7 @@ export const BarPlot = (props: BarPlotProps = {}) => {
 			}),
 			aestheticScales,
 			channelConfigs,
-			channelConfigs.pattern?.backgroundColor ?? "#e2e8f0",
+			channelConfigs.pattern?.backgroundColor ?? null,
 			patternOptions
 		).filter((d) => !seen.has(d.svgId))
 		return markDefs.length ? [...barDefs, ...markDefs] : barDefs
@@ -1498,7 +1498,7 @@ const buildRects = ({
 		aestheticScales
 	)({})
 	const defaultFill = channelConfigs.defaultFill ?? FALLBACK_FILL
-	const patternBgFallback = channelConfigs.pattern?.backgroundColor ?? "#e2e8f0"
+	const patternBgOverride = channelConfigs.pattern?.backgroundColor ?? null
 
 	// Per-slice color/pattern/opacity resolution is delegated to
 	// `resolveLayerColor` below — the channel-by-channel field/scale
@@ -1544,7 +1544,7 @@ const buildRects = ({
 			const layer = resolveLayerColor({
 				groupValues: slice.groupValues,
 				defaultFill,
-				patternBgFallback,
+				patternBgOverride,
 				aestheticScales,
 				channelConfigs,
 				patternOptions,

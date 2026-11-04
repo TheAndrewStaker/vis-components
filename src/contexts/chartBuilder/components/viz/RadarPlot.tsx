@@ -132,8 +132,8 @@ export const RadarPlot = (props: RadarPlotProps = {}) => {
 	// Every row contributes a polygon item — the polygon paints with its
 	// first-by-angle row's colors, which is among them; `<PatternDefs>`
 	// dedups by svgId.
-	const patternBgFallback =
-		channelConfigs.pattern?.backgroundColor ?? "#e2e8f0"
+	const patternBgOverride =
+		channelConfigs.pattern?.backgroundColor ?? null
 	const polygonFilled =
 		!!connectionField && channelConfigs.connection?.fillPolygon === true
 	const patternDefs = useMemo<PatternDefSpec[]>(() => {
@@ -161,7 +161,7 @@ export const RadarPlot = (props: RadarPlotProps = {}) => {
 					item,
 					aestheticScales,
 					channelConfigs,
-					patternBgFallback,
+					patternBgOverride,
 					{ defaultToNone: !!connectionField, includeDefaultPattern: true }
 				)
 				if (d && !defs.has(d.svgId)) defs.set(d.svgId, d)
@@ -171,7 +171,7 @@ export const RadarPlot = (props: RadarPlotProps = {}) => {
 					item,
 					aestheticScales,
 					channelConfigs,
-					patternBgFallback
+					patternBgOverride
 				)
 				if (d && !defs.has(d.svgId)) defs.set(d.svgId, d)
 			}
@@ -183,7 +183,7 @@ export const RadarPlot = (props: RadarPlotProps = {}) => {
 		channelConfigs,
 		connectionField,
 		polygonFilled,
-		patternBgFallback,
+		patternBgOverride,
 	])
 	// Per-axis scale sources. PlotCanvas can hand different rows to
 	// the angle vs. R scale (e.g. shareAngle="all" + shareR="perRow"
@@ -426,7 +426,7 @@ export const RadarPlot = (props: RadarPlotProps = {}) => {
 						},
 						aestheticScales,
 						channelConfigs,
-						patternBgFallback,
+						patternBgOverride,
 						{ defaultToNone: !!connectionField, includeDefaultPattern: true }
 					)
 				: null
@@ -483,7 +483,7 @@ export const RadarPlot = (props: RadarPlotProps = {}) => {
 					channelConfigs.drawOrder?.field
 						? levelOrders[channelConfigs.drawOrder.field]
 						: undefined,
-					patternBgFallback,
+					patternBgOverride,
 				)
 			: null
 
@@ -696,8 +696,8 @@ const buildPolygons = <P extends LocalPoint>(
 	/** User-defined category order for the draw-order field (if any), so
 	 *  polygons rank by legend order rather than alphabetically. */
 	drawOrderLevels: readonly string[] | undefined,
-	/** Pattern tile background when hue isn't driving the fill. */
-	patternBgFallback: string,
+	/** The Pattern panel's Background override, or null to tile over the fill. */
+	patternBgOverride: string | null,
 ): RadarSeries<P>[] => {
 	const cfg: ConnectionConfig = {
 		...DEFAULT_CONNECTION_CONFIG,
@@ -764,7 +764,7 @@ const buildPolygons = <P extends LocalPoint>(
 						},
 						aestheticScales,
 						channelConfigs,
-						patternBgFallback
+						patternBgOverride
 					)
 				: null
 		const bodyFill = polygonPattern

@@ -14,10 +14,10 @@ import {
 import { modulationSlotEdited } from "./modulationSlots"
 import type { PatternDefSpec } from "./patternDefs"
 import {
-	DEFAULT_PATTERN_INK,
 	inkForHueColor,
 	inkPaletteForHue,
 	resolveDefaultPatternForMark,
+	resolveDefaultPatternInk,
 	resolvePatternForMark,
 } from "./patterns"
 import { OPACITY_SLOT_DEFS } from "./opacitySlots"
@@ -57,10 +57,10 @@ export type ResolveLayerColorArgs = {
 	groupValues: GroupValues
 	/** Color to fall back to when hue isn't mapped (or maps to null). */
 	defaultFill: string
-	/** Background color used to pick a pattern ink when hue is unmapped
-	 *  (the pattern's foreground needs contrast against *some* color
-	 *  even when hue isn't carrying meaning). */
-	patternBgFallback: string
+	/** The Pattern panel's Background override (`pattern.backgroundColor`),
+	 *  or `null` to tile the pattern over the mark's own fill. Only read
+	 *  when hue does NOT drive the fill. */
+	patternBgOverride: string | null
 	aestheticScales: AestheticScales
 	channelConfigs: ChannelConfigs
 	/** Pattern-channel context flags (default pattern opt-in, line-chart
@@ -158,21 +158,21 @@ export const resolveGroupFill = (
 	return { fill: color, preModulationHue, satUnit, briUnit }
 }
 
-/** The background tile color for a pattern when hue does NOT drive the
- *  fill: the Pattern panel's background (or the historical gray fallback),
- *  modulated by the SAME sat/bri units the fill used. One rule everywhere —
- *  "the pattern background modulates exactly like the fill" — so mapping
- *  saturation/brightness alongside pattern stays visible on the marks (and
- *  the legend mirrors this). The pattern-INK lookup deliberately keeps
- *  keying on the un-modulated background (palette-ink invariant). */
+/** The background tile color for a pattern when the Pattern panel's
+ *  Background OVERRIDE replaces the mark's fill: the override modulated by
+ *  the SAME sat/bri units the fill used. One rule everywhere — "the pattern
+ *  background modulates exactly like the fill" — so mapping saturation/
+ *  brightness alongside pattern stays visible on the marks (and the legend
+ *  mirrors this). The pattern-INK lookup deliberately keeps keying on the
+ *  un-modulated override (palette-ink invariant). */
 export const modulatedPatternBg = (
-	patternBgFallback: string,
+	patternBgOverride: string,
 	satUnit: number | null,
 	briUnit: number | null
 ): string =>
 	satUnit !== null || briUnit !== null
-		? modulateColor(patternBgFallback, satUnit, briUnit)
-		: patternBgFallback
+		? modulateColor(patternBgOverride, satUnit, briUnit)
+		: patternBgOverride
 
 /** One mark's inputs to the pattern-def resolution, with the fill colors
  *  already resolved. Renderers with per-row pipelines (ScatterPlot) build
@@ -203,6 +203,28 @@ export type PatternDefItem = {
 	briUnit?: number | null
 }
 
+/** The tile color under one mark's pattern and the un-modulated color its
+ *  ink pairs on. `hueMapped`: the mark's fill is hue-driven, so the
+ *  Background override never applies. */
+export const patternTile = (
+	item: Pick<PatternDefItem, "fill" | "preModulationHue" | "satUnit" | "briUnit">,
+	hueMapped: boolean,
+	patternBgOverride: string | null
+): { bgColor: string; inkKeyColor: string } => {
+	const override = hueMapped ? null : patternBgOverride
+	if (override === null) {
+		return { bgColor: item.fill, inkKeyColor: item.preModulationHue }
+	}
+	return {
+		bgColor: modulatedPatternBg(
+			override,
+			item.satUnit ?? null,
+			item.briUnit ?? null
+		),
+		inkKeyColor: override,
+	}
+}
+
 export type PatternDefOptions = {
 	/** Line-chart context (a connection field is mapped): treat the ABSENCE
 	 *  of a per-category override as "no pattern" instead of auto-cycling
@@ -226,12 +248,29 @@ export const resolvePatternDefForItem = (
 	item: PatternDefItem,
 	aestheticScales: AestheticScales,
 	channelConfigs: ChannelConfigs,
-	patternBgFallback: string,
+	/** The Pattern panel's Background override, or `null` to tile over the
+	 *  mark's own fill (see `patternTile`). */
+	patternBgOverride: string | null,
 	options?: PatternDefOptions
 ): PatternDefSpec | null => {
 	const patG = aestheticScales.pattern?.field ?? null
 	const patternCategories = aestheticScales.pattern?.categories ?? null
 	const hueG = aestheticScales.hue?.field ?? null
+	const wantsDefault =
+		!!options?.includeDefaultPattern && channelConfigs.defaultPattern != null
+	if (!(patternCategories && patG) && !wantsDefault) return null
+
+	// The tile the pattern is drawn over, and the color its ink pairs on.
+	// With hue mapped the tile is the mark's hue fill. Without, it is STILL
+	// the mark's own fill (default fill, fill rules, sat/bri modulation) —
+	// a patterned bar keeps its color — unless the Background override
+	// replaces it, in which case the override modulates like the fill would.
+	// Ink lookup keys on the PRE-modulation color (see
+	// `PatternDefItem.preModulationHue`): the palette's exact swatch hex, or
+	// the override itself. Colors the active palette doesn't know (per-value
+	// overrides borrowed from another theme palette) fall back to the
+	// theme-wide ink table.
+	const { bgColor, inkKeyColor } = patternTile(item, hueG !== null, patternBgOverride)
 
 	if (patternCategories && patG) {
 		const raw = item.patternValue
@@ -239,20 +278,9 @@ export const resolvePatternDefForItem = (
 		const catStr = String(raw)
 		const catIdx = patternCategories.indexOf(catStr)
 		if (catIdx === -1) return null
-		const bgColor = hueG
-			? item.fill
-			: modulatedPatternBg(
-					patternBgFallback,
-					item.satUnit ?? null,
-					item.briUnit ?? null
-				)
 		const huePalette = inkPaletteForHue(channelConfigs, hueG?.type)
-		// Ink lookup keys on the PRE-modulation hue color (see
-		// `PatternDefItem.preModulationHue`). Colors the active palette
-		// doesn't know (per-value overrides borrowed from another theme
-		// palette) fall back to the theme-wide ink table.
 		const preferredInk = inkForHueColor(
-			hueG ? item.preModulationHue : patternBgFallback,
+			inkKeyColor,
 			huePalette.palette,
 			huePalette.inks,
 			aestheticScales.themeInkFallback
@@ -267,21 +295,18 @@ export const resolvePatternDefForItem = (
 		)
 	}
 
-	if (options?.includeDefaultPattern && channelConfigs.defaultPattern != null) {
-		// Background swatch applies only when hue isn't driving the fill;
-		// with hue mapped the pattern sits on the mark's hue color (matches
-		// the field-mapped path above).
-		const bgColor = hueG ? item.fill : patternBgFallback
-		const inkColor = channelConfigs.defaultPatternInk ?? DEFAULT_PATTERN_INK
-		return resolveDefaultPatternForMark(
-			bgColor,
-			channelConfigs.defaultPattern,
-			inkColor,
-			channelConfigs.pattern?.defaultScale
-		)
-	}
-
-	return null
+	if (channelConfigs.defaultPattern == null) return null
+	return resolveDefaultPatternForMark(
+		bgColor,
+		channelConfigs.defaultPattern,
+		resolveDefaultPatternInk(
+			channelConfigs,
+			inkKeyColor,
+			hueG?.type,
+			aestheticScales.themeInkFallback
+		),
+		channelConfigs.pattern?.defaultScale
+	)
 }
 
 /** Channel configs re-pointed at the RADAR POLYGON FILL pattern state
@@ -292,7 +317,13 @@ export const resolvePatternDefForItem = (
  *  background, and sat/bri stay shared. */
 export const polygonPatternView = (
 	configs: Partial<Pick<ChannelConfigs, "pattern" | "defaultPatternInk">>
-): { pattern: PatternConfig; defaultPattern: number | null; defaultPatternInk: string } => {
+): {
+	pattern: PatternConfig
+	defaultPattern: number | null
+	/** Explicit polygon ink, else the explicit point-fill ink, else `null`
+	 *  — the palette-paired / theme ink (`resolveDefaultPatternInk`). */
+	defaultPatternInk: string | null
+} => {
 	const pat = configs.pattern
 	return {
 		pattern: {
@@ -305,9 +336,7 @@ export const polygonPatternView = (
 		},
 		defaultPattern: pat?.defaultPolygonPattern ?? null,
 		defaultPatternInk:
-			pat?.defaultPolygonPatternInk ??
-			configs.defaultPatternInk ??
-			DEFAULT_PATTERN_INK,
+			pat?.defaultPolygonPatternInk ?? configs.defaultPatternInk ?? null,
 	}
 }
 /** The same re-pointing over a full `ChannelConfigs` (the renderer's
@@ -331,13 +360,13 @@ export const resolvePolygonPatternDef = (
 	item: PatternDefItem,
 	aestheticScales: AestheticScales,
 	channelConfigs: ChannelConfigs,
-	patternBgFallback: string
+	patternBgOverride: string | null
 ): PatternDefSpec | null =>
 	resolvePatternDefForItem(
 		item,
 		aestheticScales,
 		polygonPatternConfigs(channelConfigs),
-		patternBgFallback,
+		patternBgOverride,
 		{ defaultToNone: true, includeDefaultPattern: true }
 	)
 
@@ -361,14 +390,15 @@ export const resolvePolygonPatternDef = (
  *       `<pattern>` element id (honoring `patternOptions.defaultToNone`);
  *       with no pattern field but `defaultPattern` configured (and the
  *       renderer opted in via `patternOptions.includeDefaultPattern`),
- *       resolve the shared `__default__` def instead. The pattern's ink
- *       color is derived from the (modulated) fill or `patternBgFallback`.
+ *       resolve the `__default__` def instead. The tile sits on the mark's
+ *       fill (or the Background override when hue is unmapped) and the ink
+ *       pairs on the pre-modulation color (see `patternTile`).
  *    4. **Opacity** — same precedence as sat/bri: scale value if mapped
  *       and resolvable, the channel's `defaultOpacity` otherwise. */
 export const resolveLayerColor = ({
 	groupValues,
 	defaultFill,
-	patternBgFallback,
+	patternBgOverride,
 	aestheticScales,
 	channelConfigs,
 	patternOptions,
@@ -407,7 +437,7 @@ export const resolveLayerColor = ({
 		},
 		aestheticScales,
 		channelConfigs,
-		patternBgFallback,
+		patternBgOverride,
 		patternOptions
 	)
 	const patternId = patternDef?.svgId ?? null

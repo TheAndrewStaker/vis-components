@@ -142,11 +142,6 @@ export const resolveNoDataPatternDef = (mapConfig: {
 				inkColor: mapConfig.noDataPatternInk,
 			}
 
-/** Fallback pattern-tile background when no hue drives the mark fill and the
- *  user hasn't set `pattern.backgroundColor` (same constant the cartesian
- *  renderers use). */
-const PATTERN_BG_FALLBACK = "#e2e8f0"
-
 /** The modulation half of a geo mark's resolved color, as the pattern pass
  *  needs it (from `resolveGeoFill`).
  *
@@ -195,7 +190,7 @@ export const resolveGeoPatternDef = (
 		},
 		aestheticScales,
 		channelConfigs,
-		channelConfigs.pattern?.backgroundColor ?? PATTERN_BG_FALLBACK
+		channelConfigs.pattern?.backgroundColor ?? null
 	)
 }
 

@@ -3,7 +3,6 @@ import { useAtom, useAtomValue } from "jotai"
 
 import {
 	DEFAULT_DASH_RANGE,
-	DEFAULT_PATTERN_CONFIG,
 	DEFAULT_PATTERN_SCALE,
 	PATTERN_SCALE_MAX,
 	PATTERN_SCALE_MIN,
@@ -382,8 +381,8 @@ export const PatternOptionsPanel = () => {
 			nonEmptyMap(cfg.inkColors) ||
 			nonEmptyMap(cfg.scales)
 		: valueChanged(configs.defaultPattern, null) ||
-			valueChanged(configs.defaultPatternInk, theme.patternInkColor) ||
-			valueChanged(cfg.backgroundColor, theme.patternBackgroundColor) ||
+			valueChanged(configs.defaultPatternInk ?? null, null) ||
+			valueChanged(cfg.backgroundColor ?? null, theme.patternBackgroundColor ?? null) ||
 			(cfg.defaultScale ?? null) !== null
 
 	const updateCfg = (next: Partial<PatternConfig>) => {
@@ -513,8 +512,11 @@ export const PatternOptionsPanel = () => {
 			(cfg.defaultPolygonPatternInk ?? null) !== null ||
 			(cfg.defaultPolygonScale ?? null) !== null
 
-	const previewBg =
-		cfg.backgroundColor ?? DEFAULT_PATTERN_CONFIG.backgroundColor
+	// What the marks tile over when no hue drives them: the Background
+	// override, else their own default fill (the `patternTile` rule). Also
+	// the Background swatch's "inherit" placeholder.
+	const markFill = configs.defaultFill ?? theme.defaultFill
+	const previewBg = cfg.backgroundColor ?? markFill
 	// With pattern sharing hue's field the marks' tile background IS the hue
 	// color, so the per-category chips preview on it (same lookup chain as
 	// `effectiveInkFor`: per-value hue override, then the palette slot).
@@ -544,15 +546,16 @@ export const PatternOptionsPanel = () => {
 			(patternMode !== "fill" && dashSubsectionChanged) ||
 			(radarPolygonFilled && polygonSubsectionChanged)
 		const defaultPatternIdx = configs.defaultPattern ?? null
-		const defaultInk = configs.defaultPatternInk ?? DEFAULT_PATTERN_INK
 		const defaultScale = cfg.defaultScale ?? DEFAULT_PATTERN_SCALE
-		// Ink reset follows the pattern-color pairings the user configured in
-		// theme settings: each palette color can carry a paired pattern ink.
-		// Match the current Background against those palette colors (default
-		// categorical first, then default ordinal, then every other theme
-		// palette via the cross-palette table) and restore its paired ink;
-		// fall back to the theme's global pattern ink when the Background
-		// isn't a paired color anywhere.
+		// The inherited ink (no explicit pick) follows the pattern-color
+		// pairings the user configured in theme settings: each palette color
+		// can carry a paired pattern ink. Match the tile color (the mark's
+		// fill, or the Background override) against those palette colors
+		// (default categorical first, then default ordinal, then every other
+		// theme palette via the cross-palette table) and show its paired
+		// ink; fall back to the theme's global pattern ink when the tile
+		// color isn't a paired color anywhere — the same chain the marks
+		// resolve through (`resolveDefaultPatternInk`).
 		// Read straight from the theme — the channel configs don't carry the
 		// resolved palette, so a configs-based lookup would always miss here.
 		const catPalette = resolveCategoricalPalette(theme)
@@ -566,6 +569,7 @@ export const PatternOptionsPanel = () => {
 				themeInkFallback
 			) ??
 			theme.patternInkColor
+		const defaultInk = configs.defaultPatternInk ?? resetInk
 
 		const setDefaultPattern = (next: number | null) =>
 			setConfigs((prev) => ({ ...prev, defaultPattern: next }))
@@ -680,9 +684,11 @@ export const PatternOptionsPanel = () => {
 		const fillColorRows = (
 			<>
 				{defaultPatternIdx !== null && showFillRow && (
+					// Inherit mode: no pick = the palette-paired / theme ink
+					// (`resetInk`), previewed in the swatch.
 					<ColorRow
 						label="Ink color"
-						value={defaultInk}
+						value={configs.defaultPatternInk ?? null}
 						onChange={(c) =>
 							setConfigs((prev) => ({
 								...prev,
@@ -692,7 +698,7 @@ export const PatternOptionsPanel = () => {
 						onClear={() =>
 							setConfigs((prev) => ({
 								...prev,
-								defaultPatternInk: resetInk,
+								defaultPatternInk: null,
 							}))
 						}
 						clearLabel="reset"
@@ -708,15 +714,14 @@ export const PatternOptionsPanel = () => {
 						onClear: () => updateCfg({ defaultScale: null }),
 					})}
 				{showFillRow && (
+					// Inherit mode: no override = the marks' own fill.
 					<ColorRow
 						label="Background"
-						value={cfg.backgroundColor}
+						value={cfg.backgroundColor ?? null}
 						onChange={(c) => updateCfg({ backgroundColor: c })}
-						onClear={() =>
-							updateCfg({ backgroundColor: theme.defaultFill })
-						}
+						onClear={() => updateCfg({ backgroundColor: null })}
 						clearLabel="reset"
-						placeholder={theme.defaultFill}
+						placeholder={markFill}
 					/>
 				)}
 			</>
@@ -761,13 +766,11 @@ export const PatternOptionsPanel = () => {
 					{!showFillRow && (
 						<ColorRow
 							label="Background"
-							value={cfg.backgroundColor}
+							value={cfg.backgroundColor ?? null}
 							onChange={(c) => updateCfg({ backgroundColor: c })}
-							onClear={() =>
-								updateCfg({ backgroundColor: theme.defaultFill })
-							}
+							onClear={() => updateCfg({ backgroundColor: null })}
 							clearLabel="reset"
-							placeholder={theme.defaultFill}
+							placeholder={markFill}
 						/>
 					)}
 				</div>
@@ -843,7 +846,7 @@ export const PatternOptionsPanel = () => {
 							setConfigs((prev) => ({
 								...prev,
 								defaultPattern: null,
-								defaultPatternInk: theme.patternInkColor,
+								defaultPatternInk: null,
 								// Line-chart contexts: also clear the line-dash state this
 								// panel owns on the connection config (default dash, gap
 								// fill, range window).
@@ -1215,14 +1218,15 @@ export const PatternOptionsPanel = () => {
 		<div className="vc-option-panel">
 			<StackModeRow channel="pattern" className="px-2" />
 			{showFillRow && !hueIsMapped && (
+				// Inherit mode: no override = the marks' own fill.
 				<ColorRow
 					label="Background"
 					className="px-2"
-					value={cfg.backgroundColor}
+					value={cfg.backgroundColor ?? null}
 					onChange={(c) => updateCfg({ backgroundColor: c })}
-					onClear={() => updateCfg({ backgroundColor: theme.defaultFill })}
+					onClear={() => updateCfg({ backgroundColor: null })}
 					clearLabel="reset"
-					placeholder={theme.defaultFill}
+					placeholder={markFill}
 				/>
 			)}
 			{fieldValues &&

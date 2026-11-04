@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest"
 import { DEFAULT_PATTERN_CONFIG, PATTERN_SCALE_MAX } from "./channelConfig"
 import {
 	buildThemeInkFallback,
+	DEFAULT_PATTERN_INK,
 	effectivePatternScale,
 	inkForHueColor,
 	PATTERN_NONE,
 	PATTERN_SCALE_RENDER_MIN,
 	resolveDefaultPatternForMark,
+	resolveDefaultPatternInk,
 	resolvePatternForMark,
 } from "./patterns"
 import { polygonPatternView } from "./resolveLayerColor"
@@ -190,5 +192,34 @@ describe("inkForHueColor", () => {
 		expect(
 			inkForHueColor("#7dd3fc", palette, inks, { "#7dd3fc": "#ababab" })
 		).toBe("#ababab")
+	})
+})
+
+describe("resolveDefaultPatternInk", () => {
+	const configs = {
+		categoricalPalette: ["#aaaaaa", "#bbbbbb"],
+		categoricalPalettePatternInks: ["#111111", null],
+		ordinalPalette: ["#cccccc"],
+		ordinalPalettePatternInks: ["#222222"],
+		patternInkColor: "#999999",
+		defaultPatternInk: null,
+	}
+
+	it("an explicit pick wins", () => {
+		expect(
+			resolveDefaultPatternInk({ ...configs, defaultPatternInk: "#ff00ff" }, "#aaaaaa", "categorical")
+		).toBe("#ff00ff")
+	})
+
+	it("else the paired ink of the palette the hue type uses", () => {
+		expect(resolveDefaultPatternInk(configs, "#aaaaaa", "categorical")).toBe("#111111")
+		expect(resolveDefaultPatternInk(configs, "#AAAAAA", undefined)).toBe("#111111")
+		expect(resolveDefaultPatternInk(configs, "#cccccc", "ordinal")).toBe("#222222")
+	})
+
+	it("else the cross-palette table, else the theme ink, else the built-in", () => {
+		expect(resolveDefaultPatternInk(configs, "#cccccc", "categorical", { "#cccccc": "#333333" })).toBe("#333333")
+		expect(resolveDefaultPatternInk(configs, "#bbbbbb", "categorical")).toBe("#999999")
+		expect(resolveDefaultPatternInk({ ...configs, patternInkColor: undefined }, "#123456", "categorical")).toBe(DEFAULT_PATTERN_INK)
 	})
 })

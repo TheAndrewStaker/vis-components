@@ -10,6 +10,7 @@ import {
 import {
 	layerFillProp,
 	resolveLayerColor,
+	resolvePatternDefForItem,
 	resolvePolygonPatternDef,
 	resolveSlotColor,
 } from "./resolveLayerColor"
@@ -36,7 +37,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: {},
 			defaultFill: "#abcdef",
-			patternBgFallback: "#e2e8f0",
+			patternBgOverride: "#e2e8f0",
 			aestheticScales: emptyScales,
 			channelConfigs: EMPTY_CHANNEL_CONFIGS,
 		})
@@ -64,7 +65,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: { hue: "A" },
 			defaultFill: "#000",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: scales,
 			channelConfigs: EMPTY_CHANNEL_CONFIGS,
 		})
@@ -92,7 +93,7 @@ describe("resolveLayerColor", () => {
 			// quantitative type but a non-numeric value → parseValue → null.
 			groupValues: { hue: "not-a-number" },
 			defaultFill: "#deadbe",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: scales,
 			channelConfigs: EMPTY_CHANNEL_CONFIGS,
 		})
@@ -107,7 +108,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: {},
 			defaultFill: "#888888",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: emptyScales,
 			channelConfigs: {
 				...EMPTY_CHANNEL_CONFIGS,
@@ -124,7 +125,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: {},
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: emptyScales,
 			channelConfigs: EMPTY_CHANNEL_CONFIGS,
 		})
@@ -135,7 +136,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: {},
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: emptyScales,
 			channelConfigs: { ...EMPTY_CHANNEL_CONFIGS, defaultOpacity: 0.3 },
 		})
@@ -157,7 +158,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: { opacity: "junk" },
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: scales,
 			channelConfigs: { ...EMPTY_CHANNEL_CONFIGS, defaultOpacity: 0.3 },
 		})
@@ -178,7 +179,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: { saturation: "junk" },
 			defaultFill: "#6699cc",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: scales,
 			channelConfigs: { ...EMPTY_CHANNEL_CONFIGS, defaultSaturation: 0.9 },
 		})
@@ -190,7 +191,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: { pattern: "X" },
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: emptyScales,
 			channelConfigs: EMPTY_CHANNEL_CONFIGS,
 		})
@@ -207,7 +208,7 @@ describe("resolveLayerColor", () => {
 		const withOptIn = resolveLayerColor({
 			groupValues: {},
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: emptyScales,
 			channelConfigs: configs,
 			patternOptions: { includeDefaultPattern: true },
@@ -216,7 +217,7 @@ describe("resolveLayerColor", () => {
 		const withoutOptIn = resolveLayerColor({
 			groupValues: {},
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: emptyScales,
 			channelConfigs: configs,
 		})
@@ -234,7 +235,7 @@ describe("resolveLayerColor", () => {
 		const base = {
 			groupValues: { pattern: "A" },
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: scales,
 			channelConfigs: EMPTY_CHANNEL_CONFIGS,
 		}
@@ -274,7 +275,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: { hue: "A", pattern: "A" },
 			defaultFill: "#000",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: scales,
 			channelConfigs: {
 				...EMPTY_CHANNEL_CONFIGS,
@@ -319,7 +320,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: { hue: "A", pattern: "A" },
 			defaultFill: "#000",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: scales,
 			channelConfigs: {
 				...EMPTY_CHANNEL_CONFIGS,
@@ -350,7 +351,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: { outlineHue: "20" },
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: outlineScales,
 			channelConfigs: {
 				...EMPTY_CHANNEL_CONFIGS,
@@ -367,7 +368,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: { outlineHue: "20" },
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: outlineScales,
 			channelConfigs: {
 				...EMPTY_CHANNEL_CONFIGS,
@@ -384,7 +385,7 @@ describe("resolveLayerColor", () => {
 		const r = resolveLayerColor({
 			groupValues: {},
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: emptyScales,
 			channelConfigs: {
 				...EMPTY_CHANNEL_CONFIGS,
@@ -408,7 +409,7 @@ describe("resolveLayerColor", () => {
 		const loss = resolveLayerColor({
 			groupValues: {},
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: emptyScales,
 			channelConfigs: configs,
 			rows: [{ profit: -5 }, { profit: -1 }],
@@ -418,7 +419,7 @@ describe("resolveLayerColor", () => {
 		const mixed = resolveLayerColor({
 			groupValues: {},
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: emptyScales,
 			channelConfigs: configs,
 			rows: [{ profit: -5 }, { profit: 3 }],
@@ -446,7 +447,7 @@ describe("resolveLayerColor — fill color rules", () => {
 		const r = resolveLayerColor({
 			groupValues: { hue: "20" },
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: hueScales,
 			channelConfigs: { ...EMPTY_CHANNEL_CONFIGS, fillColorRules: rules },
 		})
@@ -459,7 +460,7 @@ describe("resolveLayerColor — fill color rules", () => {
 		const r = resolveLayerColor({
 			groupValues: { hue: "5" },
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: hueScales,
 			channelConfigs: { ...EMPTY_CHANNEL_CONFIGS, fillColorRules: rules },
 		})
@@ -469,7 +470,7 @@ describe("resolveLayerColor — fill color rules", () => {
 	it("an implicit rule never fires without a Color variable; a {Variable} rule does", () => {
 		const base = {
 			defaultFill: "#abcdef",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: emptyScales,
 		}
 		const implicit = resolveLayerColor({
@@ -495,7 +496,7 @@ describe("resolveLayerColor — fill color rules", () => {
 		const r = resolveLayerColor({
 			groupValues: { hue: "20" },
 			defaultFill: "#fff",
-			patternBgFallback: "#fff",
+			patternBgOverride: "#fff",
 			aestheticScales: hueScales,
 			channelConfigs: {
 				...EMPTY_CHANNEL_CONFIGS,
@@ -623,5 +624,116 @@ describe("resolvePolygonPatternDef (radar polygon fill)", () => {
 		)
 		expect(a?.paletteIdx).toBe(3)
 		expect(b).toBeNull()
+	})
+})
+
+describe("patterns tile over the mark's own fill when hue is unmapped", () => {
+	// A bar with no Color variable keeps its default fill under the pattern,
+	// and the ink pairs with that fill through the palette — the gray tile
+	// that used to replace the fill is gone (an explicit Background override
+	// still replaces it).
+	const palette = ["#ef476f", "#118ab2"]
+	const configs = {
+		...EMPTY_CHANNEL_CONFIGS,
+		categoricalPalette: palette,
+		categoricalPalettePatternInks: ["#8a0023", "#073b55"],
+		patternInkColor: "#000000",
+		defaultPattern: 1,
+	}
+	const item = { patternValue: undefined, fill: "#ef476f", preModulationHue: "#ef476f" }
+	const optIn = { includeDefaultPattern: true }
+
+	it("default pattern: the tile is the default fill and the ink its paired ink", () => {
+		const def = resolvePatternDefForItem(item, emptyScales, configs, null, optIn)
+		expect(def?.bgColor).toBe("#ef476f")
+		expect(def?.inkColor).toBe("#8a0023")
+		// The GroupValues pipeline resolves to the same def.
+		const r = resolveLayerColor({
+			groupValues: {},
+			defaultFill: "#ef476f",
+			patternBgOverride: null,
+			aestheticScales: emptyScales,
+			channelConfigs: configs,
+			patternOptions: optIn,
+		})
+		expect(r.patternId).toBe(def?.svgId)
+	})
+
+	it("a fill off every palette falls back to the theme's pattern ink", () => {
+		const def = resolvePatternDefForItem(
+			{ ...item, fill: "#123456", preModulationHue: "#123456" },
+			emptyScales,
+			configs,
+			null,
+			optIn
+		)
+		expect(def?.bgColor).toBe("#123456")
+		expect(def?.inkColor).toBe("#000000")
+	})
+
+	it("an explicit default-pattern ink wins over the pairing", () => {
+		const def = resolvePatternDefForItem(
+			item,
+			emptyScales,
+			{ ...configs, defaultPatternInk: "#ffffff" },
+			null,
+			optIn
+		)
+		expect(def?.inkColor).toBe("#ffffff")
+	})
+
+	it("the Background override replaces the fill, pairs its own ink and modulates like the fill", () => {
+		const def = resolvePatternDefForItem(item, emptyScales, configs, "#118ab2", optIn)
+		expect(def?.bgColor).toBe("#118ab2")
+		expect(def?.inkColor).toBe("#073b55")
+		const modulated = resolvePatternDefForItem(
+			{ ...item, briUnit: 0.9 },
+			emptyScales,
+			configs,
+			"#118ab2",
+			optIn
+		)
+		expect(modulated?.bgColor).not.toBe("#118ab2")
+		// The ink still keys on the un-modulated override.
+		expect(modulated?.inkColor).toBe("#073b55")
+	})
+
+	it("a field-mapped pattern tiles over the fill the same way", () => {
+		const scales: AestheticScales = {
+			...emptyScales,
+			pattern: { field: { name: "p", type: "categorical" }, categories: ["A"] },
+		}
+		const def = resolvePatternDefForItem(
+			{ ...item, patternValue: "A" },
+			scales,
+			{ ...configs, defaultPattern: null },
+			null
+		)
+		expect(def?.bgColor).toBe("#ef476f")
+		expect(def?.inkColor).toBe("#8a0023")
+	})
+
+	it("with hue mapped, the default pattern pairs its ink per hue color", () => {
+		const scales: AestheticScales = {
+			...emptyScales,
+			hue: {
+				field: { name: "grp", type: "categorical" },
+				scale: {
+					kind: "categorical",
+					scale: scaleOrdinal<string, string>().domain(["A", "B"]).range(palette),
+				},
+			},
+		}
+		const r = resolveLayerColor({
+			groupValues: { hue: "B" },
+			defaultFill: "#000",
+			// The override is ignored while hue drives the fill.
+			patternBgOverride: "#ffffff",
+			aestheticScales: scales,
+			channelConfigs: configs,
+			patternOptions: optIn,
+		})
+		expect(r.fill).toBe("#118ab2")
+		expect(r.patternId).toContain("118ab2-073b55")
 	})
 })

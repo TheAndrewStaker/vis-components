@@ -27,7 +27,7 @@ export const buildPatternDefsFromItems = (
 	items: Iterable<PatternDefItem>,
 	aestheticScales: AestheticScales,
 	channelConfigs: ChannelConfigs,
-	patternBgFallback: string,
+	patternBgOverride: string | null,
 	options?: PatternDefOptions
 ): PatternDefSpec[] => {
 	const defsMap = new Map<string, PatternDefSpec>()
@@ -36,7 +36,7 @@ export const buildPatternDefsFromItems = (
 			item,
 			aestheticScales,
 			channelConfigs,
-			patternBgFallback,
+			patternBgOverride,
 			options
 		)
 		if (resolved && !defsMap.has(resolved.svgId)) {
@@ -65,7 +65,7 @@ export const buildPatternDefs = (
 	aestheticScales: AestheticScales,
 	channelConfigs: ChannelConfigs,
 	defaultFill: string,
-	patternBgFallback: string,
+	patternBgOverride: string | null,
 	options?: PatternDefOptions
 ): PatternDefSpec[] => {
 	const patG = aestheticScales.pattern?.field ?? null
@@ -101,7 +101,7 @@ export const buildPatternDefs = (
 			}),
 		aestheticScales,
 		channelConfigs,
-		patternBgFallback,
+		patternBgOverride,
 		options
 	)
 }

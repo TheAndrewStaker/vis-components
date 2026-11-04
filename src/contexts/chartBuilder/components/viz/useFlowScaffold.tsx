@@ -171,12 +171,18 @@ export const useFlowScaffold = (props: ChartRendererBaseProps = {}) => {
 	const patternOnNodes =
 		!!patternField &&
 		(patternField === sourceField || patternField === targetField)
-	const patternBg = channelConfigs.pattern?.backgroundColor ?? "#e2e8f0"
+	// The tile sits on the node's drawn color (its hue color, or the default
+	// fill) unless no hue is on the nodes and the Pattern panel's Background
+	// override replaces it — the shared `patternTile` rule.
+	const patternBgOverride = channelConfigs.pattern?.backgroundColor ?? null
 	const nodePatternFor = (name: string) => {
 		if (!patternOnNodes) return null
 		const idx = scaleDomainNodes.indexOf(name)
 		if (idx === -1) return null
-		const bgColor = hueOnNodes ? nodeColorFor(name) : patternBg
+		const bgColor =
+			hueOnNodes || patternBgOverride === null
+				? nodeColorFor(name)
+				: patternBgOverride
 		const huePalette = inkPaletteForHue(channelConfigs, "categorical")
 		const preferredInk = inkForHueColor(
 			bgColor,

@@ -911,9 +911,12 @@ export type PatternConfig = {
 	/** Per-category ink color (hex). Missing categories fall back to
 	 * DEFAULT_PATTERN_INK. */
 	inkColors: Record<string, string>
-	/** Background color used when hue is NOT mapped. When hue IS mapped the
-	 * background comes from the mark's hue color automatically. */
-	backgroundColor: string
+	/** The tile color under a pattern when hue does NOT drive the mark's
+	 * fill. `null` (the default) = the mark's own fill, so a patterned bar
+	 * keeps its color and the pattern ink pairs with that color through the
+	 * palette; a hex is an explicit override. When hue IS mapped the
+	 * background is the mark's hue color regardless. */
+	backgroundColor: string | null
 	/** Stack/group/overlay layout when pattern is the highest-precedence
 	 * mapped color channel (hue > pattern > brightness > opacity >
 	 * saturation). Read by `resolveStackMode`; the Pattern panel exposes
@@ -958,7 +961,7 @@ export const DEFAULT_PATTERN_CONFIG: PatternConfig = {
 	dashOverrides: {},
 	customDashOverrides: {},
 	inkColors: {},
-	backgroundColor: "#e2e8f0",
+	backgroundColor: null,
 	stackMode: "stack",
 }
 
@@ -1781,7 +1784,11 @@ export type ChannelConfigs = Partial<{
 	defaultSaturation: number | null // null = no modulation
 	defaultBrightness: number | null // null = no modulation
 	defaultPattern: number | null // null = no pattern
-	defaultPatternInk: string // DEFAULT_PATTERN_INK from patterns.tsx
+	/** Ink for `defaultPattern`. `null` (the default) = the palette-paired
+	 * ink for the color under the tile (the mark's fill, or the Pattern
+	 * panel's Background override), else the theme's `patternInkColor`;
+	 * a hex is an explicit pick. See `resolveDefaultPatternInk`. */
+	defaultPatternInk: string | null
 	defaultAngle: number // degrees
 	defaultLength: number | null // null = shape mode, number = line px
 	// Palette settings (resolved from theme at visualization creation)

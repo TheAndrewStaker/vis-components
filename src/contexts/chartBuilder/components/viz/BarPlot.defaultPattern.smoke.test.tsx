@@ -36,7 +36,11 @@ const buildDataset = (): Dataset =>
 		],
 	})
 
-const seed = (channelConfigs: Record<string, unknown>) => {
+const seed = (
+	channelConfigs: Record<string, unknown>,
+	/** Color mapping; `null` = no Color variable (bars draw `defaultFill`). */
+	hueField: string | null = "series"
+) => {
 	const store = installInMemoryLocalStorage()
 	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set(
@@ -51,7 +55,7 @@ const seed = (channelConfigs: Record<string, unknown>) => {
 			...emptyEncodings(),
 			x: { field: "category" },
 			length: { field: "value" },
-			hue: { field: "series" },
+			...(hueField ? { hue: { field: hueField } } : {}),
 		})
 	)
 	store.set(
@@ -95,6 +99,36 @@ describe("BarPlot — default pattern (no pattern field mapped)", () => {
 			)
 			expect(id.startsWith("vc-pat-2-")).toBe(true)
 			expect(container.querySelector(`pattern[id="${id}"]`)).not.toBeNull()
+		}
+	})
+
+	it("with no Color variable, the pattern tiles over the bar's own fill with its paired ink", () => {
+		// The bar keeps its default fill under the pattern (no gray tile), and
+		// because that fill is a palette swatch the ink is the swatch's paired
+		// ink — the Background swatch (null) and Ink picker (null) both inherit.
+		seed(
+			{
+				defaultPattern: 2,
+				defaultFill: "#ef476f",
+				categoricalPalette: ["#ef476f", "#118ab2"],
+				categoricalPalettePatternInks: ["#8a0023", "#073b55"],
+				patternInkColor: "#000000",
+				defaultPatternInk: null,
+				pattern: { overrides: {}, inkColors: {}, backgroundColor: null, stackMode: "stack" },
+			},
+			null
+		)
+		const { container } = mount()
+		const patterned = patternFilledRects(container)
+		expect(patterned.length).toBeGreaterThanOrEqual(2)
+		for (const rect of patterned) {
+			const id = (rect.getAttribute("fill") ?? "").slice("url(#".length, -")".length)
+			const def = container.querySelector(`pattern[id="${id}"]`)
+			expect(def).not.toBeNull()
+			// The tile's background rect is the bar fill; the ink is its pair.
+			const tileBg = def!.querySelector("rect")
+			expect(tileBg?.getAttribute("fill")).toBe("#ef476f")
+			expect(id).toContain("ef476f-8a0023")
 		}
 	})
 

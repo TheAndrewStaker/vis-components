@@ -26,6 +26,8 @@ import { foldFlowNodeTitles } from "./foldFlowNodeTitles"
 import { structureVisualKeys } from "./savedKeyStructure"
 import {
 	clearLegacyAutoTickLabelAngle,
+	followMarkFillForLegacyPatternDefaultsInVisual,
+	followMarkFillForLegacyThemePatternBackground,
 	measureFacetGapsFromPlotEdges,
 	rebaseCustomGlyphRefs,
 } from "./storage/migrations"
@@ -659,7 +661,15 @@ export const mergeBundleIntoLibrary = (
 		// deployment's administrator, and a bundle can't make it on their
 		// behalf. The recipient promotes it by dragging it into the folder.
 		incomingThemes.push(
-			normalizeSavedTheme({ ...t, isSystem: false, managed: false })
+			// Unversioned, like the visuals: a legacy gray pattern Background
+			// follows the mark here too (the themes v2→v3 step).
+			normalizeSavedTheme(
+				followMarkFillForLegacyThemePatternBackground({
+					...t,
+					isSystem: false,
+					managed: false,
+				})
+			)
 		)
 	}
 	const themes =
@@ -723,16 +733,19 @@ export const mergeBundleIntoLibrary = (
 		// (then "auto") would land as today's explicit "keep level", a
 		// pre-v7 export carries joined facet / piece keys, a pre-v8 one
 		// cell-edge facet gaps, a pre-v9 one custom-glyph shape indices at
-		// the old base, and a flow chart from before 2026-10-19 its
-		// Node-titles styling. All five steps are idempotent; apply them to
-		// every import.
+		// the old base, a pre-v12 one the theme-seeded gray pattern tile /
+		// ink in place of "follow the mark", and a flow chart from before
+		// 2026-10-19 its Node-titles styling. All six steps are idempotent;
+		// apply them to every import.
 		const { templateId: _incomingTemplateId, ...incoming } = v
 		imported.push({
 			...foldFlowNodeTitles(
 				structureVisualKeys(
-					rebaseCustomGlyphRefs(
-						measureFacetGapsFromPlotEdges(
-							clearLegacyAutoTickLabelAngle(incoming)
+					followMarkFillForLegacyPatternDefaultsInVisual(
+						rebaseCustomGlyphRefs(
+							measureFacetGapsFromPlotEdges(
+								clearLegacyAutoTickLabelAngle(incoming)
+							)
 						)
 					)
 				)

@@ -258,7 +258,7 @@ export const buildMarks = ({
 	const lengthScale = aestheticScales.length?.scale ?? null
 	const angleScale = aestheticScales.angle?.scale ?? null
 
-	const patternBgFallback = channelConfigs.pattern?.backgroundColor ?? "#e2e8f0"
+	const patternBgOverride = channelConfigs.pattern?.backgroundColor ?? null
 	// Outline saturation / brightness — its own slot, independent of the
 	// fill's modulation (identity when neither slot is set).
 	const modulateOutline = slotModulationResolver(
@@ -319,7 +319,7 @@ export const buildMarks = ({
 							},
 							aestheticScales,
 							channelConfigs,
-							patternBgFallback,
+							patternBgOverride,
 							{
 								defaultToNone: !!encodings.connection?.field,
 								includeDefaultPattern: true,

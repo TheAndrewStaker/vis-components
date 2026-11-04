@@ -17,6 +17,7 @@ import {
 	readThemeFontSizesV2,
 	rebaseCustomGlyphRefs,
 	resetVisualFontSizesV1ToV2,
+	themesMigrations,
 	visualsMigrations,
 } from "./migrations"
 import { CUSTOM_GLYPH_BASE } from "../customGlyphs"
@@ -822,5 +823,73 @@ describe("CONTENT_MIGRATIONS", () => {
 		expect(Object.keys(CONTENT_MIGRATIONS).sort()).toEqual(
 			[...CONTENT_VERSION_COLLECTIONS].sort()
 		)
+	})
+})
+
+describe("visuals v11 -> v12: legacy pattern tile color / default ink follow the mark", () => {
+	const upgrade = visualsMigrations[11]!
+
+	it("nulls the theme-seeded gray tile and the theme-seeded ink, keeps real picks", () => {
+		const seeded = {
+			id: "a",
+			channelConfigs: {
+				patternInkColor: "#000000",
+				defaultPatternInk: "#000000",
+				pattern: { overrides: {}, backgroundColor: "#EFEFEF", stackMode: "stack" },
+			},
+		}
+		const builtIn = { id: "b", channelConfigs: { pattern: { backgroundColor: "#e2e8f0" } } }
+		const chosen = {
+			id: "c",
+			channelConfigs: {
+				patternInkColor: "#000000",
+				defaultPatternInk: "#ff0000",
+				pattern: { backgroundColor: "#abcdef" },
+			},
+		}
+		const bare = { id: "d" }
+		const [a, b, c, d] = upgrade([seeded, builtIn, chosen, bare, null]) as Array<{
+			channelConfigs?: Record<string, unknown>
+		}>
+		expect(a!.channelConfigs).toEqual({
+			patternInkColor: "#000000",
+			defaultPatternInk: null,
+			pattern: { overrides: {}, backgroundColor: null, stackMode: "stack" },
+		})
+		expect(b!.channelConfigs).toEqual({ pattern: { backgroundColor: null } })
+		expect(c).toBe(chosen)
+		expect(d).toBe(bare)
+		expect(upgrade("nope")).toBe("nope")
+	})
+
+	it("is idempotent", () => {
+		const once = upgrade([
+			{ channelConfigs: { defaultPatternInk: "#000", patternInkColor: "#000", pattern: { backgroundColor: "#efefef" } } },
+		])
+		expect(upgrade(once)).toEqual(once)
+	})
+
+	it("channelConfigs v5 -> v6 runs the same step over the draft slice", () => {
+		expect(
+			channelConfigsMigrations[5]!({ pattern: { backgroundColor: "#EFEFEF" }, defaultPatternInk: "#111", patternInkColor: "#111" })
+		).toEqual({ pattern: { backgroundColor: null }, defaultPatternInk: null, patternInkColor: "#111" })
+		const kept = { pattern: { backgroundColor: "#abcdef" } }
+		expect(channelConfigsMigrations[5]!(kept)).toBe(kept)
+		expect(channelConfigsMigrations[5]!(null)).toBeNull()
+	})
+})
+
+describe("themes v2 -> v3: the former system pattern Background follows the mark", () => {
+	const upgrade = themesMigrations[2]!
+
+	it("nulls #EFEFEF, keeps any other color and null", () => {
+		const legacy = { id: "t1", patternBackgroundColor: "#EFEFEF" }
+		const chosen = { id: "t2", patternBackgroundColor: "#abcdef" }
+		const already = { id: "t3", patternBackgroundColor: null }
+		const [a, b, c] = upgrade([legacy, chosen, already, null]) as Array<Record<string, unknown>>
+		expect(a).toEqual({ id: "t1", patternBackgroundColor: null })
+		expect(b).toBe(chosen)
+		expect(c).toBe(already)
+		expect(upgrade("nope")).toBe("nope")
 	})
 })

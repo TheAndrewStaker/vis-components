@@ -20,9 +20,12 @@ import { uniqueValues } from "./uniqueFieldValues"
  * inconsistencies with `currentColor` inside SVG paint servers.
  *
  * When hue IS mapped: bg = the mark's resolved hue color (varies per mark).
- * When hue is NOT mapped: bg = PatternConfig.backgroundColor (user-editable).
+ * When hue is NOT mapped: bg = the mark's own fill (the default fill, fill
+ * rules and sat/bri modulation included) — a patterned bar keeps its color —
+ * unless `PatternConfig.backgroundColor` overrides the tile color.
  * Ink color is per-pattern-category (same ink on all marks sharing that
- * pattern category, regardless of hue).
+ * pattern category, regardless of hue), defaulting to the palette-paired
+ * ink for the color under the tile.
  */
 
 export const DEFAULT_PATTERN_INK = "#0f172a"
@@ -221,8 +224,16 @@ export type ResolvedPattern = {
  * against the palette, so they MUST use the same palette the hue scale used —
  * otherwise (ordinal hue + pattern on the same field) the lookup misses and the
  * ink silently falls back to the default near-black. */
+export type InkPaletteConfigs = Pick<
+	ChannelConfigs,
+	| "categoricalPalette"
+	| "categoricalPalettePatternInks"
+	| "ordinalPalette"
+	| "ordinalPalettePatternInks"
+>
+
 export const inkPaletteForHue = (
-	configs: ChannelConfigs,
+	configs: InkPaletteConfigs,
 	hueType: FieldType | undefined
 ): {
 	palette: readonly string[] | undefined
@@ -283,6 +294,31 @@ export const inkForHueColor = (
 		if (paired) return paired
 	}
 	return themeInkFallback?.[target] ?? null
+}
+
+/** The ink for the no-variable DEFAULT pattern on a mark whose tile sits on
+ * `tileKeyColor` — the PRE-modulation color under the pattern: the mark's
+ * hue / default fill, or the Pattern panel's Background override. The user's
+ * explicit `defaultPatternInk` wins; otherwise the palette-paired ink for
+ * that color (the palette the hue scale uses, then the cross-palette table),
+ * then the theme's global pattern ink, then the built-in near-black. So a
+ * bar in a palette color carries that swatch's paired ink without the user
+ * touching the Ink picker. Shared by the mark resolver, the legend and the
+ * Pattern panel so all three show the same ink. */
+export const resolveDefaultPatternInk = (
+	configs: InkPaletteConfigs &
+		Pick<ChannelConfigs, "defaultPatternInk" | "patternInkColor">,
+	tileKeyColor: string,
+	hueType: FieldType | undefined,
+	themeInkFallback?: ThemeInkFallback
+): string => {
+	if (configs.defaultPatternInk) return configs.defaultPatternInk
+	const { palette, inks } = inkPaletteForHue(configs, hueType)
+	return (
+		inkForHueColor(tileKeyColor, palette, inks, themeInkFallback) ??
+		configs.patternInkColor ??
+		DEFAULT_PATTERN_INK
+	)
 }
 
 /** Resolve the full pattern def spec for a single mark, baking both the

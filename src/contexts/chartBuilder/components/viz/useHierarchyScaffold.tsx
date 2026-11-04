@@ -39,6 +39,7 @@ import {
 	resolvePatternForMark,
 	type ResolvedPattern,
 } from "../../lib/patterns"
+import { patternTile } from "../../lib/resolveLayerColor"
 import {
 	applyHueScale,
 	makeBrightnessScale,
@@ -759,12 +760,14 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 		//  - FIELD: row-backed marks only — leaves everywhere, plus named
 		//    containers (which resolve aesthetics against their row, same as
 		//    the outline chain).
-		// The pattern tile's background is the mark's drawn fill when a color
-		// varies the marks (field hue OR the derived rootGroup/depth source),
-		// else the Pattern panel's background color; ink pairing keys on the
-		// PRE-modulation color per the palette-ink invariant.
+		// The pattern tile's background is the mark's drawn fill — whether a
+		// color varies the marks (field hue OR the derived rootGroup/depth
+		// source) or not — unless no color does and the Pattern panel's
+		// Background override replaces it (the shared `patternTile` rule);
+		// ink pairing keys on the PRE-modulation color per the palette-ink
+		// invariant.
 		const patternAes = aestheticScales.pattern
-		const patternBg = channelConfigs.pattern?.backgroundColor ?? "#e2e8f0"
+		const patternBgOverride = channelConfigs.pattern?.backgroundColor ?? null
 		const hueDrivesFill = !!hueSource || !!aestheticScales.hue
 		const inkHueType = hueSource
 			? derivedType(hueSource)
@@ -774,10 +777,14 @@ export const useHierarchyScaffold = (props: ChartRendererBaseProps = {}) => {
 			catIdx: number,
 			style: HierarchyMarkStyle
 		): ResolvedPattern | null => {
-			const bgColor = hueDrivesFill ? style.fill : patternBg
+			const { bgColor, inkKeyColor } = patternTile(
+				{ fill: style.fill, preModulationHue: style.preModulationFill },
+				hueDrivesFill,
+				patternBgOverride
+			)
 			const huePalette = inkPaletteForHue(channelConfigs, inkHueType)
 			const preferredInk = inkForHueColor(
-				hueDrivesFill ? style.preModulationFill : patternBg,
+				inkKeyColor,
 				huePalette.palette,
 				huePalette.inks,
 				aestheticScales.themeInkFallback

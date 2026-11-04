@@ -17,6 +17,7 @@ import type {
 } from "../../chartBuilder/lib/channelConfig"
 import { dashArrayFor } from "../../chartBuilder/lib/dashPatterns"
 import { ptToPx } from "../../chartBuilder/lib/fontUnit"
+import { buildThemeInkFallback, inkForHueColor } from "../../chartBuilder/lib/patterns"
 import { PALETTE_INTERPOLATORS } from "../../chartBuilder/lib/scales"
 import {
 	dataLabelsConfigFromTheme,
@@ -274,6 +275,17 @@ const orderedGradients = (theme: Theme): SamplerGradient[] => {
 export const buildThemeSamplerModel = (theme: Theme): ThemeSamplerModel => {
 	const dataLabels = dataLabelsConfigFromTheme(theme)
 	const ink = theme.patternInkColor
+	// The no-hue tile sits on the mark fill (unless the theme overrides the
+	// Background), inked with that color's paired ink when it is a palette
+	// swatch — what a patterned bar with no color mapping draws.
+	const tileBackground = theme.patternBackgroundColor ?? theme.defaultFill
+	const tileInk =
+		inkForHueColor(
+			tileBackground,
+			resolveCategoricalPalette(theme).colors,
+			resolveCategoricalPalette(theme).patternInks,
+			buildThemeInkFallback(theme)
+		) ?? ink
 	return {
 		background: theme.chartBackgroundColor,
 		categoricalPalettes: orderedPalettes(
@@ -289,7 +301,7 @@ export const buildThemeSamplerModel = (theme: Theme): ThemeSamplerModel => {
 			ink
 		),
 		gradients: orderedGradients(theme),
-		pattern: { ink, background: theme.patternBackgroundColor },
+		pattern: { ink: tileInk, background: tileBackground },
 		mark: {
 			fill: theme.defaultFill,
 			radius: theme.defaultRadius,

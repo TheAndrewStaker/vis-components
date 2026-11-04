@@ -2,7 +2,7 @@ import type { Feature } from "geojson"
 import { describe, expect, it } from "vitest"
 
 import type { AestheticScales } from "../../store/useAestheticScales"
-import { EMPTY_CHANNEL_CONFIGS } from "../channelConfig"
+import { DEFAULT_PATTERN_CONFIG, EMPTY_CHANNEL_CONFIGS } from "../channelConfig"
 import { makeHueScale, makeOpacityScale, type UnitScale } from "../scales"
 import {
 	OPACITY_BASE_FILL,
@@ -352,7 +352,7 @@ describe("resolveGeoPatternDef / geoPatternFill", () => {
 		).toBe(`url(#${def!.svgId})`)
 	})
 
-	it("without hue, the shared pattern background fallback is used", () => {
+	it("without hue, the tile sits on the mark's own fill unless the Pattern Background overrides it", () => {
 		const scales = patternScales(false)
 		const def = resolveGeoPatternDef(
 			{ p: "A" },
@@ -361,8 +361,13 @@ describe("resolveGeoPatternDef / geoPatternFill", () => {
 			EMPTY_CHANNEL_CONFIGS
 		)
 		expect(def).not.toBeNull()
-		// The cartesian renderers' shared default tile background.
-		expect(def!.bgColor).toBe("#e2e8f0")
+		// The shared `patternTile` rule: a patterned region keeps its color.
+		expect(def!.bgColor).toBe("#123456")
+		const overridden = resolveGeoPatternDef({ p: "A" }, "#123456", scales, {
+			...EMPTY_CHANNEL_CONFIGS,
+			pattern: { ...DEFAULT_PATTERN_CONFIG, backgroundColor: "#e2e8f0" },
+		})
+		expect(overridden!.bgColor).toBe("#e2e8f0")
 	})
 
 	it("cycles the pattern palette by category index", () => {

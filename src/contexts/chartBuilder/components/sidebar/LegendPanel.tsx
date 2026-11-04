@@ -14,6 +14,7 @@ import {
 	type DisplayUnit,
 } from "../../lib/displayUnits"
 import { effectiveType } from "../../lib/fieldType"
+import { DEFAULT_FILL } from "../../lib/channelConfig"
 import { histogramMeasureColorDomain } from "../../lib/histogramMeasureColor"
 import { resolveHistogramMeasure } from "../../lib/histogramMeasure"
 import {
@@ -1662,7 +1663,8 @@ export const LegendPanel = () => {
 												value={
 													merged.patternLegendBgColor ??
 													configs.pattern?.backgroundColor ??
-													"#e2e8f0"
+													configs.defaultFill ??
+													DEFAULT_FILL
 												}
 												onChange={(patternLegendBgColor) =>
 													update({ patternLegendBgColor })

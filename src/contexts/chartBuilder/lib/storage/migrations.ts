@@ -28,16 +28,16 @@ import type { Migration } from "./versioning"
  *   v0 = pre-versioning (unwrapped JSON; no `_v` field). Existing user
  *        data lives here, so the v0→v1 migration must be tolerant of
  *        the existing on-disk shape. */
-export const VISUALS_VERSION = 11
+export const VISUALS_VERSION = 12
 export const DATASETS_VERSION = 1
-export const CHANNEL_CONFIGS_VERSION = 5
+export const CHANNEL_CONFIGS_VERSION = 6
 export const LABELS_VERSION = 1
 export const LEGEND_VERSION = 2
 export const TOOLTIP_VERSION = 1
 export const DATA_LABELS_ENCODINGS_VERSION = 1
 export const DATA_LABELS_CONFIG_VERSION = 2
 export const ENCODINGS_VERSION = 1
-export const THEMES_VERSION = 2
+export const THEMES_VERSION = 3
 export const EMBED_INSTANCES_VERSION = 1
 export const FIELD_OVERRIDES_VERSION = 1
 export const FIELD_LEVEL_ORDERS_VERSION = 1
@@ -431,6 +431,13 @@ export const visualsMigrations: Migration[] = [
 			return { ...vis, dataTableConfig: fillDataTableMaxRowsV2ToV3(vis.dataTableConfig) }
 		})
 	},
+	// v11 -> v12: patterns tile over each mark's own fill; the theme-seeded
+	// tile color / default-pattern ink every save stored become "follow the
+	// mark" — see `followMarkFillForLegacyPatternDefaults`.
+	(raw) => {
+		if (!Array.isArray(raw)) return raw
+		return raw.map((v) => followMarkFillForLegacyPatternDefaultsInVisual(v))
+	},
 ]
 
 /** One data-table config, v2 → v3. Max rows defaulted to null (every
@@ -442,6 +449,59 @@ const fillDataTableMaxRowsV2ToV3 = (raw: unknown): unknown => {
 	if (typeof raw !== "object" || !raw) return raw
 	const cfg = raw as Record<string, unknown>
 	return cfg.maxRows === null ? { ...cfg, maxRows: 10 } : raw
+}
+
+/** The tile colors patterns used to sit on when no hue drove the fill: the
+ *  system themes' pattern Background and the built-in `PatternConfig`
+ *  default. Every save stored one of them, so neither is a choice. */
+const LEGACY_PATTERN_TILE_COLORS = new Set(["#efefef", "#e2e8f0"])
+const isLegacyPatternTileColor = (v: unknown): boolean =>
+	typeof v === "string" && LEGACY_PATTERN_TILE_COLORS.has(v.toLowerCase())
+
+/** One `ChannelConfigs` record, v5 → v6 of the draft slice (the visuals
+ *  v11→v12 step). Patterns now tile over each mark's OWN fill — a patterned
+ *  bar keeps its color — with `pattern.backgroundColor` an explicit
+ *  override (`null` = follow the mark) and `defaultPatternInk` `null` =
+ *  the palette-paired ink for the tile color, else the theme ink. Before,
+ *  every save stored the theme-seeded gray tile and the theme-seeded ink
+ *  (`defaultPatternInk` equal to the stored `patternInkColor` snapshot);
+ *  neither was a choice, so both become `null`. A deliberately picked tile
+ *  color (anything but the legacy grays) or ink (anything but the theme's)
+ *  stays. Idempotent, and applied to bundle imports too (bundles carry no
+ *  storage version). Returns the input reference when nothing changed. */
+export const followMarkFillForLegacyPatternDefaults = (raw: unknown): unknown => {
+	if (typeof raw !== "object" || !raw) return raw
+	const cc = raw as Record<string, unknown>
+	let next: Record<string, unknown> | null = null
+	const pat = cc.pattern
+	if (
+		typeof pat === "object" &&
+		pat &&
+		isLegacyPatternTileColor((pat as Record<string, unknown>).backgroundColor)
+	) {
+		next = { ...cc, pattern: { ...(pat as Record<string, unknown>), backgroundColor: null } }
+	}
+	const ink = cc.defaultPatternInk
+	const themeInk = cc.patternInkColor
+	if (
+		typeof ink === "string" &&
+		typeof themeInk === "string" &&
+		ink.toLowerCase() === themeInk.toLowerCase()
+	) {
+		next = { ...(next ?? cc), defaultPatternInk: null }
+	}
+	return next ?? raw
+}
+
+/** The same step over a whole visual (its `channelConfigs`). Returns the
+ *  input reference when nothing changed. */
+export const followMarkFillForLegacyPatternDefaultsInVisual = <T>(visual: T): T => {
+	if (typeof visual !== "object" || !visual) return visual
+	const vis = visual as Record<string, unknown>
+	const cc = vis.channelConfigs
+	if (typeof cc !== "object" || !cc) return visual
+	const next = followMarkFillForLegacyPatternDefaults(cc)
+	return next === cc ? visual : ({ ...vis, channelConfigs: next } as T)
 }
 
 /** One data-table config, v1 → v2.
@@ -732,6 +792,9 @@ export const channelConfigsMigrations: Migration[] = [
 		if (typeof raw !== "object" || !raw) return raw
 		return rebaseCustomGlyphRefsInConfigs(raw as Record<string, unknown>)
 	},
+	// v5 -> v6: legacy pattern tile color / default ink → follow the mark
+	// (the visuals v11→v12 step, for the draft slice).
+	(raw) => followMarkFillForLegacyPatternDefaults(raw),
 ]
 /** mapConfig v0 (pre-versioning) shape matched the original `MapConfig`, so
  *  the v0→v1 promotion is the identity. v1→v2 backfills `showNoDataRegions`
@@ -893,7 +956,26 @@ export const themesMigrations: Migration[] = [
 			return { ...obj, ordinalPalettes, defaultOrdinalPaletteId }
 		})
 	},
+	// v2 -> v3: the theme's pattern Background "#EFEFEF" becomes null — see
+	// `followMarkFillForLegacyThemePatternBackground`.
+	(raw) => {
+		if (!Array.isArray(raw)) return raw
+		return raw.map((entry) => followMarkFillForLegacyThemePatternBackground(entry))
+	},
 ]
+
+/** One theme, v2 → v3: its pattern Background "#EFEFEF" — the former
+ *  system default, carried into every theme copied from one — becomes
+ *  null, so new visuals tile patterns over each mark's own fill. Any other
+ *  color is a deliberate override and stays. Idempotent; bundle imports
+ *  (unversioned) run it too. Returns the input reference when unchanged. */
+export const followMarkFillForLegacyThemePatternBackground = <T>(entry: T): T => {
+	if (!entry || typeof entry !== "object") return entry
+	const obj = entry as Record<string, unknown>
+	return isLegacyPatternTileColor(obj.patternBackgroundColor)
+		? ({ ...obj, patternBackgroundColor: null } as T)
+		: entry
+}
 export const embedInstancesMigrations = identityMigrations
 export const userFontsMigrations = identityMigrations
 export const fieldOverridesMigrations = identityMigrations

@@ -1,4 +1,4 @@
-import { ColorInput, Section, SectionGroup } from "./controls"
+import { ColorInput, Section, SectionGroup, THEME_LABEL_CLASS } from "./controls"
 import { ColorInput as UiColorInput } from "../../../../components/ui/ColorInput"
 import { updateCategoricalPalette } from "./paletteHelpers"
 import type { ThemeSectionProps } from "./types"
@@ -12,19 +12,25 @@ export const PatternsSection = ({
 		{/* Pattern defaults */}
 		<Section title="Pattern">
 			<p className="text-sm vc-muted">
-				Background color is used when patterns sit on a mark with no hue
-				mapping. Ink color is the default pattern stroke; per-palette
-				overrides below let you pair a specific ink with each hue swatch.
+				Patterns sit on each mark&apos;s own color; the ink pairs with that
+				color through the per-palette overrides below, else the Ink color.
+				Background, when set, replaces the mark color under the pattern on
+				marks with no hue mapping.
 			</p>
 			<ColorInput
 				label="Ink color"
 				value={theme.patternInkColor}
 				onChange={(v) => set("patternInkColor", v)}
 			/>
-			<ColorInput
+			{/* Inherit mode: empty = the mark's fill, previewed in the swatch. */}
+			<UiColorInput
 				label="Background"
-				value={theme.patternBackgroundColor}
+				labelClassName={THEME_LABEL_CLASS}
+				showPalettePicker={false}
+				value={theme.patternBackgroundColor ?? null}
 				onChange={(v) => set("patternBackgroundColor", v)}
+				onClear={() => set("patternBackgroundColor", null)}
+				placeholder={theme.defaultFill}
 			/>
 			{theme.categoricalPalettes.length > 0 && (
 				<div className="mt-2 flex flex-col gap-3">
