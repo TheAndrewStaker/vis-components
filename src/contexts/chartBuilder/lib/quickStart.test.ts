@@ -696,6 +696,25 @@ describe("applyVariation", () => {
 		]
 		const { configs } = applyVariation(filledRadar, radarAssignments, {})
 		expect(configs.connection?.fillPolygon).toBe(true)
+		// The watercolor look rides the Polygon fill opacity slot.
+		expect(configs.opacitySlots?.polygonFill).toEqual({ field: null, level: 0.25 })
+		// The dead per-connection opacity knobs are gone.
+		expect(configs.connection).not.toHaveProperty("fillOpacity")
+		expect(configs.connection).not.toHaveProperty("lineOpacity")
+
+		// A plain radar after it drops the stale Polygon fill level but keeps
+		// the other opacity slots.
+		const plainRadar = { ...filledRadar, name: "Radar polygon", polygonFill: undefined }
+		const next = applyVariation(plainRadar, radarAssignments, {
+			...configs,
+			opacitySlots: {
+				...configs.opacitySlots,
+				border: { field: null, level: 0.5 },
+			},
+		}).configs
+		expect(next.connection?.fillPolygon).toBe(false)
+		expect(next.opacitySlots?.polygonFill).toBeUndefined()
+		expect(next.opacitySlots?.border).toEqual({ field: null, level: 0.5 })
 	})
 
 	it("maps connection to the named channel's field via connectionFrom and applies connectionFill", () => {
@@ -1059,6 +1078,25 @@ describe("mapConfigForVariation", () => {
 		)
 		expect(next.coordSystem).toBe("geographic")
 		expect(next.geographyLevel).toBe("states")
+	})
+
+	it("keeps the current (theme-derived) no-data colors on a map pick", () => {
+		const current = {
+			...DEFAULT_MAP_CONFIG,
+			noDataFill: "#44403c",
+			noDataPatternInk: "#78716c",
+			showBasemap: false,
+		}
+		const next = mapConfigForVariation(
+			choropleth,
+			[{ channel: "connection", field: stateField }],
+			regionDetection,
+			current
+		)
+		expect(next.noDataFill).toBe("#44403c")
+		expect(next.noDataPatternInk).toBe("#78716c")
+		// Everything else is still a fresh config.
+		expect(next.showBasemap).toBe(DEFAULT_MAP_CONFIG.showBasemap)
 	})
 
 	it("uses the detection's pointsLevel for the dot map", () => {

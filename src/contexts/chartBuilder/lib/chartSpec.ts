@@ -26,8 +26,11 @@ import {
 	rethemeCaption,
 	rethemeChannelConfigs,
 	rethemeDataLabels,
+	rethemeDataTable,
 	rethemeLabels,
 	rethemeLegend,
+	rethemeMap,
+	rethemeTooltip,
 } from "./themeSwitch"
 import type { EncodingChannel, FieldType, Theme, Visual } from "./types"
 import { hydrateVisual, newVisualDraft, newVisualId } from "./visualDefaults"
@@ -497,6 +500,9 @@ export const editVisual = (
 					legendConfig: rethemeLegend(hydrated.legendConfig, theme),
 					dataLabelsConfig: rethemeDataLabels(hydrated.dataLabelsConfig, theme),
 					captionConfig: rethemeCaption(hydrated.captionConfig, theme),
+					tooltipConfig: rethemeTooltip(hydrated.tooltipConfig, theme),
+					dataTableConfig: rethemeDataTable(hydrated.dataTableConfig, theme),
+					mapConfig: rethemeMap(hydrated.mapConfig, theme),
 				}
 			: hydrated
 	const known = new Map(deps.fields.map((f) => [f.name, f.type]))

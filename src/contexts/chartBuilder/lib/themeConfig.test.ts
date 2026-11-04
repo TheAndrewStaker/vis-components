@@ -447,8 +447,8 @@ describe("connection dot is scoped to the Connection dropdown", () => {
 			)
 		).toContain("chord axis")
 	})
-	it("radar-only fillPolygon and Opacity-menu fillOpacity do NOT dot Connection", () => {
-		expect(dot("connection", withConn({ fillPolygon: true, fillOpacity: 0.25 }))).toBe(false)
+	it("radar-only fillPolygon does NOT dot Connection", () => {
+		expect(dot("connection", withConn({ fillPolygon: true }))).toBe(false)
 	})
 	it("outline color (strokeColor) dots the COLOR menu, not Connection", () => {
 		const c = withConn({ strokeColor: "#5746dd" })

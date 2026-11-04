@@ -57,3 +57,35 @@ describe("ExportingSection — canvas margin defaults", () => {
 		})
 	})
 })
+
+describe("ExportingSection — canvas size defaults", () => {
+	it("sits above Canvas margins and shows 1000 × 600 while unset", () => {
+		mount()
+		const headings = screen.getAllByRole("heading").map((h) => h.textContent)
+		expect(headings).toEqual(["Units", "Canvas size", "Canvas margins"])
+		expect((screen.getByLabelText("Width") as HTMLInputElement).value).toBe("1000")
+		expect((screen.getByLabelText("Height") as HTMLInputElement).value).toBe("600")
+		// One Units picker governs both sections.
+		expect(screen.getAllByLabelText("Units")).toHaveLength(1)
+	})
+
+	it("writes width / height in px", () => {
+		const set = mount()
+		fireEvent.change(screen.getByLabelText("Width"), { target: { value: "800" } })
+		expect(set).toHaveBeenCalledWith("exportCanvasWidth", 800)
+		fireEvent.change(screen.getByLabelText("Height"), { target: { value: "450" } })
+		expect(set).toHaveBeenCalledWith("exportCanvasHeight", 450)
+	})
+
+	it("displays and converts through the shared unit (1 in = 96 px)", () => {
+		const set = mount({
+			...THEME,
+			exportMarginUnit: "in",
+			exportCanvasWidth: 960,
+		})
+		expect((screen.getByLabelText("Width") as HTMLInputElement).value).toBe("10")
+		expect((screen.getByLabelText("Height") as HTMLInputElement).value).toBe("6.25")
+		fireEvent.change(screen.getByLabelText("Height"), { target: { value: "5" } })
+		expect(set).toHaveBeenCalledWith("exportCanvasHeight", 480)
+	})
+})

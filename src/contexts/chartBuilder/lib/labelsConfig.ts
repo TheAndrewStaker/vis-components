@@ -103,6 +103,8 @@ export type TextFontConfig = FontStyles & {
 	legendSize?: number
 	legendWeight?: number
 	legendColor?: string
+	legendItalic?: boolean
+	legendUnderline?: boolean
 }
 
 export type BaseFontConfig = {
@@ -437,6 +439,21 @@ export type LegendPosition = "right" | "left" | "top" | "bottom" | "inside"
  *   needed. Useful for footer-style legends or compact in-chart placements. */
 export type LegendOrientation = "vertical" | "horizontal"
 
+/** Position / orientation choices as the Legend panel and the theme sheet's
+ * Legend → Layout both label them. */
+export const LEGEND_POSITION_OPTIONS = [
+	{ value: "right", label: "Right" },
+	{ value: "left", label: "Left" },
+	{ value: "top", label: "Top" },
+	{ value: "bottom", label: "Bottom" },
+	{ value: "inside", label: "Custom coordinates" },
+] as const satisfies ReadonlyArray<{ value: LegendPosition; label: string }>
+
+export const LEGEND_ORIENTATION_OPTIONS = [
+	{ value: "vertical", label: "Stacked" },
+	{ value: "horizontal", label: "Horizontal" },
+] as const satisfies ReadonlyArray<{ value: LegendOrientation; label: string }>
+
 export type LegendConfig = {
 	/** Master toggle. When false, the legend doesn't render at all. */
 	enabled: boolean
@@ -747,16 +764,59 @@ export type GradientBarStyle = {
 	labelAlign: LabelAlignment | null
 }
 
-export const resolveGradientBarStyle = (cfg: LegendConfig): GradientBarStyle => ({
-	length: cfg.gradientBarLength ?? null,
-	thickness: Math.max(0, cfg.gradientBarThickness ?? DEFAULT_GRADIENT_BAR_THICKNESS),
-	radius: cfg.gradientBarRadius ?? DEFAULT_GRADIENT_BAR_RADIUS,
-	borderWidth: Math.max(0, cfg.gradientBarBorderWidth ?? 0),
-	borderColor: cfg.gradientBarBorderColor ?? DEFAULT_GRADIENT_BAR_BORDER_COLOR,
-	tickLength: cfg.gradientBarTickLength ?? 0,
-	tickThickness: cfg.gradientBarTickThickness ?? 1,
-	tickColor: cfg.gradientBarTickColor ?? DEFAULT_GRADIENT_BAR_TICK_COLOR,
-	labelAlign: cfg.gradientBarLabelAlign ?? null,
+/** The theme's gradient-bar defaults (Settings → Themes → Legends →
+ * Gradient legend). Unlike the seeded legend fields these follow the theme
+ * LIVE: a visual's `gradientBar*` stays null until edited. */
+export const GRADIENT_BAR_THEME_KEYS = [
+	"legendGradientBarLength",
+	"legendGradientBarThickness",
+	"legendGradientBarRadius",
+	"legendGradientBarBorderWidth",
+	"legendGradientBarBorderColor",
+	"legendGradientBarTickLength",
+	"legendGradientBarTickThickness",
+	"legendGradientBarTickColor",
+	"legendGradientBarLabelAlign",
+] as const satisfies ReadonlyArray<keyof Theme>
+
+export type GradientBarThemeDefaults = Partial<
+	Pick<Theme, (typeof GRADIENT_BAR_THEME_KEYS)[number]>
+>
+
+/** The gradient bar as it renders: each field the visual set, else the
+ * theme's, else the built-in default. Same chain in the renderer and the
+ * Legend panel's placeholders / reset links. `length: null` = auto. */
+export const resolveGradientBarStyle = (
+	cfg: LegendConfig,
+	theme: GradientBarThemeDefaults
+): GradientBarStyle => ({
+	length: cfg.gradientBarLength ?? theme.legendGradientBarLength ?? null,
+	thickness: Math.max(
+		0,
+		cfg.gradientBarThickness ??
+			theme.legendGradientBarThickness ??
+			DEFAULT_GRADIENT_BAR_THICKNESS
+	),
+	radius:
+		cfg.gradientBarRadius ??
+		theme.legendGradientBarRadius ??
+		DEFAULT_GRADIENT_BAR_RADIUS,
+	borderWidth: Math.max(
+		0,
+		cfg.gradientBarBorderWidth ?? theme.legendGradientBarBorderWidth ?? 0
+	),
+	borderColor:
+		cfg.gradientBarBorderColor ??
+		theme.legendGradientBarBorderColor ??
+		DEFAULT_GRADIENT_BAR_BORDER_COLOR,
+	tickLength: cfg.gradientBarTickLength ?? theme.legendGradientBarTickLength ?? 0,
+	tickThickness:
+		cfg.gradientBarTickThickness ?? theme.legendGradientBarTickThickness ?? 1,
+	tickColor:
+		cfg.gradientBarTickColor ??
+		theme.legendGradientBarTickColor ??
+		DEFAULT_GRADIENT_BAR_TICK_COLOR,
+	labelAlign: cfg.gradientBarLabelAlign ?? theme.legendGradientBarLabelAlign ?? null,
 })
 
 // ---------------------------------------------------------------------------
@@ -1481,8 +1541,9 @@ export const resolveLegendTextFont = (
 	size: ptToPx(override?.size ?? base.text.legendSize ?? base.text.size),
 	color: override?.color ?? base.text.legendColor ?? base.text.color,
 	weight: override?.weight ?? base.text.legendWeight ?? base.text.weight,
-	italic: override?.italic ?? base.text.italic ?? false,
-	underline: override?.underline ?? base.text.underline ?? false,
+	italic: override?.italic ?? base.text.legendItalic ?? base.text.italic ?? false,
+	underline:
+		override?.underline ?? base.text.legendUnderline ?? base.text.underline ?? false,
 })
 
 // ---------------------------------------------------------------------------

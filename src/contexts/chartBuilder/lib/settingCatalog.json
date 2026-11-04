@@ -10780,9 +10780,19 @@
 				"string"
 			]
 		},
+		"labelsConfig.baseFont.text.legendItalic": {
+			"kinds": [
+				"boolean"
+			]
+		},
 		"labelsConfig.baseFont.text.legendSize": {
 			"kinds": [
 				"number"
+			]
+		},
+		"labelsConfig.baseFont.text.legendUnderline": {
+			"kinds": [
+				"boolean"
 			]
 		},
 		"labelsConfig.baseFont.text.legendWeight": {

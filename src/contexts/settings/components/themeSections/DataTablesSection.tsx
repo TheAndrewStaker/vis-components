@@ -1,18 +1,21 @@
-import { Checkbox } from "../../../../components/ui/Checkbox"
 import { ColorInput as UiColorInput } from "../../../../components/ui/ColorInput"
 import { NumberInput as UiNumberInput } from "../../../../components/ui/NumberInput"
 import {
 	themeDataTableStyle,
+	type DataTablePlacement,
 	type ResolvedDataTableStyle,
 } from "../../../chartBuilder/lib/dataTableConfig"
+import { dataTableConfigFromTheme } from "../../../chartBuilder/lib/themeConfig"
 import type { Theme } from "../../../chartBuilder/lib/types"
 import {
 	AlignmentRow,
+	CheckboxRow,
 	FontFamilyRow,
 	FontWeightRow,
 	NumberInput,
 	Section,
 	SectionGroup,
+	SelectInput,
 	THEME_LABEL_CLASS,
 } from "./controls"
 import type { ThemeSectionProps } from "./types"
@@ -59,22 +62,6 @@ const OptionalColorRow = ({
  *  header ("Bottom line", "Column alignment"), so the two read the same. */
 const SubHeading = ({ children }: { children: string }) => (
 	<span className="vc-group-header pt-1">{children}</span>
-)
-
-/** Checkbox lined up with the label column of the rows around it. */
-const CheckRow = ({
-	label,
-	checked,
-	onChange,
-}: {
-	label: string
-	checked: boolean
-	onChange: (v: boolean) => void
-}) => (
-	<div className="flex items-center gap-2 text-sm">
-		<span className={`${THEME_LABEL_CLASS} shrink-0`} aria-hidden="true" />
-		<Checkbox label={label} checked={checked} onChange={onChange} />
-	</div>
 )
 
 /** A font size the theme may leave empty (empty = `placeholder`'s size). */
@@ -173,13 +160,72 @@ const TextBlockRows = ({
  *  changes (`resolveDataTableStyle`). Empty table-text rows follow the
  *  theme's base text font, and empty title / caption rows follow the table
  *  text, so both track a later Text fonts change. */
+/** Same options and wording as the sidebar's Placement select. */
+const PLACEMENT_OPTIONS: Array<{ value: DataTablePlacement; label: string }> = [
+	{ value: "below", label: "Below the chart" },
+	{ value: "button", label: "Behind a button" },
+	{ value: "tabs", label: "In a tab" },
+]
+
+/** Settings → Themes → Data tables → Defaults: on / placement / max rows /
+ *  download, SEEDED into a chart's `DataTableConfig` when it's created or
+ *  switched onto the theme (`dataTableConfigFromTheme`) — unlike the style
+ *  sections below, which follow live. Unset rows show the built-in value. */
+const BehaviorDefaults = ({
+	theme,
+	set,
+}: Omit<ThemeSectionProps, "isReadOnly">) => {
+	const seed = dataTableConfigFromTheme(theme)
+	return (
+		<Section title="Defaults">
+			<p className="text-xs vc-muted">
+				Copied into a chart when it&apos;s created or switched to this theme;
+				editing them here doesn&apos;t change existing charts.
+			</p>
+			<CheckboxRow
+				label="Show a data table"
+				checked={seed.enabled}
+				onChange={(v) => set("dataTableEnabled", v)}
+			/>
+			<SelectInput
+				label="Placement"
+				value={seed.placement}
+				options={PLACEMENT_OPTIONS}
+				onChange={(v) => set("dataTablePlacement", v as DataTablePlacement)}
+			/>
+			{/* Empty = All (null), as in the sidebar. */}
+			<UiNumberInput
+				label="Max rows"
+				labelClassName={THEME_LABEL_CLASS}
+				value={seed.maxRows}
+				placeholder="All"
+				min={1}
+				step={1}
+				stepBase={10}
+				onChange={(n) => {
+					if (n >= 1) set("dataTableMaxRows", Math.round(n))
+				}}
+				onClear={() => set("dataTableMaxRows", null)}
+				inputClassName="w-20"
+			/>
+			<CheckboxRow
+				label="Download link"
+				checked={seed.showDownload}
+				onChange={(v) => set("dataTableShowDownload", v)}
+			/>
+		</Section>
+	)
+}
+
 export const DataTablesSection = ({ theme, set, isReadOnly }: ThemeSectionProps) => {
 	const look = themeDataTableStyle(theme)
 	return (
 		<SectionGroup title="Data tables" isReadOnly={isReadOnly}>
+			<BehaviorDefaults theme={theme} set={set} />
 			<p className="text-xs vc-muted">
-				What the data table under a chart starts as on every visual. The
-				sidebar&apos;s Data table section overrides these per visual.
+				The sections below are what the data table under a chart looks like
+				on every visual, live. The sidebar&apos;s Data table section
+				overrides them per visual.
 			</p>
 			<Section title="Title">
 				<p className="text-xs vc-muted">
@@ -269,7 +315,7 @@ export const DataTablesSection = ({ theme, set, isReadOnly }: ThemeSectionProps)
 					theme={theme}
 					set={set}
 				/>
-				<CheckRow
+				<CheckboxRow
 					label="Format first column like other columns"
 					checked={theme.dataTableFirstColumnLikeOthers}
 					onChange={(v) => set("dataTableFirstColumnLikeOthers", v)}
@@ -324,7 +370,7 @@ export const DataTablesSection = ({ theme, set, isReadOnly }: ThemeSectionProps)
 					theme={theme}
 					set={set}
 				/>
-				<CheckRow
+				<CheckboxRow
 					label="Striped rows"
 					checked={theme.dataTableStriped}
 					onChange={(v) => set("dataTableStriped", v)}

@@ -5,7 +5,12 @@ import { ptToPx } from "./fontUnit"
 import {
 	chartTitlePrefixOf,
 	DEFAULT_BASE_FONT_CONFIG,
+	DEFAULT_GRADIENT_BAR_BORDER_COLOR,
+	DEFAULT_GRADIENT_BAR_RADIUS,
+	DEFAULT_GRADIENT_BAR_THICKNESS,
+	DEFAULT_GRADIENT_BAR_TICK_COLOR,
 	DEFAULT_LABELS_CONFIG,
+	DEFAULT_LEGEND_CONFIG,
 	facetTitleColorOf,
 	hasChartTitle,
 	fontWeightDisplayName,
@@ -22,6 +27,7 @@ import {
 	legendSwatchSize,
 	migrateLabelsConfig,
 	resolveLegendHidden,
+	resolveGradientBarStyle,
 	resolveLegendTextFont,
 	resolveTitleFont,
 	resolveTitlePrefixFont,
@@ -698,6 +704,116 @@ describe("resolveLegendTextFont", () => {
 		expect(f.color).toBe("#111111")
 		expect(f.weight).toBe(400)
 		expect(f.size).toBe(ptToPx(12))
+	})
+	it("italic / underline: visual, then the theme's legend slot, then shared", () => {
+		const shared = {
+			...base,
+			text: { ...base.text, italic: true, underline: false },
+		}
+		// Shared only.
+		expect(resolveLegendTextFont(shared).italic).toBe(true)
+		expect(resolveLegendTextFont(shared).underline).toBe(false)
+		// The theme's legend slot beats the shared font.
+		const slot = {
+			...shared,
+			text: { ...shared.text, legendItalic: false, legendUnderline: true },
+		}
+		expect(resolveLegendTextFont(slot).italic).toBe(false)
+		expect(resolveLegendTextFont(slot).underline).toBe(true)
+		// The visual beats both.
+		const f = resolveLegendTextFont(slot, { italic: true, underline: false })
+		expect(f.italic).toBe(true)
+		expect(f.underline).toBe(false)
+		// Nothing set anywhere = upright, no underline.
+		expect(resolveLegendTextFont(base).italic).toBe(false)
+		expect(resolveLegendTextFont(base).underline).toBe(false)
+	})
+})
+
+/** The gradient bar follows the theme LIVE: a visual's `gradientBar*` is
+ *  null until edited, so each field chains visual → theme → built-in. */
+describe("resolveGradientBarStyle", () => {
+	const theme = {
+		legendGradientBarLength: 200,
+		legendGradientBarThickness: 20,
+		legendGradientBarRadius: 0,
+		legendGradientBarBorderWidth: 1,
+		legendGradientBarBorderColor: "#111111",
+		legendGradientBarTickLength: 4,
+		legendGradientBarTickThickness: 2,
+		legendGradientBarTickColor: "#222222",
+		legendGradientBarLabelAlign: "right" as const,
+	}
+
+	it("built-in defaults with no theme value and no visual value", () => {
+		expect(resolveGradientBarStyle(DEFAULT_LEGEND_CONFIG, {})).toEqual({
+			length: null,
+			thickness: DEFAULT_GRADIENT_BAR_THICKNESS,
+			radius: DEFAULT_GRADIENT_BAR_RADIUS,
+			borderWidth: 0,
+			borderColor: DEFAULT_GRADIENT_BAR_BORDER_COLOR,
+			tickLength: 0,
+			tickThickness: 1,
+			tickColor: DEFAULT_GRADIENT_BAR_TICK_COLOR,
+			labelAlign: null,
+		})
+	})
+
+	it("the theme fills every field the visual leaves null", () => {
+		expect(resolveGradientBarStyle(DEFAULT_LEGEND_CONFIG, theme)).toEqual({
+			length: 200,
+			thickness: 20,
+			radius: 0,
+			borderWidth: 1,
+			borderColor: "#111111",
+			tickLength: 4,
+			tickThickness: 2,
+			tickColor: "#222222",
+			labelAlign: "right",
+		})
+	})
+
+	it("the visual wins field by field", () => {
+		const s = resolveGradientBarStyle(
+			{
+				...DEFAULT_LEGEND_CONFIG,
+				gradientBarLength: 90,
+				gradientBarThickness: 6,
+				gradientBarTickColor: "#333333",
+				gradientBarLabelAlign: "center",
+			},
+			theme
+		)
+		expect(s.length).toBe(90)
+		expect(s.thickness).toBe(6)
+		expect(s.tickColor).toBe("#333333")
+		expect(s.labelAlign).toBe("center")
+		// Untouched fields still follow the theme.
+		expect(s.radius).toBe(0)
+		expect(s.borderColor).toBe("#111111")
+	})
+
+	it("length null is auto: falls to the theme, and a null theme length stays auto", () => {
+		expect(
+			resolveGradientBarStyle(DEFAULT_LEGEND_CONFIG, {
+				legendGradientBarLength: null,
+			}).length
+		).toBeNull()
+		expect(
+			resolveGradientBarStyle(
+				{ ...DEFAULT_LEGEND_CONFIG, gradientBarLength: null },
+				{ legendGradientBarLength: 150 }
+			).length
+		).toBe(150)
+	})
+
+	it("clamps negative thickness / border width from either source to 0", () => {
+		const s = resolveGradientBarStyle(
+			{ ...DEFAULT_LEGEND_CONFIG, gradientBarBorderWidth: -2 },
+			{ legendGradientBarThickness: -5 }
+		)
+		expect(s.thickness).toBe(0)
+		expect(s.borderWidth).toBe(0)
 	})
 })
 

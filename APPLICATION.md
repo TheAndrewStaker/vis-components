@@ -5020,15 +5020,18 @@ Theme settings:
   created or re-themed; the Data Labels panel's reset links restore
   these theme values. Themes saved before these fields existed fall
   back to the built-in defaults (11pt, weight 500, plain).
-- **Caption defaults** — font family, color, size, weight, and alignment
-  used by the Caption panel's text. Applied when a chart is created or
-  re-themed (the caption's text, position / size nudges, padding, and
-  box are user-driven and untouched); the Caption panel's reset links
-  compare against and restore these theme values. An unset family or
+- **Caption defaults** — font family, color, size, weight, alignment and
+  style (italic / underline) used by the Caption panel's text, plus a
+  **Caption box** section: background color + opacity, corner radius,
+  padding, and Border (on / off, color, thickness). Applied when a chart
+  is created or re-themed (the caption's text and position / size
+  nudges are user-driven and untouched); the Caption panel's reset
+  links and changed dots compare against and restore these theme
+  values. An unset family or
   color follows the Axis text font, so a dark theme's caption is
   readable without editing this section; unset size / weight /
-  alignment keep the built-in caption defaults (13pt, weight 400,
-  left).
+  alignment / box keep the built-in caption defaults (13pt, weight 400,
+  left, upright, 8px padding, transparent white box, no border).
 - **Annotations** — the initial style newly added annotations get:
   fill color + opacity, border color / thickness / opacity / dash for
   rectangles and circles; font family / size / color / weight,
@@ -5046,6 +5049,20 @@ Theme settings:
   saved before these fields existed fall back to the built-in seeds
   (yellow 20% fill, invisible border, slate line, 13pt centered
   text).
+- **Legend** — **Layout** (Position, Orientation) and **Box**
+  (background, Border on / off, border color, corner radius) are
+  copied into a chart when it's created or switched to the theme, like
+  the background always was; editing the theme doesn't move existing
+  charts. **Gradient legend**: the style (bar / discrete) is copied the
+  same way, but the bar's look — length (blank = auto), thickness,
+  corner radius, border thickness / color, tick length / thickness /
+  color, and break-label alignment — follows the theme LIVE: a chart's
+  bar fields stay empty until edited in its Legend panel, and an edit
+  that matches the theme clears back to empty. Unset theme fields keep
+  the built-in look (right, stacked, no border, #e2e8f0 / 6px corners,
+  12px bar with 2px corners, no ticks or border). The legend entry
+  labels' italic / underline sit with the other Legend text fonts
+  under Text, falling back to the axis text style.
 - **Legend swatches** — the glyph (rectangle / line segment / a shape
   from the palette), size, outline width, and outline color that the
   discrete swatches of a color / outline-color / saturation /
@@ -5066,8 +5083,21 @@ Theme settings:
   group (§10) shows these values and stores an override only when a
   visual deviates. Themes saved before these fields existed fall back
   to the historical look (240px, 6px corners, Auto colors, opaque, a
-  12px black shadow at 15%).
-- **Data tables** — the look of the optional data table under the
+  12px black shadow at 15%). A **Hover** section sets what a new
+  chart's Tooltips and hover settings start as — Show tooltips, Show
+  tooltips only at points, Show hover, Hover over legend to highlight,
+  Recolor hovered elements (+ color), Outline hovered elements (+ color,
+  width), Fade other elements (+ amount) — copied in when a chart is
+  created or switched to the theme (unlike the box, editing it doesn't
+  restyle existing charts). The sidebar's reset links and changed dots
+  compare against these. Unset keeps the built-ins (tooltips + hover +
+  legend highlight on, fade 85%, recolor #FFD400 and a 2px #111827
+  outline both off).
+- **Data tables** — a **Defaults** section first: Show a data table,
+  Placement, Max rows (empty = All) and Download link, copied into a
+  chart when it's created or switched to the theme (unset = off, below
+  the chart, 10 rows, download on); the sidebar's changed dots compare
+  against them. Then the look of the optional data table under the
   chart (§10b), in the sidebar's order and wording: Title (family,
   size, weight — semibold by default — color, alignment), Header
   (family, size, weight — semibold by default — text
@@ -5103,8 +5133,17 @@ Theme settings:
   leader lines" in the Data Labels panel, §6). Seeded on chart
   creation and flowed through on a theme switch like the data-label
   font knobs. Themes saved before these fields existed fall back to
-  the built-in defaults (#999999, 1px).
-- **Exporting** (last section of the sheet) — default **canvas
+  the built-in defaults (#999999, 1px). A **No-data regions** section
+  sets the No-data fill (regions with no matching data, and the world
+  backdrop) and the no-data Pattern ink, seeded and re-themed the same
+  way; a map quick-start pick keeps the chart's current no-data colors.
+  Unset = stone-200 / stone-400; System (Dark) uses stone-700 /
+  stone-500 so missing regions don't glare on its navy background.
+- **Exporting** (last section of the sheet) — a **Units** select (px /
+  in) governing both sections below; a **Canvas size** (Width × Height)
+  a chart's canvas starts at the first time its "Set canvas size" is
+  turned on (charts still start unsized; unset = 1000 × 600; never
+  re-applied to a canvas that already has a size); and default **canvas
   margins** for visuals drawn on a fixed canvas (§13 "Canvas size"):
   Top / Right / Bottom / Left, entered in px or inches (a Units
   select; stored in px at 96 px/inch). A margin is the white space
@@ -5134,10 +5173,11 @@ A small catch-all panel:
   it from the new theme — replacing a custom pick — like the legend
   background.
 - **Canvas size** — a "Set canvas size" checkbox that, when on, draws
-  the chart inside a fixed Width × Height rectangle (default 1000 × 600,
-  px / in / cm display units at 96 px/inch; stored in px) instead of
-  filling the viewport. Width and Height each show a reset link back to
-  that default when changed. The editor shows the rectangle as a white canvas
+  the chart inside a fixed Width × Height rectangle (starting at the
+  theme's Exporting ▸ Canvas size, else 1000 × 600; px / in / cm display
+  units at 96 px/inch; stored in px) instead of filling the viewport.
+  Width and Height each show a reset link back to that starting size
+  when changed. The editor shows the rectangle as a white canvas
   centered in a gray viewport; exports default to its dimensions. Scroll
   mode and the aspect ratio operate within the rectangle. Published
   embeds ignore the size (the iframe is its own canvas).

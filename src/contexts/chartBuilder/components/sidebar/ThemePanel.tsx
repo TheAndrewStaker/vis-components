@@ -6,15 +6,21 @@ import {
 	rethemeCaption,
 	rethemeChannelConfigs,
 	rethemeDataLabels,
+	rethemeDataTable,
 	rethemeLabels,
 	rethemeLegend,
+	rethemeMap,
+	rethemeTooltip,
 } from "../../lib/themeSwitch"
 import {
 	currentCaptionConfigAtom,
 	currentChannelConfigsAtom,
 	currentDataLabelsConfigAtom,
+	currentDataTableConfigAtom,
 	currentLabelsAtom,
 	currentLegendConfigAtom,
+	currentMapConfigAtom,
+	currentTooltipConfigAtom,
 	currentThemeIdAtom,
 	themeAtom,
 	themesAtom,
@@ -59,6 +65,9 @@ export const ThemePanel = () => {
 				set(currentLegendConfigAtom, (prev) => rethemeLegend(prev, theme))
 				set(currentDataLabelsConfigAtom, (prev) => rethemeDataLabels(prev, theme))
 				set(currentCaptionConfigAtom, (prev) => rethemeCaption(prev, theme))
+				set(currentTooltipConfigAtom, (prev) => rethemeTooltip(prev, theme))
+				set(currentDataTableConfigAtom, (prev) => rethemeDataTable(prev, theme))
+				set(currentMapConfigAtom, (prev) => rethemeMap(prev, theme))
 				set(currentThemeIdAtom, themeId)
 			},
 			[themes]

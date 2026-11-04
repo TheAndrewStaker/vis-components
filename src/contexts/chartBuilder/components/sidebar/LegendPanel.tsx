@@ -24,13 +24,11 @@ import { DEFAULT_FILL } from "../../lib/channelConfig"
 import { histogramMeasureColorDomain } from "../../lib/histogramMeasureColor"
 import { resolveHistogramMeasure } from "../../lib/histogramMeasure"
 import {
-	DEFAULT_GRADIENT_BAR_BORDER_COLOR,
-	DEFAULT_GRADIENT_BAR_RADIUS,
-	DEFAULT_GRADIENT_BAR_THICKNESS,
-	DEFAULT_GRADIENT_BAR_TICK_COLOR,
 	DEFAULT_LEGEND_CHANNEL_CONFIG,
 	DEFAULT_LEGEND_CONFIG,
 	LEGEND_CHANNELS,
+	LEGEND_ORIENTATION_OPTIONS,
+	LEGEND_POSITION_OPTIONS,
 	LEGEND_FRIENDLY_NAME,
 	QUANTITATIVE_LEGEND_CHANNELS,
 	legendSwatchOutlineColor,
@@ -39,6 +37,7 @@ import {
 	resolveLegendSwatchShape,
 	resolveLegendSwatchSize,
 	resolveLegendHidden,
+	resolveGradientBarStyle,
 	type EncodingLegendChannel,
 	type FontConfig,
 	type LabelAlignment,
@@ -46,8 +45,6 @@ import {
 	type LegendChannelConfig,
 	type LegendSwatchShape,
 	type LegendConfig,
-	type LegendOrientation,
-	type LegendPosition,
 	type QuantitativeLegendChannel,
 	type SwatchShapeChannel,
 } from "../../lib/labelsConfig"
@@ -62,6 +59,7 @@ import { isHierarchyModeId, packedSourceOf } from "../../lib/packedMeasure"
 import { DEFAULT_PATTERN_INK } from "../../lib/patterns"
 import {
 	explainLegendCustomization,
+	legendConfigFromTheme,
 	type LegendDotGroup,
 } from "../../lib/themeConfig"
 import {
@@ -105,22 +103,6 @@ import { Select } from "../../../../components/ui/Select"
  *  color — one definition so the aux and shape pickers can't drift. */
 const DEFAULT_SWATCH_FILL = "#4f8eda"
 const DEFAULT_SWATCH_STROKE = "#ffffff"
-
-const POSITION_OPTIONS = [
-	{ value: "right", label: "Right" },
-	{ value: "left", label: "Left" },
-	{ value: "top", label: "Top" },
-	{ value: "bottom", label: "Bottom" },
-	{ value: "inside", label: "Custom coordinates" },
-] as const satisfies ReadonlyArray<{ value: LegendPosition; label: string }>
-
-const ORIENTATION_OPTIONS = [
-	{ value: "vertical", label: "Stacked" },
-	{ value: "horizontal", label: "Horizontal" },
-] as const satisfies ReadonlyArray<{
-	value: LegendOrientation
-	label: string
-}>
 
 type BgKind = "transparent" | "themeDefault" | "custom"
 
@@ -270,6 +252,18 @@ export const LegendPanel = () => {
 	const configs = useAtomValue(currentChannelConfigsAtom)
 	const labels = useAtomValue(currentLabelsAtom)
 	const merged: LegendConfig = { ...DEFAULT_LEGEND_CONFIG, ...cfg }
+	// The config a fresh chart on this theme is seeded with — the baseline
+	// the reset links below return to (same baseline as the dots).
+	const themeLegend = legendConfigFromTheme(theme)
+	// Gradient bar: the visual's entries are null until edited and follow
+	// the theme live, so `themeBar` (theme → built-in) is what an unset
+	// field shows and `bar` is what renders.
+	const themeBar = resolveGradientBarStyle(DEFAULT_LEGEND_CONFIG, theme)
+	const bar = resolveGradientBarStyle(merged, theme)
+	// Sparse against the theme: picking the theme's own value drops the
+	// entry, so the dot clears and a later theme edit flows through.
+	const barValue = <T,>(next: T, themeValue: T): T | null =>
+		next === themeValue ? null : next
 	// Per-subsection "changed" dots: a group lights when a setting it owns
 	// differs from the theme baseline. Compared against the raw `cfg` (not
 	// `merged`) so an absent field falls back to the default without dotting.
@@ -395,7 +389,7 @@ export const LegendPanel = () => {
 		currentRenderedGradientBarLengthAtom,
 	)
 	const resolveGradientBarLengthStart = (): number =>
-		merged.gradientBarLength ??
+		bar.length ??
 		(autoGradientBarLength && autoGradientBarLength > 0
 			? autoGradientBarLength
 			: 128)
@@ -811,7 +805,13 @@ export const LegendPanel = () => {
 		// Entry labels render with no weight attribute when nothing sets one,
 		// so the browser's 400 is what the user actually sees inherited.
 		weight: baseText.legendWeight ?? baseText.weight ?? 400,
+		italic: baseText.legendItalic ?? baseText.italic ?? false,
+		underline: baseText.legendUnderline ?? baseText.underline ?? false,
 	}
+	// The bar's break labels with no visual or theme alignment: centered
+	// under a horizontal bar, left beside a vertical one.
+	const breakLabelAlignAuto: LabelAlignment =
+		merged.orientation === "horizontal" ? "center" : "left"
 	// Left IS the historical layout (labels hug their swatches), so picking it
 	// clears the setting rather than storing a redundant value — keeps the
 	// config sparse and the subsection's dot honest.
@@ -900,7 +900,7 @@ export const LegendPanel = () => {
 							label="Position"
 							labelClassName={LABEL_COL}
 							value={merged.position}
-							options={POSITION_OPTIONS}
+							options={LEGEND_POSITION_OPTIONS}
 							onChange={(position) => update({ position })}
 							selectClassName="flex-1"
 						/>
@@ -1027,7 +1027,7 @@ export const LegendPanel = () => {
 							<Segmented
 								ariaLabel="Orientation"
 								value={merged.orientation}
-								segments={ORIENTATION_OPTIONS.map((o) => ({
+								segments={LEGEND_ORIENTATION_OPTIONS.map((o) => ({
 									key: o.value,
 									label: o.label,
 								}))}
@@ -1149,12 +1149,10 @@ export const LegendPanel = () => {
 										inputClassName="w-16"
 										suffix="px"
 									/>
-									{merged.borderRadius !== DEFAULT_LEGEND_CONFIG.borderRadius && (
+									{merged.borderRadius !== themeLegend.borderRadius && (
 										<ResetLink
 											onClick={() =>
-												update({
-													borderRadius: DEFAULT_LEGEND_CONFIG.borderRadius,
-												})
+												update({ borderRadius: themeLegend.borderRadius })
 											}
 										/>
 									)}
@@ -1166,10 +1164,10 @@ export const LegendPanel = () => {
 										value={merged.borderColor}
 										onChange={(borderColor) => update({ borderColor })}
 									/>
-									{merged.borderColor !== DEFAULT_LEGEND_CONFIG.borderColor && (
+									{merged.borderColor !== themeLegend.borderColor && (
 										<ResetLink
 											onClick={() =>
-												update({ borderColor: DEFAULT_LEGEND_CONFIG.borderColor })
+												update({ borderColor: themeLegend.borderColor })
 											}
 										/>
 									)}
@@ -1210,12 +1208,14 @@ export const LegendPanel = () => {
 								<div className="flex items-center gap-2 text-sm">
 									<span className={LABEL_COL}>Align break labels</span>
 									<AlignmentControl
-										value={
-											merged.gradientBarLabelAlign ??
-											(merged.orientation === "horizontal" ? "center" : "left")
-										}
+										value={bar.labelAlign ?? breakLabelAlignAuto}
 										onChange={(gradientBarLabelAlign) =>
-											update({ gradientBarLabelAlign })
+											update({
+												gradientBarLabelAlign: barValue(
+													gradientBarLabelAlign,
+													themeBar.labelAlign ?? breakLabelAlignAuto
+												),
+											})
 										}
 									/>
 								</div>
@@ -1229,6 +1229,8 @@ export const LegendPanel = () => {
 						baseColor={inheritedTextFont.color}
 						baseSize={inheritedTextFont.size}
 						baseWeight={inheritedTextFont.weight}
+						baseItalic={inheritedTextFont.italic}
+						baseUnderline={inheritedTextFont.underline}
 					/>
 					{/* The legend section TITLES live in Titles → Legend titles;
 					 *  jump there rather than explain it in prose. */}
@@ -1325,13 +1327,17 @@ export const LegendPanel = () => {
 									step={1}
 									value={merged.gradientBarLength ?? null}
 									placeholder={
-										autoGradientBarLength != null
-											? String(autoGradientBarLength)
-											: "Auto"
+										themeBar.length != null
+											? String(themeBar.length)
+											: autoGradientBarLength != null
+												? String(autoGradientBarLength)
+												: "Auto"
 									}
 									stepBase={resolveGradientBarLengthStart()}
-									onChange={(gradientBarLength) =>
-										update({ gradientBarLength: Math.max(0, gradientBarLength) })
+									onChange={(n) =>
+										update({
+											gradientBarLength: barValue(Math.max(0, n), themeBar.length),
+										})
 									}
 									onClear={() => update({ gradientBarLength: null })}
 									inputClassName="w-16"
@@ -1345,35 +1351,37 @@ export const LegendPanel = () => {
 								<NumberInput
 									label="Bar thickness"
 									labelClassName={LABEL_COL}
-									value={merged.gradientBarThickness ?? DEFAULT_GRADIENT_BAR_THICKNESS}
+									value={bar.thickness}
 									min={0}
 									step={1}
-									onChange={(gradientBarThickness) =>
-										update({ gradientBarThickness: Math.max(0, gradientBarThickness) })
+									onChange={(n) =>
+										update({
+											gradientBarThickness: barValue(Math.max(0, n), themeBar.thickness),
+										})
 									}
 									inputClassName="w-16"
 									suffix="px"
 								/>
-								{merged.gradientBarThickness != null &&
-									merged.gradientBarThickness !== DEFAULT_GRADIENT_BAR_THICKNESS && (
-										<ResetLink onClick={() => update({ gradientBarThickness: null })} />
-									)}
+								{merged.gradientBarThickness != null && (
+									<ResetLink onClick={() => update({ gradientBarThickness: null })} />
+								)}
 							</div>
 							<div className="flex items-center gap-2">
 								<NumberInput
 									label="Corner radius"
 									labelClassName={LABEL_COL}
-									value={merged.gradientBarRadius ?? DEFAULT_GRADIENT_BAR_RADIUS}
+									value={bar.radius}
 									min={0}
 									step={1}
-									onChange={(gradientBarRadius) => update({ gradientBarRadius })}
+									onChange={(n) =>
+										update({ gradientBarRadius: barValue(n, themeBar.radius) })
+									}
 									inputClassName="w-16"
 									suffix="px"
 								/>
-								{merged.gradientBarRadius != null &&
-									merged.gradientBarRadius !== DEFAULT_GRADIENT_BAR_RADIUS && (
-										<ResetLink onClick={() => update({ gradientBarRadius: null })} />
-									)}
+								{merged.gradientBarRadius != null && (
+									<ResetLink onClick={() => update({ gradientBarRadius: null })} />
+								)}
 							</div>
 							{/* Border thickness is the switch ([[legend-swatch-outline]]
 							 *  convention): 0 (the default) draws no border and hides
@@ -1384,30 +1392,34 @@ export const LegendPanel = () => {
 									<NumberInput
 										label="Border thickness"
 										labelClassName={LABEL_COL}
-										value={merged.gradientBarBorderWidth ?? 0}
+										value={bar.borderWidth}
 										min={0}
 										step={0.5}
-										onChange={(gradientBarBorderWidth) =>
-											update({ gradientBarBorderWidth: Math.max(0, gradientBarBorderWidth) })
+										onChange={(n) =>
+											update({
+												gradientBarBorderWidth: barValue(
+													Math.max(0, n),
+													themeBar.borderWidth
+												),
+											})
 										}
 										inputClassName="w-16"
 										suffix="px"
 									/>
-									{(merged.gradientBarBorderWidth ?? 0) !== 0 && (
+									{merged.gradientBarBorderWidth != null && (
 										<ResetLink onClick={() => update({ gradientBarBorderWidth: null })} />
 									)}
 								</div>
-								{(merged.gradientBarBorderWidth ?? 0) > 0 && (
+								{bar.borderWidth > 0 && (
 									<div className="flex flex-wrap items-center gap-2">
 										<ColorInput
 											label="Border color"
 											labelClassName={LABEL_COL}
-											value={
-												merged.gradientBarBorderColor ??
-												DEFAULT_GRADIENT_BAR_BORDER_COLOR
-											}
-											onChange={(gradientBarBorderColor) =>
-												update({ gradientBarBorderColor })
+											value={bar.borderColor}
+											onChange={(c) =>
+												update({
+													gradientBarBorderColor: barValue(c, themeBar.borderColor),
+												})
 											}
 											showHexInput
 										/>
@@ -1424,35 +1436,37 @@ export const LegendPanel = () => {
 									<NumberInput
 										label="Tick length"
 										labelClassName={LABEL_COL}
-										value={merged.gradientBarTickLength ?? 0}
+										value={bar.tickLength}
 										min={0}
 										step={1}
-										onChange={(gradientBarTickLength) =>
-											update({ gradientBarTickLength })
+										onChange={(n) =>
+											update({ gradientBarTickLength: barValue(n, themeBar.tickLength) })
 										}
 										inputClassName="w-16"
 										suffix="px"
 									/>
-									{(merged.gradientBarTickLength ?? 0) !== 0 && (
+									{merged.gradientBarTickLength != null && (
 										<ResetLink onClick={() => update({ gradientBarTickLength: null })} />
 									)}
 								</div>
-								{(merged.gradientBarTickLength ?? 0) > 0 && (
+								{bar.tickLength > 0 && (
 									<>
 										<div className="flex items-center gap-2">
 											<NumberInput
 												label="Tick thickness"
 												labelClassName={LABEL_COL}
-												value={merged.gradientBarTickThickness ?? 1}
+												value={bar.tickThickness}
 												min={0}
 												step={0.5}
-												onChange={(gradientBarTickThickness) =>
-													update({ gradientBarTickThickness })
+												onChange={(n) =>
+													update({
+														gradientBarTickThickness: barValue(n, themeBar.tickThickness),
+													})
 												}
 												inputClassName="w-16"
 												suffix="px"
 											/>
-											{(merged.gradientBarTickThickness ?? 1) !== 1 && (
+											{merged.gradientBarTickThickness != null && (
 												<ResetLink
 													onClick={() => update({ gradientBarTickThickness: null })}
 												/>
@@ -1462,12 +1476,11 @@ export const LegendPanel = () => {
 											<ColorInput
 												label="Tick color"
 												labelClassName={LABEL_COL}
-												value={
-													merged.gradientBarTickColor ??
-													DEFAULT_GRADIENT_BAR_TICK_COLOR
-												}
-												onChange={(gradientBarTickColor) =>
-													update({ gradientBarTickColor })
+												value={bar.tickColor}
+												onChange={(c) =>
+													update({
+														gradientBarTickColor: barValue(c, themeBar.tickColor),
+													})
 												}
 												showHexInput
 											/>

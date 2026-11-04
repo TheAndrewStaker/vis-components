@@ -13,6 +13,8 @@ import {
 import { buildDataset } from "../../../../testSupport/fixtures"
 import { emptyEncodings } from "../../lib/types"
 import { LIGHT_THEME_BASE } from "../../lib/systemThemes"
+import { dataTableConfigFromTheme } from "../../lib/themeConfig"
+import type { Theme } from "../../lib/types"
 import {
 	currentDataTableConfigAtom,
 	currentDatasetIdAtom,
@@ -370,5 +372,53 @@ describe("DataTablePanel", () => {
 			hiddenPlottedColumns: [computed],
 		})
 		expect((utils.getByLabelText(computed!) as HTMLInputElement).checked).toBe(false)
+	})
+})
+
+describe("DataTablePanel — theme-seeded defaults", () => {
+	const THEMED: Theme = {
+		...LIGHT_THEME_BASE,
+		dataTableEnabled: true,
+		dataTablePlacement: "tabs",
+		dataTableMaxRows: null,
+		dataTableShowDownload: false,
+	}
+	const mountSeeded = () => {
+		installInMemoryLocalStorage()
+		const captured: { store?: TestStore } = {}
+		const utils = render(
+			<TestProvider
+				initializeState={(s) => {
+					captured.store = s
+					s.set(themeAtom, THEMED)
+					s.set(currentDataTableConfigAtom, dataTableConfigFromTheme(THEMED))
+				}}
+			>
+				<DataTablePanel />
+			</TestProvider>
+		)
+		return { ...utils, store: captured.store! }
+	}
+	const dot = (utils: ReturnType<typeof render>, title: string) =>
+		utils.getByRole("button", { name: title }).querySelector("span.rounded-full")
+
+	it("a fresh chart on the theme starts there with no changed dot", () => {
+		const utils = mountSeeded()
+		expect((utils.getByLabelText("Show a data table") as HTMLInputElement).checked).toBe(true)
+		expect((utils.getByLabelText("Placement") as HTMLSelectElement).value).toBe("tabs")
+		// null = All: the box is empty, showing the "All" placeholder.
+		expect((utils.getByLabelText("Max rows") as HTMLInputElement).value).toBe("")
+		expect((utils.getByLabelText("Download link") as HTMLInputElement).checked).toBe(false)
+		expect(dot(utils, "Table properties")).toBeNull()
+	})
+
+	it("deviating from the theme lights the dot; returning to it clears it", () => {
+		const utils = mountSeeded()
+		fireEvent.change(utils.getByLabelText("Placement"), { target: { value: "below" } })
+		expect(dot(utils, "Table properties")).not.toBeNull()
+		fireEvent.change(utils.getByLabelText("Placement"), { target: { value: "tabs" } })
+		expect(dot(utils, "Table properties")).toBeNull()
+		fireEvent.change(utils.getByLabelText("Max rows"), { target: { value: "10" } })
+		expect(dot(utils, "Table properties")).not.toBeNull()
 	})
 })

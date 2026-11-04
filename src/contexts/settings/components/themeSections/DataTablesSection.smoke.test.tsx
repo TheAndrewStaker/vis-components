@@ -30,7 +30,14 @@ describe("DataTablesSection — data table defaults", () => {
 	it("follows the sidebar's order and wording", () => {
 		mount()
 		const headings = screen.getAllByRole("heading").map((h) => h.textContent)
-		expect(headings).toEqual(["Title", "Header", "Table text", "Rows", "Caption"])
+		expect(headings).toEqual([
+			"Defaults",
+			"Title",
+			"Header",
+			"Table text",
+			"Rows",
+			"Caption",
+		])
 		// Family / Size / Weight for title, header, table text, first column, caption.
 		for (const label of ["Family", "Size", "Weight"])
 			expect(screen.getAllByLabelText(label)).toHaveLength(5)
@@ -95,5 +102,42 @@ describe("DataTablesSection — data table defaults", () => {
 		const firstWeight = screen.getAllByLabelText("Weight")[3]!
 		fireEvent.change(firstWeight, { target: { value: "700" } })
 		expect(set).toHaveBeenCalledWith("dataTableFirstColumnFontWeight", 700)
+	})
+})
+
+describe("DataTablesSection — seeded defaults", () => {
+	it("shows the built-in behavior while the theme sets none", () => {
+		mount()
+		expect((screen.getByLabelText("Show a data table") as HTMLInputElement).checked).toBe(false)
+		expect((screen.getByLabelText("Placement") as HTMLSelectElement).value).toBe("below")
+		expect((screen.getByLabelText("Max rows") as HTMLInputElement).value).toBe("10")
+		expect((screen.getByLabelText("Download link") as HTMLInputElement).checked).toBe(true)
+		const options = [...(screen.getByLabelText("Placement") as HTMLSelectElement).options]
+		expect(options.map((o) => o.textContent)).toEqual([
+			"Below the chart",
+			"Behind a button",
+			"In a tab",
+		])
+	})
+
+	it("each control writes its key; emptying Max rows stores All (null)", () => {
+		const set = mount()
+		fireEvent.click(screen.getByLabelText("Show a data table"))
+		expect(set).toHaveBeenCalledWith("dataTableEnabled", true)
+		fireEvent.change(screen.getByLabelText("Placement"), { target: { value: "tabs" } })
+		expect(set).toHaveBeenCalledWith("dataTablePlacement", "tabs")
+		fireEvent.change(screen.getByLabelText("Max rows"), { target: { value: "25" } })
+		expect(set).toHaveBeenCalledWith("dataTableMaxRows", 25)
+		fireEvent.change(screen.getByLabelText("Max rows"), { target: { value: "" } })
+		expect(set).toHaveBeenCalledWith("dataTableMaxRows", null)
+		fireEvent.click(screen.getByLabelText("Download link"))
+		expect(set).toHaveBeenCalledWith("dataTableShowDownload", false)
+	})
+
+	it("a theme's All (null) shows an empty box with the All placeholder", () => {
+		mount({ ...THEME, dataTableMaxRows: null })
+		const box = screen.getByLabelText("Max rows") as HTMLInputElement
+		expect(box.value).toBe("")
+		expect(box.placeholder).toBe("All")
 	})
 })

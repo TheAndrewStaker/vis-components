@@ -10,7 +10,6 @@ import { ResetLink } from "../../../../components/ui/ResetLink"
 import { SelectInput } from "../../../../components/ui/SelectInput"
 import { Checkbox } from "../../../../components/ui/Checkbox"
 import {
-	DEFAULT_DATA_TABLE_CONFIG,
 	defaultDataTableTitle,
 	migrateDataTableConfig,
 	columnAlignOf,
@@ -26,6 +25,7 @@ import {
 	columnAlignPatch,
 } from "../../lib/dataTableConfig"
 import { effectiveType } from "../../lib/fieldType"
+import { dataTableConfigFromTheme } from "../../lib/themeConfig"
 import { dataTableColumns } from "../../lib/dataTable"
 import { plotsAggregates, plottedRows } from "../../lib/plottedData"
 import {
@@ -330,12 +330,16 @@ export const DataTablePanel = () => {
 		},
 		theme
 	)
+	/** What a fresh chart on this theme starts with — the built-in defaults
+	 *  plus the theme's seeded on / placement / max rows / download
+	 *  (Settings → Themes → Data tables → Defaults). The changed-dot
+	 *  baseline. */
+	const seed = dataTableConfigFromTheme(theme)
 	const changed = (...keys: (keyof DataTableConfig)[]) =>
 		keys.some((k) =>
 			k === "columnAlign"
 				? Object.keys(cfg.columnAlign).length > 0
-
-				: cfg[k] !== DEFAULT_DATA_TABLE_CONFIG[k]
+				: cfg[k] !== seed[k]
 		)
 	/** The reset handler for a theme-backed key, or null while it follows
 	 *  the theme (no link then). */

@@ -51,11 +51,18 @@ const labelsWithLegendText = (): LabelsConfig => ({
 
 afterEach(cleanup)
 
-const mount = (legend: Partial<LegendConfig> = {}) => {
+const mount = (
+	legend: Partial<LegendConfig> = {},
+	text: Partial<LabelsConfig["baseFont"]["text"]> = {}
+) => {
 	const store = installInMemoryLocalStorage()
 	const encodings = { ...emptyEncodings(), hue: { field: "Tier" } }
 	const legendCfg: LegendConfig = { ...DEFAULT_LEGEND_CONFIG, ...legend }
-	const labels = labelsWithLegendText()
+	const base = labelsWithLegendText()
+	const labels: LabelsConfig = {
+		...base,
+		baseFont: { ...base.baseFont, text: { ...base.baseFont.text, ...text } },
+	}
 	/* eslint-disable @vc/use-wrapped-json-functions */
 	store.set("vis-components:datasets", JSON.stringify({ [DATASET_ID]: buildDataset() }))
 	store.set("vis-components:currentDatasetId", JSON.stringify(DATASET_ID))
@@ -161,5 +168,17 @@ describe("LegendPanel — Legend text", () => {
 		// Left IS the historical layout, so it clears rather than storing.
 		fireEvent.click(utils.getByLabelText("Align left"))
 		expect(utils.cfg()?.textAlign).toBeNull()
+	})
+
+	it("Style toggles show the theme's legend italic / underline, and a click overrides it", () => {
+		const utils = mount({}, { legendItalic: true, underline: true, legendUnderline: false })
+		const italic = utils.getByLabelText("Italic")
+		const underline = utils.getByLabelText("Underline")
+		expect(italic.getAttribute("aria-pressed")).toBe("true")
+		// The legend slot's `false` beats the shared text font's underline.
+		expect(underline.getAttribute("aria-pressed")).toBe("false")
+		// Turning the inherited italic off stores the override.
+		fireEvent.click(italic)
+		expect(utils.cfg()?.textFont).toEqual({ italic: false })
 	})
 })

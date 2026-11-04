@@ -4,6 +4,7 @@ import { useFontFamilyOptions } from "../../../chartBuilder/store/useFontOptions
 
 import {
 	AlignmentRow,
+	CheckboxRow,
 	ColorInput,
 	FontFamilyRow,
 	FontWeightRow,
@@ -304,6 +305,15 @@ export const TextSection = ({ theme, set, isReadOnly }: ThemeSectionProps) => {
 				onChange={(w) => set("legendTextFontWeight", w)}
 				onDefault={() => set("legendTextFontWeight", undefined)}
 			/>
+			{/* Unset follows the Axis text style, so that's what shows. */}
+			<StyleToggleRow
+				italic={theme.legendTextFontItalic ?? theme.textFontItalic ?? false}
+				underline={
+					theme.legendTextFontUnderline ?? theme.textFontUnderline ?? false
+				}
+				onItalic={(v) => set("legendTextFontItalic", v)}
+				onUnderline={(v) => set("legendTextFontUnderline", v)}
+			/>
 		</Section>
 
 		{/* Data label defaults */}
@@ -362,7 +372,7 @@ export const TextSection = ({ theme, set, isReadOnly }: ThemeSectionProps) => {
 			<p className="text-sm vc-muted">
 				Initial text style for Caption, applied when a chart
 				is created or re-themed. Family and color fall back to the
-				Axis text font.
+				Axis text font. The box around it is under Caption box.
 			</p>
 			<FontFamilyRow
 				label="Family"
@@ -396,6 +406,82 @@ export const TextSection = ({ theme, set, isReadOnly }: ThemeSectionProps) => {
 				value={theme.captionAlignment ?? DEFAULT_CAPTION_CONFIG.align}
 				onChange={(a) => set("captionAlignment", a)}
 			/>
+			<StyleToggleRow
+				italic={theme.captionItalic ?? false}
+				underline={theme.captionUnderline ?? false}
+				onItalic={(v) => set("captionItalic", v)}
+				onUnderline={(v) => set("captionUnderline", v)}
+			/>
+		</Section>
+
+		{/* Caption box defaults — same order as the Caption panel's Box. */}
+		<Section title="Caption box">
+			<p className="text-sm vc-muted">
+				Initial background and border for Caption, applied when a chart
+				is created or re-themed. Opacity 0 leaves the box transparent.
+			</p>
+			<ColorInput
+				label="Background color"
+				value={
+					theme.captionBackgroundColor ??
+					DEFAULT_CAPTION_CONFIG.backgroundColor
+				}
+				onChange={(v) => set("captionBackgroundColor", v)}
+			/>
+			<NumberInput
+				label="Background opacity"
+				value={
+					theme.captionBackgroundOpacity ??
+					DEFAULT_CAPTION_CONFIG.backgroundOpacity
+				}
+				onChange={(v) => set("captionBackgroundOpacity", v)}
+				min={0}
+				max={1}
+				step={0.05}
+			/>
+			<NumberInput
+				label="Corner radius"
+				value={theme.captionBorderRadius ?? DEFAULT_CAPTION_CONFIG.borderRadius}
+				onChange={(v) => set("captionBorderRadius", v)}
+				min={0}
+				max={60}
+				step={1}
+				suffix="px"
+			/>
+			<NumberInput
+				label="Padding"
+				value={theme.captionPadding ?? DEFAULT_CAPTION_CONFIG.padding}
+				onChange={(v) => set("captionPadding", v)}
+				min={0}
+				max={80}
+				step={1}
+				suffix="px"
+			/>
+			<CheckboxRow
+				label="Border"
+				checked={
+					theme.captionBorderEnabled ?? DEFAULT_CAPTION_CONFIG.borderEnabled
+				}
+				onChange={(v) => set("captionBorderEnabled", v)}
+			/>
+			{(theme.captionBorderEnabled ?? DEFAULT_CAPTION_CONFIG.borderEnabled) && (
+				<>
+					<ColorInput
+						label="Border color"
+						value={theme.captionBorderColor ?? DEFAULT_CAPTION_CONFIG.borderColor}
+						onChange={(v) => set("captionBorderColor", v)}
+					/>
+					<NumberInput
+						label="Border thickness"
+						value={theme.captionBorderWidth ?? DEFAULT_CAPTION_CONFIG.borderWidth}
+						onChange={(v) => set("captionBorderWidth", v)}
+						min={0}
+						max={20}
+						step={0.5}
+						suffix="px"
+					/>
+				</>
+			)}
 		</Section>
 	</SectionGroup>
 	)

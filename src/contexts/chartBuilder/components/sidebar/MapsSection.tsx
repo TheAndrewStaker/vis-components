@@ -16,7 +16,6 @@ import {
 	focusRegionPatch,
 } from "../../lib/geo/focusRegion"
 import {
-	DEFAULT_MAP_CONFIG,
 	FOCUS_REGIONS,
 	GEOGRAPHY_LEVELS,
 	PROJECTIONS,
@@ -31,7 +30,9 @@ import {
 import { PatternTile } from "../../lib/patternDefs"
 import { PATTERN_PALETTE } from "../../lib/patterns"
 import { swatchChipClass } from "./channelOptions/glyphShared"
+import { mapConfigFromTheme } from "../../lib/themeConfig"
 import { currentMapConfigAtom } from "../../store/atoms"
+import { useCurrentTheme } from "../../store/useCurrentTheme"
 import { useChartModeDef } from "../../store/useChartModeDef"
 import { useAutoFitViewport } from "../../store/useAutoFitViewport"
 import { useEffectiveGeographyLevel } from "../../store/useEffectiveGeographyLevel"
@@ -190,6 +191,9 @@ const MatchStatus = () => {
  */
 export const MapsSection = () => {
 	const [mapConfig, setMapConfig] = useAtom(currentMapConfigAtom)
+	// No-data colors reset to the THEME's defaults (Settings → Themes → Maps),
+	// the same values a new visual and a theme switch install.
+	const themeMapDefaults = mapConfigFromTheme(useCurrentTheme())
 
 	// Resolve the active mode the same way the render path does, so each
 	// geographic toggle can be contextual to the kind of map in play. The
@@ -395,12 +399,13 @@ export const MapsSection = () => {
 									className="contents"
 								/>
 								{mapConfig.noDataFill !==
-									DEFAULT_MAP_CONFIG.noDataFill && (
+									themeMapDefaults.noDataFill && (
 									<ResetLink
+										ariaLabel="Reset no-data fill"
 										onClick={() =>
 											update({
 												noDataFill:
-													DEFAULT_MAP_CONFIG.noDataFill,
+													themeMapDefaults.noDataFill,
 											})
 										}
 									/>
@@ -456,12 +461,13 @@ export const MapsSection = () => {
 									className="contents"
 								/>
 								{mapConfig.noDataPatternInk !==
-									DEFAULT_MAP_CONFIG.noDataPatternInk && (
+									themeMapDefaults.noDataPatternInk && (
 									<ResetLink
+										ariaLabel="Reset pattern ink"
 										onClick={() =>
 											update({
 												noDataPatternInk:
-													DEFAULT_MAP_CONFIG.noDataPatternInk,
+													themeMapDefaults.noDataPatternInk,
 											})
 										}
 									/>

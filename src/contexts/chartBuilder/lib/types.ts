@@ -332,7 +332,11 @@ export const emptyDataLabelsEncodings = (): DataLabelsEncodings => ({
 
 import type { AnnotationsConfig } from "./annotationsConfig"
 import type { CaptionConfig } from "./captionConfig"
-import type { DataTableConfig, DataTableNumberAlign } from "./dataTableConfig"
+import type {
+	DataTableConfig,
+	DataTableNumberAlign,
+	DataTablePlacement,
+} from "./dataTableConfig"
 import type { AccessibilityConfig } from "./accessibilityConfig"
 import type {
 	CanvasMargins,
@@ -681,6 +685,10 @@ export type Theme = {
 	legendTextFontSize?: number
 	legendTextFontWeight?: number
 	legendTextColor?: string
+	/** Legend entry-label italic / underline. Unset falls back to the shared
+	 * text font's (`textFontItalic` / `textFontUnderline`). */
+	legendTextFontItalic?: boolean
+	legendTextFontUnderline?: boolean
 	textFontFamily: string
 	textFontSize: number
 	textFontColor: string
@@ -782,6 +790,18 @@ export type Theme = {
 	captionFontSize?: number
 	captionFontWeight?: number
 	captionAlignment?: "left" | "center" | "right"
+	/** Caption style + box defaults. Seeded like the font fields above; unset
+	 * keeps the built-in caption defaults (upright, no underline, 8px padding,
+	 * transparent background, no border). */
+	captionItalic?: boolean
+	captionUnderline?: boolean
+	captionPadding?: number
+	captionBackgroundColor?: string
+	captionBackgroundOpacity?: number
+	captionBorderEnabled?: boolean
+	captionBorderColor?: string
+	captionBorderWidth?: number
+	captionBorderRadius?: number
 	// Annotation defaults — seed the style of NEWLY ADDED annotations (the
 	// sidebar's rectangles / circles / lines / text). Existing annotations keep
 	// the style they were authored with. All optional: themes saved before
@@ -840,6 +860,11 @@ export type Theme = {
 	// to the built-in defaults (#999999 / 1px).
 	mapLeaderLineColor?: string
 	mapLeaderLineThickness?: number
+	/** Fill for map regions with no data (and the world backdrop), plus the
+	 * ink of the optional no-data pattern. Seeded into `MapConfig`; unset
+	 * keeps the built-in stone-200 / stone-400. */
+	mapNoDataFill?: string
+	mapNoDataPatternInk?: string
 	// Distribution overlay defaults — stroke + fill used by the violin /
 	// box-plot overlays when first enabled on a chart's value axis.
 	distributionOverlayStroke: string
@@ -873,6 +898,27 @@ export type Theme = {
 	chartBackgroundColor: string | null
 	/** Default background color for the legend box. `null` means transparent. */
 	legendBackgroundColor: string | null
+	/** Legend layout + box defaults, seeded into `LegendConfig` when a chart
+	 * is created or re-themed. Unset keeps the built-in right / vertical /
+	 * no border (`#e2e8f0`, 6px corners) / gradient "bar". */
+	legendPosition?: LegendConfig["position"]
+	legendOrientation?: LegendConfig["orientation"]
+	legendShowBorder?: boolean
+	legendBorderColor?: string
+	legendBorderRadius?: number
+	legendGradientStyle?: LegendConfig["gradientLegendStyle"]
+	/** Gradient-bar defaults. Unlike the fields above these follow the theme
+	 * LIVE: the visual's `gradientBar*` entries are null until edited, and
+	 * `resolveGradientBarStyle` falls back visual → theme → built-in. */
+	legendGradientBarLength?: number | null
+	legendGradientBarThickness?: number
+	legendGradientBarRadius?: number
+	legendGradientBarBorderWidth?: number
+	legendGradientBarBorderColor?: string
+	legendGradientBarTickLength?: number
+	legendGradientBarTickThickness?: number
+	legendGradientBarTickColor?: string
+	legendGradientBarLabelAlign?: "left" | "center" | "right" | null
 	/** Color used for length / angle / area / opacity legend swatches when
 	 * they render as a STANDALONE section (no hue gradient to inherit
 	 * from). Per-visual override lives in `LegendConfig.auxLegendSwatchColor`
@@ -926,6 +972,21 @@ export type Theme = {
 	tooltipShadowColor: string
 	/** Shadow opacity 0–1. */
 	tooltipShadowOpacity: number
+	/** Settings → Themes → Tooltips → Hover: tooltip on/off and the hover /
+	 * legend-highlight look, seeded into `TooltipConfig` when a chart is
+	 * created or re-themed (unlike the box above, which follows live). Unset
+	 * keeps the built-in defaults (`DEFAULT_TOOLTIP_CONFIG`). */
+	tooltipEnabled?: boolean
+	tooltipPointsOnly?: boolean
+	hoverEnabled?: boolean
+	hoverLegendHighlight?: boolean
+	hoverRecolor?: boolean
+	hoverHighlightColor?: string
+	hoverOutline?: boolean
+	hoverOutlineColor?: string
+	hoverOutlineWidth?: number
+	hoverFade?: boolean
+	hoverFadeAmount?: number
 	/** Settings → Themes → Data tables: the look of the optional HTML table
 	 * under the chart. Per-visual overrides live in `DataTableConfig` (a null
 	 * there follows these; `resolveDataTableStyle` in dataTableConfig.ts is
@@ -981,14 +1042,28 @@ export type Theme = {
 	dataTableCaptionColor: string | null
 	dataTableCaptionFontWeight: number | null
 	dataTableCaptionAlign: DataTableNumberAlign
+	/** Data-table behavior defaults, seeded into `DataTableConfig` when a
+	 * chart is created or re-themed (the style fields above follow live).
+	 * Unset keeps the built-in off / below / 10 rows / download on.
+	 * `dataTableMaxRows: null` means "All" — distinct from unset. */
+	dataTableEnabled?: boolean
+	dataTablePlacement?: DataTablePlacement
+	dataTableMaxRows?: number | null
+	dataTableShowDownload?: boolean
 	/** Settings → Themes → Exporting: default fixed-canvas margins (px,
 	 * sparse per side — an absent side is auto). A visual with a canvas
 	 * size inherits each side it hasn't set itself
 	 * (`CanvasSizeConfig.margins`); see `resolveCanvasMargins`. Optional:
 	 * themes saved before this field existed set no defaults. */
 	exportCanvasMargins?: CanvasMargins
-	/** Unit the theme sheet's margin inputs display in (px-truth stays in
-	 * `exportCanvasMargins`). Absent = px. */
+	/** Size (px) a visual's canvas starts at the first time "Set canvas
+	 * size" is turned on (`canvasSizeToggled`). Not seeded into new charts —
+	 * charts still start unsized. Absent = 1000 × 600. */
+	exportCanvasWidth?: number
+	exportCanvasHeight?: number
+	/** Unit the theme sheet's margin + size inputs display in (px-truth
+	 * stays in `exportCanvasMargins` / `exportCanvasWidth|Height`). Absent =
+	 * px. */
 	exportMarginUnit?: "px" | "in"
 }
 

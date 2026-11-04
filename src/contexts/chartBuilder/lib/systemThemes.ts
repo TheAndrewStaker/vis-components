@@ -379,10 +379,11 @@ export const SYSTEM_LIGHT_THEME: SavedTheme = {
 
 /** Dark overrides of `SYSTEM_THEME_STYLE`: every ink that is black in the
  * light theme goes near-white, plus per-axis gridlines, the annotation text
- * box fill and map leader lines that the light theme leaves unset. The data
- * table swaps the light theme's pink header fill and stripe color (they'd
- * sit on a navy chart) for a solid near-white header rule, and lets the body
- * font, weight and header size follow the table text again. */
+ * box fill, map leader lines and map no-data colors that the light theme
+ * leaves unset. The data table swaps the light theme's pink header fill and
+ * stripe color (they'd sit on a navy chart) for a solid near-white header
+ * rule, and lets the body font, weight and header size follow the table text
+ * again. */
 const DARK_THEME_STYLE: Partial<Theme> = {
 	dataLabelsColor: DARK_INK,
 	xGridlineColor: DARK_INK,
@@ -396,6 +397,10 @@ const DARK_THEME_STYLE: Partial<Theme> = {
 	annotationTextBoxFillColor: DARK_BG,
 	annotationTextBoxBorderColor: DARK_INK,
 	mapLeaderLineColor: DARK_INK,
+	// No-data map regions: the built-in stone-200 fill would glare on the navy
+	// background, so a dark stone fill with a lighter stone pattern ink.
+	mapNoDataFill: "#44403c", // stone-700
+	mapNoDataPatternInk: "#78716c", // stone-500
 	// Data table (lifted from Nancy's "Test Theme DARK", 2026-10-29).
 	dataTableFontFamily: null,
 	dataTableFontWeight: null,

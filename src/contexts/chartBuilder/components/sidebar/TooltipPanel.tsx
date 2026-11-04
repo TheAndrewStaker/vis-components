@@ -10,6 +10,7 @@ import {
 	type TooltipConfig,
 	tooltipBoxPatch,
 } from "../../lib/labelsConfig"
+import { tooltipConfigFromTheme } from "../../lib/themeConfig"
 import {
 	buildDefaultTooltipCss,
 	buildDefaultTooltipHtml,
@@ -75,6 +76,10 @@ export const TooltipPanel = () => {
 	// resolved value, write an entry only when it differs from the theme,
 	// and the reset link drops the entry so the theme flows through again.
 	const theme = useCurrentTheme()
+	// What a fresh chart on this theme starts with (Settings → Themes →
+	// Tooltips → Hover seeds these on create / re-theme): the baseline for
+	// the changed dots and what the reset links restore.
+	const seed = tooltipConfigFromTheme(theme)
 	const box = resolveTooltipBox(merged, theme)
 	const boxChanged = hasTooltipBoxOverride(merged)
 	const pinned = (key: TooltipBoxKey) => merged[key] !== undefined
@@ -152,29 +157,34 @@ export const TooltipPanel = () => {
 	const hoverOutlineColor =
 		merged.hoverOutlineColor ?? DEFAULT_HOVER_OUTLINE_COLOR
 	const hoverOutlineWidth = merged.hoverOutlineWidth ?? DEFAULT_HOVER_OUTLINE_WIDTH
+	const hoverFadeAmount = merged.hoverFadeAmount ?? 0.85
 	// Stored 0–1; surfaced as a 0–100 percentage in the UI.
-	const hoverFadePercent = Math.round((merged.hoverFadeAmount ?? 0.85) * 100)
+	const hoverFadePercent = Math.round(hoverFadeAmount * 100)
 
-	// Subsection "changed" dots — any control non-default. Controls nested
-	// behind an opt-in toggle (custom HTML boxes, recolor/outline styling)
-	// don't need their own checks: turning the toggle on is itself the
-	// deviation that lights the dot.
+	// Subsection "changed" dots — any control off the theme's seed. A
+	// control hidden behind a toggle (custom HTML boxes; the hover styling
+	// while its toggle is off) is compared only while it shows: turning the
+	// toggle away from the seed is itself the deviation that lights the dot.
 	const tooltipsChanged =
-		merged.enabled !== DEFAULT_TOOLTIP_CONFIG.enabled ||
+		merged.enabled !== seed.enabled ||
 		(merged.enabled &&
 			(merged.visibleFields.length > 0 ||
 				!!merged.useCustomHtml ||
-				!!merged.pointsOnly ||
+				!!merged.pointsOnly !== !!seed.pointsOnly ||
 				boxChanged))
 	const hoverChanged =
-		!hoverEnabled ||
-		!legendHighlight ||
-		hoverRecolor ||
-		hoverOutline ||
-		!hoverFade ||
-		(hoverFade &&
-			(merged.hoverFadeAmount ?? 0.85) !==
-				DEFAULT_TOOLTIP_CONFIG.hoverFadeAmount)
+		hoverEnabled !== !!seed.hoverEnabled ||
+		(hoverEnabled &&
+			(legendHighlight !== !!seed.legendHighlight ||
+				hoverRecolor !== !!seed.hoverRecolor ||
+				(hoverRecolor &&
+					hoverHighlightColor !== seed.hoverHighlightColor) ||
+				hoverOutline !== !!seed.hoverOutline ||
+				(hoverOutline &&
+					(hoverOutlineColor !== seed.hoverOutlineColor ||
+						hoverOutlineWidth !== seed.hoverOutlineWidth)) ||
+				hoverFade !== !!seed.hoverFade ||
+				(hoverFade && hoverFadeAmount !== seed.hoverFadeAmount)))
 
 	return (
 		<div className="vc-option-panel">
@@ -457,10 +467,10 @@ export const TooltipPanel = () => {
 										value={hoverHighlightColor}
 										onChange={(c) => update({ hoverHighlightColor: c })}
 									/>
-									{hoverHighlightColor !== DEFAULT_HOVER_HIGHLIGHT_COLOR && (
+									{hoverHighlightColor !== seed.hoverHighlightColor && (
 										<ResetLink
 											ariaLabel="Reset recolor color"
-											onClick={() => update({ hoverHighlightColor: DEFAULT_HOVER_HIGHLIGHT_COLOR })}
+											onClick={() => update({ hoverHighlightColor: seed.hoverHighlightColor })}
 										/>
 									)}
 								</div>
@@ -479,10 +489,10 @@ export const TooltipPanel = () => {
 											value={hoverOutlineColor}
 											onChange={(c) => update({ hoverOutlineColor: c })}
 										/>
-										{hoverOutlineColor !== DEFAULT_HOVER_OUTLINE_COLOR && (
+										{hoverOutlineColor !== seed.hoverOutlineColor && (
 											<ResetLink
 												ariaLabel="Reset outline color"
-												onClick={() => update({ hoverOutlineColor: DEFAULT_HOVER_OUTLINE_COLOR })}
+												onClick={() => update({ hoverOutlineColor: seed.hoverOutlineColor })}
 											/>
 										)}
 									</div>
@@ -499,10 +509,10 @@ export const TooltipPanel = () => {
 												update({ hoverOutlineWidth: Math.max(n, 0) })
 											}
 										/>
-										{hoverOutlineWidth !== DEFAULT_HOVER_OUTLINE_WIDTH && (
+										{hoverOutlineWidth !== seed.hoverOutlineWidth && (
 											<ResetLink
 												ariaLabel="Reset outline width"
-												onClick={() => update({ hoverOutlineWidth: DEFAULT_HOVER_OUTLINE_WIDTH })}
+												onClick={() => update({ hoverOutlineWidth: seed.hoverOutlineWidth })}
 											/>
 										)}
 									</div>
@@ -531,14 +541,11 @@ export const TooltipPanel = () => {
 											})
 										}
 									/>
-									{(merged.hoverFadeAmount ?? 0.85) !==
-										DEFAULT_TOOLTIP_CONFIG.hoverFadeAmount && (
+									{hoverFadeAmount !== seed.hoverFadeAmount && (
 										<ResetLink
 											ariaLabel="Reset fade amount"
 											onClick={() =>
-												update({
-													hoverFadeAmount: DEFAULT_TOOLTIP_CONFIG.hoverFadeAmount,
-												})
+												update({ hoverFadeAmount: seed.hoverFadeAmount })
 											}
 										/>
 									)}

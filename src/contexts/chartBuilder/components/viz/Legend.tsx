@@ -371,7 +371,7 @@ export const Legend = ({
 									entryColumns > 1 ? "vertical" : legendCfg.orientation
 								}
 								gradientLegendStyle={legendCfg.gradientLegendStyle ?? "bar"}
-								gradientBarStyle={resolveGradientBarStyle(legendCfg)}
+								gradientBarStyle={resolveGradientBarStyle(legendCfg, theme)}
 								legendFillColor={legendCfg.shapeLegendFillColor}
 								legendStrokeColor={legendCfg.shapeLegendStrokeColor}
 								connectionMapped={

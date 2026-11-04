@@ -10,6 +10,7 @@ import { installInMemoryLocalStorage } from "../../../../testSupport/localStorag
 import { EMPTY_CHANNEL_CONFIGS } from "../../lib/channelConfig"
 import { DEFAULT_TOOLTIP_CONFIG } from "../../lib/labelsConfig"
 import { LIGHT_THEME_BASE } from "../../lib/systemThemes"
+import { tooltipConfigFromTheme } from "../../lib/themeConfig"
 import { emptyEncodings, type Encodings, type Theme } from "../../lib/types"
 import {
 	currentChannelConfigsAtom,
@@ -48,7 +49,13 @@ const dataset = () =>
 		],
 	})
 
-const mount = (encodings: Encodings, theme?: Partial<Theme>) => {
+const mount = (
+	encodings: Encodings,
+	theme?: Partial<Theme>,
+	/** Seed the visual's tooltip config from the theme, as a chart created
+	 * (or re-themed) on it would be. */
+	seeded = false
+) => {
 	installInMemoryLocalStorage()
 	const init = (snap: TestStore) => {
 		// `currentThemeIdAtom` defaults null, so `useCurrentTheme` falls back
@@ -61,7 +68,12 @@ const mount = (encodings: Encodings, theme?: Partial<Theme>) => {
 		snap.set(currentChannelConfigsAtom, EMPTY_CHANNEL_CONFIGS)
 		snap.set(currentFieldOverridesAtom, {})
 		snap.set(currentFieldLevelOrdersAtom, {})
-		snap.set(currentTooltipConfigAtom, DEFAULT_TOOLTIP_CONFIG)
+		snap.set(
+			currentTooltipConfigAtom,
+			seeded
+				? tooltipConfigFromTheme({ ...LIGHT_THEME_BASE, ...theme })
+				: DEFAULT_TOOLTIP_CONFIG
+		)
 	}
 	return render(
 		<TestProvider initializeState={init}>
@@ -178,5 +190,59 @@ describe("TooltipPanel — box", () => {
 		const utils = mount(scatter())
 		fireEvent.click(utils.getByLabelText(/show tooltips$/i))
 		expect(utils.queryByLabelText("Max width")).toBeNull()
+	})
+})
+
+describe("TooltipPanel — Hover follows the theme's seed", () => {
+	const scatter = (): Encodings => ({
+		...emptyEncodings(),
+		x: { field: "x" },
+		y: { field: "y" },
+	})
+	const headerDot = (container: HTMLElement, title: string) =>
+		[...container.querySelectorAll("button")]
+			.find(
+				(b) =>
+					b.getAttribute("aria-expanded") !== null &&
+					b.textContent?.trim() === title
+			)
+			?.querySelector("span.rounded-full") ?? null
+	const THEMED: Partial<Theme> = {
+		tooltipEnabled: false,
+		hoverRecolor: true,
+		hoverHighlightColor: "#ff0000",
+		hoverOutline: true,
+		hoverOutlineColor: "#00ff00",
+		hoverOutlineWidth: 4,
+		hoverFade: true,
+		hoverFadeAmount: 0.5,
+	}
+
+	it("a fresh chart on a theme with hover defaults shows no changed dots", () => {
+		const utils = mount(scatter(), THEMED, true)
+		expect(headerDot(utils.container, "Tooltips")).toBeNull()
+		expect(headerDot(utils.container, "Hover")).toBeNull()
+		expect((utils.getByLabelText(/show tooltips$/i) as HTMLInputElement).checked).toBe(false)
+		expect((utils.getByLabelText("Fade amount") as HTMLInputElement).value).toBe("50")
+		expect(utils.queryByLabelText(/^Reset /)).toBeNull()
+	})
+
+	it("reset links return to the theme's value, not the built-in", () => {
+		const utils = mount(scatter(), THEMED, true)
+		fireEvent.change(utils.getByLabelText("Outline width"), { target: { value: "1" } })
+		fireEvent.change(utils.getByLabelText("Fade amount"), { target: { value: "20" } })
+		expect(headerDot(utils.container, "Hover")).not.toBeNull()
+
+		fireEvent.click(utils.getByLabelText("Reset outline width"))
+		expect((utils.getByLabelText("Outline width") as HTMLInputElement).value).toBe("4")
+		fireEvent.click(utils.getByLabelText("Reset fade amount"))
+		expect((utils.getByLabelText("Fade amount") as HTMLInputElement).value).toBe("50")
+		expect(headerDot(utils.container, "Hover")).toBeNull()
+	})
+
+	it("turning tooltips back on under a tooltips-off theme lights the dot", () => {
+		const utils = mount(scatter(), THEMED, true)
+		fireEvent.click(utils.getByLabelText(/show tooltips$/i))
+		expect(headerDot(utils.container, "Tooltips")).not.toBeNull()
 	})
 })

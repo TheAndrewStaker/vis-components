@@ -67,8 +67,8 @@ const OffsetField = ({
 /** Adapter: the caption's text styling as the shared `FontEditor`'s
  *  `Partial<FontConfig>`. A field equal to the LIVE theme's caption default
  *  reads as unset, so the editor shows the theme value as its placeholder /
- *  "(…)" entry and offers a reset exactly when the value deviates. Italic /
- *  underline are set only when on. */
+ *  "(…)" entry (italic / underline: the `baseItalic` / `baseUnderline`
+ *  toggle state) and offers a reset exactly when the value deviates. */
 const captionToFont = (
 	cfg: CaptionConfig,
 	theme: CaptionConfig
@@ -77,8 +77,8 @@ const captionToFont = (
 	...(cfg.fontSize !== theme.fontSize && { size: cfg.fontSize }),
 	...(cfg.textColor !== theme.textColor && { color: cfg.textColor }),
 	...(cfg.fontWeight !== theme.fontWeight && { weight: cfg.fontWeight }),
-	...(cfg.italic && { italic: true }),
-	...(cfg.underline && { underline: true }),
+	...(!!cfg.italic !== !!theme.italic && { italic: !!cfg.italic }),
+	...(!!cfg.underline !== !!theme.underline && { underline: !!cfg.underline }),
 })
 
 /** Inverse of `captionToFont`: an unset field (reset / "(…)" choice) writes
@@ -92,8 +92,9 @@ const fontToCaption = (
 	fontSize: font.size ?? theme.fontSize,
 	textColor: font.color ?? theme.textColor,
 	fontWeight: font.weight ?? theme.fontWeight,
-	italic: font.italic || undefined,
-	underline: font.underline || undefined,
+	// Sparse like the seed: absent = off.
+	italic: (font.italic ?? !!theme.italic) || undefined,
+	underline: (font.underline ?? !!theme.underline) || undefined,
 })
 
 /** Sidebar panel for the Caption subsystem. Drives `CaptionConfig` — a single
@@ -112,21 +113,22 @@ export const CaptionPanel = () => {
 	// NumberInput can't express).
 	const dimIdBase = useId()
 	const merged: CaptionConfig = { ...DEFAULT_CAPTION_CONFIG, ...cfg }
-	// Resolve the LIVE theme so the text reset links compare against — and
-	// reset to — the theme's Caption defaults (Settings → Themes → Text →
-	// Caption) rather than the hardcoded constants. Everything the theme
-	// doesn't seed (position, size, padding, box) still compares against
-	// DEFAULT_CAPTION_CONFIG, which `captionConfigFromTheme` passes through.
+	// Resolve the LIVE theme so the text and box reset links compare
+	// against — and reset to — the theme's Caption defaults (Settings →
+	// Themes → Text → Caption / Caption box) rather than the hardcoded
+	// constants. Everything the theme doesn't seed (position, size) still
+	// compares against DEFAULT_CAPTION_CONFIG, which `captionConfigFromTheme`
+	// passes through.
 	const theme = useCurrentTheme()
 	const themeDefaults = captionConfigFromTheme(theme)
 
 	const update = (next: Partial<CaptionConfig>) => setCfg({ ...merged, ...next })
 
 	// Subsection "changed" dots — light when any control inside deviates from
-	// the baseline the reset links restore (theme seed for the text knobs,
-	// DEFAULT_CAPTION_CONFIG for the rest). Unit picks alone don't count: 0px
-	// and 0% (or auto) render identically, so a unit is only a change once
-	// its value is set.
+	// the baseline the reset links restore (the theme seed, which is
+	// DEFAULT_CAPTION_CONFIG for everything the theme doesn't set). Unit
+	// picks alone don't count: 0px and 0% (or auto) render identically, so a
+	// unit is only a change once its value is set.
 	const d = themeDefaults
 	const positionChanged = merged.offsetX !== d.offsetX || merged.offsetY !== d.offsetY
 	const sizeChanged = merged.width > 0 || merged.height > 0
@@ -136,8 +138,8 @@ export const CaptionPanel = () => {
 		merged.fontWeight !== d.fontWeight ||
 		merged.align !== d.align ||
 		merged.textColor !== d.textColor ||
-		!!merged.italic ||
-		!!merged.underline
+		!!merged.italic !== !!d.italic ||
+		!!merged.underline !== !!d.underline
 	// Border color/width only count while the border toggle shows them.
 	const boxChanged =
 		merged.padding !== d.padding ||
@@ -317,6 +319,8 @@ export const CaptionPanel = () => {
 								baseSize={themeDefaults.fontSize}
 								baseFamily={themeDefaults.fontFamily}
 								baseWeight={themeDefaults.fontWeight}
+								baseItalic={!!themeDefaults.italic}
+								baseUnderline={!!themeDefaults.underline}
 							/>
 						</div>
 					</CollapsibleSubsection>
@@ -330,14 +334,10 @@ export const CaptionPanel = () => {
 									value={merged.backgroundColor}
 									onChange={(c) => update({ backgroundColor: c })}
 								/>
-								{merged.backgroundColor !==
-									DEFAULT_CAPTION_CONFIG.backgroundColor && (
+								{merged.backgroundColor !== d.backgroundColor && (
 									<ResetLink
 										onClick={() =>
-											update({
-												backgroundColor:
-													DEFAULT_CAPTION_CONFIG.backgroundColor,
-											})
+											update({ backgroundColor: d.backgroundColor })
 										}
 									/>
 								)}
@@ -353,14 +353,10 @@ export const CaptionPanel = () => {
 									step={0.05}
 									clamp
 								/>
-								{merged.backgroundOpacity !==
-									DEFAULT_CAPTION_CONFIG.backgroundOpacity && (
+								{merged.backgroundOpacity !== d.backgroundOpacity && (
 									<ResetLink
 										onClick={() =>
-											update({
-												backgroundOpacity:
-													DEFAULT_CAPTION_CONFIG.backgroundOpacity,
-											})
+											update({ backgroundOpacity: d.backgroundOpacity })
 										}
 									/>
 								)}
@@ -375,13 +371,10 @@ export const CaptionPanel = () => {
 									step={1}
 									suffix="px"
 								/>
-								{merged.borderRadius !==
-									DEFAULT_CAPTION_CONFIG.borderRadius && (
+								{merged.borderRadius !== d.borderRadius && (
 									<ResetLink
 										onClick={() =>
-											update({
-												borderRadius: DEFAULT_CAPTION_CONFIG.borderRadius,
-											})
+											update({ borderRadius: d.borderRadius })
 										}
 									/>
 								)}
@@ -396,10 +389,10 @@ export const CaptionPanel = () => {
 									step={1}
 									suffix="px"
 								/>
-								{merged.padding !== DEFAULT_CAPTION_CONFIG.padding && (
+								{merged.padding !== d.padding && (
 									<ResetLink
 										onClick={() =>
-											update({ padding: DEFAULT_CAPTION_CONFIG.padding })
+											update({ padding: d.padding })
 										}
 									/>
 								)}
@@ -421,14 +414,10 @@ export const CaptionPanel = () => {
 											value={merged.borderColor}
 											onChange={(c) => update({ borderColor: c })}
 										/>
-										{merged.borderColor !==
-											DEFAULT_CAPTION_CONFIG.borderColor && (
+										{merged.borderColor !== d.borderColor && (
 											<ResetLink
 												onClick={() =>
-													update({
-														borderColor:
-															DEFAULT_CAPTION_CONFIG.borderColor,
-													})
+													update({ borderColor: d.borderColor })
 												}
 											/>
 										)}
@@ -443,14 +432,10 @@ export const CaptionPanel = () => {
 											step={0.5}
 											suffix="px"
 										/>
-										{merged.borderWidth !==
-											DEFAULT_CAPTION_CONFIG.borderWidth && (
+										{merged.borderWidth !== d.borderWidth && (
 											<ResetLink
 												onClick={() =>
-													update({
-														borderWidth:
-															DEFAULT_CAPTION_CONFIG.borderWidth,
-													})
+													update({ borderWidth: d.borderWidth })
 												}
 											/>
 										)}

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { DEFAULT_ANNOTATIONS_CONFIG } from "./annotationsConfig"
 import { DEFAULT_CAPTION_CONFIG } from "./captionConfig"
 import { DEFAULT_DATA_LABELS_CONFIG, EMPTY_CHANNEL_CONFIGS } from "./channelConfig"
-import { migrateDataTableConfig } from "./dataTableConfig"
+import { DEFAULT_DATA_TABLE_CONFIG, migrateDataTableConfig } from "./dataTableConfig"
 import { migrateAccessibilityConfig } from "./accessibilityConfig"
 import {
 	DEFAULT_LEGEND_CONFIG,
@@ -18,6 +18,8 @@ import {
 	dataLabelsConfigFromTheme,
 	labelsFromTheme,
 	legendConfigFromTheme,
+	mapConfigFromTheme,
+	tooltipConfigFromTheme,
 } from "./themeConfig"
 import { emptyDataLabelsEncodings, emptyEncodings, type Visual } from "./types"
 import { hydrateVisual, newVisualDraft, newVisualId } from "./visualDefaults"
@@ -40,11 +42,15 @@ describe("newVisualDraft", () => {
 			dataLabelsConfigFromTheme(LIGHT_THEME_BASE)
 		)
 		expect(draft.captionConfig).toEqual(captionConfigFromTheme(LIGHT_THEME_BASE))
-		expect(draft.tooltipConfig).toBe(DEFAULT_TOOLTIP_CONFIG)
+		expect(draft.tooltipConfig).toEqual(tooltipConfigFromTheme(LIGHT_THEME_BASE))
+		// A theme without the hover / table / map fields keeps the built-ins.
+		expect(draft.tooltipConfig).toEqual(DEFAULT_TOOLTIP_CONFIG)
+		expect(draft.dataTableConfig).toEqual(DEFAULT_DATA_TABLE_CONFIG)
 		expect(draft.dataLabelsEncodings).toEqual(emptyDataLabelsEncodings())
 		expect(draft.fieldOrder).toEqual([])
 		expect(draft.annotationsConfig).toBe(DEFAULT_ANNOTATIONS_CONFIG)
-		expect(draft.mapConfig).toBe(DEFAULT_MAP_CONFIG)
+		expect(draft.mapConfig).toEqual(mapConfigFromTheme(LIGHT_THEME_BASE))
+		expect(draft.mapConfig).toEqual(DEFAULT_MAP_CONFIG)
 	})
 })
 

@@ -126,3 +126,43 @@ describe("AestheticsPanel — canvas margins", () => {
 		expect(withCanvasMargin({ top: 5, left: 0 }, "top", null)).toEqual({ left: 0 })
 	})
 })
+
+describe("AestheticsPanel — canvas size starts at the theme's", () => {
+	const themed: SavedTheme = {
+		...SYSTEM_LIGHT_THEME,
+		exportCanvasWidth: 800,
+		exportCanvasHeight: 450,
+	}
+
+	it("turning on Set canvas size seeds the theme's size", () => {
+		let snapshot: TestStore | undefined
+		installInMemoryLocalStorage()
+		const utils = render(
+			<TestProvider
+				initializeState={(snap) => {
+					snapshot = snap
+					snap.set(themesAtom, [themed])
+					snap.set(currentThemeIdAtom, themed.id)
+				}}
+			>
+				<AestheticsPanel />
+			</TestProvider>
+		)
+		fireEvent.click(utils.getByText("Canvas size"))
+		fireEvent.click(utils.getByLabelText("Set canvas size"))
+		expect(snapshot!.get(currentChannelConfigsAtom).canvasSize).toMatchObject({ enabled: true, width: 800, height: 450 })
+		// At the theme's size: no reset links.
+		expect(utils.queryByLabelText("Reset canvas width")).toBeNull()
+		expect(utils.queryByLabelText("Reset canvas height")).toBeNull()
+	})
+
+	it("reset returns to the theme's size, not 1000 × 600", () => {
+		const { getByLabelText, queryByLabelText } = mount(FIXED, null, themed)
+		// 1000 × 600 differs from the theme's 800 × 450.
+		fireEvent.click(getByLabelText("Reset canvas width"))
+		fireEvent.click(getByLabelText("Reset canvas height"))
+		expect((getByLabelText("Width") as HTMLInputElement).value).toBe("800")
+		expect((getByLabelText("Height") as HTMLInputElement).value).toBe("450")
+		expect(queryByLabelText("Reset canvas width")).toBeNull()
+	})
+})

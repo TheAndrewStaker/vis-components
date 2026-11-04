@@ -10,6 +10,7 @@ import { ColorInput as UiColorInput } from "../../../../components/ui/ColorInput
 import { NumberInput as UiNumberInput } from "../../../../components/ui/NumberInput"
 import { SelectInput as UiSelectInput } from "../../../../components/ui/SelectInput"
 import { Select } from "../../../../components/ui/Select"
+import { Checkbox } from "../../../../components/ui/Checkbox"
 
 export const Section = ({
 	title,
@@ -88,6 +89,22 @@ export const NumberInput = (props: {
 	step: number
 	suffix?: string
 }) => <UiNumberInput labelClassName={THEME_LABEL_CLASS} {...props} />
+
+/** Checkbox lined up with the label column of the rows around it. */
+export const CheckboxRow = ({
+	label,
+	checked,
+	onChange,
+}: {
+	label: string
+	checked: boolean
+	onChange: (v: boolean) => void
+}) => (
+	<div className="flex items-center gap-2 text-sm">
+		<span className={`${THEME_LABEL_CLASS} shrink-0`} aria-hidden="true" />
+		<Checkbox label={label} checked={checked} onChange={onChange} />
+	</div>
+)
 
 export const SelectInput = (props: {
 	label: string

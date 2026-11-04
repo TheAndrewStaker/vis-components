@@ -1627,6 +1627,10 @@ type FontEditorProps = {
 	 *  is set. Pass the EFFECTIVE inherited weight (base font weight, falling
 	 *  back to the slot's render-site default). */
 	baseWeight?: number
+	/** Inherited italic / underline the Style toggles show while the value
+	 *  leaves them unset (e.g. a theme's legend-text italic). Absent = off. */
+	baseItalic?: boolean
+	baseUnderline?: boolean
 	/** Optional controls rendered directly below the Color row, so callers
 	 *  can keep color-related extras (e.g. the facet-title "Color by facet"
 	 *  checkbox + per-value swatches) next to the color swatch instead of
@@ -1646,9 +1650,13 @@ export const FontEditor = ({
 	baseSize,
 	baseFamily,
 	baseWeight,
+	baseItalic = false,
+	baseUnderline = false,
 	afterColor,
 	hideColor = false,
 }: FontEditorProps) => {
+	const italicOn = value.italic ?? baseItalic
+	const underlineOn = value.underline ?? baseUnderline
 	const familyOptions = useFontFamilyOptions()
 	const userFontWeights = useUserFontWeights()
 	const familyDisplayName = useFamilyDisplayName()
@@ -1780,18 +1788,18 @@ export const FontEditor = ({
 					Style
 				</span>
 				<StyleButton
-					on={!!value.italic}
+					on={italicOn}
 					label="I"
 					className="italic"
 					ariaLabel="Italic"
-					onClick={() => onChange({ ...value, italic: !value.italic })}
+					onClick={() => onChange({ ...value, italic: !italicOn })}
 				/>
 				<StyleButton
-					on={!!value.underline}
+					on={underlineOn}
 					label="U"
 					className="underline"
 					ariaLabel="Underline"
-					onClick={() => onChange({ ...value, underline: !value.underline })}
+					onClick={() => onChange({ ...value, underline: !underlineOn })}
 				/>
 				{showResetFields &&
 					(value.italic !== undefined || value.underline !== undefined) && (

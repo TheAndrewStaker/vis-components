@@ -5,11 +5,17 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react"
-import { TestProvider } from "../../../../testSupport/TestProvider"
+import { TestProvider, type TestStore } from "../../../../testSupport/TestProvider"
 import { installInMemoryLocalStorage } from "../../../../testSupport/localStorageShim"
 import { buildDataset as buildDatasetFixture } from "../../../../testSupport/fixtures"
 import { afterEach, describe, expect, it } from "vitest"
 import { DEFAULT_MAP_CONFIG } from "../../lib/mapConfig"
+import { SYSTEM_DARK_THEME, SYSTEM_LIGHT_THEME } from "../../lib/systemThemes"
+import {
+	currentMapConfigAtom,
+	currentThemeIdAtom,
+	themesAtom,
+} from "../../store/atoms"
 import { MAP_CONFIG_VERSION } from "../../lib/storage/migrations"
 import { emptyEncodings } from "../../lib/types"
 
@@ -282,6 +288,54 @@ describe("MapsSection", () => {
 		seed("geographic", { showBasemap: false }, SYMBOLS_ENC)
 		mount()
 		expect(screen.queryByLabelText("No-data fill")).toBeNull()
+	})
+
+	// --- No-data reset links return to the THEME's defaults, not the built-in
+	// gray (System Dark ships its own no-data fill + ink). ---
+
+	const mountWithTheme = (themeId: string) => {
+		let store: TestStore | null = null
+		render(
+			<TestProvider
+				initializeState={(s) => {
+					s.set(themesAtom, [SYSTEM_LIGHT_THEME, SYSTEM_DARK_THEME])
+					s.set(currentThemeIdAtom, themeId)
+					store = s
+				}}
+			>
+				<MapsSection />
+			</TestProvider>
+		)
+		return store as unknown as TestStore
+	}
+
+	it("no-data resets compare against and restore the current theme's colors", () => {
+		const darkFill = SYSTEM_DARK_THEME.mapNoDataFill!
+		const darkInk = SYSTEM_DARK_THEME.mapNoDataPatternInk!
+		// The built-in colors under System Dark read as an edit.
+		seed("geographic", { noDataPattern: 0 }, CHOROPLETH_ENC)
+		const store = mountWithTheme(SYSTEM_DARK_THEME.id)
+		fireEvent.click(screen.getByRole("button", { name: "Reset no-data fill" }))
+		fireEvent.click(screen.getByRole("button", { name: "Reset pattern ink" }))
+		expect(store.get(currentMapConfigAtom).noDataFill).toBe(darkFill)
+		expect(store.get(currentMapConfigAtom).noDataPatternInk).toBe(darkInk)
+		expect(screen.queryByRole("button", { name: "Reset no-data fill" })).toBeNull()
+		expect(screen.queryByRole("button", { name: "Reset pattern ink" })).toBeNull()
+	})
+
+	it("shows no no-data reset when the colors match the theme's", () => {
+		seed(
+			"geographic",
+			{
+				noDataPattern: 0,
+				noDataFill: SYSTEM_DARK_THEME.mapNoDataFill!,
+				noDataPatternInk: SYSTEM_DARK_THEME.mapNoDataPatternInk!,
+			},
+			CHOROPLETH_ENC
+		)
+		mountWithTheme(SYSTEM_DARK_THEME.id)
+		expect(screen.queryByRole("button", { name: "Reset no-data fill" })).toBeNull()
+		expect(screen.queryByRole("button", { name: "Reset pattern ink" })).toBeNull()
 	})
 
 	it("shows the no-data-fill color in choropleth mode", () => {

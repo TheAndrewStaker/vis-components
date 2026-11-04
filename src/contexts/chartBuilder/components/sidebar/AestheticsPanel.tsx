@@ -22,8 +22,7 @@ import {
 import {
 	aspectRatioToggled,
 	canvasSizeToggled,
-	DEFAULT_CANVAS_HEIGHT,
-	DEFAULT_CANVAS_WIDTH,
+	canvasStartSize,
 	MIN_CANVAS_DIM,
 } from "../../lib/canvasSizeEdits"
 import type { DrawOrderConfig } from "../../lib/drawOrder"
@@ -76,6 +75,9 @@ export const AestheticsPanel = () => {
 	const canvasUnit = canvasSize?.unit ?? "px"
 	const setCanvasSize = (next: CanvasSizeConfig | null) =>
 		setConfigs((prev) => ({ ...prev, canvasSize: next ?? undefined }))
+	// The size a canvas starts at (theme's Exporting → Canvas size, else
+	// 1000 × 600): the empty-input fallback and the reset target.
+	const startSize = canvasStartSize(theme)
 	// White space the layout currently leaves on each side of the fixed
 	// canvas (measured by ChartCanvas's margin frame) — the margin inputs'
 	// "auto" placeholder, so stepping starts from what's on screen.
@@ -151,7 +153,9 @@ export const AestheticsPanel = () => {
 					<Checkbox
 						label="Set canvas size"
 						checked={canvasSize?.enabled ?? false}
-						onChange={(enabled) => setCanvasSize(canvasSizeToggled(canvasSize, enabled))}
+						onChange={(enabled) =>
+							setCanvasSize(canvasSizeToggled(canvasSize, enabled, theme))
+						}
 					/>
 					{canvasSize?.enabled && (
 						<>
@@ -183,8 +187,8 @@ export const AestheticsPanel = () => {
 										setCanvasSize({
 											...canvasSize,
 											// Preserve the raw input's guard: an all-cleared / zero
-											// entry falls back to the default rather than committing 0.
-											width: unitToPx(v, canvasUnit) || DEFAULT_CANVAS_WIDTH,
+											// entry falls back to the start size rather than committing 0.
+											width: unitToPx(v, canvasUnit) || startSize.width,
 										})
 									}
 									min={pxToUnit(MIN_CANVAS_DIM, canvasUnit)}
@@ -192,11 +196,11 @@ export const AestheticsPanel = () => {
 									clamp
 									suffix={canvasUnit}
 								/>
-								{canvasSize.width !== DEFAULT_CANVAS_WIDTH && (
+								{canvasSize.width !== startSize.width && (
 									<ResetLink
 										ariaLabel="Reset canvas width"
 										onClick={() =>
-											setCanvasSize({ ...canvasSize, width: DEFAULT_CANVAS_WIDTH })
+											setCanvasSize({ ...canvasSize, width: startSize.width })
 										}
 									/>
 								)}
@@ -209,7 +213,7 @@ export const AestheticsPanel = () => {
 									onChange={(v) =>
 										setCanvasSize({
 											...canvasSize,
-											height: unitToPx(v, canvasUnit) || DEFAULT_CANVAS_HEIGHT,
+											height: unitToPx(v, canvasUnit) || startSize.height,
 										})
 									}
 									min={pxToUnit(MIN_CANVAS_DIM, canvasUnit)}
@@ -217,11 +221,11 @@ export const AestheticsPanel = () => {
 									clamp
 									suffix={canvasUnit}
 								/>
-								{canvasSize.height !== DEFAULT_CANVAS_HEIGHT && (
+								{canvasSize.height !== startSize.height && (
 									<ResetLink
 										ariaLabel="Reset canvas height"
 										onClick={() =>
-											setCanvasSize({ ...canvasSize, height: DEFAULT_CANVAS_HEIGHT })
+											setCanvasSize({ ...canvasSize, height: startSize.height })
 										}
 									/>
 								)}

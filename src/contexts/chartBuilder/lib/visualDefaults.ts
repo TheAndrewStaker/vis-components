@@ -1,7 +1,6 @@
 import { DEFAULT_ANNOTATIONS_CONFIG } from "./annotationsConfig"
 import { DEFAULT_CAPTION_CONFIG } from "./captionConfig"
 import {
-	DEFAULT_DATA_TABLE_CONFIG,
 	migrateDataTableConfig,
 } from "./dataTableConfig"
 import {
@@ -24,8 +23,11 @@ import {
 	configsFromTheme,
 	captionConfigFromTheme,
 	dataLabelsConfigFromTheme,
+	dataTableConfigFromTheme,
 	labelsFromTheme,
 	legendConfigFromTheme,
+	mapConfigFromTheme,
+	tooltipConfigFromTheme,
 } from "./themeConfig"
 import {
 	emptyDataLabelsEncodings,
@@ -72,7 +74,7 @@ export const newVisualDraft = (theme: Theme): VisualDraft => ({
 	channelConfigs: configsFromTheme(theme),
 	labelsConfig: labelsFromTheme(theme),
 	legendConfig: legendConfigFromTheme(theme),
-	tooltipConfig: DEFAULT_TOOLTIP_CONFIG,
+	tooltipConfig: tooltipConfigFromTheme(theme),
 	dataLabelsEncodings: emptyDataLabelsEncodings(),
 	dataLabelsConfig: dataLabelsConfigFromTheme(theme),
 	fieldLevelOrders: {},
@@ -80,9 +82,9 @@ export const newVisualDraft = (theme: Theme): VisualDraft => ({
 	fieldOrder: [],
 	annotationsConfig: DEFAULT_ANNOTATIONS_CONFIG,
 	captionConfig: captionConfigFromTheme(theme),
-	dataTableConfig: DEFAULT_DATA_TABLE_CONFIG,
+	dataTableConfig: dataTableConfigFromTheme(theme),
 	accessibilityConfig: DEFAULT_ACCESSIBILITY_CONFIG,
-	mapConfig: DEFAULT_MAP_CONFIG,
+	mapConfig: mapConfigFromTheme(theme),
 	reshapeConfig: DEFAULT_RESHAPE_CONFIG,
 	derivedVariablesConfig: DEFAULT_DERIVED_VARIABLES_CONFIG,
 })

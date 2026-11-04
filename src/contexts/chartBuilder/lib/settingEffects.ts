@@ -407,7 +407,7 @@ export const applySettingEffects = (
 
 	// Canvas size and aspect ratio: enabling seeds the numbers.
 	if (sent(patch, "channelConfigs", "canvasSize", "enabled") === true)
-		setConfigs({ ...configs(), canvasSize: canvasSizeToggled(configs().canvasSize, true) })
+		setConfigs({ ...configs(), canvasSize: canvasSizeToggled(configs().canvasSize, true, theme) })
 	if (sent(patch, "channelConfigs", "aspectRatio", "enabled") === true)
 		setConfigs({ ...configs(), aspectRatio: aspectRatioToggled(configs().aspectRatio, true) })
 

@@ -61,3 +61,61 @@ describe("TooltipsSection — tooltip box defaults", () => {
 		expect(screen.queryByLabelText("Shadow opacity")).toBeNull()
 	})
 })
+
+describe("TooltipsSection — hover defaults", () => {
+	it("shows the built-in defaults while the theme sets none", () => {
+		mount()
+		const checked = (label: string) =>
+			(screen.getByLabelText(label) as HTMLInputElement).checked
+		expect(checked("Show tooltips")).toBe(true)
+		expect(checked("Show tooltips only at points")).toBe(false)
+		expect(checked("Show hover")).toBe(true)
+		expect(checked("Hover over legend to highlight visual elements")).toBe(true)
+		expect(checked("Recolor hovered elements")).toBe(false)
+		expect(checked("Outline hovered elements")).toBe(false)
+		expect(checked("Fade other elements")).toBe(true)
+		expect((screen.getByLabelText("Fade amount") as HTMLInputElement).value).toBe("85")
+		// Dependent controls hide while their toggle is off.
+		expect(screen.queryByLabelText("Recolor color")).toBeNull()
+		expect(screen.queryByLabelText("Outline width")).toBeNull()
+	})
+
+	it("each toggle writes its key", () => {
+		const set = mount()
+		const pairs: Array<[string, string, boolean]> = [
+			["Show tooltips", "tooltipEnabled", false],
+			["Show tooltips only at points", "tooltipPointsOnly", true],
+			["Show hover", "hoverEnabled", false],
+			["Hover over legend to highlight visual elements", "hoverLegendHighlight", false],
+			["Recolor hovered elements", "hoverRecolor", true],
+			["Outline hovered elements", "hoverOutline", true],
+			["Fade other elements", "hoverFade", false],
+		]
+		for (const [label, key, value] of pairs) {
+			fireEvent.click(screen.getByLabelText(label))
+			expect(set, label).toHaveBeenCalledWith(key, value)
+		}
+	})
+
+	it("the dependent controls show under their toggle and write their keys", () => {
+		const set = mount({ ...THEME, hoverRecolor: true, hoverOutline: true })
+		fireEvent.change(screen.getByLabelText("Recolor color hex"), {
+			target: { value: "#ff0000" },
+		})
+		expect(set).toHaveBeenCalledWith("hoverHighlightColor", "#FF0000")
+		fireEvent.change(screen.getByLabelText("Outline color hex"), {
+			target: { value: "#00ff00" },
+		})
+		expect(set).toHaveBeenCalledWith("hoverOutlineColor", "#00FF00")
+		fireEvent.change(screen.getByLabelText("Outline width"), { target: { value: "3" } })
+		expect(set).toHaveBeenCalledWith("hoverOutlineWidth", 3)
+		fireEvent.change(screen.getByLabelText("Fade amount"), { target: { value: "40" } })
+		expect(set).toHaveBeenCalledWith("hoverFadeAmount", 0.4)
+	})
+
+	it("hides the hover styling while Show hover is off", () => {
+		mount({ ...THEME, hoverEnabled: false })
+		expect(screen.queryByLabelText("Fade other elements")).toBeNull()
+		expect(screen.queryByLabelText("Recolor hovered elements")).toBeNull()
+	})
+})

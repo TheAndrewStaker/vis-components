@@ -739,5 +739,10 @@ export const mapConfigForVariation = (
 		...DEFAULT_MAP_CONFIG,
 		coordSystem: "geographic",
 		geographyLevel: level,
+		// No-data colors are theme-derived (`mapConfigFromTheme`, re-written by
+		// `rethemeMap` on a theme switch), not quick-start choices — carry them
+		// over so a pick doesn't snap a themed map back to the built-in gray.
+		noDataFill: current.noDataFill,
+		noDataPatternInk: current.noDataPatternInk,
 	}
 }

@@ -1,4 +1,16 @@
-import { ColorInput, NumberInput, Section, SectionGroup } from "./controls"
+import {
+	DEFAULT_HOVER_HIGHLIGHT_COLOR,
+	DEFAULT_HOVER_OUTLINE_COLOR,
+	DEFAULT_HOVER_OUTLINE_WIDTH,
+} from "../../../chartBuilder/lib/labelsConfig"
+import { tooltipConfigFromTheme } from "../../../chartBuilder/lib/themeConfig"
+import {
+	CheckboxRow,
+	ColorInput,
+	NumberInput,
+	Section,
+	SectionGroup,
+} from "./controls"
 import type { ThemeSectionProps } from "./types"
 
 /** One Auto / Custom color: the tooltip's outline and background follow
@@ -41,9 +53,108 @@ const AutoColorRow = ({
 	</div>
 )
 
+/** Settings → Themes → Tooltips → Hover: tooltip on/off and the hover look.
+ *  Unlike the box, these are SEEDED into a chart's `TooltipConfig` when it's
+ *  created or switched onto the theme (`tooltipConfigFromTheme`); an unset
+ *  field shows the built-in default. Labels match the sidebar's. */
+const HoverDefaults = ({ theme, set }: Omit<ThemeSectionProps, "isReadOnly">) => {
+	const seed = tooltipConfigFromTheme(theme)
+	const hoverOn = seed.hoverEnabled ?? true
+	return (
+		<Section title="Hover">
+			<p className="text-xs vc-muted">
+				What a new chart&apos;s Tooltips and hover settings start as. Copied in
+				when a chart is created or switched to this theme — editing them here
+				doesn&apos;t change existing charts.
+			</p>
+			<CheckboxRow
+				label="Show tooltips"
+				checked={seed.enabled}
+				onChange={(v) => set("tooltipEnabled", v)}
+			/>
+			{seed.enabled && (
+				<CheckboxRow
+					label="Show tooltips only at points"
+					checked={!!seed.pointsOnly}
+					onChange={(v) => set("tooltipPointsOnly", v)}
+				/>
+			)}
+			<CheckboxRow
+				label="Show hover"
+				checked={hoverOn}
+				onChange={(v) => set("hoverEnabled", v)}
+			/>
+			{hoverOn && (
+				<>
+					<CheckboxRow
+						label="Hover over legend to highlight visual elements"
+						checked={seed.legendHighlight ?? true}
+						onChange={(v) => set("hoverLegendHighlight", v)}
+					/>
+					<CheckboxRow
+						label="Recolor hovered elements"
+						checked={!!seed.hoverRecolor}
+						onChange={(v) => set("hoverRecolor", v)}
+					/>
+					{seed.hoverRecolor && (
+						<ColorInput
+							label="Recolor color"
+							value={seed.hoverHighlightColor ?? DEFAULT_HOVER_HIGHLIGHT_COLOR}
+							onChange={(v) => set("hoverHighlightColor", v)}
+						/>
+					)}
+					<CheckboxRow
+						label="Outline hovered elements"
+						checked={!!seed.hoverOutline}
+						onChange={(v) => set("hoverOutline", v)}
+					/>
+					{seed.hoverOutline && (
+						<>
+							<ColorInput
+								label="Outline color"
+								value={seed.hoverOutlineColor ?? DEFAULT_HOVER_OUTLINE_COLOR}
+								onChange={(v) => set("hoverOutlineColor", v)}
+							/>
+							<NumberInput
+								label="Outline width"
+								value={seed.hoverOutlineWidth ?? DEFAULT_HOVER_OUTLINE_WIDTH}
+								min={0}
+								max={20}
+								step={0.5}
+								suffix="px"
+								onChange={(v) => set("hoverOutlineWidth", Math.max(v, 0))}
+							/>
+						</>
+					)}
+					<CheckboxRow
+						label="Fade other elements"
+						checked={seed.hoverFade ?? true}
+						onChange={(v) => set("hoverFade", v)}
+					/>
+					{(seed.hoverFade ?? true) && (
+						// Stored 0–1; shown as a percentage like the sidebar.
+						<NumberInput
+							label="Fade amount"
+							value={Math.round((seed.hoverFadeAmount ?? 0.85) * 100)}
+							min={0}
+							max={100}
+							step={5}
+							suffix="%"
+							onChange={(v) =>
+								set("hoverFadeAmount", Math.min(Math.max(v, 0), 100) / 100)
+							}
+						/>
+					)}
+				</>
+			)}
+		</Section>
+	)
+}
+
 /** Settings → Themes → Tooltips: the box every hover tooltip renders in.
  *  The Tooltips panel's Box group shows these values live and stores an
- *  override only where a visual deviates (`resolveTooltipBox`). */
+ *  override only where a visual deviates (`resolveTooltipBox`). The Hover
+ *  section after it is seeded instead (see `HoverDefaults`). */
 export const TooltipsSection = ({ theme, set, isReadOnly }: ThemeSectionProps) => (
 	<SectionGroup title="Tooltips" isReadOnly={isReadOnly}>
 		<Section title="Tooltip box">
@@ -119,5 +230,6 @@ export const TooltipsSection = ({ theme, set, isReadOnly }: ThemeSectionProps) =
 				</>
 			)}
 		</Section>
+		<HoverDefaults theme={theme} set={set} />
 	</SectionGroup>
 )

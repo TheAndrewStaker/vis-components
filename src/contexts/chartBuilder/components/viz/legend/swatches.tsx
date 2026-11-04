@@ -136,9 +136,11 @@ export const renderEntryList = (
 	)
 
 /** Fallback style for callers (smoke tests prop-driving the sub-legends)
- * that don't thread the legend config's gradient-bar options through. */
+ * that don't thread the legend config's gradient-bar options through: the
+ * built-in defaults, no theme. The real legend (`Legend.tsx`) always passes
+ * the visual → theme → built-in resolution. */
 export const DEFAULT_GRADIENT_BAR_STYLE: GradientBarStyle =
-	resolveGradientBarStyle(DEFAULT_LEGEND_CONFIG)
+	resolveGradientBarStyle(DEFAULT_LEGEND_CONFIG, {})
 
 export type GradientRampStop = {
 	/** Proportional position along the bar, 0 (lo) → 1 (hi). */

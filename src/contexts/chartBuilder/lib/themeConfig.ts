@@ -44,15 +44,22 @@ import {
 	type TextAnnotationBoxStyle,
 } from "./annotationsConfig"
 import { DEFAULT_CAPTION_CONFIG, type CaptionConfig } from "./captionConfig"
+import {
+	DEFAULT_DATA_TABLE_CONFIG,
+	type DataTableConfig,
+} from "./dataTableConfig"
 import { DEFAULT_HEXBIN_BIN_COUNT } from "./hexbins"
 import {
 	DEFAULT_LABELS_CONFIG,
 	DEFAULT_LEGEND_CONFIG,
+	DEFAULT_TOOLTIP_CONFIG,
 	SWATCH_SHAPE_CHANNELS,
 	type LabelsConfig,
 	type LegendConfig,
 	type SwatchShapeChannel,
+	type TooltipConfig,
 } from "./labelsConfig"
+import { DEFAULT_MAP_CONFIG, type MapConfig } from "./mapConfig"
 import type { Theme } from "./types"
 
 /** Resolve the default categorical palette from the theme. Returns the
@@ -292,10 +299,10 @@ export const dataLabelsConfigFromTheme = (t: Theme): DataLabelsConfig => ({
 })
 
 /** Theme-seeded Caption config — see `shapeConfigFromTheme` for why this is
- * a shared builder. Only the text knobs (family / color / size / weight /
- * alignment) are theme-driven; the caption text itself, its position / size
- * nudges, padding, and the background box are user-driven and stay at the
- * built-in defaults here. An unset family / color follows the theme's Axis
+ * a shared builder. The text knobs (family / color / size / weight /
+ * alignment / italic / underline) and the box (padding, background, border)
+ * are theme-driven; the caption text itself and its position / size nudges
+ * are user-driven and stay at the built-in defaults here. An unset family / color follows the theme's Axis
  * text font (so a dark theme gets a readable caption without the theme
  * author touching the Caption section); unset size / weight / alignment keep
  * the built-in caption defaults, which is what every theme saved before these
@@ -311,6 +318,18 @@ export const captionConfigFromTheme = (t: Theme): CaptionConfig => ({
 	fontSize: t.captionFontSize ?? DEFAULT_CAPTION_CONFIG.fontSize,
 	fontWeight: t.captionFontWeight ?? DEFAULT_CAPTION_CONFIG.fontWeight,
 	align: t.captionAlignment ?? DEFAULT_CAPTION_CONFIG.align,
+	// Sparse like the Caption panel writes them: absent = off.
+	italic: t.captionItalic || undefined,
+	underline: t.captionUnderline || undefined,
+	padding: t.captionPadding ?? DEFAULT_CAPTION_CONFIG.padding,
+	backgroundColor:
+		t.captionBackgroundColor ?? DEFAULT_CAPTION_CONFIG.backgroundColor,
+	backgroundOpacity:
+		t.captionBackgroundOpacity ?? DEFAULT_CAPTION_CONFIG.backgroundOpacity,
+	borderEnabled: t.captionBorderEnabled ?? DEFAULT_CAPTION_CONFIG.borderEnabled,
+	borderColor: t.captionBorderColor ?? DEFAULT_CAPTION_CONFIG.borderColor,
+	borderWidth: t.captionBorderWidth ?? DEFAULT_CAPTION_CONFIG.borderWidth,
+	borderRadius: t.captionBorderRadius ?? DEFAULT_CAPTION_CONFIG.borderRadius,
 })
 
 /** Theme-seeded fill + border style for NEW rectangle and circle annotations.
@@ -517,10 +536,62 @@ export const configsFromTheme = (t: Theme): ChannelConfigs => ({
 	r: axisConfigFromTheme(t, "r"),
 })
 
-/** Build initial legendConfig from the user's theme. */
+/** Build initial legendConfig from the user's theme. The gradient-bar
+ * fields stay null here — they follow the theme live through
+ * `resolveGradientBarStyle`. */
 export const legendConfigFromTheme = (t: Theme): LegendConfig => ({
 	...DEFAULT_LEGEND_CONFIG,
 	backgroundColor: t.legendBackgroundColor,
+	position: t.legendPosition ?? DEFAULT_LEGEND_CONFIG.position,
+	orientation: t.legendOrientation ?? DEFAULT_LEGEND_CONFIG.orientation,
+	showBorder: t.legendShowBorder ?? DEFAULT_LEGEND_CONFIG.showBorder,
+	borderColor: t.legendBorderColor ?? DEFAULT_LEGEND_CONFIG.borderColor,
+	borderRadius: t.legendBorderRadius ?? DEFAULT_LEGEND_CONFIG.borderRadius,
+	gradientLegendStyle:
+		t.legendGradientStyle ?? DEFAULT_LEGEND_CONFIG.gradientLegendStyle,
+})
+
+/** Theme-seeded tooltip on/off + hover look. The tooltip-box keys are NOT
+ * set here: they're sparse and follow the theme live (`resolveTooltipBox`). */
+export const tooltipConfigFromTheme = (t: Theme): TooltipConfig => ({
+	...DEFAULT_TOOLTIP_CONFIG,
+	enabled: t.tooltipEnabled ?? DEFAULT_TOOLTIP_CONFIG.enabled,
+	pointsOnly: t.tooltipPointsOnly ?? DEFAULT_TOOLTIP_CONFIG.pointsOnly,
+	hoverEnabled: t.hoverEnabled ?? DEFAULT_TOOLTIP_CONFIG.hoverEnabled,
+	legendHighlight:
+		t.hoverLegendHighlight ?? DEFAULT_TOOLTIP_CONFIG.legendHighlight,
+	hoverRecolor: t.hoverRecolor ?? DEFAULT_TOOLTIP_CONFIG.hoverRecolor,
+	hoverHighlightColor:
+		t.hoverHighlightColor ?? DEFAULT_TOOLTIP_CONFIG.hoverHighlightColor,
+	hoverOutline: t.hoverOutline ?? DEFAULT_TOOLTIP_CONFIG.hoverOutline,
+	hoverOutlineColor:
+		t.hoverOutlineColor ?? DEFAULT_TOOLTIP_CONFIG.hoverOutlineColor,
+	hoverOutlineWidth:
+		t.hoverOutlineWidth ?? DEFAULT_TOOLTIP_CONFIG.hoverOutlineWidth,
+	hoverFade: t.hoverFade ?? DEFAULT_TOOLTIP_CONFIG.hoverFade,
+	hoverFadeAmount: t.hoverFadeAmount ?? DEFAULT_TOOLTIP_CONFIG.hoverFadeAmount,
+})
+
+/** Theme-seeded data-table behavior flags. The style fields stay null —
+ * they follow the theme live (`resolveDataTableStyle`). `dataTableMaxRows`
+ * null is "All", so only `undefined` falls back. */
+export const dataTableConfigFromTheme = (t: Theme): DataTableConfig => ({
+	...DEFAULT_DATA_TABLE_CONFIG,
+	enabled: t.dataTableEnabled ?? DEFAULT_DATA_TABLE_CONFIG.enabled,
+	placement: t.dataTablePlacement ?? DEFAULT_DATA_TABLE_CONFIG.placement,
+	maxRows:
+		t.dataTableMaxRows === undefined
+			? DEFAULT_DATA_TABLE_CONFIG.maxRows
+			: t.dataTableMaxRows,
+	showDownload:
+		t.dataTableShowDownload ?? DEFAULT_DATA_TABLE_CONFIG.showDownload,
+})
+
+/** Theme-seeded map no-data colors. */
+export const mapConfigFromTheme = (t: Theme): MapConfig => ({
+	...DEFAULT_MAP_CONFIG,
+	noDataFill: t.mapNoDataFill ?? DEFAULT_MAP_CONFIG.noDataFill,
+	noDataPatternInk: t.mapNoDataPatternInk ?? DEFAULT_MAP_CONFIG.noDataPatternInk,
 })
 
 /** A config slice is "empty" — and therefore not a customization — when it is
@@ -1316,6 +1387,8 @@ export const labelsFromTheme = (t: Theme): LabelsConfig => ({
 			legendSize: t.legendTextFontSize,
 			legendWeight: t.legendTextFontWeight,
 			legendColor: t.legendTextColor,
+			legendItalic: t.legendTextFontItalic,
+			legendUnderline: t.legendTextFontUnderline,
 		},
 	},
 })
