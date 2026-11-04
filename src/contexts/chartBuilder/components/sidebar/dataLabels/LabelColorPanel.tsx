@@ -8,6 +8,7 @@ import {
 	type TextColorRule,
 } from "../../../lib/channelConfig"
 import { labelEntry, withLabelEntry } from "../../../lib/labelPieces"
+import { pickLabelPalette } from "../../../lib/paletteEdits"
 import { CATEGORICAL_HUE_PALETTE } from "../../../lib/scales"
 import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
 import { resolveTextPickerPalette } from "../../../lib/themeConfig"
@@ -411,9 +412,8 @@ const CategoricalPaletteRow = ({
 			})
 			return
 		}
-		const pal = theme.categoricalPalettes.find((p) => p.id === paletteId)
-		if (!pal) return
-		onChange({ paletteId, palette: [...pal.colors], colorOverrides: {} })
+		if (!theme.categoricalPalettes.some((p) => p.id === paletteId)) return
+		onChange(pickLabelPalette(theme, paletteId))
 	}
 	const currentSelection: string =
 		cfg.paletteId === DATA_LABELS_SINGLE_COLOR_ID

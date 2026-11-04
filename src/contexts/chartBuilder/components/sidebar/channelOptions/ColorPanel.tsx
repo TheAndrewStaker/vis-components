@@ -16,6 +16,7 @@ import {
 import { isAreaModeId } from "../../../lib/chartModes/families"
 import { effectiveType } from "../../../lib/fieldType"
 import { CATEGORICAL_HUE_PALETTE } from "../../../lib/scales"
+import { pickSlotPalette } from "../../../lib/paletteEdits"
 import { seedColorSlot } from "../../../lib/seedColorSlot"
 import type { FieldType } from "../../../lib/types"
 import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
@@ -483,14 +484,8 @@ const SlotCategoricalControls = ({
 		type: fieldType as FieldType,
 	})
 
-	const changePalette = (paletteId: string) => {
-		const pal = palettes.find((p) => p.id === paletteId)
-		updateSlot({
-			paletteId,
-			palette: [...(pal?.colors ?? CATEGORICAL_HUE_PALETTE)],
-			hue: { ...DEFAULT_CATEGORICAL_HUE_CONFIG, colors: {} },
-		})
-	}
+	const changePalette = (paletteId: string) =>
+		updateSlot(pickSlotPalette(theme, paletteId, fieldType as FieldType))
 	const setColor = (value: string, color: string) =>
 		updateSlot({ hue: { ...catCfg, colors: { ...catCfg.colors, [value]: color } } })
 	const resetColor = (value: string) => {

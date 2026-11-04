@@ -401,3 +401,17 @@ export const columnAlignOf = (
 	look: Pick<ResolvedDataTableStyle, "numberAlign">
 ): DataTableTextAlign =>
 	cfg.columnAlign[column.name] ?? defaultColumnAlign(column.type, look)
+
+/** A column alignment as the Data Table panel stores it: the column's
+ * default (by its type and the table's number alignment) is "unset". */
+export const columnAlignPatch = (
+	cfg: Pick<DataTableConfig, "columnAlign">,
+	column: { name: string; type: FieldType },
+	align: DataTableTextAlign,
+	look: Pick<ResolvedDataTableStyle, "numberAlign">
+): Pick<DataTableConfig, "columnAlign"> => {
+	const { [column.name]: _old, ...rest } = cfg.columnAlign
+	return {
+		columnAlign: align === defaultColumnAlign(column.type, look) ? rest : { ...rest, [column.name]: align },
+	}
+}

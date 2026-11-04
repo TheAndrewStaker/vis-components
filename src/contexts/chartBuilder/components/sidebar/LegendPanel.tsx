@@ -13,6 +13,12 @@ import {
 	pxToUnit,
 	type DisplayUnit,
 } from "../../lib/displayUnits"
+import {
+	legendHiddenPatch,
+	swatchOutlineWidthPatch,
+	swatchShapePatch,
+	swatchSizePatch,
+} from "../../lib/legendEdits"
 import { effectiveType } from "../../lib/fieldType"
 import { DEFAULT_FILL } from "../../lib/channelConfig"
 import { histogramMeasureColorDomain } from "../../lib/histogramMeasureColor"
@@ -27,7 +33,6 @@ import {
 	LEGEND_CHANNELS,
 	LEGEND_FRIENDLY_NAME,
 	QUANTITATIVE_LEGEND_CHANNELS,
-	legendChannelHiddenByDefault,
 	legendSwatchOutlineColor,
 	resolveLegendSwatchOutlineColor,
 	resolveLegendSwatchOutlineWidth,
@@ -422,15 +427,8 @@ export const LegendPanel = () => {
 		packedSourceOf(encodings.hue) !== null &&
 		!!encodings.connection?.field
 
-	const setHidden = (channel: LegendChannel, hidden: boolean) => {
-		const nextHidden = { ...merged.hidden, [channel]: hidden }
-		// Drop the key entirely when toggling back to the mode default
-		// ("show", for all but the default-hidden channels) so the persisted
-		// blob stays small.
-		if (hidden === legendChannelHiddenByDefault(channel, modeDef.legend))
-			delete nextHidden[channel]
-		update({ hidden: nextHidden })
-	}
+	const setHidden = (channel: LegendChannel, hidden: boolean) =>
+		update(legendHiddenPatch(merged, channel, hidden, modeDef.legend))
 
 	// Only surface toggles for channels that are actually mapped AND
 	// meaningful in the current chart mode (e.g. length is hidden in bar
@@ -683,28 +681,10 @@ export const LegendPanel = () => {
 	// explicitly — the rectangle as "rect", since a stored null means
 	// "follow the theme". Hue's legacy global fields are cleared alongside
 	// so they can't shine through a dropped entry.
-	const setSwatchShape = (ch: SwatchShapeChannel, shape: LegendSwatchShape) => {
-		const next = { ...merged.swatchShapes }
-		if (shape === theme.legendSwatchShape) delete next[ch]
-		else next[ch] = shape === null ? "rect" : shape
-		update({
-			swatchShapes: next,
-			...(ch === "hue" && merged.hueLegendSwatchShape != null
-				? { hueLegendSwatchShape: null }
-				: {}),
-		})
-	}
-	const setSwatchSize = (ch: SwatchShapeChannel, size: number) => {
-		const next = { ...merged.swatchSizes }
-		if (size === theme.legendSwatchSize) delete next[ch]
-		else next[ch] = size
-		update({
-			swatchSizes: next,
-			...(ch === "hue" && merged.hueLegendSwatchSize != null
-				? { hueLegendSwatchSize: null }
-				: {}),
-		})
-	}
+	const setSwatchShape = (ch: SwatchShapeChannel, shape: LegendSwatchShape) =>
+		update(swatchShapePatch(merged, ch, shape, theme))
+	const setSwatchSize = (ch: SwatchShapeChannel, size: number) =>
+		update(swatchSizePatch(merged, ch, size, theme))
 	const setSwatchOutlineColor = (ch: SwatchShapeChannel, color: string) =>
 		update({
 			swatchOutlineColors: { ...merged.swatchOutlineColors, [ch]: color },
@@ -718,16 +698,8 @@ export const LegendPanel = () => {
 		else delete next[ch]
 		update({ swatchOutlineColors: next })
 	}
-	const setSwatchOutlineWidth = (ch: SwatchShapeChannel, width: number) => {
-		// Keep the stored config sparse: the theme's width is the default, so
-		// drop the entry when it's picked — unless a legacy GLOBAL width would
-		// shine through, which an explicit entry must override.
-		const next = { ...merged.swatchOutlineWidths }
-		if (width === theme.legendSwatchOutlineWidth && merged.swatchOutlineWidth == null)
-			delete next[ch]
-		else next[ch] = width
-		update({ swatchOutlineWidths: next })
-	}
+	const setSwatchOutlineWidth = (ch: SwatchShapeChannel, width: number) =>
+		update(swatchOutlineWidthPatch(merged, ch, width, theme))
 	// The standalone-swatch color picker appears for channels in
 	// {length, angle, area, opacity} that are mapped + visible AND aren't
 	// sharing a field with hue (those get their color from the hue

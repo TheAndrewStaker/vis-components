@@ -1,5 +1,6 @@
 import type { DataLabelsConfig, HueConfig, PaletteName } from "./channelConfig"
-import type { FieldType } from "./types"
+import { resolveTextPalettePick } from "./themeConfig"
+import type { FieldType, Theme } from "./types"
 
 /** Build a HueConfig (in the shape expected by `makeHueScale`) from the
  * Data Labels palette / gradient knobs and the field's effective type.
@@ -50,4 +51,18 @@ export const buildLabelHueConfig = (
 	// Categorical / ordinal — only meaningful when a palette is selected.
 	if (cfg.palette.length === 0) return null
 	return { kind: "categorical", colors: {}, stackMode: "stack" }
+}
+
+/** The palette the Data Labels panel seeds when labels first color by a
+ * categorical field (or a packed layout's root group): the theme's text
+ * palette, with no per-value overrides. Null when a palette is already
+ * chosen or the theme has none. */
+export const seedLabelTextPalette = (
+	cfg: Pick<DataLabelsConfig, "paletteId">,
+	theme: Theme
+): Pick<DataLabelsConfig, "paletteId" | "palette" | "colorOverrides"> | null => {
+	if (cfg.paletteId !== null) return null
+	const pick = resolveTextPalettePick(theme)
+	if (pick.id === null) return null
+	return { paletteId: pick.id, palette: pick.colors, colorOverrides: {} }
 }

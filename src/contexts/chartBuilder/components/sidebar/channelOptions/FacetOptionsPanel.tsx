@@ -15,6 +15,7 @@ import { SidebarJumpLink } from "../../../../../components/ui/SidebarJumpLink"
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { axisFieldsFor, axisRangeIsContinuous } from "../../../lib/axisFields"
 import { isPieModeId } from "../../../lib/chartModes/families"
+import { facetGridPatch, facetSizingPatch, type FacetSizing } from "../../../lib/facetEdits"
 import { facetAxisMapping } from "../../../lib/facetAxisMapping"
 import { effectiveType } from "../../../lib/fieldType"
 import { resolveFacetGrid } from "../../../lib/resolveFacetGrid"
@@ -303,6 +304,12 @@ export const FacetOptionsPanel = () => {
 	// Individual cap: no single axis can exceed the number of facets.
 	const maxPerAxis = Math.max(1, facetCount)
 
+	// Enabling proportional sizing clears the stored panel dimension on that
+	// axis (it would silently override the weights at render time). A wrap
+	// grid never flips the share setting.
+	const setSizing = (axis: "x" | "y", next: FacetSizing) =>
+		updateCfg(facetSizingPatch(cfg, axis, next, { flipShare: false, perGroupAvailable: false }))
+
 	// Commit a new value for one axis. The other axis SNAPS up to the
 	// smallest value that keeps every facet fitted — so e.g. with 5 facets
 	// and rows=1, cols becomes 5 (the only legal cols); typing cols=4
@@ -315,16 +322,7 @@ export const FacetOptionsPanel = () => {
 		raw: string,
 	): Partial<FacetConfig> | null => {
 		if (raw.trim() === "") return { [axis]: null }
-		const n = Number.parseInt(raw, 10)
-		if (!Number.isFinite(n) || n < 1) return null
-		if (n > maxPerAxis) return null
-		const otherKey: "rows" | "cols" = axis === "rows" ? "cols" : "rows"
-		const other = otherKey === "cols" ? cfg.cols : cfg.rows
-		const minLegalOther = Math.max(1, Math.ceil(facetCount / n))
-		if (other == null || other < minLegalOther) {
-			return { [axis]: n, [otherKey]: minLegalOther }
-		}
-		return { [axis]: n }
+		return facetGridPatch(cfg, axis, Number.parseInt(raw, 10), facetCount)
 	}
 
 	// When the wrap channel isn't mapped, surface only the empty-state
@@ -561,28 +559,14 @@ export const FacetOptionsPanel = () => {
 						<SizeByCheckboxRow
 							label={`Size ${rowSizingNoun} by category count`}
 							checked={sizeY === "categoryCount"}
-							onChange={(checked) =>
-								updateCfg({
-									proportionalSizingY: checked ? "categoryCount" : "off",
-									// Enabling proportional row sizing makes a stored
-									// panelHeight stale (it'd silently override the
-									// proportional weights at render time). Clear it
-									// so the user starts from auto.
-									...(checked ? { panelHeight: null } : {}),
-								})
-							}
+							onChange={(checked) => setSizing("y", checked ? "categoryCount" : "off")}
 						/>
 					)}
 					{showRowSizing && rowAxisIsContinuous && (
 						<SizeByCheckboxRow
 							label={`Size ${rowSizingNoun} by unit range`}
 							checked={sizeY === "unit"}
-							onChange={(checked) =>
-								updateCfg({
-									proportionalSizingY: checked ? "unit" : "off",
-									...(checked ? { panelHeight: null } : {}),
-								})
-							}
+							onChange={(checked) => setSizing("y", checked ? "unit" : "off")}
 						/>
 					)}
 
@@ -670,26 +654,14 @@ export const FacetOptionsPanel = () => {
 						<SizeByCheckboxRow
 							label={`Size ${colSizingNoun} by category count`}
 							checked={sizeX === "categoryCount"}
-							onChange={(checked) =>
-								updateCfg({
-									proportionalSizingX: checked ? "categoryCount" : "off",
-									// Clear panelWidth on enable — see the symmetric
-									// note on the row-sizing handler above.
-									...(checked ? { panelWidth: null } : {}),
-								})
-							}
+							onChange={(checked) => setSizing("x", checked ? "categoryCount" : "off")}
 						/>
 					)}
 					{showColSizing && colAxisIsContinuous && (
 						<SizeByCheckboxRow
 							label={`Size ${colSizingNoun} by unit range`}
 							checked={sizeX === "unit"}
-							onChange={(checked) =>
-								updateCfg({
-									proportionalSizingX: checked ? "unit" : "off",
-									...(checked ? { panelWidth: null } : {}),
-								})
-							}
+							onChange={(checked) => setSizing("x", checked ? "unit" : "off")}
 						/>
 					)}
 

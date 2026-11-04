@@ -23,6 +23,7 @@ import {
 	type DataTablePlacement,
 	type DataTableTextAlign,
 	type ResolvedDataTableStyle,
+	columnAlignPatch,
 } from "../../lib/dataTableConfig"
 import { effectiveType } from "../../lib/fieldType"
 import { dataTableColumns } from "../../lib/dataTable"
@@ -344,13 +345,7 @@ export const DataTablePanel = () => {
 	const setColumnAlign = (
 		column: (typeof tableColumns)[number],
 		a: DataTableTextAlign
-	) => {
-		const { [column.name]: _old, ...rest } = cfg.columnAlign
-		update({
-			columnAlign:
-				a === defaultColumnAlign(column.type, look) ? rest : { ...rest, [column.name]: a },
-		})
-	}
+	) => update(columnAlignPatch(cfg, column, a, look))
 
 	return (
 		<div className="vc-option-panel">

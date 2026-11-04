@@ -19,6 +19,13 @@ import {
 	UNIT_STEP,
 	type DisplayUnit,
 } from "../../lib/displayUnits"
+import {
+	aspectRatioToggled,
+	canvasSizeToggled,
+	DEFAULT_CANVAS_HEIGHT,
+	DEFAULT_CANVAS_WIDTH,
+	MIN_CANVAS_DIM,
+} from "../../lib/canvasSizeEdits"
 import type { DrawOrderConfig } from "../../lib/drawOrder"
 import {
 	currentChannelConfigsAtom,
@@ -28,11 +35,6 @@ import { useCurrentTheme } from "../../store/useCurrentTheme"
 import { useCurrentDatasetView } from "../../store/useCurrentDatasetView"
 import { Select } from "../../../../components/ui/Select"
 
-// Smallest usable canvas edge, in px (matches the Export modal's floor).
-const MIN_CANVAS_DIM = 50
-// What "Set canvas size" seeds (px) — also the Width / Height reset target.
-const DEFAULT_CANVAS_WIDTH = 1000
-const DEFAULT_CANVAS_HEIGHT = 600
 
 const SIDE_LABEL: Record<CanvasSide, string> = {
 	top: "Top",
@@ -149,14 +151,7 @@ export const AestheticsPanel = () => {
 					<Checkbox
 						label="Set canvas size"
 						checked={canvasSize?.enabled ?? false}
-						onChange={(enabled) =>
-							setCanvasSize({
-								enabled,
-								width: canvasSize?.width ?? DEFAULT_CANVAS_WIDTH,
-								height: canvasSize?.height ?? DEFAULT_CANVAS_HEIGHT,
-								unit: canvasSize?.unit,
-							})
-						}
+						onChange={(enabled) => setCanvasSize(canvasSizeToggled(canvasSize, enabled))}
 					/>
 					{canvasSize?.enabled && (
 						<>
@@ -292,13 +287,7 @@ export const AestheticsPanel = () => {
 					<Checkbox
 						label="Fix aspect ratio"
 						checked={aspect?.enabled ?? false}
-						onChange={(enabled) =>
-							setAspect({
-								enabled,
-								length: aspect?.length ?? 1,
-								width: aspect?.width ?? 1,
-							})
-						}
+						onChange={(enabled) => setAspect(aspectRatioToggled(aspect, enabled))}
 					/>
 					{aspect?.enabled && (
 						<>

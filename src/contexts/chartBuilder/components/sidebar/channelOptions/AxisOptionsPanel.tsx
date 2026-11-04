@@ -16,6 +16,7 @@ import {
 	type SpineConfig,
 	type TickmarkConfig,
 } from "../../../lib/channelConfig"
+import { distributionTypeOf, distributionTypePatch, type DistributionType } from "../../../lib/distributionType"
 import { naturalWrapAlignFor } from "../../../lib/tickLabelWrap"
 import { axisConfigFromTheme, spineThemeFor, valueChanged } from "../../../lib/themeConfig"
 import type { FontConfig, LabelAlignment } from "../../../lib/labelsConfig"
@@ -1782,7 +1783,6 @@ const DensityCurveControls = ({
 	</>
 )
 
-type DistributionType = "none" | "histogram" | "density" | "violin" | "box"
 
 /** Single-select segmented control for the distribution display on a
  * quantitative position axis. Histogram, violin, and box plot are alternative
@@ -1807,15 +1807,7 @@ const DistributionTypeControls = ({
 	boxSizeLabel: string
 	onChange: (next: Partial<AxisConfig>) => void
 }) => {
-	const selected: DistributionType = histogram.enabled
-		? "histogram"
-		: overlay.showDensityCurve
-			? "density"
-			: overlay.showDensityViolin
-				? "violin"
-				: overlay.showBoxPlot
-					? "box"
-					: "none"
+	const selected = distributionTypeOf(histogram, overlay)
 
 	const segments: { key: DistributionType; label: string }[] = [
 		{ key: "none", label: "None" },
@@ -1838,16 +1830,7 @@ const DistributionTypeControls = ({
 	// Apply a selection by writing both configs at once so only one display is
 	// ever active — histogram, the density curve, and the violin/box overlay are
 	// mutually exclusive.
-	const select = (type: DistributionType) =>
-		onChange({
-			histogram: { ...histogram, enabled: type === "histogram" },
-			distributionOverlay: {
-				...overlay,
-				showDensityCurve: type === "density",
-				showDensityViolin: type === "violin",
-				showBoxPlot: type === "box",
-			},
-		})
+	const select = (type: DistributionType) => onChange(distributionTypePatch(histogram, overlay, type))
 
 	const setOverlay = (next: Partial<DistributionOverlayConfig>) =>
 		onChange({ distributionOverlay: { ...overlay, ...next } })

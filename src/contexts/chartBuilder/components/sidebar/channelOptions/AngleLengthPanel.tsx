@@ -10,8 +10,7 @@ import {
 	type LengthConfig,
 } from "../../../lib/channelConfig"
 import { MIN_LINE_THICKNESS } from "../../../lib/connectionThickness"
-import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
-import { orderedLevels } from "../../../lib/smartSort"
+import { fieldLevels, thicknessByLevel } from "../../../lib/thicknessVaryBy"
 import {
 	isBarModeId,
 	isComboModeId,
@@ -776,12 +775,8 @@ const SegmentPropertiesSection = () => {
 			: null
 	// Distinct levels of a field, in the Fields panel's pinned order —
 	// parsed through the effective type so keys match the drawn rows.
-	const levelsOf = (name: string): string[] => {
-		if (!dataset) return []
-		const type = typeOf(name)
-		const values = uniqueFieldValues(dataset.rows, name, { type })
-		return orderedLevels(values, type, levelOrders[name]).map((l) => l.value)
-	}
+	const levelsOf = (name: string): string[] =>
+		dataset ? fieldLevels(dataset.rows, name, typeOf(name), levelOrders[name]) : []
 	const levels = varyField ? levelsOf(varyField) : []
 
 	const ch = {
@@ -796,9 +791,7 @@ const SegmentPropertiesSection = () => {
 			updateLength({ segmentThicknessField: null, segmentThicknessByValue: {} })
 			return
 		}
-		const seeded: Record<string, number> = {}
-		for (const v of levelsOf(next)) seeded[v] = thickness
-		updateLength({ segmentThicknessField: next, segmentThicknessByValue: seeded })
+		updateLength({ segmentThicknessField: next, segmentThicknessByValue: thicknessByLevel(levelsOf(next), thickness) })
 	}
 	const setThicknessFor = (value: string, n: number) => {
 		if (n < 0) return

@@ -2,8 +2,7 @@ import { useId, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { effectiveDerivedName } from "../../lib/derivedVariables"
 import {
-	alphabeticalLevelOrder,
-	orderLevelsByField,
+	levelOrderFromSpec,
 } from "../../lib/orderLevelsByField"
 import { applyLevelOrder, smartSortCategories } from "../../lib/smartSort"
 import type { Field, FieldLevelOrderSpec, FieldType } from "../../lib/types"
@@ -600,6 +599,10 @@ const LevelReorderPanel = ({
 			: ""
 	const decreasing = orderSpec?.decreasing ?? false
 
+	/** The type of an order-by candidate (quantitative or temporal), for
+	 * the computed order; anything else is not orderable-by. */
+	const candidateType = (name: string) => orderByCandidates.find((c) => c.name === name)?.type
+
 	/** The spec a set of picker choices records. Sparse: absent keys mean
 	 * "not chosen", so a plain Alphabetical order stores just its `by`. */
 	const specFor = (
@@ -656,28 +659,11 @@ const LevelReorderPanel = ({
 	 * chosen, level not yet) applies UNSCOPED rather than going inert, so the
 	 * chart order never lags the controls. */
 	const applyOrderBy = (key: string, desc: boolean, sVar: string, sLevel: string) => {
-		if (key === "alpha") {
-			setPinnedOrder(alphabeticalLevelOrder(discovered, desc))
-			setOrderSpec(specFor(key, desc, sVar, sLevel))
-			return
-		}
-		const name = keyToField(key)
-		const candidate = orderByCandidates.find((c) => c.name === name)
-		if (!candidate) return
-		const scope =
-			sVar !== "" && sLevel !== "" ? { field: sVar, value: sLevel } : undefined
-		setPinnedOrder(
-			orderLevelsByField(
-				dataset.rows,
-				field,
-				type,
-				candidate.name,
-				candidate.type,
-				desc,
-				scope
-			)
-		)
-		setOrderSpec(specFor(key, desc, sVar, sLevel))
+		const spec = specFor(key, desc, sVar, sLevel)
+		const result = levelOrderFromSpec(dataset.rows, field, type, spec, candidateType)
+		if ("problem" in result) return
+		setPinnedOrder(result.order)
+		setOrderSpec(spec)
 	}
 
 	const reset = () => {

@@ -8,10 +8,12 @@ import {
 	resolveTooltipBox,
 	type TooltipBoxKey,
 	type TooltipConfig,
+	tooltipBoxPatch,
 } from "../../lib/labelsConfig"
 import {
 	buildDefaultTooltipCss,
 	buildDefaultTooltipHtml,
+	customHtmlPatch,
 } from "../../lib/tooltipDefaults"
 import { ALL_ENCODING_CHANNELS } from "../../lib/channels"
 import {
@@ -87,7 +89,7 @@ export const TooltipPanel = () => {
 			| "tooltipShadowOpacity"
 		>,
 		n: number
-	) => (n === theme[key] ? unset(key) : update({ [key]: n }))
+	) => setCfg(tooltipBoxPatch(merged, key, n, theme))
 	/** Write a box color (`null` = Auto): the theme's own value clears it. */
 	const setBoxColor = (
 		key: Extract<
@@ -95,7 +97,7 @@ export const TooltipPanel = () => {
 			"tooltipOutlineColor" | "tooltipBackgroundColor" | "tooltipShadowColor"
 		>,
 		c: string | null
-	) => (c === theme[key] ? unset(key) : update({ [key]: c }))
+	) => setCfg(tooltipBoxPatch(merged, key, c, theme))
 	// The Custom CSS seed mirrors the box as it stands, so turning the
 	// template on changes nothing visible.
 	const defaultCss = buildDefaultTooltipCss(box)
@@ -380,20 +382,7 @@ export const TooltipPanel = () => {
 					<Checkbox
 						label="Use custom HTML template"
 						checked={!!merged.useCustomHtml}
-						onChange={(on) => {
-							// Seed empty boxes with the defaults on enable so the
-							// user starts from an editable template instead of a
-							// blank textarea; existing edits are left alone.
-							update({
-								useCustomHtml: on,
-								...(on && !merged.customHtml
-									? { customHtml: defaultHtml }
-									: {}),
-								...(on && !merged.customCss
-									? { customCss: defaultCss }
-									: {}),
-							})
-						}}
+						onChange={(on) => update(customHtmlPatch(merged, on, mappedFieldNames, theme))}
 					/>
 					{merged.useCustomHtml && (
 					<>

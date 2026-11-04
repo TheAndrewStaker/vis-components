@@ -13,7 +13,7 @@ import { Checkbox } from "../../../../components/ui/Checkbox"
 import {
 	FOCUS_REGION_LABELS,
 	levelDefaultViewport,
-	regionViewport,
+	focusRegionPatch,
 } from "../../lib/geo/focusRegion"
 import {
 	DEFAULT_MAP_CONFIG,
@@ -222,18 +222,8 @@ export const MapsSection = () => {
 	// viewport "from the current view" — the active region's box, or a sensible
 	// default for the geography level — but only the first time (so re-selecting
 	// Custom doesn't blow away a viewport the user already dragged).
-	const onFocusChange = (next: FocusRegion | "auto" | "custom") => {
-		if (next === "custom" && !mapConfig.customViewport) {
-			const prev = mapConfig.focusRegion
-			const seed =
-				prev !== "auto" && prev !== "custom"
-					? regionViewport(prev)
-					: autoViewport()
-			update({ focusRegion: next, customViewport: seed })
-		} else {
-			update({ focusRegion: next })
-		}
-	}
+	const onFocusChange = (next: FocusRegion | "auto" | "custom") =>
+		update(focusRegionPatch(mapConfig, next, autoViewport))
 
 	// "Reset view" for custom focus: re-seed from what auto would show (the
 	// data frame when only data regions draw, else the level default).

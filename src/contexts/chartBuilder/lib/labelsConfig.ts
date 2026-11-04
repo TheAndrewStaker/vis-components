@@ -1596,3 +1596,79 @@ export const migrateLabelsConfig = (
 			: {}),
 	}
 }
+
+/** A tooltip-box setting as the Tooltips panel stores it: the theme's own
+ * value is "unset" (follow the theme), anything else is pinned. */
+export const tooltipBoxPatch = <K extends TooltipBoxKey>(
+	cfg: TooltipConfig,
+	key: K,
+	value: TooltipConfig[K],
+	theme: TooltipBoxThemeDefaults
+): TooltipConfig => {
+	if (value === theme[key]) {
+		const next = { ...cfg }
+		delete next[key]
+		return next
+	}
+	return { ...cfg, [key]: value }
+}
+
+/** A title alignment as the Labels panel stores it: sparse against the
+ * theme-seeded base, so theme defaults never read as user edits. */
+export const titleAlignmentPatch = (
+	labels: Pick<LabelsConfig, "titleAlignments" | "baseFont">,
+	key: LabelFontKey,
+	value: LabelAlignment
+): Pick<LabelsConfig, "titleAlignments"> => {
+	const next = { ...labels.titleAlignments }
+	if (value === baseTitleAlignmentOf(labels.baseFont.titles, key)) delete next[key]
+	else next[key] = value
+	return { titleAlignments: next }
+}
+
+export const titleVerticalAlignmentPatch = (
+	labels: Pick<LabelsConfig, "titleVerticalAlignments">,
+	key: LabelFontKey,
+	value: VerticalAlignment
+): Pick<LabelsConfig, "titleVerticalAlignments"> => {
+	const next = { ...labels.titleVerticalAlignments }
+	if (value === "middle") delete next[key]
+	else next[key] = value
+	return { titleVerticalAlignments: next }
+}
+
+export const titleAnglePatch = (
+	labels: Pick<LabelsConfig, "titleAngles">,
+	key: LabelFontKey,
+	value: number
+): Pick<LabelsConfig, "titleAngles"> => {
+	const next = { ...labels.titleAngles }
+	if (value === 0) delete next[key]
+	else next[key] = value
+	return { titleAngles: next }
+}
+
+/** The legend channels one title row writes: every channel mapped to the
+ * same field as `channel`, while legends combine by variable. */
+export const legendTitleChannels = (
+	encodings: Partial<Record<EncodingLegendChannel, { field: string | null } | undefined>>,
+	channel: EncodingLegendChannel,
+	combineSameVariable: boolean
+): EncodingLegendChannel[] => {
+	const field = encodings[channel]?.field
+	if (!combineSameVariable || !field) return [channel]
+	return LEGEND_CHANNELS.filter((ch) => encodings[ch]?.field === field)
+}
+
+/** The visual name after the chart title changes: while the name still
+ * tracks the title (it is "Untitled" or equals the previous title), it
+ * follows; once the user named the visual something else, it stays. */
+export const mirroredVisualName = (
+	name: string,
+	previousTitle: string,
+	nextTitle: string,
+	untitled: string
+): string => {
+	const mirrored = nextTitle.trim() === "" ? untitled : nextTitle
+	return name === untitled || name === previousTitle ? mirrored : name
+}

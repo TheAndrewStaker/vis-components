@@ -13,6 +13,7 @@ import {
 	facetPanelOptions,
 	resolveFacetPanels,
 } from "../../../lib/resolveFacetPanels"
+import { facetSizingPatch, type FacetSizing } from "../../../lib/facetEdits"
 import type { FacetPanelRef } from "../../../lib/facetPanelRef"
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { axisFieldsFor, axisRangeIsContinuous } from "../../../lib/axisFields"
@@ -302,14 +303,13 @@ const FacetAxisSubsection = ({
 	// semantics and we leave those alone. Enabling sizing also clears the
 	// stored panel dimension (it'd silently override the proportional
 	// weights at render time) so the user starts from auto.
-	const setSizing = (next: "off" | "categoryCount" | "unit") => {
-		const patch = { [spec.sizingKey]: next } as Partial<FacetConfig>
-		if (next !== "off" && axisMap.showPanelSize && share === "all") {
-			patch[spec.shareKey] = perGroupAvailable ? "perGroup" : "none"
-		}
-		if (next !== "off") patch[spec.panelDimKey] = null
-		updateCfg(patch)
-	}
+	const setSizing = (next: FacetSizing) =>
+		updateCfg(
+			facetSizingPatch(cfg, spec.sizingKey === "proportionalSizingX" ? "x" : "y", next, {
+				flipShare: axisMap.showPanelSize,
+				perGroupAvailable,
+			})
+		)
 
 	// Per-group range editor surfaces when each row / column has a single
 	// well-defined axis to bound:

@@ -22,7 +22,12 @@ import {
 	type TitlePrefixConfig,
 	type TitlesFontConfig,
 	type VerticalAlignment,
+	mirroredVisualName,
+	titleAlignmentPatch,
+	titleAnglePatch,
+	titleVerticalAlignmentPatch,
 } from "../../lib/labelsConfig"
+import { UNTITLED_VISUAL_NAME } from "../../lib/nameUniqueness"
 import { defaultAxisTitles } from "../../lib/axisTitleDefaults"
 import { effectiveType } from "../../lib/fieldType"
 import { resolveHistogramMeasure } from "../../lib/histogramMeasure"
@@ -110,10 +115,7 @@ export const LabelsPanel = () => {
 		// title we last mirrored — at which point the two diverge for good.
 		if (key === "title") {
 			const previousTitle = labels.title
-			const mirrored = value.trim() === "" ? "Untitled" : value
-			setVisualName((prev) =>
-				prev === "Untitled" || prev === previousTitle ? mirrored : prev
-			)
+			setVisualName((prev) => mirroredVisualName(prev, previousTitle, value, UNTITLED_VISUAL_NAME))
 		}
 	}
 	// `next` REPLACES any existing override for the key (caller passes the full
@@ -131,49 +133,15 @@ export const LabelsPanel = () => {
 			}
 		})
 	}
-	const setAlignment = (key: LabelFontKey, value: LabelAlignment) => {
-		setLabels((prev) => {
-			const next = { ...prev.titleAlignments }
-			// Keep the persisted map sparse: drop the entry when it matches the
-			// theme-seeded base for this key (center for every slot except the
-			// primary title / subtitle, whose base comes from the theme). An
-			// unconditional "center → delete" broke Center on a theme with a
-			// left/right primary alignment: the renderer resolves a missing entry
-			// to the theme base, so the click looked like a no-op.
-			if (value === baseTitleAlignmentOf(prev.baseFont.titles, key)) {
-				delete next[key]
-			} else {
-				next[key] = value
-			}
-			return { ...prev, titleAlignments: next }
-		})
-	}
-	const setVerticalAlignment = (key: LabelFontKey, value: VerticalAlignment) => {
-		setLabels((prev) => {
-			const next = { ...prev.titleVerticalAlignments }
-			// Drop the entry at the "middle" default so the persisted map stays
-			// sparse (mirrors setAlignment's center handling).
-			if (value === "middle") {
-				delete next[key]
-			} else {
-				next[key] = value
-			}
-			return { ...prev, titleVerticalAlignments: next }
-		})
-	}
-	const setAngle = (key: LabelFontKey, value: number) => {
-		setLabels((prev) => {
-			const next = { ...prev.titleAngles }
-			// Drop the entry at the upright default so the persisted map stays
-			// sparse (mirrors setAlignment's center handling).
-			if (value === 0) {
-				delete next[key]
-			} else {
-				next[key] = value
-			}
-			return { ...prev, titleAngles: next }
-		})
-	}
+	// The three maps stay sparse against their defaults (the theme-seeded
+	// base alignment, "middle", upright), so theme defaults never read as
+	// user edits: see the lib patches.
+	const setAlignment = (key: LabelFontKey, value: LabelAlignment) =>
+		setLabels((prev) => ({ ...prev, ...titleAlignmentPatch(prev, key, value) }))
+	const setVerticalAlignment = (key: LabelFontKey, value: VerticalAlignment) =>
+		setLabels((prev) => ({ ...prev, ...titleVerticalAlignmentPatch(prev, key, value) }))
+	const setAngle = (key: LabelFontKey, value: number) =>
+		setLabels((prev) => ({ ...prev, ...titleAnglePatch(prev, key, value) }))
 	const setYAxisHorizontal = (value: boolean) => {
 		setLabels((prev) => ({ ...prev, yAxisTitleHorizontal: value }))
 	}

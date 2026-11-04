@@ -43,6 +43,8 @@ import {
 	buildQuantHueConfigFromTheme,
 	resolveGradientToConfig,
 } from "../../../lib/hueDefaults"
+import { pickHuePalette } from "../../../lib/paletteEdits"
+import { seedQuantHue } from "../../../lib/seedColorSlot"
 import { resolveCategoricalPalette } from "../../../lib/themeConfig"
 import { rgb as d3Rgb } from "d3-color"
 import { StackModeRow } from "./StackModeRow"
@@ -285,18 +287,7 @@ export const ColorOptionsPanel = ({
 	// All hooks MUST be above this line — no early returns before hooks.
 	useEffect(() => {
 		if (!needsQuantInit) return
-		const initCfg = buildQuantConfigFromTheme(theme)
-		// Prefer a stashed gradient over the theme default (the stash holds the
-		// user's last quantitative config, saved when the encoding switched to
-		// a categorical field — see EncodingShelf), and stash an outgoing
-		// categorical config the same way so its overrides survive too.
-		setConfigs((prev) => ({
-			...prev,
-			hue: preserveStackMode(prev.hue, prev.hueQuantStash ?? initCfg),
-			...(prev.hue?.kind === "categorical"
-				? { hueCategoricalStash: prev.hue }
-				: {}),
-		}))
+		setConfigs((prev) => seedQuantHue(prev, theme))
 	}, [needsQuantInit]) // eslint-disable-line react-hooks/exhaustive-deps
 
 	const update = (next: HueConfig) => {
@@ -690,40 +681,8 @@ const CategoricalPanel = ({
 		const { [value]: _removed, ...rest } = cfg.colors
 		update({ ...cfg, colors: rest })
 	}
-	const inksFor = (
-		pal: { colors: string[]; patternInks?: Array<string | null> } | undefined,
-		fallbackColors: readonly string[],
-	): Array<string | null> => {
-		const colors = pal?.colors ?? fallbackColors
-		const inks = pal?.patternInks ?? []
-		return colors.map((_, i) => inks[i] ?? null)
-	}
-	const changePalette = (paletteId: string) => {
-		const pal = palettesForType.find((p) => p.id === paletteId)
-		if (isOrdinal) {
-			setConfigs((prev) => ({
-				...prev,
-				hue: preserveStackMode(prev.hue, {
-					...DEFAULT_CATEGORICAL_HUE_CONFIG,
-					colors: {},
-				}),
-				ordinalPaletteId: paletteId,
-				ordinalPalette: [...(pal?.colors ?? CATEGORICAL_HUE_PALETTE)],
-				ordinalPalettePatternInks: inksFor(pal, CATEGORICAL_HUE_PALETTE),
-			}))
-		} else {
-			setConfigs((prev) => ({
-				...prev,
-				hue: preserveStackMode(prev.hue, {
-					...DEFAULT_CATEGORICAL_HUE_CONFIG,
-					colors: {},
-				}),
-				categoricalPaletteId: paletteId,
-				categoricalPalette: [...(pal?.colors ?? CATEGORICAL_HUE_PALETTE)],
-				categoricalPalettePatternInks: inksFor(pal, CATEGORICAL_HUE_PALETTE),
-			}))
-		}
-	}
+	const changePalette = (paletteId: string) =>
+		setConfigs((prev) => pickHuePalette(prev, theme, paletteId, type))
 	const FillPaletteDropdown = palettesForType.length > 1 && (
 		<SelectInput
 			label="Palette"

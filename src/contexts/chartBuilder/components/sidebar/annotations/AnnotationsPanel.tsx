@@ -2,10 +2,6 @@ import { extent } from "d3-array"
 import { useMemo, useState } from "react"
 import { useAtom, useAtomValue } from "jotai"
 import {
-	newCircle,
-	newLineSegment,
-	newRectangle,
-	newTextAnnotation,
 	type AnnotationsConfig,
 	type CircleAnnotation,
 	type LineSegmentAnnotation,
@@ -37,7 +33,8 @@ import {
 import { useChartModeDef } from "../../../store/useChartModeDef"
 import { useCurrentDatasetView } from "../../../store/useCurrentDatasetView"
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
-import { nameSuggestion, nextAnnotationName, type AxisInfo } from "./axisInfo"
+import { addAnnotation, nameSuggestion } from "../../../lib/annotationAdd"
+import type { AxisInfo } from "./axisInfo"
 import { CircleEditor } from "./CircleEditor"
 import { FacetScopeControl } from "../FacetScopeControl"
 import { LineSegmentEditor } from "./LineSegmentEditor"
@@ -175,19 +172,8 @@ export const AnnotationsPanel = () => {
 	const texts = cfg.texts ?? []
 
 	const addRectangle = () => {
-		const id = `rect-${Date.now().toString(36)}-${Math.random()
-			.toString(36)
-			.slice(2, 6)}`
-		update({
-			...cfg,
-			rectangles: [
-				...cfg.rectangles,
-				{
-					...newRectangle(id, rectDefaults),
-					name: nextAnnotationName("Rectangle", cfg.rectangles),
-				},
-			],
-		})
+		const { cfg: next, id } = addAnnotation(cfg, "rectangles", theme)
+		update(next)
 		setExpanded(id, true)
 	}
 
@@ -206,19 +192,8 @@ export const AnnotationsPanel = () => {
 	}
 
 	const addCircle = () => {
-		const id = `circle-${Date.now().toString(36)}-${Math.random()
-			.toString(36)
-			.slice(2, 6)}`
-		update({
-			...cfg,
-			circles: [
-				...circles,
-				{
-					...newCircle(id, circleDefaults),
-					name: nextAnnotationName("Circle", circles),
-				},
-			],
-		})
+		const { cfg: next, id } = addAnnotation(cfg, "circles", theme)
+		update(next)
 		setExpanded(id, true)
 	}
 
@@ -235,19 +210,8 @@ export const AnnotationsPanel = () => {
 	}
 
 	const addLineSegment = () => {
-		const id = `line-${Date.now().toString(36)}-${Math.random()
-			.toString(36)
-			.slice(2, 6)}`
-		update({
-			...cfg,
-			lineSegments: [
-				...lineSegments,
-				{
-					...newLineSegment(id, lineDefaults),
-					name: nextAnnotationName("Line", lineSegments),
-				},
-			],
-		})
+		const { cfg: next, id } = addAnnotation(cfg, "lineSegments", theme)
+		update(next)
 		setExpanded(id, true)
 	}
 
@@ -266,19 +230,8 @@ export const AnnotationsPanel = () => {
 	}
 
 	const addText = () => {
-		const id = `text-${Date.now().toString(36)}-${Math.random()
-			.toString(36)
-			.slice(2, 6)}`
-		update({
-			...cfg,
-			texts: [
-				...texts,
-				{
-					...newTextAnnotation(id, textDefaults),
-					name: nextAnnotationName("Text", texts),
-				},
-			],
-		})
+		const { cfg: next, id } = addAnnotation(cfg, "texts", theme)
+		update(next)
 		setExpanded(id, true)
 	}
 

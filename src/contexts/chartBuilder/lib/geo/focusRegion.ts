@@ -1,7 +1,7 @@
 import { geoBounds } from "d3-geo"
 import type { Feature } from "geojson"
 
-import type { FocusRegion, GeographyLevel, GeoViewport } from "../mapConfig"
+import type { FocusRegion, GeographyLevel, GeoViewport, MapConfig } from "../mapConfig"
 import { clampViewport } from "./viewportMath"
 
 /** Human-readable labels for the Focus dropdown. */
@@ -164,3 +164,17 @@ export const focusRegionGeoJson = (
 	region: FocusRegion | "auto"
 ): Feature | null =>
 	region === "auto" ? null : viewportGeoJson(regionViewport(region))
+
+/** The Maps panel's focus pick: switching to Custom with no custom
+ * viewport yet seeds one from the region it replaces, else from
+ * `autoViewport` (what "auto" shows now, or the level's default). */
+export const focusRegionPatch = (
+	cfg: Pick<MapConfig, "focusRegion" | "customViewport">,
+	next: MapConfig["focusRegion"],
+	autoViewport: () => GeoViewport
+): Partial<MapConfig> => {
+	if (next !== "custom" || cfg.customViewport) return { focusRegion: next }
+	const prev = cfg.focusRegion
+	const seed = prev !== "auto" && prev !== "custom" ? regionViewport(prev) : autoViewport()
+	return { focusRegion: next, customViewport: seed }
+}

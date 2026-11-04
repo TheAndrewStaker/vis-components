@@ -155,27 +155,9 @@ export const convertRadiusUnit = (
 		: cleanNumber(value / extentPx)
 }
 
-/** Suggestion (placeholder) label for the Nth annotation of a kind:
- *  "Rectangle", "Rectangle 2", "Rectangle 3", … Shown as light placeholder
- *  text so the user can tell the shapes apart, but is nudged to type a more
- *  descriptive name (which replaces the suggestion). */
-export const nameSuggestion = (base: string, index: number): string =>
-	`${base} ${index + 1}`
-
-/** The default name for a NEW annotation of one kind: "<Kind> N" where N
- *  starts at one past the kind's current count and skips any number already
- *  taken (so removing "Circle 1" and adding again doesn't mint a second
- *  "Circle 3"). Stored on the annotation at creation, so names stay put when
- *  earlier siblings are removed. */
-export const nextAnnotationName = (
-	base: string,
-	existing: ReadonlyArray<{ name: string }>
-): string => {
-	const taken = new Set(existing.map((a) => a.name.trim().toLowerCase()))
-	let n = existing.length + 1
-	while (taken.has(`${base} ${n}`.toLowerCase())) n += 1
-	return `${base} ${n}`
-}
+// The naming helpers moved to lib so the settings path names a new
+// annotation the way "+ Add" does; re-exported for the editors here.
+export { nameSuggestion, nextAnnotationName } from "../../../lib/annotationAdd"
 
 /** The rendered plot rect's size, from `currentRenderedPanelInnerDimsAtom`.
  *  Null before the first layout pass — pixel conversions then leave the

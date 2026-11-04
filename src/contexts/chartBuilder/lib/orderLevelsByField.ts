@@ -1,6 +1,7 @@
 import { parseNumericCell, parseValue } from "./scales"
 import { smartSortCategories } from "./smartSort"
-import type { FieldType } from "./types"
+import type { FieldLevelOrderSpec, FieldType } from "./types"
+import { uniqueFieldValues } from "./uniqueFieldValues"
 
 /** Compute a level ordering for a categorical/ordinal `field` by aggregating
  * a quantitative/temporal `byField` per level: quantitative → SUM of the
@@ -79,4 +80,36 @@ export const alphabeticalLevelOrder = (
 		a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
 	)
 	return decreasing ? sorted.reverse() : sorted
+}
+
+/** The order an "Order by" spec computes for `field`'s levels (the Fields
+ * panel pins it into `fieldLevelOrders`), or why it can't. */
+export const levelOrderFromSpec = (
+	rows: ReadonlyArray<Record<string, string>>,
+	field: string,
+	type: FieldType,
+	spec: FieldLevelOrderSpec,
+	typeOf: (name: string) => FieldType | undefined
+): { order: string[] } | { problem: string } => {
+	const discovered = uniqueFieldValues(rows, field, { skipBlank: true })
+	if (spec.by === "alphabetical") return { order: alphabeticalLevelOrder(discovered, spec.decreasing === true) }
+	const byField = spec.byField ?? ""
+	const byType = typeOf(byField)
+	if (byType !== "quantitative" && byType !== "temporal")
+		return { problem: `"byField" must name a quantitative or temporal field` }
+	const scope =
+		spec.scopeField && spec.scopeLevel ? { field: spec.scopeField, value: spec.scopeLevel } : undefined
+	return {
+		order: orderLevelsByField(rows, field, type, byField, byType, spec.decreasing === true, scope),
+	}
+}
+
+/** A scope on the ordered field itself, or on the order-by field, is a
+ * self-scope: the picker drops it. */
+export const withoutSelfScope = (field: string, spec: FieldLevelOrderSpec): FieldLevelOrderSpec => {
+	if (spec.scopeField !== undefined && (spec.scopeField === field || spec.scopeField === spec.byField)) {
+		const { scopeField: _f, scopeLevel: _l, ...rest } = spec
+		return rest
+	}
+	return spec
 }

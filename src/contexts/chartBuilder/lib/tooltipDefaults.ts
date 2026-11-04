@@ -20,6 +20,9 @@ export const buildDefaultTooltipHtml = (fields: string[]): string => {
 import {
 	resolveTooltipBox,
 	type ResolvedTooltipBox,
+	type TooltipBoxKey,
+	type TooltipBoxThemeDefaults,
+	type TooltipConfig,
 } from "./labelsConfig"
 import { LIGHT_THEME_BASE } from "./systemThemes"
 
@@ -66,3 +69,17 @@ font-size: 0.875rem;`
 export const DEFAULT_TOOLTIP_CSS = buildDefaultTooltipCss(
 	resolveTooltipBox({}, LIGHT_THEME_BASE)
 )
+
+/** "Use custom HTML template": on, empty template and CSS boxes are
+ * seeded with the defaults so the user starts from an editable copy of
+ * what renders; existing edits are left alone. */
+export const customHtmlPatch = (
+	cfg: Pick<TooltipConfig, "customHtml" | "customCss"> & Pick<TooltipConfig, TooltipBoxKey>,
+	on: boolean,
+	fieldNames: string[],
+	theme: TooltipBoxThemeDefaults
+): Partial<TooltipConfig> => ({
+	useCustomHtml: on,
+	...(on && !cfg.customHtml ? { customHtml: buildDefaultTooltipHtml(fieldNames) } : {}),
+	...(on && !cfg.customCss ? { customCss: buildDefaultTooltipCss(resolveTooltipBox(cfg, theme)) } : {}),
+})

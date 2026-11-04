@@ -18,6 +18,8 @@ import {
 	primaryStackChannel,
 	type StackChannel,
 } from "../../../lib/stackMode"
+import { axisStemPatch, switchConnectionFill } from "../../../lib/connectionEdits"
+import { fieldLevels, thicknessByLevel } from "../../../lib/thicknessVaryBy"
 import { MIN_LINE_THICKNESS } from "../../../lib/connectionThickness"
 import {
 	formatPointIndices,
@@ -53,8 +55,6 @@ import {
 } from "../../../store/atoms"
 import { useCurrentTheme } from "../../../store/useCurrentTheme"
 import { effectiveType } from "../../../lib/fieldType"
-import { uniqueFieldValues } from "../../../lib/uniqueFieldValues"
-import { orderedLevels } from "../../../lib/smartSort"
 import type { FieldType } from "../../../lib/types"
 import { CollapsibleSubsection } from "../../../../../components/ui/CollapsibleSubsection"
 import { LABEL_COL, LabelSpacer } from "../../../../../components/ui/LabeledField"
@@ -252,12 +252,8 @@ export const ConnectionOptionsPanel = () => {
 	// Distinct levels of a field, in the Fields panel's pinned order — the
 	// categories the per-value inputs enumerate. Parsed through the field's
 	// effective type so numeric/temporal keys match what the renderers key on.
-	const levelsOf = (name: string): string[] => {
-		if (!dataset) return []
-		const type = typeOf(name)
-		const values = uniqueFieldValues(dataset.rows, name, { type })
-		return orderedLevels(values, type, levelOrders[name]).map((l) => l.value)
-	}
+	const levelsOf = (name: string): string[] =>
+		dataset ? fieldLevels(dataset.rows, name, typeOf(name), levelOrders[name]) : []
 	const thicknessLevels = thicknessField ? levelsOf(thicknessField) : []
 
 	// Per-control "changed vs default" flags, driving the subsection dots + the
@@ -319,9 +315,7 @@ export const ConnectionOptionsPanel = () => {
 			updateCfg({ thicknessField: null, thicknessByValue: {} })
 			return
 		}
-		const seeded: Record<string, number> = {}
-		for (const v of levelsOf(next)) seeded[v] = cfg.thickness
-		updateCfg({ thicknessField: next, thicknessByValue: seeded })
+		updateCfg({ thicknessField: next, thicknessByValue: thicknessByLevel(levelsOf(next), cfg.thickness) })
 	}
 	const setThicknessFor = (value: string, n: number) => {
 		if (n < 0) return
@@ -438,38 +432,13 @@ export const ConnectionOptionsPanel = () => {
 	// it swaps `y → length` so the existing areas-x detection (which keys off
 	// `length`) fires; unchecking reverses the swap. The user's measure field
 	// is preserved across the swap, so the toggle is non-destructive.
-	const switchToArea = () => {
-		const yField = encodings.y?.field
-		const lengthField = encodings.length?.field
-		if (yField && !lengthField) {
-			setEncodings((prev) => ({
-				...prev,
-				length: { ...prev.length, field: yField },
-				y: { ...prev.y, field: null },
-			}))
-		}
-		updateCfg({ fill: "area" })
-		// Area charts with a hue almost always want stacking. Existing
-		// configs may have been saved with the old "overlay" default, so
-		// flip them here as part of the toggle action.
-		setConfigs((prev) => {
-			const hue = prev.hue
-			if (!hue) return prev
-			return { ...prev, hue: { ...hue, stackMode: "stack" } }
-		})
+	const switchFill = (fill: "area" | "line") => {
+		const next = switchConnectionFill(encodings, configs, fill, theme)
+		setEncodings(next.encodings)
+		setConfigs(next.configs)
 	}
-	const switchToLine = () => {
-		const yField = encodings.y?.field
-		const lengthField = encodings.length?.field
-		if (lengthField && !yField) {
-			setEncodings((prev) => ({
-				...prev,
-				y: { ...prev.y, field: lengthField },
-				length: { ...prev.length, field: null },
-			}))
-		}
-		updateCfg({ fill: "line" })
-	}
+	const switchToArea = () => switchFill("area")
+	const switchToLine = () => switchFill("line")
 
 	return (
 		<div className="vc-option-panel">
@@ -892,20 +861,7 @@ export const ConnectionOptionsPanel = () => {
 										name="connection-axis-stem"
 										value={value}
 										checked={axisStem === value}
-										onChange={() =>
-											// Picking a custom mode seeds its threshold (kept from
-											// a previous visit, else 0) so stems draw immediately
-											// instead of waiting on a first keystroke.
-											updateCfg({
-												axisStem: value,
-												...(value === "custom-x"
-													? { axisStemCustomX: cfg.axisStemCustomX ?? 0 }
-													: {}),
-												...(value === "custom-y"
-													? { axisStemCustomY: cfg.axisStemCustomY ?? 0 }
-													: {}),
-											})
-										}
+										onChange={() => updateCfg(axisStemPatch(cfg, value))}
 										className="h-3 w-3"
 									/>
 									<span className="vc-muted">

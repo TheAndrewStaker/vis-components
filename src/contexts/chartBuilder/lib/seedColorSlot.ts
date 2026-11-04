@@ -5,6 +5,7 @@ import {
 } from "./channelConfig"
 import { buildQuantHueConfigFromTheme } from "./hueDefaults"
 import { CATEGORICAL_HUE_PALETTE } from "./scales"
+import { preserveStackMode } from "./stackMode"
 import { resolveTextPalettePick } from "./themeConfig"
 import type { FieldType, Theme } from "./types"
 
@@ -59,6 +60,17 @@ export const seedColorSlot = (
 const isContinuous = (type: FieldType) =>
 	type === "quantitative" || type === "temporal"
 
+/** The gradient a continuous Fill field draws with: the stashed one (the
+ * user's last quantitative config, saved when the encoding switched to a
+ * categorical field), else the theme's; the outgoing categorical config is
+ * stashed the same way and its stack mode kept. The Color panel runs this
+ * whenever the Fill field is continuous but the config isn't. */
+export const seedQuantHue = (prev: ChannelConfigs, theme: Theme): ChannelConfigs => ({
+	...prev,
+	hue: preserveStackMode(prev.hue, prev.hueQuantStash ?? buildQuantHueConfigFromTheme(theme)),
+	...(prev.hue?.kind === "categorical" ? { hueCategoricalStash: prev.hue } : {}),
+})
+
 /** The configs after a field of `type` lands on the Fill (`hue`) channel, as
  * the encoding shelf writes them: a continuous field restores a stashed
  * gradient (else seeds the theme's), a discrete one the stashed categorical
@@ -69,17 +81,7 @@ export const seedHueChannel = (
 	type: FieldType,
 	theme: Theme
 ): ChannelConfigs => {
-	if (isContinuous(type)) {
-		return prev.hue?.kind === "quantitative"
-			? prev
-			: {
-					...prev,
-					hue: prev.hueQuantStash ?? buildQuantHueConfigFromTheme(theme),
-					...(prev.hue?.kind === "categorical"
-						? { hueCategoricalStash: prev.hue }
-						: {}),
-				}
-	}
+	if (isContinuous(type)) return prev.hue?.kind === "quantitative" ? prev : seedQuantHue(prev, theme)
 	return prev.hue?.kind === "categorical"
 		? prev
 		: {

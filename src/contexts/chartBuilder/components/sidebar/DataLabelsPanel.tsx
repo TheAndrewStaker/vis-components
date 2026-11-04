@@ -27,9 +27,10 @@ import {
 	type FlowLabelNodes,
 } from "../../lib/flowNodeLabels"
 import { barTotalFieldName } from "../../lib/barTotalLabel"
+import { seedLabelTextPalette } from "../../lib/dataLabelsHue"
+import { BAR_TOTAL_SEED, valueFieldsPatch } from "../../lib/dataLabelsValueFields"
 import {
 	POPULATION_LABEL,
-	composedLabelForField,
 	fieldLabelPointsMode,
 	labelPieceSplit,
 	labelFacetKeysFor,
@@ -44,7 +45,6 @@ import {
 import { resolveStackModes } from "../../lib/stackMode"
 import {
 	dataLabelsConfigFromTheme,
-	resolveTextPalettePick,
 } from "../../lib/themeConfig"
 import { effectiveType } from "../../lib/fieldType"
 import {
@@ -833,10 +833,8 @@ export const DataLabelsPanel = () => {
 	// the user's, and re-mapping Color never overwrites it. The dropdown
 	// below re-picks, "Match chart colors" included.
 	const seedTextPalette = () => {
-		if (merged.paletteId !== null) return
-		const pick = resolveTextPalettePick(theme)
-		if (pick.id === null) return
-		updateCfg({ paletteId: pick.id, palette: pick.colors, colorOverrides: {} })
+		const seeded = seedLabelTextPalette(merged, theme)
+		if (seeded) updateCfg(seeded)
 	}
 
 	const setField = (channel: DataLabelsChannel, fieldName: string) => {
@@ -912,13 +910,7 @@ export const DataLabelsPanel = () => {
 		// A total reads as the bar's once per bar, past its end: a fresh Bar
 		// total starts on the last layer of each stack, outside its end —
 		// movable like any label.
-		if (barTotalName !== null && v === barTotalName) {
-			updateCfg({
-				labelPoints: "last",
-				labelPointsScope: "stack",
-				barLabelPosition: "outside-end",
-			})
-		}
+		if (barTotalName !== null && v === barTotalName) updateCfg(BAR_TOTAL_SEED)
 	}
 	const setValueFields = (fields: string[]) => {
 		const prev = encodings.value.fields ?? []
@@ -926,50 +918,10 @@ export const DataLabelsPanel = () => {
 			...p,
 			value: { field: null, multiField: true, fields },
 		}))
-		// The labels follow the checklist: checking a variable adds its own
-		// `{Field}` label; unchecking removes the labels composing just it
-		// (a combination that names it keeps its text — the token reads as
-		// literal until the variable is checked again). This persists the
-		// list on the first change, legacy-derived or not.
-		const current = merged.composedLabels ?? []
-		const added = fields.filter((f) => !prev.includes(f))
-		const removed = prev.filter((f) => !fields.includes(f))
-		// A newly checked Bar total seeds ITS label where a total reads as the
-		// bar's: the last layer of each stack, outside its end — the same
-		// start the single-field pick gets, on the label's own entries.
-		const totalKey =
-			barTotalName !== null && added.includes(barTotalName)
-				? barTotalName
-				: null
-		updateCfg({
-			composedLabels: [
-				...current.filter(
-					(l) => !removed.some((f) => l.template.trim() === `{${f}}`)
-				),
-				...added
-					.filter((f) => !current.some((l) => l.id === f))
-					.map(composedLabelForField),
-			],
-			...(totalKey !== null
-				? {
-						fieldLabelPoints: {
-							...(merged.fieldLabelPoints ?? {}),
-							[totalKey]: "last" as const,
-						},
-						fieldLabelPointsScope: {
-							...(merged.fieldLabelPointsScope ?? {}),
-							[totalKey]: "stack" as const,
-						},
-						fieldBarPlacements: {
-							...(merged.fieldBarPlacements ?? {}),
-							[totalKey]: {
-								...(merged.fieldBarPlacements?.[totalKey] ?? {}),
-								position: "outside-end" as const,
-							},
-						},
-					}
-				: {}),
-		})
+		// The labels follow the checklist (and a newly checked Bar total seeds
+		// its placement): see `valueFieldsPatch`. This persists the list on
+		// the first change, legacy-derived or not.
+		updateCfg(valueFieldsPatch(merged, prev, fields, barTotalName))
 	}
 
 	const allEligible = dataset?.fields ?? []
