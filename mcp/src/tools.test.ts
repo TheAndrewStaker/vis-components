@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest"
 
 import { CONTENT_VERSION_HEADER } from "../../src/contexts/chartBuilder/lib/storage/contentVersionHeader"
 import { VISUALS_VERSION } from "../../src/contexts/chartBuilder/lib/storage/migrations"
-import type { DatasetMeta, Visual } from "../../src/contexts/chartBuilder/lib/types"
+import { SYSTEM_THEMES, themeOf } from "../../src/contexts/chartBuilder/lib/systemThemes"
+import type { DatasetMeta, SavedTheme, Visual } from "../../src/contexts/chartBuilder/lib/types"
 import { createApi } from "./api"
 import type { SpecProblem } from "../../src/contexts/chartBuilder/lib/chartSpec"
 import { createHandlers } from "./tools"
@@ -14,6 +15,10 @@ type Call = { method: string; path: string; headers: Record<string, string>; bod
 /** An in-memory stand-in for the self-host API that records every call. */
 const fakeServer = (stamps: Record<string, number> = {}) => {
 	const calls: Call[] = []
+	/** Runs before each read of the visuals collection (an editor save
+	 *  landing between the MCP's reads). */
+	const hooks: { beforeVisualsRead?: (visuals: Map<string, Visual>, read: number) => void } = {}
+	let visualReads = 0
 	const visuals = new Map<string, Visual>()
 	const datasets = new Map<string, unknown>()
 	const metas = new Map<string, DatasetMeta>()
@@ -34,7 +39,10 @@ const fakeServer = (stamps: Record<string, number> = {}) => {
 			if (path === "/api/content-versions") return json(stamps)
 			if (path === "/api/datasets?view=index") return json(Object.fromEntries(metas))
 			if (parts[0] === "datasets" && parts[1]) return json(datasets.get(parts[1]))
-			if (path === "/api/visuals?thumbnails=0") return json([...visuals.values()])
+			if (path === "/api/visuals?thumbnails=0") {
+				hooks.beforeVisualsRead?.(visuals, ++visualReads)
+				return json([...visuals.values()])
+			}
 			if (["/api/folders", "/api/themes", "/api/settings"].includes(path)) return json([])
 			return new Response("not found", { status: 404 })
 		}
@@ -44,7 +52,7 @@ const fakeServer = (stamps: Record<string, number> = {}) => {
 		if (parts[0] === "datasets" && parts[2] === "meta") metas.set(parts[1], body)
 		return new Response(null, { status: 204 })
 	}) as typeof fetch
-	return { calls, visuals, fetchImpl, writes: () => calls.filter((c) => c.method !== "GET") }
+	return { calls, visuals, hooks, fetchImpl, writes: () => calls.filter((c) => c.method !== "GET") }
 }
 
 type ToolOutput = { id: string; message: string; problems: SpecProblem[]; [key: string]: unknown }
@@ -186,5 +194,122 @@ describe("edit_chart and undo", () => {
 		expect(result.isError).toBe(true)
 		expect(s.writes()).toEqual([])
 		expect((await s.tools.undo_chart_edit({ id })).isError).toBe(true)
+	})
+})
+
+const lineChart = async () => {
+	const s = await withDataset()
+	const { id } = parsed(
+		await s.tools.create_chart({
+			datasetId: s.datasetId,
+			folderId: null,
+			encodings: { x: "year", y: "sales" },
+		})
+	)
+	s.calls.length = 0
+	return { ...s, id: id as string }
+}
+
+describe("settings", () => {
+	it("applies settings on create and on edit", async () => {
+		const s = await withDataset()
+		const created = await s.tools.create_chart({
+			datasetId: s.datasetId,
+			folderId: null,
+			encodings: { x: "year", y: "sales" },
+			settings: { channelConfigs: { y: { gridlines: { enabled: false } } } },
+		})
+		expect(created.isError).toBeFalsy()
+		const { id } = parsed(created)
+		expect(s.visuals.get(id)?.channelConfigs.y?.gridlines?.enabled).toBe(false)
+		const edited = await s.tools.edit_chart({
+			id,
+			patch: { settings: { legendConfig: { position: "bottom" } } },
+		})
+		expect(edited.isError).toBeFalsy()
+		expect(s.visuals.get(id)?.legendConfig?.position).toBe("bottom")
+		expect(s.visuals.get(id)?.channelConfigs.y?.gridlines?.enabled).toBe(false)
+	})
+
+	it("refuses a bad setting with nothing written", async () => {
+		const s = await lineChart()
+		const result = await s.tools.edit_chart({
+			id: s.id,
+			patch: { settings: { channelConfigs: { x: { gridline: {} } } } },
+		})
+		expect(result.isError).toBe(true)
+		expect(parsed(result).problems[0].path).toBe("settings.channelConfigs.x.gridline")
+		expect(s.writes()).toEqual([])
+	})
+
+	it("get_chart returns the settings slices", async () => {
+		const s = await lineChart()
+		const out = parsed(await s.tools.get_chart({ id: s.id }))
+		const settings = out.settings as Record<string, unknown>
+		expect(Object.keys(settings)).toEqual(expect.arrayContaining(["channelConfigs", "labelsConfig"]))
+		expect(settings).not.toHaveProperty("encodings")
+		expect(settings).not.toHaveProperty("id")
+	})
+
+	it("list_settings filters by slice and query, and refuses an unknown slice", async () => {
+		const s = setup()
+		const out = parsed(await s.tools.list_settings({ slice: "channelConfigs", query: "GRIDLINES.enabled" }))
+		const rows = out.rows as Array<{ path: string; kinds: string[] }>
+		expect(rows.length).toBeGreaterThan(0)
+		expect(rows.every((r) => r.path.startsWith("channelConfigs.") && /gridlines\.enabled/i.test(r.path))).toBe(true)
+		expect(rows.find((r) => r.path === "channelConfigs.x.gridlines.enabled")?.kinds).toEqual(["boolean"])
+		const all = parsed(await s.tools.list_settings({}))
+		expect(all.rows).toHaveLength(200)
+		expect(all.note).toMatch(/narrow the query/)
+		const bad = await s.tools.list_settings({ slice: "labelConfig" })
+		expect(bad.isError).toBe(true)
+		expect(parsed(bad).message).toContain('did you mean "labelsConfig"')
+	})
+})
+
+describe("stale-edit guard", () => {
+	const editorSave = (id: string) => (visuals: Map<string, Visual>, read: number) => {
+		const v = visuals.get(id)
+		if (read === 2 && v) visuals.set(id, { ...v, updatedAt: v.updatedAt + 1, name: "Editor" })
+	}
+
+	it("edit_chart refuses and writes nothing when the chart changed after it was read", async () => {
+		const s = await lineChart()
+		s.hooks.beforeVisualsRead = editorSave(s.id)
+		const result = await s.tools.edit_chart({ id: s.id, patch: { title: "Mine" } })
+		expect(result.isError).toBe(true)
+		expect(parsed(result).message).toMatch(/changed in the editor since it was read/)
+		expect(s.writes()).toEqual([])
+		expect(s.visuals.get(s.id)?.name).toBe("Editor")
+		expect((await s.tools.undo_chart_edit({ id: s.id })).isError).toBe(true)
+	})
+
+	it("undo_chart_edit refuses when the chart changed after the edit", async () => {
+		const s = await lineChart()
+		expect((await s.tools.edit_chart({ id: s.id, patch: { title: "Mine" } })).isError).toBeFalsy()
+		const v = s.visuals.get(s.id) as Visual
+		s.visuals.set(s.id, { ...v, updatedAt: v.updatedAt + 1 })
+		s.calls.length = 0
+		const result = await s.tools.undo_chart_edit({ id: s.id })
+		expect(result.isError).toBe(true)
+		expect(parsed(result).message).toMatch(/changed in the editor/)
+		expect(s.writes()).toEqual([])
+	})
+})
+
+describe("theme on edit", () => {
+	it("re-themes by name and refuses an unknown theme", async () => {
+		const s = await lineChart()
+		const bad = await s.tools.edit_chart({ id: s.id, patch: { themeId: "no such theme" } })
+		expect(bad.isError).toBe(true)
+		expect(parsed(bad).problems[0].path).toBe("themeId")
+		expect(s.writes()).toEqual([])
+		const other = SYSTEM_THEMES.find((t) => t.id !== s.visuals.get(s.id)?.themeId) as SavedTheme
+		const result = await s.tools.edit_chart({ id: s.id, patch: { themeId: other.name, title: "Kept" } })
+		expect(result.isError).toBeFalsy()
+		const v = s.visuals.get(s.id) as Visual
+		expect(v.themeId).toBe(other.id)
+		expect(v.labelsConfig.title).toBe("Kept")
+		expect(v.channelConfigs.defaultFill).toBe(themeOf(other).defaultFill)
 	})
 })

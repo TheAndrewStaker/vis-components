@@ -4,9 +4,12 @@
  * own new-visual draft and the theme; everything it names is written to the
  * config keys the sidebar panels write. Pure: no store, no server. */
 
+import { applySettings } from "./applySettings"
 import type { AxisConfig, ChannelConfigs, StackMode } from "./channelConfig"
 import { ALL_ENCODING_CHANNELS, CHANNELS, channelsConflict } from "./channels"
+import { didYouMean } from "./didYouMean"
 import { foldFlowNodeTitles } from "./foldFlowNodeTitles"
+import { formatSpecProblem } from "./formatTick"
 import { parseLocalDate } from "./localDate"
 import { UNTITLED_VISUAL_NAME } from "./nameUniqueness"
 import { scaffoldVariation, type ChannelAssignment } from "./quickStart"
@@ -19,6 +22,13 @@ import {
 import { structureVisualKeys } from "./savedKeyStructure"
 import { seedHueChannel, seedOutlineHueChannel } from "./seedColorSlot"
 import { axisConfigFromTheme } from "./themeConfig"
+import {
+	rethemeCaption,
+	rethemeChannelConfigs,
+	rethemeDataLabels,
+	rethemeLabels,
+	rethemeLegend,
+} from "./themeSwitch"
 import type { EncodingChannel, FieldType, Theme, Visual } from "./types"
 import { hydrateVisual, newVisualDraft, newVisualId } from "./visualDefaults"
 import { isTemplate, isTrashed } from "./visualTrash"
@@ -52,12 +62,16 @@ export type ChartSpec = {
 	axes?: { x?: AxisSpec; y?: AxisSpec }
 	stack?: StackMode
 	themeId?: string
+	/** Any stored setting, by the paths of `settingCatalog.json`; applied
+	 * last (`applySettings`). */
+	settings?: Record<string, unknown>
 }
 
 /** An edit: the spec's chart-level keys, every one optional. A null
- * encoding unmaps the channel; a null bound clears it. */
+ * encoding unmaps the channel; a null bound clears it; a `themeId`
+ * re-themes the chart the way the Theme panel does. */
 export type ChartSpecEdit = Partial<
-	Omit<ChartSpec, "datasetId" | "folderId" | "variation" | "themeId" | "encodings" | "axes">
+	Omit<ChartSpec, "datasetId" | "folderId" | "variation" | "encodings" | "axes">
 > & {
 	encodings?: Partial<Record<SpecChannel, string | null>>
 	axes?: Partial<
@@ -74,6 +88,8 @@ export type SpecProblem = { path: string; message: string }
 export type ComposeDeps = {
 	/** The dataset's fields with their effective types. */
 	fields: ReadonlyArray<{ name: string; type: FieldType }>
+	/** The theme the result is styled under: on an edit naming `themeId`,
+	 * the theme that id names. */
 	theme: Theme
 	/** When given, a `folderId` outside it is a problem. */
 	folderIds?: ReadonlySet<string>
@@ -101,9 +117,12 @@ export const SPEC_KEYS: Readonly<Record<keyof ChartSpec, string>> = {
 	subtitle: "The chart subtitle.",
 	axes: "{x, y}, each {title, min, max, format}; min/max are dates on a temporal axis.",
 	stack: `"stack", "group" or "overlay" for the hue levels.`,
-	themeId: "The theme id the visual is styled under.",
+	themeId:
+		"The theme id the visual is styled under; on an edit, re-themes it as the Theme panel does (user overrides stay).",
+	settings:
+		"Any stored setting: slice → nested values, by list_settings paths. Objects merge; lists replace whole. Applied last.",
 }
-const CREATE_ONLY = new Set(["datasetId", "folderId", "variation", "themeId"])
+const CREATE_ONLY = new Set(["datasetId", "folderId", "variation"])
 
 /** Maps need value-based region detection and flows a target column, which
  * only the editor sets up. */
@@ -123,28 +142,6 @@ export const chartSpecVocabulary = () => ({
 	})),
 	specKeys: { ...SPEC_KEYS } as Record<string, string>,
 })
-
-/** `; did you mean "x"?` for the closest candidate by edit distance
- * (case-insensitive, at most a third of the name's length), else "". */
-const didYouMean = (name: string, candidates: readonly string[]): string => {
-	const a = name.toLowerCase()
-	let best: string | null = null
-	let bestDist = Math.max(2, Math.ceil(a.length / 3)) + 1
-	for (const c of candidates) {
-		const b = c.toLowerCase()
-		let row = Array.from({ length: b.length + 1 }, (_, j) => j)
-		for (let i = 1; i <= a.length; i++) {
-			const next = [i]
-			for (let j = 1; j <= b.length; j++)
-				next.push(
-					Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
-				)
-			row = next
-		}
-		if (row[b.length] < bestDist) [best, bestDist] = [c, row[b.length]]
-	}
-	return best === null ? "" : `; did you mean "${best}"?`
-}
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v)
@@ -192,6 +189,8 @@ const shapeProblems = (input: unknown, edit: boolean): SpecProblem[] => {
 	for (const [f, t] of Object.entries(isObj(input.fieldTypes) ? input.fieldTypes : {})) {
 		if (!oneOf(FIELD_TYPES, t)) bad(`fieldTypes.${f}`, `types are ${quoted(FIELD_TYPES)}`)
 	}
+	if (input.settings !== undefined && !isObj(input.settings))
+		bad("settings", `"settings" must be an object: slice → values`)
 	if (input.axes !== undefined && !isObj(input.axes)) bad("axes", `"axes" must be {x, y}`)
 	for (const [axis, spec] of Object.entries(isObj(input.axes) ? input.axes : {})) {
 		if (axis !== "x" && axis !== "y") {
@@ -207,6 +206,10 @@ const shapeProblems = (input: unknown, edit: boolean): SpecProblem[] => {
 			if (!AXIS_KEYS.includes(k)) bad(path, `unknown axis key "${k}"${didYouMean(k, AXIS_KEYS)}`)
 			else if ((k === "title" || k === "format") && typeof v !== "string")
 				bad(path, "must be a string")
+			else if (k === "format") {
+				const why = formatSpecProblem(v as string)
+				if (why) bad(path, why)
+			}
 			else if (
 				(k === "min" || k === "max") &&
 				!(edit && v === null) &&
@@ -354,6 +357,19 @@ const applyCommon = (
 	return { ...visual, channelConfigs: configs, labelsConfig, fieldTypeOverrides: overrides }
 }
 
+/** The spec's `settings`, applied last; their problems are prefixed
+ * `settings.`. Mutates `out`. */
+const withSettings = (
+	visual: Visual,
+	settings: unknown,
+	out: { problems: SpecProblem[] }
+): Visual => {
+	if (!isObj(settings)) return visual
+	const applied = applySettings(visual, settings)
+	for (const p of applied.problems) out.problems.push({ ...p, path: `settings.${p.path}` })
+	return applied.visual
+}
+
 /** The intake every saved visual goes through (`store/saveVisual.ts`), and
  * the sparse `fieldOrder` the save writes. */
 const intake = (v: Visual): Visual => {
@@ -435,7 +451,7 @@ export const composeVisual = (spec: ChartSpec, deps: ComposeDeps): ComposeResult
 	}
 	const visual = applyCommon(spec, base, deps, out)
 	visual.name = spec.name?.trim() || spec.title?.trim() || UNTITLED_VISUAL_NAME
-	return { visual: intake(visual), ...out }
+	return { visual: intake(withSettings(visual, spec.settings, out)), ...out }
 }
 
 /** An edit of a stored chart: only the keys the edit names change. */
@@ -450,7 +466,19 @@ export const editVisual = (
 	if (isTrashed(base))
 		out.problems.push({ path: "", message: "this visual is in the Trash; restore it first" })
 	const stored = foldFlowNodeTitles(structureVisualKeys(base))
-	const draft = hydrateVisual(stored)
+	const hydrated = hydrateVisual(stored)
+	const theme = deps.theme
+	const draft =
+		typeof patch.themeId === "string"
+			? {
+					...hydrated,
+					channelConfigs: rethemeChannelConfigs(hydrated.channelConfigs, theme),
+					labelsConfig: rethemeLabels(hydrated.labelsConfig, theme),
+					legendConfig: rethemeLegend(hydrated.legendConfig, theme),
+					dataLabelsConfig: rethemeDataLabels(hydrated.dataLabelsConfig, theme),
+					captionConfig: rethemeCaption(hydrated.captionConfig, theme),
+				}
+			: hydrated
 	const known = new Map(deps.fields.map((f) => [f.name, f.type]))
 	const typeOf = (f: string) => patch.fieldTypes?.[f] ?? draft.fieldTypeOverrides[f] ?? known.get(f)
 	const encodings = { ...draft.encodings }
@@ -468,10 +496,17 @@ export const editVisual = (
 	}
 	const visual = applyCommon(
 		patch,
-		{ ...stored, ...draft, encodings, channelConfigs: configs, updatedAt: deps.now ?? Date.now() },
+		{
+			...stored,
+			...draft,
+			...(typeof patch.themeId === "string" ? { themeId: patch.themeId } : {}),
+			encodings,
+			channelConfigs: configs,
+			updatedAt: deps.now ?? Date.now(),
+		},
 		deps,
 		out
 	)
 	if (patch.name !== undefined) visual.name = patch.name.trim() || stored.name
-	return { visual: intake(visual), ...out }
+	return { visual: intake(withSettings(visual, patch.settings, out)), ...out }
 }

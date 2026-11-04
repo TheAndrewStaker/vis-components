@@ -188,6 +188,33 @@ export const parseFormatSpec = (raw: string): FormatSpecParts => {
 	return { prefix: "", spec: text, suffix: "" }
 }
 
+/** Why the Format box's text can't format a value, or null when it can:
+ * Auto, `literal`, `year-ends`, a d3-time-format spec, one of `labelOnly`
+ * (label sentinels such as `country-name`), or a d3-format spec, with or
+ * without a K / M / B scale letter and Before / After text. The renderer
+ * swallows a bad spec (`safeFormat`), so a client writing one gets told. */
+export const formatSpecProblem = (
+	raw: string,
+	labelOnly: readonly string[] = []
+): string | null => {
+	const spec = parseFormatSpec(raw).spec.trim()
+	const lower = spec.toLowerCase()
+	if (
+		spec === "" ||
+		lower === LITERAL_FORMAT ||
+		lower === YEAR_ENDS_FORMAT ||
+		labelOnly.includes(lower) ||
+		isTimeFormatSpec(spec)
+	)
+		return null
+	try {
+		formatSpecifier(parseScaledSpec(spec)?.base ?? spec)
+		return null
+	} catch {
+		return `"${spec}" isn't a format spec; use d3-format (",.0f", ".1%", "$,.2~s") or d3-time-format ("%Y-%m")`
+	}
+}
+
 /** Build a stored format string from parts, using the explicit braced form
  * whenever an affix is set (so it re-parses by rule 1 regardless of what
  * the spec or affixes contain). With no affixes the spec is stored bare,

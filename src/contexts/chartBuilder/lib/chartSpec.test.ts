@@ -123,6 +123,34 @@ describe("composeVisual", () => {
 		expect(bad.map((p) => p.path)).toEqual(["axes.x.min"])
 	})
 
+	it("refuses an axis format the Format box can't parse", () => {
+		const { problems } = composeVisual(spec({ ...BAR, axes: { y: { format: "bogus!" } } }), deps)
+		expect(problems.map((p) => p.path)).toEqual(["axes.y.format"])
+	})
+
+	it("applies settings last, over the spec's own keys", () => {
+		const v = ok({
+			...BAR,
+			title: "From the spec",
+			settings: {
+				labelsConfig: { title: "From settings" },
+				channelConfigs: { y: { gridlines: { enabled: false } } },
+			},
+		})
+		expect(v.labelsConfig.title).toBe("From settings")
+		expect(v.channelConfigs.y?.gridlines?.enabled).toBe(false)
+		const { problems } = composeVisual(
+			spec({ ...BAR, settings: { channelConfigs: { x: { gridline: {} } } } }),
+			deps
+		)
+		expect(problems).toEqual([
+			{ path: "settings.channelConfigs.x.gridline", message: expect.stringContaining("gridlines") },
+		])
+		expect(composeVisual(spec({ ...BAR, settings: [] as never }), deps).problems[0]?.path).toBe(
+			"settings"
+		)
+	})
+
 	it("names the visual from name, then title, then Untitled", () => {
 		expect(ok({ ...BAR, name: " Mine ", title: "T" }).name).toBe("Mine")
 		expect(ok({ ...BAR, title: " T " }).name).toBe("T")
@@ -170,6 +198,31 @@ describe("editVisual", () => {
 		expect(editVisual(base(), { encodings: { x: "nope" } }, deps).problems[0]?.path).toBe(
 			"encodings.x"
 		)
+	})
+
+	it("applies settings on an edit, merging into what is stored", () => {
+		const b = base()
+		const { visual, problems } = editVisual(
+			b,
+			{ settings: { legendConfig: { position: "bottom" } } },
+			deps
+		)
+		expect(problems).toEqual([])
+		expect(visual.legendConfig?.position).toBe("bottom")
+		expect(visual.channelConfigs.y?.min).toBe(0)
+		expect(editVisual(b, { settings: { nope: 1 } }, deps).problems[0]?.path).toBe("settings.nope")
+	})
+
+	it("re-themes on a themeId the way the Theme panel does, keeping user overrides", () => {
+		const b = editVisual(base(), { title: "Kept", settings: { channelConfigs: { hue: { colors: { North: "#ff0000" } } } } }, deps).visual
+		const theme = { ...LIGHT_THEME_BASE, defaultFill: "#abcdef", legendBackgroundColor: "#010203" }
+		const { visual, problems } = editVisual(b, { themeId: "t-2" }, { ...deps, theme })
+		expect(problems).toEqual([])
+		expect(visual.themeId).toBe("t-2")
+		expect(visual.channelConfigs.defaultFill).toBe("#abcdef")
+		expect(visual.legendConfig?.backgroundColor).toBe("#010203")
+		expect(visual.labelsConfig.title).toBe("Kept")
+		expect(visual.channelConfigs.hue).toMatchObject({ colors: { North: "#ff0000" } })
 	})
 
 	it("refuses templates and trashed rows", () => {

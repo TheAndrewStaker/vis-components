@@ -121,9 +121,12 @@ Tools:
 - `list_datasets`: data sets with their fields, types and row counts.
 - `create_dataset`: store rows as a new data set (an identical one is reused).
 - `create_chart`: make a chart from an encodings-first spec; returns editor, embed and picture links.
-- `get_chart`: a chart's encodings, titles and links.
-- `edit_chart`: change only the keys a patch names.
+- `get_chart`: a chart's encodings, titles, links and stored settings.
+- `edit_chart`: change only the keys a patch names (refused if the chart changed in the editor since it was read).
 - `undo_chart_edit`: undo this session's last `edit_chart` on a chart.
+- `list_settings`: the stored settings a spec's `settings` key can set, by path (`*` = a level, field or panel key; `[]` = a list entry; lists replace whole).
+
+The catalog behind `settings` is `src/contexts/chartBuilder/lib/settingCatalog.json`; regenerate it with `pnpm settings:catalog` after changing a saved config type.
 
 ## Verifying changes
 

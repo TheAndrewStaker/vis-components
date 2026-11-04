@@ -6,6 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod"
 
+import { SETTING_CATALOG } from "../../src/contexts/chartBuilder/lib/applySettings"
 import {
 	chartSpecVocabulary,
 	composeVisual,
@@ -18,6 +19,7 @@ import {
 } from "../../src/contexts/chartBuilder/lib/chartSpec"
 import { datasetsEqual } from "../../src/contexts/chartBuilder/lib/datasetDedupe"
 import { datasetFromRows } from "../../src/contexts/chartBuilder/lib/datasetFromRows"
+import { didYouMean } from "../../src/contexts/chartBuilder/lib/didYouMean"
 import { themeOf } from "../../src/contexts/chartBuilder/lib/systemThemes"
 import type {
 	DatasetMeta,
@@ -28,6 +30,12 @@ import type {
 import type { Api } from "./api"
 
 const UNDO_DEPTH = 20
+
+/** list_settings returns at most this many rows. */
+const SETTINGS_ROW_CAP = 200
+
+const STALE =
+	"the chart changed in the editor since it was read; read it again and resend"
 
 /** The collections a chart write reads from and writes to. */
 const CHART_COLLECTIONS = ["visuals", "datasets", "themes"] as const
@@ -69,8 +77,22 @@ const datasetSummary = (meta: DatasetMeta) => ({
 /** A theme name with case, spaces and punctuation taken out. */
 const nameKey = (name: string) => name.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")
 
+/** The stored visual's settings slices (absent ones left out). */
+const settingsOf = (visual: Visual) =>
+	Object.fromEntries(
+		SETTING_CATALOG.slices.flatMap((slice) => {
+			const value = (visual as Record<string, unknown>)[slice]
+			return value === undefined ? [] : [[slice, value]]
+		})
+	)
+
 export const createHandlers = (api: Api) => {
-	const undo = new Map<string, Visual[]>()
+	/** Per chart: the visual each edit replaced, and the `updatedAt` it wrote. */
+	const undo = new Map<string, Array<{ previous: Visual; wrote: number }>>()
+
+	/** True when the stored chart's `updatedAt` is still `seen`. */
+	const unchangedSince = async (id: string, seen: number) =>
+		(await api.visual(id))?.updatedAt === seen
 
 	const links = async (id: string) => {
 		const base = await api.baseUrl()
@@ -110,9 +132,10 @@ export const createHandlers = (api: Api) => {
 		datasetId ? (await api.datasetIndex())[datasetId] : undefined
 
 	const saveEdit = async (base: Visual, next: Visual, warnings: string[]) => {
+		if (!(await unchangedSince(base.id, base.updatedAt))) return refused(STALE)
 		await api.putVisual(next)
 		const stack = undo.get(base.id) ?? []
-		stack.push(base)
+		stack.push({ previous: base, wrote: next.updatedAt })
 		if (stack.length > UNDO_DEPTH) stack.shift()
 		undo.set(base.id, stack)
 		return chartResult(next, warnings)
@@ -201,6 +224,28 @@ export const createHandlers = (api: Api) => {
 				subtitle: visual.labelsConfig?.subtitle ?? "",
 				...(visual.deletedAt ? { trashed: true } : {}),
 				...(await links(visual.id)),
+				settings: settingsOf(visual),
+			})
+		}),
+
+		list_settings: guarded(async ({ slice, query }: { slice?: string; query?: string }) => {
+			const { slices, paths } = SETTING_CATALOG
+			if (slice !== undefined && !slices.includes(slice))
+				return refused(`no settings slice "${slice}"${didYouMean(slice, slices)}; slices are ${slices.join(", ")}`)
+			const q = query?.trim().toLowerCase() ?? ""
+			const rows = Object.entries(paths)
+				.filter(
+					([path, entry]) =>
+						(slice === undefined || path === slice || path.startsWith(`${slice}.`)) &&
+						(q === "" || `${path} ${entry.doc ?? ""}`.toLowerCase().includes(q))
+				)
+				.map(([path, entry]) => ({ path, ...entry }))
+			return ok({
+				total: rows.length,
+				rows: rows.slice(0, SETTINGS_ROW_CAP),
+				...(rows.length > SETTINGS_ROW_CAP
+					? { note: `showing ${SETTINGS_ROW_CAP} of ${rows.length}; narrow the query` }
+					: {}),
 			})
 		}),
 
@@ -209,11 +254,14 @@ export const createHandlers = (api: Api) => {
 			const base = await api.visual(id)
 			if (!base) return refused(`no chart with id "${id}"`)
 			const meta = await datasetMeta(base.datasetId)
-			// A visual whose theme is gone renders under the default; edit
-			// against that too.
-			const named = await resolveTheme(base.themeId)
+			// A new theme must exist; a visual whose stored theme is gone
+			// renders under the default, so edit against that too.
+			const wanted = typeof patch.themeId === "string" ? await resolveTheme(patch.themeId) : null
+			if (wanted && !("id" in wanted)) return refused("the chart wasn't changed", [wanted])
+			const named = wanted ?? (await resolveTheme(base.themeId))
 			const theme = "id" in named ? named : await defaultTheme()
-			const { visual, problems, warnings } = editVisual(base, patch, {
+			const edit = wanted ? { ...patch, themeId: theme.id } : patch
+			const { visual, problems, warnings } = editVisual(base, edit, {
 				fields: meta ? fieldsOf(meta) : [],
 				theme: themeOf(theme),
 				latestVersionId: meta?.latestVersionId ?? null,
@@ -223,14 +271,18 @@ export const createHandlers = (api: Api) => {
 		}),
 
 		undo_chart_edit: guarded(async ({ id }: { id: string }) => {
-			const previous = undo.get(id)?.pop()
-			if (!previous) return refused(`nothing to undo for "${id}" in this session`)
-			await api.assertCurrent(CHART_COLLECTIONS)
-			const restored = { ...previous, updatedAt: Date.now() }
+			const entry = undo.get(id)?.pop()
+			if (!entry) return refused(`nothing to undo for "${id}" in this session`)
+			const restored = { ...entry.previous, updatedAt: Date.now() }
 			try {
+				await api.assertCurrent(CHART_COLLECTIONS)
+				if (!(await unchangedSince(id, entry.wrote))) {
+					undo.get(id)?.push(entry)
+					return refused(STALE)
+				}
 				await api.putVisual(restored)
 			} catch (error) {
-				undo.get(id)?.push(previous)
+				undo.get(id)?.push(entry)
 				throw error
 			}
 			return chartResult(restored, [])
@@ -256,9 +308,13 @@ const specShape = {
 	axes: z.record(z.string(), z.record(z.string(), z.unknown())).optional().describe(SPEC_KEYS.axes),
 	stack: z.string().optional().describe(SPEC_KEYS.stack),
 	themeId: z.string().optional().describe(`${SPEC_KEYS.themeId} A theme name works too.`),
+	settings: z.record(z.string(), z.unknown()).optional().describe(SPEC_KEYS.settings),
 }
 
-const { datasetId: _d, folderId: _f, variation: _v, themeId: _t, ...editShape } = specShape
+const { datasetId: _d, folderId: _f, variation: _v, ...editShape } = specShape
+
+const SETTINGS_RULES =
+	"`settings` sets any stored setting by list_settings paths: objects merge, lists replace whole (send every entry; a new entry leaves out id)."
 
 /** Register every tool on `server`. Unknown keys pass through to the lib,
  *  whose problems name them (with a did-you-mean) instead of zod dropping
@@ -298,7 +354,7 @@ export const registerTools = (server: McpServer, handlers: Handlers): void => {
 	server.registerTool(
 		"create_chart",
 		{
-			description: `Create a Zafiro chart from a spec and return its editor, embed and picture links. ${ENCODINGS_FIRST} Problems come back as an error and nothing is saved.`,
+			description: `Create a Zafiro chart from a spec and return its editor, embed and picture links. ${ENCODINGS_FIRST} ${SETTINGS_RULES} Problems come back as an error and nothing is saved.`,
 			inputSchema: z.object(specShape).passthrough(),
 		},
 		(args) => handlers.create_chart(args as unknown as ChartSpec)
@@ -306,7 +362,8 @@ export const registerTools = (server: McpServer, handlers: Handlers): void => {
 	server.registerTool(
 		"get_chart",
 		{
-			description: "A Zafiro chart's summary: name, folder, data set, channel → field encodings, titles and links.",
+			description:
+				"A Zafiro chart's summary (name, folder, data set, channel → field encodings, titles, links) and its stored `settings` slices, with list entries' ids.",
 			inputSchema: { id: z.string().describe("The chart id.") },
 		},
 		(args) => handlers.get_chart(args)
@@ -314,7 +371,7 @@ export const registerTools = (server: McpServer, handlers: Handlers): void => {
 	server.registerTool(
 		"edit_chart",
 		{
-			description: `Change a Zafiro chart: only the keys the patch names change (a null encoding unmaps the channel, a null axis bound clears it). ${ENCODINGS_FIRST}`,
+			description: `Change a Zafiro chart: only the keys the patch names change (a null encoding unmaps the channel, a null axis bound clears it; a themeId re-themes it, keeping user overrides). ${ENCODINGS_FIRST} ${SETTINGS_RULES} Refused if the chart changed in the editor since it was read.`,
 			inputSchema: {
 				id: z.string().describe("The chart id."),
 				patch: z
@@ -331,9 +388,22 @@ export const registerTools = (server: McpServer, handlers: Handlers): void => {
 		(args) => handlers.edit_chart(args as unknown as { id: string; patch: ChartSpecEdit })
 	)
 	server.registerTool(
+		"list_settings",
+		{
+			description:
+				"The stored settings a `settings` patch can set: path, kinds, allowed values, doc, and color / format flags. In a path, `*` stands for a key you take from the chart (a level, field or panel) and `[]` for a list entry; lists replace whole. Filter by slice and a text query.",
+			inputSchema: {
+				slice: z.string().optional().describe("One slice, such as channelConfigs or labelsConfig."),
+				query: z.string().optional().describe("Case-insensitive text matched against path and doc."),
+			},
+		},
+		(args) => handlers.list_settings(args)
+	)
+	server.registerTool(
 		"undo_chart_edit",
 		{
-			description: "Undo the last edit_chart on this chart made in this session (up to 20 deep).",
+			description:
+				"Undo the last edit_chart on this chart made in this session (up to 20 deep). Refused if the chart changed in the editor since that edit.",
 			inputSchema: { id: z.string().describe("The chart id.") },
 		},
 		(args) => handlers.undo_chart_edit(args)

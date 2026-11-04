@@ -3,12 +3,12 @@ import { useAtomCallback } from "jotai/utils"
 import { useCallback, useState } from "react"
 import { isManagedTheme, themeOf } from "../../lib/systemThemes"
 import {
-	captionConfigFromTheme,
-	configsFromTheme,
-	dataLabelsConfigFromTheme,
-	labelsFromTheme,
-	legendConfigFromTheme,
-} from "../../lib/themeConfig"
+	rethemeCaption,
+	rethemeChannelConfigs,
+	rethemeDataLabels,
+	rethemeLabels,
+	rethemeLegend,
+} from "../../lib/themeSwitch"
 import {
 	currentCaptionConfigAtom,
 	currentChannelConfigsAtom,
@@ -49,117 +49,16 @@ export const ThemePanel = () => {
 				// Snapshot values into the live editor — when the user moves on
 				// from a chart and saves, these become part of the Visual.
 				//
-				// Preserve user customizations when switching themes (the user
-				// reported "toggling themes wipes my titles, gradient
-				// customizations, etc."). We update ONLY the fields the theme
-				// actually drives — fonts/palettes/default colors — and leave
-				// user-typed titles, alignments, per-category overrides, and
-				// hue configurations intact. Switching back to a prior theme
-				// then restores their customizations rather than starting
-				// over.
+				// Preserve user customizations when switching themes: only the
+				// fields the theme drives change (lib/themeSwitch.ts, shared
+				// with editVisual), so switching back to a prior theme restores
+				// the user's customizations rather than starting over.
 				set(themeAtom, theme)
-				set(currentChannelConfigsAtom, (prev) => {
-					const fromTheme = configsFromTheme(theme)
-					const mergedShape = prev.shape
-						? {
-								...prev.shape,
-								outlineColor:
-									fromTheme.shape?.outlineColor ?? prev.shape.outlineColor,
-								outlineWidth:
-									fromTheme.shape?.outlineWidth ?? prev.shape.outlineWidth,
-							}
-						: fromTheme.shape
-					const mergedPattern = prev.pattern
-						? {
-								...prev.pattern,
-								backgroundColor:
-									fromTheme.pattern?.backgroundColor ??
-									prev.pattern.backgroundColor,
-							}
-						: fromTheme.pattern
-					const mergedText = prev.text
-						? {
-								...prev.text,
-								color: fromTheme.text?.color ?? prev.text.color,
-								palette: fromTheme.text?.palette ?? prev.text.palette,
-							}
-						: fromTheme.text
-					return {
-						...prev,
-						// Theme-controlled defaults (overwritten).
-						defaultFill: fromTheme.defaultFill,
-						defaultRadius: fromTheme.defaultRadius,
-						defaultOpacity: fromTheme.defaultOpacity,
-						defaultShape: fromTheme.defaultShape,
-						categoricalPaletteId: fromTheme.categoricalPaletteId,
-						categoricalPalette: fromTheme.categoricalPalette,
-						categoricalPalettePatternInks:
-							fromTheme.categoricalPalettePatternInks,
-						ordinalPaletteId: fromTheme.ordinalPaletteId,
-						ordinalPalette: fromTheme.ordinalPalette,
-						ordinalPalettePatternInks: fromTheme.ordinalPalettePatternInks,
-						defaultGradientId: fromTheme.defaultGradientId,
-						defaultGradientColors: fromTheme.defaultGradientColors,
-						patternInkColor: fromTheme.patternInkColor,
-						defaultPatternInk: fromTheme.defaultPatternInk,
-						// Chart background follows the theme like the legend
-						// background does: a theme that declares a background
-						// should not leave the chart transparent after a switch
-						// (Aesthetics ▸ Chart background reads the theme as its
-						// baseline, so this also keeps its "changed" dot honest).
-						backgroundColor: fromTheme.backgroundColor,
-						// Merge nested configs so user overrides survive.
-						shape: mergedShape,
-						pattern: mergedPattern,
-						text: mergedText,
-					}
-				})
-				set(currentLabelsAtom, (prev) => ({
-					...prev,
-					baseFont: labelsFromTheme(theme).baseFont,
-				}))
-				set(currentLegendConfigAtom, (prev) => {
-					const fromTheme = legendConfigFromTheme(theme)
-					// Legend layout (position, orientation, enabled, border)
-					// is user-driven; only the theme-default background color
-					// flows through on a theme switch.
-					return {
-						...prev,
-						backgroundColor: fromTheme.backgroundColor,
-					}
-				})
-				set(currentDataLabelsConfigAtom, (prev) => {
-					const fromTheme = dataLabelsConfigFromTheme(theme)
-					// Only the theme-driven font knobs (plus the single fallback
-					// color and the map leader-line stroke) flow through; label
-					// encodings, per-value color overrides, offsets, and templates
-					// are user-driven.
-					return {
-						...prev,
-						color: fromTheme.color,
-						fontFamily: fromTheme.fontFamily,
-						fontSize: fromTheme.fontSize,
-						fontWeight: fromTheme.fontWeight,
-						italic: fromTheme.italic,
-						underline: fromTheme.underline,
-						leaderLineColor: fromTheme.leaderLineColor,
-						leaderLineWidth: fromTheme.leaderLineWidth,
-					}
-				})
-				set(currentCaptionConfigAtom, (prev) => {
-					const fromTheme = captionConfigFromTheme(theme)
-					// Only the theme-driven text knobs flow through; the caption
-					// text, its position / size nudges, padding, and the box are
-					// user-driven.
-					return {
-						...prev,
-						fontFamily: fromTheme.fontFamily,
-						fontSize: fromTheme.fontSize,
-						fontWeight: fromTheme.fontWeight,
-						textColor: fromTheme.textColor,
-						align: fromTheme.align,
-					}
-				})
+				set(currentChannelConfigsAtom, (prev) => rethemeChannelConfigs(prev, theme))
+				set(currentLabelsAtom, (prev) => rethemeLabels(prev, theme))
+				set(currentLegendConfigAtom, (prev) => rethemeLegend(prev, theme))
+				set(currentDataLabelsConfigAtom, (prev) => rethemeDataLabels(prev, theme))
+				set(currentCaptionConfigAtom, (prev) => rethemeCaption(prev, theme))
 				set(currentThemeIdAtom, themeId)
 			},
 			[themes]
