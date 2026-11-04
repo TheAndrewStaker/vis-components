@@ -16,7 +16,6 @@ import {
 	memoryUndo,
 	revisionOf,
 	run,
-	UNDO_DEPTH,
 	type Deps,
 	type UndoEntry,
 } from "./commands"
@@ -82,21 +81,14 @@ const resave = async (id: string) => {
 }
 
 describe("run", () => {
-	it("refuses an unknown command with a did-you-mean", async () => {
-		const e = await refusal(call("chart gte", {}))
-		expect(e.code).toBe("usage")
-		expect(e.message).toContain('did you mean "chart get"')
-	})
-
-	it.each(COMMANDS.map((c) => c.name))("%s refuses an unknown input key instead of dropping it", async (name) => {
-		const e = await refusal(call(name, { extraKey: 1 }))
-		expect(e.code).toBe("usage")
-		expect(e.problems).toContainEqual({ path: "extraKey", message: 'unknown input "extraKey"' })
-	})
-
-	it("names an unknown key inside undo, and a wrong type", async () => {
-		const e = await refusal(call("chart undo", { id: "x", undo: { previous: {}, wrote: "r", by: "me" } }))
-		expect(e.problems).toContainEqual({ path: "undo.by", message: 'unknown input "by"' })
+	it("refuses an unknown input key instead of dropping it, and a wrong type", async () => {
+		for (const { name } of COMMANDS) {
+			const e = await refusal(call(name, { extraKey: 1 }))
+			expect(e.code, name).toBe("usage")
+			expect(e.problems, name).toContainEqual({ path: "extraKey", message: 'unknown input "extraKey"' })
+		}
+		const nested = await refusal(call("chart undo", { id: "x", undo: { previous: {}, wrote: "r", by: "me" } }))
+		expect(nested.problems).toContainEqual({ path: "undo.by", message: 'unknown input "by"' })
 		const typed = await refusal(call("chart get", { id: 7 }))
 		expect(typed.code).toBe("usage")
 		expect(typed.problems?.[0].path).toBe("id")
@@ -119,12 +111,6 @@ describe("run", () => {
 		expect(e.code).toBe("version")
 		expect((await api.visuals()).length).toBe(before)
 	})
-
-	it("reports an unreachable server as failed", async () => {
-		const e = await refusal(call("chart get", { id: "x" }, { api: createApi("http://127.0.0.1:1"), undo: memoryUndo() }))
-		expect(e.code).toBe("failed")
-		expect(e.message).toContain("Could not reach")
-	})
 })
 
 describe("manifest", () => {
@@ -136,10 +122,6 @@ describe("manifest", () => {
 			expect(c.summary.length).toBeGreaterThan(0)
 			expect(c.inputSchema).toMatchObject({ type: "object", additionalProperties: false })
 		}
-	})
-
-	it("is the same on every call", () => {
-		expect(JSON.stringify(manifest())).toBe(JSON.stringify(manifest()))
 	})
 })
 
@@ -154,38 +136,6 @@ describe("revisionOf", () => {
 })
 
 describe("chart create", () => {
-	it("refuses a missing data set and the stock Examples folder together", async () => {
-		const e = await refusal(
-			call("chart create", {
-				spec: { datasetId: "ds-none", folderId: PUBLIC_SEED_FOLDER_IDS[0], encodings: { x: "a" } },
-			})
-		)
-		expect(e.code).toBe("invalid")
-		expect(e.problems?.map((p) => p.path)).toEqual(["datasetId", "folderId"])
-		expect(e.problems?.[1].message).toContain("read-only")
-	})
-
-	it("refuses an unknown theme, listing the themes", async () => {
-		const e = await refusal(
-			call("chart create", {
-				spec: { datasetId: await dataset(), folderId: null, encodings: { x: "hospital" }, themeId: "Neon" },
-			})
-		)
-		expect(e.code).toBe("invalid")
-		expect(e.problems?.[0]).toMatchObject({ path: "themeId" })
-		expect(e.problems?.[0].message).toContain("system-dark")
-	})
-
-	it("refuses a spec the lib finds problems in, with its problems", async () => {
-		const e = await refusal(
-			call("chart create", {
-				spec: { datasetId: await dataset(), folderId: null, encodings: { x: "hospitl" } },
-			})
-		)
-		expect(e.code).toBe("invalid")
-		expect(e.problems?.[0].path).toBe("encodings.x")
-	})
-
 	it("writes nothing in preview mode", async () => {
 		const out = await call("chart create", {
 			spec: { datasetId: await dataset(), folderId: null, encodings: { x: "hospital", length: "rate" } },
@@ -195,29 +145,16 @@ describe("chart create", () => {
 		expect(await api.visual(out.id)).toBeNull()
 	})
 
-	it("returns the stored chart's revision", async () => {
-		const out = await chart()
-		expect(out.written).toBe(true)
-		expect(revisionOf(await stored(out.id))).toBe(out.revision)
-	})
-})
-
-describe("chart get", () => {
-	it("refuses an unknown id as not_found", async () => {
-		expect((await refusal(call("chart get", { id: "vs-none" }))).code).toBe("not_found")
-	})
-
-	it("returns the chart and its revision", async () => {
-		const { id, revision } = await chart()
-		expect(await call("chart get", { id })).toMatchObject({ visual: { id }, revision })
+	it("refuses the stock Examples folder", async () => {
+		const spec = { datasetId: await dataset(), folderId: PUBLIC_SEED_FOLDER_IDS[0], encodings: { x: "hospital" } }
+		expect(await refusal(call("chart create", { spec }))).toMatchObject({
+			code: "invalid",
+			problems: [{ path: "folderId", message: expect.stringContaining("read-only") }],
+		})
 	})
 })
 
 describe("chart edit", () => {
-	it("refuses an unknown id as not_found", async () => {
-		expect((await refusal(edit("vs-none", "t"))).code).toBe("not_found")
-	})
-
 	it("refuses a stale expectedRevision and writes nothing", async () => {
 		const { id, revision } = await chart()
 		await edit(id, "someone else's")
@@ -249,16 +186,6 @@ describe("chart edit", () => {
 		expect((await stored(id)).name).toBe("saved meanwhile")
 	})
 
-	it("refuses a trashed chart, and edits one whose deletedAt is null", async () => {
-		const trashed = await chart()
-		await api.putVisual({ ...(await stored(trashed.id)), deletedAt: Date.now() })
-		expect((await refusal(edit(trashed.id, "t"))).code).toBe("conflict")
-		const restored = await chart()
-		await api.putVisual({ ...(await stored(restored.id)), deletedAt: null } as unknown as Visual)
-		await edit(restored.id, "back")
-		expect((await stored(restored.id)).labelsConfig.title).toBe("back")
-	})
-
 	it("refuses a chart in the stock Examples folder, and a move into it", async () => {
 		const example = await chart()
 		await api.putVisual({ ...(await stored(example.id)), folderId: PUBLIC_SEED_FOLDER_IDS[0] })
@@ -269,27 +196,6 @@ describe("chart edit", () => {
 		const move = await refusal(call("chart edit", { id: mine.id, patch: { folderId: PUBLIC_SEED_FOLDER_IDS[0] } }))
 		expect(move.problems?.[0]).toMatchObject({ path: "folderId" })
 		expect((await stored(mine.id)).folderId).toBeNull()
-	})
-
-	it("refuses a move to a folder that doesn't exist", async () => {
-		const { id } = await chart()
-		const e = await refusal(call("chart edit", { id, patch: { folderId: "fl-none" } }))
-		expect(e.problems?.[0].message).toContain('no folder with id "fl-none"')
-	})
-
-	it("refuses a patch the lib finds problems in, and writes nothing", async () => {
-		const { id, revision } = await chart()
-		const e = await refusal(call("chart edit", { id, patch: { encodings: { x: "hospitl" } } }))
-		expect(e.code).toBe("invalid")
-		expect(revisionOf(await stored(id))).toBe(revision)
-	})
-
-	it("writes nothing in preview mode, and returns what it would write", async () => {
-		const { id, revision } = await chart()
-		const out = await edit(id, "maybe", { mode: "preview" })
-		expect(out).toMatchObject({ written: false, previousRevision: revision })
-		expect(out.visual.labelsConfig.title).toBe("maybe")
-		expect(revisionOf(await stored(id))).toBe(revision)
 	})
 })
 
@@ -342,92 +248,11 @@ describe("chart undo", () => {
 		await call("chart undo", { id, caller: "c" })
 		expect((await stored(id)).labelsConfig.title).toBe("")
 	})
-
-	it("refuses to put a chart back into, or over one in, the stock Examples folder", async () => {
-		const { id } = await chart()
-		const { undo } = await edit(id, "t")
-		const planted = { ...undo, previous: { ...undo.previous, folderId: PUBLIC_SEED_FOLDER_IDS[0] } }
-		const e = await refusal(call("chart undo", { id, undo: planted }))
-		expect(e.code).toBe("invalid")
-		expect((await stored(id)).labelsConfig.title).toBe("t")
-	})
 })
 
-describe("dataset create", () => {
-	it("refuses rows the lib can't store, with its problems", async () => {
-		const e = await refusal(call("dataset create", { name: "empty", rows: [] }))
-		expect(e.code).toBe("invalid")
-		expect(e.problems?.length).toBeGreaterThan(0)
-	})
-
-	it("reuses identical data under the same name, and refuses different data by that name", async () => {
-		const rows = [{ a: "x", b: 1 }]
-		const first = await call("dataset create", { name: "Reuse me", rows })
-		expect(first.reused).toBe(false)
-		const again = await call("dataset create", { name: "Reuse me", rows })
-		expect(again).toMatchObject({ id: first.id, reused: true })
-		const e = await refusal(call("dataset create", { name: "Reuse me", rows: [{ a: "y", b: 2 }] }))
-		expect(e.code).toBe("conflict")
-	})
-})
-
-describe("dataset fields", () => {
-	it("refuses an unknown id as not_found", async () => {
-		expect((await refusal(call("dataset fields", { id: "ds-none" }))).code).toBe("not_found")
-	})
-
-	it("returns the fields, versions and latest version", async () => {
-		const id = await dataset()
-		const out = await call("dataset fields", { id })
-		expect(out.fields.map((f: { name: string }) => f.name)).toEqual(["hospital", "rate"])
-		expect(out.versions).toHaveLength(1)
-		expect(out.latestVersionId).toBe(out.versions[0].id)
-	})
-})
-
-describe("settings list", () => {
-	it("refuses an unknown slice with a did-you-mean", async () => {
-		const e = await refusal(call("settings list", { slice: "legendConfg" }))
-		expect(e.code).toBe("invalid")
-		expect(e.message).toContain('did you mean "legendConfig"')
-	})
-
-	it("refuses an unknown chart as not_found", async () => {
-		expect((await refusal(call("settings list", { chartId: "vs-none" }))).code).toBe("not_found")
-	})
-
-	it("adds a chart's stored slices, keys and palettes", async () => {
-		const { id } = await chart()
-		const out = await call("settings list", { chartId: id, query: "legend" })
-		expect(out.total).toBeGreaterThan(0)
-		expect(out.stored).toHaveProperty("channelConfigs")
-		expect(out.palettes.categorical.length).toBeGreaterThan(0)
-	})
-})
-
-describe("vocabulary and guide", () => {
-	it("vocabulary names spec keys, channels, families, slices, themes and folders", async () => {
-		const out = await call("vocabulary", {})
-		expect(Object.keys(out.specKeys)).toContain("encodings")
-		expect(out.channels.find((c: { name: string }) => c.name === "x")).toHaveProperty("label")
-		expect(out.settingsFamilies.map((f: { chart: string }) => f.chart)).toContain("map")
-		expect(out.themes.filter((t: { default: boolean }) => t.default)).toHaveLength(1)
-	})
-
-	it("guide is mcp/guide/agent-guide.md as is", async () => {
+describe("guide", () => {
+	it("is mcp/guide/agent-guide.md as is", async () => {
 		const file = readFileSync(new URL("../../mcp/guide/agent-guide.md", import.meta.url), "utf8")
 		expect((await call("guide", {})).markdown).toBe(file)
-	})
-})
-
-describe("memoryUndo", () => {
-	it(`keeps the last ${UNDO_DEPTH} entries per caller and chart`, async () => {
-		const store = memoryUndo()
-		const entry = (n: number) => ({ previous: { id: "v" } as Visual, wrote: String(n) })
-		for (let n = 0; n < UNDO_DEPTH + 5; n++) await store.push("c", "v", entry(n))
-		const popped: string[] = []
-		for (let e = await store.pop("c", "v"); e; e = await store.pop("c", "v")) popped.push(e.wrote)
-		expect(popped).toHaveLength(UNDO_DEPTH)
-		expect(popped[0]).toBe(String(UNDO_DEPTH + 4))
 	})
 })

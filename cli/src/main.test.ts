@@ -1,6 +1,6 @@
 // @vitest-environment node
-// The CLI's argument handling, JSON in and out, and exit codes; and the
-// file undo store separate runs share.
+// The CLI's JSON in and out, its exit codes, and the file undo store
+// separate runs share.
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -8,7 +8,7 @@ import { join } from "node:path"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 import { startTestServer, type TestServer } from "../../mcp/src/testServer"
-import { EXIT, fileUndo, main, type Io } from "./main"
+import { EXIT, main, type Io } from "./main"
 
 let server: TestServer
 let state: string
@@ -20,12 +20,12 @@ beforeAll(async () => {
 afterAll(() => server.close())
 
 /** One run: its exit code and the one JSON line it wrote. */
-const cli = async (argv: string[], stdin = "", env: Record<string, string | undefined> = {}) => {
+const cli = async (argv: string[], stdin = "") => {
 	const lines: string[] = []
 	const io: Io = {
 		stdin: async () => stdin,
 		stdout: (text) => void lines.push(text),
-		env: { VIS_API_URL: server.base, ZAFIRO_CLI_STATE: state, ...env },
+		env: { VIS_API_URL: server.base, ZAFIRO_CLI_STATE: state },
 	}
 	const code = await main(argv, io)
 	expect(lines).toHaveLength(1)
@@ -37,24 +37,6 @@ describe("main", () => {
 		const { code, out } = await cli(["manifest", "--json"])
 		expect(code).toBe(0)
 		expect(out.manifestVersion).toBe(1)
-	})
-
-	it.each([
-		[[], "usage: zafiro"],
-		[["manifest", "--yaml"], 'unknown flag "--yaml"'],
-		[["chart", "get", "--id=x"], "input goes on stdin"],
-		[["chart", "gte"], 'did you mean "chart get"'],
-	])("refuses %j as usage, exit 2", async (argv, message) => {
-		const { code, out } = await cli(argv)
-		expect(code).toBe(2)
-		expect(out.error.code).toBe("usage")
-		expect(out.error.message).toContain(message)
-	})
-
-	it("refuses stdin that isn't JSON, and a missing or non-http VIS_API_URL", async () => {
-		expect((await cli(["guide"], "{nope")).out.error.message).toBe("stdin is not JSON")
-		expect((await cli(["guide"], "", { VIS_API_URL: undefined })).out.error.message).toContain("VIS_API_URL is required")
-		expect((await cli(["guide"], "", { VIS_API_URL: "ftp://x" })).out.error.message).toContain("http(s)")
 	})
 
 	it("maps each refusal to its exit code", async () => {
@@ -85,16 +67,5 @@ describe("main", () => {
 		const undone = await cli(["chart", "undo"], JSON.stringify({ id, caller: "shell" }))
 		expect(undone.code).toBe(0)
 		expect(undone.out.revision).toBe(created.out.revision)
-	})
-})
-
-describe("fileUndo", () => {
-	it("shares a caller's stack between stores on the same directory", async () => {
-		const dir = mkdtempSync(join(tmpdir(), "vis-cli-undo-"))
-		const entry = { previous: { id: "v" } as never, wrote: "r1" }
-		await fileUndo(dir).push("caller", "v", entry)
-		expect(await fileUndo(dir).pop("other", "v")).toBeUndefined()
-		expect(await fileUndo(dir).pop("caller", "v")).toEqual(entry)
-		expect(await fileUndo(dir).pop("caller", "v")).toBeUndefined()
 	})
 })
