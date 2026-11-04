@@ -60,6 +60,9 @@ export type QuickStartVariation = {
 	 * The scaffold picks a random eligible field per channel, preferring
 	 * fields not already used by another channel in the same scaffold. */
 	channels: Partial<Record<EncodingChannel, readonly FieldType[]>>
+	/** Channels in `channels` the scaffold fills when the data allows but a
+	 * chart spec may leave empty (a dumbbell's shape and area). */
+	optional?: readonly EncodingChannel[]
 	/** Whether the scaffold should opportunistically add a hue encoding when
 	 * `channels` doesn't already include hue and the dataset has a suitable
 	 * categorical field available. Defaults to `true`. */
@@ -332,6 +335,7 @@ export const QUICK_START_VARIATIONS: Record<
 				shape: CATEGORICAL_LIKE,
 				area: QUANTITATIVE_LIKE,
 			},
+			optional: ["shape", "area"],
 			connectionFrom: "y",
 			connectionFill: "line",
 		},
@@ -345,6 +349,7 @@ export const QUICK_START_VARIATIONS: Record<
 				shape: CATEGORICAL_LIKE,
 				area: QUANTITATIVE_LIKE,
 			},
+			optional: ["shape", "area"],
 			connectionFrom: "x",
 			connectionFill: "line",
 		},

@@ -174,6 +174,22 @@ describe("composeVisual", () => {
 	})
 })
 
+describe("optional variation channels", () => {
+	it("composes a dumbbell without shape or area, and still type-checks them when mapped", () => {
+		const v = ok({ family: "dumbbell", encodings: { y: "region", x: "sales", hue: "segment" } })
+		expect(v.encodings.connection).toEqual({ field: "region" })
+		expect(v.encodings.shape.field).toBeNull()
+		const { problems } = composeVisual(
+			spec({ family: "dumbbell", encodings: { y: "region", x: "sales", hue: "segment", shape: "profit" } }),
+			deps
+		)
+		expect(problems[0]?.path).toBe("encodings.shape")
+		expect(chartSpecVocabulary().families.find((f) => f.name === "dumbbell")?.variations[0]).toMatchObject({
+			optional: ["shape", "area"],
+		})
+	})
+})
+
 describe("editVisual", () => {
 	it("clears a mapped channel that conflicts with the one the edit maps, and says so", () => {
 		const base = ok(SCATTER)

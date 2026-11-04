@@ -30,7 +30,7 @@ What a set of encodings draws. A setting named here goes in the spec's
 | `x` + `length` + `connection` | stacked area; add `hue` for overlaid areas |
 | `x` + `y` + `length` | vector field: a segment at each point (add `angle` for direction) |
 | `x` + `y` + `length`, `family: "combo"` | bars with points; add `connection` for bars with a line |
-| `y` categorical + `x` quantitative + `hue` (two levels), `family: "dumbbell"` | dumbbell: the two points of each category joined |
+| `y` categorical + `x` quantitative + `hue` (two levels), `family: "dumbbell"` | dumbbell: the two points of each category joined (`shape` and `area` optional) |
 | `x` categorical + `y` quantitative, `family: "violin"` | violin or box plot (its variations) |
 | `x` + `y` (both categorical) + `hue` | tile heatmap |
 | `x` + `y` (both quantitative), `family: "hexbin"` | hexbin: hexagonal density |

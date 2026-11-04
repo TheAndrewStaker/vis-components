@@ -142,7 +142,11 @@ export const chartSpecVocabulary = () => ({
 	channels: SPEC_CHANNELS.map((c) => ({ name: c, accepts: [...CHANNELS[c].accepts] })),
 	families: SPEC_FAMILIES.map((f) => ({
 		name: f,
-		variations: QUICK_START_VARIATIONS[f].map((v) => ({ name: v.name, channels: v.channels })),
+		variations: QUICK_START_VARIATIONS[f].map((v) => ({
+			name: v.name,
+			channels: v.channels,
+			...(v.optional ? { optional: v.optional } : {}),
+		})),
 	})),
 	specKeys: { ...SPEC_KEYS } as Record<string, string>,
 })
@@ -238,7 +242,8 @@ const pickVariation = (
 	const unfilled = (v: QuickStartVariation) =>
 		(Object.entries(v.channels) as Array<[SpecChannel, readonly FieldType[]]>)
 			.filter(([ch, types]) => {
-				const t = fields[ch] && typeOf(fields[ch])
+				if (!fields[ch]) return !v.optional?.includes(ch)
+				const t = typeOf(fields[ch])
 				return !t || !types.includes(t)
 			})
 			.map(([ch, types]) => `"${ch}" (${types.join(" or ")})`)

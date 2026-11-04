@@ -2,44 +2,21 @@
 // The MCP tools against the real self-host server (server/src), in-process
 // on an ephemeral port with temp dirs, the way server/src/routes.test.ts
 // starts one.
-import { mkdtempSync, writeFileSync } from "node:fs"
-import { createServer, type Server } from "node:http"
-import type { AddressInfo } from "node:net"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-import { openDb } from "../../server/src/db.js"
-import { createHandler } from "../../server/src/routes.js"
 import type { Dataset, Visual } from "../../src/contexts/chartBuilder/lib/types"
 import { createApi } from "./api"
 import type { SpecProblem } from "../../src/contexts/chartBuilder/lib/chartSpec"
+import { startTestServer, type TestServer } from "./testServer"
 import { createHandlers } from "./tools"
 
-let server: Server
+let server: TestServer
 let base: string
 
 beforeAll(async () => {
-	const dir = (name: string) => mkdtempSync(join(tmpdir(), `vis-mcp-${name}-`))
-	const distDir = dir("dist")
-	const dbDir = dir("db")
-	writeFileSync(join(distDir, "index.html"), "<title>spa</title>")
-	const handler = createHandler({
-		config: {
-			baseUrl: "https://charts.example.com",
-			dbDir,
-			dataDir: dir("data"),
-			port: 0,
-			publishDir: dir("publish"),
-			publishBaseUrl: "https://embeds.example.com",
-		},
-		db: openDb(dbDir),
-		distDir,
-	})
-	server = createServer((req, res) => void handler(req, res))
-	await new Promise<void>((resolve) => server.listen(0, resolve))
-	base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+	server = await startTestServer()
+	base = server.base
 })
 
 afterAll(() => {
