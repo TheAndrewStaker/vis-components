@@ -129,6 +129,32 @@ Tools:
 
 The catalog behind `settings` is `src/contexts/chartBuilder/lib/settingCatalog.json`; regenerate it with `pnpm settings:catalog` after changing a saved config type. A setting behaves as its sidebar panel does (`lib/settingEffects.ts`): the panel and the settings path call the same lib function for anything a pick seeds, gates or normalizes.
 
+## CLI
+
+`cli/` is the same chart operations as commands: `zafiro <noun> <verb>`
+reads one JSON object on stdin and writes one on stdout, against a running
+self-host server (`VIS_API_URL`). Build it with `pnpm cli:build` (also part
+of `pnpm build`): `cli/dist/cli.js`, one file with no runtime dependencies
+beyond Node 22.
+
+```
+node cli/dist/cli.js manifest --json    # every command with its input and output JSON Schemas
+echo '{"id":"vs-…"}' | VIS_API_URL=http://localhost:8080 node cli/dist/cli.js chart get
+```
+
+Commands: `vocabulary`, `guide`, `chart create`, `chart get`, `chart edit`,
+`chart undo`, `dataset create`, `dataset fields`, `settings list`. Every
+input object is strict (an unknown key is refused, never dropped). A chart's
+`revision` is a hash of its content without the keys a save without a change
+rewrites (`thumbnail`, `thumbnailAt`, `updatedAt`, `updatedBy`); `chart edit`
+takes `expectedRevision` and returns an `undo` that `chart undo` takes back,
+or keeps the edit on a `caller`'s stack (a file under `ZAFIRO_CLI_STATE`,
+default `~/.zafiro-cli`). A refusal is `{"error": {code, message, problems?}}`
+with exit code 2 (`usage`, `invalid`), 3 (`stale`), 4 (`not_found`), 5
+(`conflict`, `nothing_to_undo`), 6 (`version`) or 1 (`failed`). The bundle
+also exports `run` and `manifest` for a process that calls the commands
+in-process.
+
 ## Verifying changes
 
 ```
