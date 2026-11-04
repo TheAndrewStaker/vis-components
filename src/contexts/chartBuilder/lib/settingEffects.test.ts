@@ -215,6 +215,23 @@ describe("applySettings: what the panels do beyond storing a value", () => {
 		expect(map.mapConfig!.customViewport).not.toBeNull()
 	})
 
+	it("fills the label x / y from the chart's axes when a value is set without them", () => {
+		const v = ok({ dataLabelsEncodings: { value: { field: "sales" } } }, bars())
+		expect(v.dataLabelsEncodings!.x).toEqual({ field: "region" })
+		expect(v.dataLabelsEncodings!.y).toEqual({ field: null })
+		const own = ok({ dataLabelsEncodings: { value: { field: "sales" }, x: { field: "year" } } }, bars())
+		expect(own.dataLabelsEncodings!.x).toEqual({ field: "year" })
+	})
+
+	it("refuses another position field where the labels are locked to the axes", () => {
+		const tile = base({
+			encodings: { ...base().encodings, x: { field: "region" }, y: { field: "when" }, hue: { field: "sales" } },
+			fieldTypeOverrides: { when: "categorical" },
+		})
+		expect(paths({ dataLabelsEncodings: { x: { field: "sales" } } }, tile)).toEqual(["dataLabelsEncodings.x"])
+		expect(ok({ dataLabelsEncodings: { x: { field: "region" } } }, tile).dataLabelsEncodings!.x).toEqual({ field: "region" })
+	})
+
 	it("refuses x / y label positions on a flow chart", () => {
 		const flow = base({
 			encodings: { ...base().encodings, connection: { field: "region" }, area: { field: "sales" } },

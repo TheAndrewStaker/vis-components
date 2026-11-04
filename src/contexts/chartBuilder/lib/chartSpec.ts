@@ -277,7 +277,7 @@ const applyCommon = (
 	for (const f of Object.keys(spec.fieldTypes ?? {})) {
 		if (!known.has(f)) bad(`fieldTypes.${f}`, `no field "${f}"${didYouMean(f, names)}`)
 	}
-	const encodings = visual.encodings
+	const encodings = { ...visual.encodings }
 	const touched = new Set<string>([
 		...Object.keys(spec.encodings ?? {}),
 		...SPEC_CHANNELS.filter((ch) => spec.fieldTypes?.[encodings[ch]?.field ?? ""] !== undefined),
@@ -293,15 +293,25 @@ const applyCommon = (
 				`"${ch}" takes ${CHANNELS[ch].accepts.join(" or ")}; "${field}" is ${type}`
 			)
 	}
+	// A channel the spec maps clears a mapped channel it conflicts with, as
+	// the shelf does after its confirmation (an agent guiding the chart is
+	// that confirmation); two conflicting channels in one spec are refused.
+	let configs: ChannelConfigs = visual.channelConfigs
 	const mapped = SPEC_CHANNELS.filter((ch) => encodings[ch]?.field || encodings[ch]?.measureSource)
 	mapped.forEach((a, i) => {
 		for (const b of mapped.slice(i + 1)) {
-			if (channelsConflict(a, b) && (touched.has(a) || touched.has(b)))
-				bad(`encodings.${touched.has(b) ? b : a}`, `"${a}" and "${b}" can't be mapped together`)
+			if (!channelsConflict(a, b) || (!touched.has(a) && !touched.has(b))) continue
+			if (touched.has(a) && touched.has(b)) {
+				bad(`encodings.${b}`, `"${a}" and "${b}" can't be mapped together`)
+				continue
+			}
+			const [kept, cleared] = touched.has(a) ? [a, b] : [b, a]
+			encodings[cleared] = { field: null }
+			if (cleared === "length") configs = { ...configs, defaultLength: null }
+			out.warnings.push(`unmapped "${cleared}" (it can't be mapped with "${kept}")`)
 		}
 	})
 
-	let configs: ChannelConfigs = visual.channelConfigs
 	const hueField = encodings.hue?.field
 	if (spec.stack !== undefined) {
 		const hueType = hueField ? typeOf(hueField) : undefined
@@ -358,7 +368,7 @@ const applyCommon = (
 		if (typeof picked === "string")
 			bad((spec as ChartSpec).variation !== undefined ? "variation" : "family", picked)
 	}
-	return { ...visual, channelConfigs: configs, labelsConfig, fieldTypeOverrides: overrides }
+	return { ...visual, encodings, channelConfigs: configs, labelsConfig, fieldTypeOverrides: overrides }
 }
 
 /** The spec's `settings`, applied last; their problems are prefixed

@@ -24,6 +24,7 @@ import { COLOR_SLOT_DEFS } from "./colorSlots"
 import { axisStemPatch, switchConnectionFill, withConnectionConfig } from "./connectionEdits"
 import { resolveDashGapFill } from "./dashGapFill"
 import { seedLabelTextPalette } from "./dataLabelsHue"
+import { DATA_LABEL_POSITION_CHANNELS, resolveDataLabelPositions } from "./dataLabelsPosition"
 import { BAR_TOTAL_SEED, valueFieldsPatch } from "./dataLabelsValueFields"
 import { columnAlignPatch, resolveDataTableStyle } from "./dataTableConfig"
 import { distributionTypeOf, distributionTypePatch, type DistributionType } from "./distributionType"
@@ -247,6 +248,24 @@ export const applySettingEffects = (
 					...labelEncodings,
 					[ch]: sentField ? { ...enc, measureSource: undefined } : { ...enc, field: null },
 				}
+			}
+		// A value with no position of its own takes the chart's axis fields,
+		// stored, so the labels draw at once. A mode whose label positions
+		// are locked to the axes (tile) takes no other field.
+		const labels = v.dataLabelsEncodings
+		if (labels && has(patch, "dataLabelsEncodings", "value")) {
+			const filled = resolveDataLabelPositions(labels, v.encodings)
+			let next = labels
+			for (const ch of DATA_LABEL_POSITION_CHANNELS)
+				if (filled[ch] !== labels[ch] && !has(patch, "dataLabelsEncodings", ch)) next = { ...next, [ch]: filled[ch] }
+			v.dataLabelsEncodings = next
+		}
+		if (labels && mode.labels.positionLockedToAxes)
+			for (const ch of ["x", "y"] as const) {
+				const field = labels[ch]?.field
+				const axis = v.encodings[ch]?.field ?? null
+				if (has(patch, "dataLabelsEncodings", ch) && field && field !== axis)
+					bad(`dataLabelsEncodings.${ch}`, `a ${mode.id} chart's labels sit on its ${ch} axis${axis ? ` ("${axis}")` : ""}; the position can't be another field`)
 			}
 		const hue = v.dataLabelsEncodings?.hue
 		if (hue && theme && v.dataLabelsConfig && has(patch, "dataLabelsEncodings", "hue")) {

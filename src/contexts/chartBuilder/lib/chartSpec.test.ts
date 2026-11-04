@@ -175,6 +175,19 @@ describe("composeVisual", () => {
 })
 
 describe("editVisual", () => {
+	it("clears a mapped channel that conflicts with the one the edit maps, and says so", () => {
+		const base = ok(SCATTER)
+		const { visual, problems, warnings } = editVisual(base, { encodings: { length: "profit" } }, deps)
+		expect(problems).toEqual([])
+		expect(visual.encodings.length).toEqual({ field: "profit" })
+		expect(visual.encodings.area).toEqual({ field: null })
+		expect(warnings).toEqual([`unmapped "area" (it can't be mapped with "length")`])
+		expect(editVisual(base, { encodings: { length: "profit", shape: "region" } }, deps).problems[0]?.path).toBe(
+			"encodings.shape"
+		)
+	})
+
+
 	const base = (): Visual => ok({ ...LINE, axes: { y: { min: 0 } } })
 
 	it("unmaps a channel, clears a bound, and bumps updatedAt only", () => {
