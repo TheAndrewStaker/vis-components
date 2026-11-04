@@ -730,9 +730,17 @@ const buildPolygons = <P extends LocalPoint>(
 	const patternField = aestheticScales.pattern?.field.name ?? null
 	// Border (polygon outline) opacity = the Border slot. Polygons are
 	// aggregated per group, so a field-mapped border resolves to the slot's
-	// level. The fill uses each group's overall opacity (absolute) below.
+	// level. The fill uses each group's overall opacity (absolute) times the
+	// Polygon fill slot below.
 	const borderOpacity = slotOpacityResolver(
 		"border",
+		channelConfigs,
+		aestheticScales
+	)({})
+	// Polygon fill slot — a level-only MULTIPLIER on each group's overall
+	// opacity (default 1 = unchanged), the "watercolor" knob for filled radars.
+	const polygonFillOpacity = slotOpacityResolver(
+		"polygonFill",
 		channelConfigs,
 		aestheticScales
 	)({})
@@ -809,7 +817,10 @@ const buildPolygons = <P extends LocalPoint>(
 				key={`radar-poly-${key}`}
 				points={pts}
 				fill={fillEnabled ? (mh.fill ?? bodyFill) : "none"}
-				fillOpacity={(fillEnabled ? (sorted[0]?.opacity ?? 1) : 0) * mh.opacityMul}
+				fillOpacity={
+					(fillEnabled ? (sorted[0]?.opacity ?? 1) * polygonFillOpacity : 0) *
+					mh.opacityMul
+				}
 				stroke={mh.outline ?? mh.fill ?? stroke}
 				strokeOpacity={mh.outline ? 1 : borderOpacity * mh.opacityMul}
 				strokeWidth={

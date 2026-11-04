@@ -564,12 +564,9 @@ export const applyVariation = (
 			// fill closed polygons with their hue color. The renderer
 			// ignores it outside radar mode, so leaving it on a config
 			// that gets re-applied to (e.g.) a line chart is benign.
-			// `fillOpacity` shifts to 0.25 for filled-polygon variants so
-			// the new chart lands at the canonical "watercolor radar"
-			// look instead of a solid disc.
-			...(variation.polygonFill
-				? { fillPolygon: true, fillOpacity: 0.25 }
-				: {}),
+			// (The fill's translucency is the Polygon fill opacity slot,
+			// set just below.)
+			...(variation.polygonFill ? { fillPolygon: true } : {}),
 			// Hierarchy/flow scaffolds pick their layout here — the shared
 			// area+connection signature renders whatever this selects (the
 			// mode registry dispatches on it). Id / target columns stay on
@@ -577,6 +574,19 @@ export const applyVariation = (
 			...(variation.hierarchyLayout
 				? { hierarchyLayout: variation.hierarchyLayout }
 				: {}),
+		}
+		// Filled-polygon variants land at the canonical "watercolor radar" look
+		// (a 0.25 Polygon fill opacity) instead of a solid disc. Any other
+		// connection reset drops a stale Polygon fill level from a previous
+		// filled radar, like the rest of the connection knobs above.
+		if (variation.polygonFill) {
+			configs.opacitySlots = {
+				...configs.opacitySlots,
+				polygonFill: { field: null, level: 0.25 },
+			}
+		} else if (configs.opacitySlots?.polygonFill) {
+			const { polygonFill: _stale, ...rest } = configs.opacitySlots
+			configs.opacitySlots = rest
 		}
 	}
 

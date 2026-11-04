@@ -209,6 +209,22 @@ describe("RadarPlot — basics", () => {
 		}
 	})
 
+	it("the Polygon fill opacity slot multiplies the body's opacity; the outline is untouched", () => {
+		const c = mount({
+			withConnection: true,
+			connectionCfg: { fillPolygon: true },
+			extraConfigs: {
+				opacitySlots: { polygonFill: { field: null, level: 0.5 } },
+			},
+		})
+		const polygons = [...c.querySelectorAll("polygon")]
+		expect(polygons.length).toBeGreaterThan(0)
+		for (const p of polygons) {
+			expect(Number(p.getAttribute("fill-opacity"))).toBeCloseTo(0.425, 5)
+			expect(p.getAttribute("stroke-opacity")).toBe("1")
+		}
+	})
+
 	it("per-value `lineColors` override the polygon outline independently of fill", () => {
 		const c = mount({
 			withConnection: true,

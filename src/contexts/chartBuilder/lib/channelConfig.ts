@@ -776,6 +776,7 @@ export type OpacitySlotKey =
 	| "densityCurveStroke"
 	| "stem"
 	| "spine"
+	| "polygonFill"
 	| "node"
 	| "ribbon"
 	| "regressionStroke"
@@ -1279,20 +1280,12 @@ export type ConnectionConfig = {
 	 * load unchanged (absent = off). */
 	dashRange?: DashRangeConfig
 	/** Radar-mode only: when true, the closed polygon connecting each
-	 *  series' points fills with its hue color (modulated by
-	 *  `fillOpacity`). When false, only the polygon outline draws.
+	 *  series' points fills with its hue color, at the series' opacity
+	 *  times the Opacity panel's "Polygon fill" slot (`opacitySlots
+	 *  .polygonFill`). When false, only the polygon outline draws.
 	 *  Toggle surfaces in the Connection panel only while the active
 	 *  chart mode is radar. */
 	fillPolygon?: boolean
-	/** Opacity multiplier applied to LINES — area-mode top edges and
-	 *  radar-mode polygon outlines. Composes with each layer/series'
-	 *  hue-resolved opacity. Defaults to 1 (fully opaque). Surfaced in
-	 *  the Opacity panel for area + radar charts. */
-	lineOpacity?: number
-	/** Opacity multiplier applied to FILLS — area-mode layer bodies and
-	 *  radar-mode polygon interiors (when `fillPolygon` is on). Same
-	 *  composition rule as `lineOpacity`. Defaults to 1. */
-	fillOpacity?: number
 	/** Scatter-only: draw a stem from each point to an axis (lollipop
 	 *  charts). Unlike the group polyline above, this is a PER-POINT
 	 *  derived mark — it needs no connection field and ignores grouping.
@@ -1415,8 +1408,6 @@ export const DEFAULT_CONNECTION_CONFIG: ConnectionConfig = {
 	dashGapColor: null,
 	dashGapFill: null,
 	fillPolygon: false,
-	lineOpacity: 1,
-	fillOpacity: 1,
 	axisStem: "none",
 	axisStemCustomX: null,
 	axisStemCustomY: null,

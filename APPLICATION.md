@@ -1807,7 +1807,12 @@ fill** and **Violin / box outline**; the Fill subheader reuses the
 overall encoding. A part's modulation is absolute (its slot alone,
 independent of the Fill); the overlay body's fill modulates BEFORE a
 body pattern tiles over it, and the pattern ink still pairs on the
-pre-modulation fill, exactly as a mark does.
+pre-modulation fill, exactly as a mark does. A filled radar (Connection
+▸ "Fill polygon") adds a **Polygon fill** opacity slot: a level-only
+multiplier on each series' Fill opacity (default 1 = unchanged), so the
+polygon body can go translucent while the points stay solid. The
+"Filled radar" quick start sets it to 0.25; any other connection quick
+start clears it.
 
 While a violin / box overlay is on, the Color, Opacity, Saturation and
 Brightness panels title their marks' Fill and Outline subheaders

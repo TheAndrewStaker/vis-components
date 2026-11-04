@@ -4210,14 +4210,8 @@
 				"line"
 			]
 		},
-		"channelConfigs.connection.fillOpacity": {
-			"doc": "Opacity multiplier applied to FILLS — area-mode layer bodies and radar-mode polygon interiors (when `fillPolygon` is on). Same composition rule as `lineOpacity`. Defaults to 1.",
-			"kinds": [
-				"number"
-			]
-		},
 		"channelConfigs.connection.fillPolygon": {
-			"doc": "Radar-mode only: when true, the closed polygon connecting each series' points fills with its hue color (modulated by `fillOpacity`). When false, only the polygon outline draws. Toggle surfaces in the Connection panel only while the active chart mode is radar.",
+			"doc": "Radar-mode only: when true, the closed polygon connecting each series' points fills with its hue color, at the series' opacity times the Opacity panel's \"Polygon fill\" slot (`opacitySlots .polygonFill`). When false, only the polygon outline draws.",
 			"kinds": [
 				"boolean"
 			]
@@ -4277,12 +4271,6 @@
 			"color": true,
 			"kinds": [
 				"string"
-			]
-		},
-		"channelConfigs.connection.lineOpacity": {
-			"doc": "Opacity multiplier applied to LINES — area-mode top edges and radar-mode polygon outlines. Composes with each layer/series' hue-resolved opacity. Defaults to 1 (fully opaque). Surfaced in the Opacity panel for area + radar charts.",
-			"kinds": [
-				"number"
 			]
 		},
 		"channelConfigs.connection.linePalette": {
@@ -5666,6 +5654,66 @@
 			]
 		},
 		"channelConfigs.opacitySlots.node.opacity.stackMode": {
+			"kinds": [
+				"string"
+			],
+			"values": [
+				"group",
+				"overlay",
+				"stack"
+			]
+		},
+		"channelConfigs.opacitySlots.polygonFill": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.opacitySlots.polygonFill.field": {
+			"kinds": [
+				"null",
+				"string"
+			]
+		},
+		"channelConfigs.opacitySlots.polygonFill.level": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.opacitySlots.polygonFill.opacity": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.opacitySlots.polygonFill.opacity.kind": {
+			"kinds": [
+				"string"
+			],
+			"values": [
+				"categorical",
+				"quantitative"
+			]
+		},
+		"channelConfigs.opacitySlots.polygonFill.opacity.max": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.opacitySlots.polygonFill.opacity.min": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.opacitySlots.polygonFill.opacity.overrides": {
+			"kinds": [
+				"object"
+			]
+		},
+		"channelConfigs.opacitySlots.polygonFill.opacity.overrides.*": {
+			"kinds": [
+				"number"
+			]
+		},
+		"channelConfigs.opacitySlots.polygonFill.opacity.stackMode": {
 			"kinds": [
 				"string"
 			],

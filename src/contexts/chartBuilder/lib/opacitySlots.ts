@@ -148,6 +148,19 @@ export const OPACITY_SLOT_REGISTRY: readonly OpacitySlotDef[] = [
 		defaultLevel: 1,
 		acceptsFieldMapping: false,
 	},
+	{
+		// Filled-radar polygon interiors. Multiplies each series' own opacity
+		// (the Fill section) rather than replacing it, so the default of 1
+		// leaves filled radars unchanged; the "Filled radar" quick start sets
+		// 0.25 for the watercolor look. Polygons aggregate a whole series, so
+		// level only (like the spine).
+		key: "polygonFill",
+		label: "Polygon fill",
+		modes: m("radar"),
+		isApplicable: (_encodings, configs) => !!configs.connection?.fillPolygon,
+		defaultLevel: 1,
+		acceptsFieldMapping: false,
+	},
 	// Flow diagrams (chord / sankey) split opacity by mark part: node arcs /
 	// rects anchor the eye at full opacity while ribbons / links read as
 	// translucent washes of their source node's color. Flow marks aggregate

@@ -12,6 +12,20 @@ describe("applicableOpacitySlots", () => {
 		).toContain("border")
 	})
 
+	it("offers the radar Polygon fill slot only while the polygon is filled", () => {
+		expect(
+			applicableOpacitySlots("radar", {} as never, {}).map((d) => d.key)
+		).not.toContain("polygonFill")
+		const filled = { connection: { fillPolygon: true } } as never
+		expect(
+			applicableOpacitySlots("radar", {} as never, filled).map((d) => d.key)
+		).toContain("polygonFill")
+		// Radar only: a stray fillPolygon on another mode's config surfaces nothing.
+		expect(
+			applicableOpacitySlots("scatter", {} as never, filled).map((d) => d.key)
+		).not.toContain("polygonFill")
+	})
+
 	it("offers the rug slot only when a histogram is on", () => {
 		expect(
 			applicableOpacitySlots("bars-x", {} as never, {}).map((d) => d.key)
