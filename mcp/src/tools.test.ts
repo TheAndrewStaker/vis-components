@@ -265,6 +265,30 @@ describe("settings", () => {
 		expect(bad.isError).toBe(true)
 		expect(parsed(bad).message).toContain('did you mean "labelsConfig"')
 	})
+
+	it("list_settings with a chart returns the keys its `*` paths take and the theme's palettes", async () => {
+		const s = await withDataset()
+		const created = parsed(
+			await s.tools.create_chart({
+				datasetId: s.datasetId,
+				folderId: null,
+				encodings: { x: "year", y: "sales", hue: "region", facet: "region" },
+				settings: { dataLabelsEncodings: { value: { field: null, multiField: true, fields: ["sales"] } } },
+			})
+		)
+		expect(created.id).toBeDefined()
+		const out = parsed(await s.tools.list_settings({ chartId: created.id as string, query: "panelOrder" }))
+		const keys = out.keys as { fields: string[]; levels: Record<string, string[]>; composedLabels: string[]; facetPanels: string[] }
+		expect(keys.fields).toEqual(["year", "region", "sales"])
+		expect(keys.levels).toEqual({ region: ["North", "South"] })
+		expect(keys.facetPanels).toEqual(["North", "South"])
+		expect(keys.composedLabels).toEqual(["sales"])
+		const palettes = out.palettes as { categorical: Array<{ id: string; colors: string[] }> }
+		expect(palettes.categorical.length).toBeGreaterThan(0)
+		expect(palettes.categorical[0].colors[0]).toMatch(/^#/)
+		const missing = await s.tools.list_settings({ chartId: "nope" })
+		expect(missing.isError).toBe(true)
+	})
 })
 
 describe("stale-edit guard", () => {

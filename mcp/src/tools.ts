@@ -21,6 +21,7 @@ import {
 import { datasetsEqual } from "../../src/contexts/chartBuilder/lib/datasetDedupe"
 import { datasetFromRows } from "../../src/contexts/chartBuilder/lib/datasetFromRows"
 import { didYouMean } from "../../src/contexts/chartBuilder/lib/didYouMean"
+import { settingKeysOf } from "../../src/contexts/chartBuilder/lib/settingKeys"
 import { themeOf } from "../../src/contexts/chartBuilder/lib/systemThemes"
 import type {
 	DatasetMeta,
@@ -237,26 +238,51 @@ export const createHandlers = (api: Api) => {
 			})
 		}),
 
-		list_settings: guarded(async ({ slice, query }: { slice?: string; query?: string }) => {
-			const { slices, paths } = SETTING_CATALOG
-			if (slice !== undefined && !slices.includes(slice))
-				return refused(`no settings slice "${slice}"${didYouMean(slice, slices)}; slices are ${slices.join(", ")}`)
-			const q = query?.trim().toLowerCase() ?? ""
-			const rows = Object.entries(paths)
-				.filter(
-					([path, entry]) =>
-						(slice === undefined || path === slice || path.startsWith(`${slice}.`)) &&
-						(q === "" || `${path} ${entry.doc ?? ""}`.toLowerCase().includes(q))
-				)
-				.map(([path, entry]) => ({ path, ...entry }))
-			return ok({
-				total: rows.length,
-				rows: rows.slice(0, SETTINGS_ROW_CAP),
-				...(rows.length > SETTINGS_ROW_CAP
-					? { note: `showing ${SETTINGS_ROW_CAP} of ${rows.length}; narrow the query` }
-					: {}),
-			})
-		}),
+		list_settings: guarded(
+			async ({ slice, query, chartId }: { slice?: string; query?: string; chartId?: string }) => {
+				const { slices, paths } = SETTING_CATALOG
+				if (slice !== undefined && !slices.includes(slice))
+					return refused(`no settings slice "${slice}"${didYouMean(slice, slices)}; slices are ${slices.join(", ")}`)
+				const q = query?.trim().toLowerCase() ?? ""
+				const rows = Object.entries(paths)
+					.filter(
+						([path, entry]) =>
+							(slice === undefined || path === slice || path.startsWith(`${slice}.`)) &&
+							(q === "" || `${path} ${entry.doc ?? ""}`.toLowerCase().includes(q))
+					)
+					.map(([path, entry]) => ({ path, ...entry }))
+				// With a chart: the keys its `*` paths take, and its theme's palettes.
+				let keys: unknown
+				let palettes: unknown
+				if (chartId !== undefined) {
+					const visual = await api.visual(chartId)
+					if (!visual) return refused(`no chart with id "${chartId}"`)
+					const meta = await datasetMeta(visual.datasetId)
+					const body = meta ? await api.dataset(meta.id) : null
+					const dataRows = body?.versions.find((v) => v.id === meta?.latestVersionId)?.rows ?? []
+					keys = settingKeysOf(visual, meta ? fieldsOf(meta) : [], dataRows)
+					const named = await resolveTheme(visual.themeId)
+					const theme = themeOf("id" in named ? named : await defaultTheme())
+					const list = (pals: SavedTheme["categoricalPalettes"]) =>
+						pals.map((p) => ({ id: p.id, name: p.name, colors: p.colors }))
+					palettes = {
+						note: "For a color, prefer a palette id (where the setting takes one) or a color from these palettes over an arbitrary hex.",
+						categorical: list(theme.categoricalPalettes),
+						ordinal: list(theme.ordinalPalettes),
+						text: theme.defaultTextPaletteId,
+					}
+				}
+				return ok({
+					total: rows.length,
+					rows: rows.slice(0, SETTINGS_ROW_CAP),
+					...(rows.length > SETTINGS_ROW_CAP
+						? { note: `showing ${SETTINGS_ROW_CAP} of ${rows.length}; narrow the query` }
+						: {}),
+					...(keys !== undefined ? { keys } : {}),
+					...(palettes !== undefined ? { palettes } : {}),
+				})
+			}
+		),
 
 		edit_chart: guarded(async ({ id, patch }: { id: string; patch: ChartSpecEdit }) => {
 			await api.assertCurrent(CHART_COLLECTIONS)
@@ -401,10 +427,11 @@ export const registerTools = (server: McpServer, handlers: Handlers): void => {
 		"list_settings",
 		{
 			description:
-				"The stored settings a `settings` patch can set: path, kinds, allowed values, doc, and color / format flags. In a path, `*` stands for a key you take from the chart (a level, field or panel) and `[]` for a list entry; lists replace whole. Filter by slice and a text query.",
+				"The stored settings a `settings` patch can set: path, kinds, allowed values, doc, and color / format flags. In a path, `*` stands for a key you take from the chart (a level, field or panel) and `[]` for a list entry; lists replace whole. Filter by slice and a text query. With a chartId, also returns the keys that chart's `*` paths take (its fields, the levels of each mapped field, its composed label ids, facet panels and table columns) and its theme's palettes: prefer those colors to arbitrary hex.",
 			inputSchema: {
 				slice: z.string().optional().describe("One slice, such as channelConfigs or labelsConfig."),
 				query: z.string().optional().describe("Case-insensitive text matched against path and doc."),
+				chartId: z.string().optional().describe("A chart whose keys and theme palettes to include."),
 			},
 		},
 		(args) => handlers.list_settings(args)

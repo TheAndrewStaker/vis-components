@@ -124,7 +124,7 @@ Tools:
 - `get_chart`: a chart's encodings, titles, links and stored settings.
 - `edit_chart`: change only the keys a patch names (refused if the chart changed in the editor since it was read).
 - `undo_chart_edit`: undo this session's last `edit_chart` on a chart.
-- `list_settings`: the stored settings a spec's `settings` key can set, by path (`*` = a level, field or panel key; `[]` = a list entry; lists replace whole).
+- `list_settings`: the stored settings a spec's `settings` key can set, by path (`*` = a level, field or panel key; `[]` = a list entry; lists replace whole). With a `chartId`, also the keys that chart's `*` paths take and its theme's palettes.
 
 The catalog behind `settings` is `src/contexts/chartBuilder/lib/settingCatalog.json`; regenerate it with `pnpm settings:catalog` after changing a saved config type. A setting behaves as its sidebar panel does (`lib/settingEffects.ts`): the panel and the settings path call the same lib function for anything a pick seeds, gates or normalizes.
 
