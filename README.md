@@ -126,7 +126,7 @@ Tools:
 - `undo_chart_edit`: undo this session's last `edit_chart` on a chart.
 - `list_settings`: the stored settings a spec's `settings` key can set, by path (`*` = a level, field or panel key; `[]` = a list entry; lists replace whole).
 
-The catalog behind `settings` is `src/contexts/chartBuilder/lib/settingCatalog.json`; regenerate it with `pnpm settings:catalog` after changing a saved config type.
+The catalog behind `settings` is `src/contexts/chartBuilder/lib/settingCatalog.json`; regenerate it with `pnpm settings:catalog` after changing a saved config type. A setting behaves as its sidebar panel does (`lib/settingEffects.ts`): the panel and the settings path call the same lib function for anything a pick seeds, gates or normalizes.
 
 ## Verifying changes
 

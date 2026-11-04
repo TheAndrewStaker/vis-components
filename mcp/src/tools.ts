@@ -7,6 +7,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { z } from "zod"
 
 import { SETTING_CATALOG } from "../../src/contexts/chartBuilder/lib/applySettings"
+import { settingsReadRows } from "../../src/contexts/chartBuilder/lib/settingEffects"
 import {
 	chartSpecVocabulary,
 	composeVisual,
@@ -128,6 +129,13 @@ export const createHandlers = (api: Api) => {
 		return all.find((t) => t.id === defaultId) ?? all[0]
 	}
 
+	/** The latest version's rows, only for a settings patch that reads them. */
+	const rowsFor = async (meta: DatasetMeta | undefined, settings: unknown) => {
+		if (!meta || !settingsReadRows(settings)) return undefined
+		const body = await api.dataset(meta.id)
+		return body.versions.find((v) => v.id === meta.latestVersionId)?.rows
+	}
+
 	const datasetMeta = async (datasetId: string | null): Promise<DatasetMeta | undefined> =>
 		datasetId ? (await api.datasetIndex())[datasetId] : undefined
 
@@ -197,6 +205,7 @@ export const createHandlers = (api: Api) => {
 				theme: themeOf(theme),
 				folderIds: new Set(folders.map((f) => f.id)),
 				latestVersionId: meta.latestVersionId,
+				rows: await rowsFor(meta, spec.settings),
 			}
 			const { visual, problems, warnings } = composeVisual({ ...spec, themeId: theme.id }, deps)
 			if (problems.length > 0) return refused("the chart wasn't created", problems)
@@ -265,6 +274,7 @@ export const createHandlers = (api: Api) => {
 				fields: meta ? fieldsOf(meta) : [],
 				theme: themeOf(theme),
 				latestVersionId: meta?.latestVersionId ?? null,
+				rows: await rowsFor(meta, patch.settings),
 			})
 			if (problems.length > 0) return refused("the chart wasn't changed", problems)
 			return saveEdit(base, visual, warnings)
@@ -314,7 +324,7 @@ const specShape = {
 const { datasetId: _d, folderId: _f, variation: _v, ...editShape } = specShape
 
 const SETTINGS_RULES =
-	"`settings` sets any stored setting by list_settings paths: objects merge, lists replace whole (send every entry; a new entry leaves out id)."
+	"`settings` sets any stored setting by list_settings paths: objects merge, lists replace whole (send every entry; a new entry leaves out id). A setting behaves as the editor's panel does: a new annotation gets the theme's style and a name, data-label value fields get their labels, an Order by spec computes the order, a palette id brings its colors, thickness by field seeds every level, numbers clamp to the input's range, and a value equal to its default is stored as unset."
 
 /** Register every tool on `server`. Unknown keys pass through to the lib,
  *  whose problems name them (with a did-you-mean) instead of zod dropping

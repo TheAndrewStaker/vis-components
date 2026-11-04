@@ -3,6 +3,7 @@
  * Objects deep-merge; lists replace whole. Every refusal is a problem and
  * nothing is applied unless there are none. Pure: no store, no server. */
 
+import { ANNOTATION_LISTS, newAnnotation, newAnnotationId, type AnnotationList } from "./annotationAdd"
 import { migrateShareValue } from "./channelConfig"
 import type { SpecProblem } from "./chartSpec"
 import { newComposedLabelId } from "./dataLabelsSelection"
@@ -12,7 +13,10 @@ import { formatSpecProblem } from "./formatTick"
 import { COUNTRY_NAME_FORMAT } from "./geo/countryNames"
 import { structureVisualKeys } from "./savedKeyStructure"
 import catalogJson from "./settingCatalog.json"
+import { applySettingEffects, settingDefaults, type SettingsDeps } from "./settingEffects"
 import type { Visual } from "./types"
+
+export type { SettingsDeps } from "./settingEffects"
 
 export type SettingKind = "string" | "number" | "boolean" | "null" | "list" | "object"
 
@@ -32,27 +36,22 @@ export const SETTING_CATALOG = catalogJson as {
 	paths: Record<string, SettingEntry>
 }
 
-export type ApplySettingsOptions = {
+export type ApplySettingsOptions = SettingsDeps & {
 	/** A fresh id for a new entry of the list at `listPath` (a catalog path
 	 *  such as `annotationsConfig.texts`). Defaults to the editor's minting. */
 	mintId?: (listPath: string) => string
 }
 
-const minted = (prefix: string) =>
-	`${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-
-/** The prefixes the sidebar's add handlers mint with. */
-const ID_PREFIX: Record<string, string> = {
-	"annotationsConfig.rectangles": "rect",
-	"annotationsConfig.circles": "circle",
-	"annotationsConfig.lineSegments": "line",
-	"annotationsConfig.texts": "text",
-}
+const ANNOTATION_LIST_PATH: Record<string, AnnotationList> = Object.fromEntries(
+	ANNOTATION_LISTS.map((list) => [`annotationsConfig.${list}`, list])
+)
 
 const defaultMintId = (listPath: string) =>
 	listPath === "dataLabelsConfig.composedLabels"
 		? newComposedLabelId()
-		: minted(ID_PREFIX[listPath] ?? "item")
+		: ANNOTATION_LIST_PATH[listPath]
+			? newAnnotationId(ANNOTATION_LIST_PATH[listPath])
+			: `item-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 
 /** `|` and control characters never go into a saved key (CLAUDE.md: the
  * hosting firewall inspects stored content). */
@@ -124,10 +123,19 @@ export const applySettings = (
 	const bad = (path: string, message: string) => problems.push({ path, message })
 	const mintId = opts.mintId ?? defaultMintId
 	const { paths, slices } = SETTING_CATALOG
+	const defaults = settingDefaults(visual, opts) as Record<string, unknown> | undefined
 
 	/** `value` checked against `type` (declared at catalog path `at`, real
-	 *  path `real`) and merged into `base`. */
-	const merge = (base: unknown, value: unknown, type: SettingType, at: string, real: string): unknown => {
+	 *  path `real`) and merged into `base`; `fallback` is the editor's
+	 *  default at the same path, the base where the visual has none. */
+	const merge = (
+		base: unknown,
+		value: unknown,
+		type: SettingType,
+		at: string,
+		real: string,
+		fallback: unknown
+	): unknown => {
 		const kind = kindOf(value)
 		if (type.kinds && !type.kinds.includes(kind as SettingKind)) {
 			bad(real, `must be ${describeKinds(type)}`)
@@ -144,7 +152,8 @@ export const applySettings = (
 		}
 		if (kind === "list") return replaceList(value as unknown[], type, at, real)
 		if (kind !== "object") return value
-		const next: Record<string, unknown> = isObj(base) ? { ...base } : {}
+		const start = base === undefined ? fallback : base
+		const next: Record<string, unknown> = isObj(start) ? { ...start } : {}
 		for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
 			const named = paths[`${at}.${key}`]
 			const entry = named ?? paths[`${at}.*`]
@@ -155,9 +164,22 @@ export const applySettings = (
 				bad(where, `unknown setting "${key}"${didYouMean(key, names)}`)
 			} else if (!named && unsafeKey(key)) {
 				bad(where, `a key can't contain "|" or a control character`)
-			} else next[key] = merge(next[key], v, entry, child, where)
+			} else next[key] = merge(next[key], v, entry, child, where, isObj(fallback) ? fallback[key] : undefined)
 		}
 		return next
+	}
+
+	/** A new entry of a list as the panel's "+ Add" seeds it, under the
+	 *  sent fields: an annotation gets the theme's style and the next free
+	 *  name; a composed label an empty template. */
+	const seeded = (at: string, soFar: ReadonlyArray<unknown>, entry: Record<string, unknown>) => {
+		const list = ANNOTATION_LIST_PATH[at]
+		if (list) {
+			const existing = soFar.filter(isObj).map((e) => ({ name: typeof e.name === "string" ? e.name : "" }))
+			return { ...newAnnotation(list, existing, opts.theme ?? null, mintId(at)), ...entry }
+		}
+		if (at === "dataLabelsConfig.composedLabels") return { template: "", ...entry }
+		return entry
 	}
 
 	/** A list replaces the stored one whole. An entry without an id gets a
@@ -168,9 +190,9 @@ export const applySettings = (
 		const seen = new Set<string>()
 		const out: unknown[] = []
 		list.forEach((item, i) => {
-			let v = merge(undefined, item, element, `${at}[]`, `${real}[${i}]`)
+			let v = merge(undefined, item, element, `${at}[]`, `${real}[${i}]`, undefined)
 			if (hasId && isObj(v)) {
-				if (typeof v.id !== "string" || v.id === "") v = { ...v, id: mintId(at) }
+				if (typeof v.id !== "string" || v.id === "") v = { ...seeded(at, out, v), id: mintId(at) }
 				const id = (v as { id: string }).id
 				if (seen.has(id)) bad(`${real}[${i}].id`, `"${id}" is used by another entry`)
 				seen.add(id)
@@ -186,7 +208,12 @@ export const applySettings = (
 			bad(slice, `unknown settings slice "${slice}"${didYouMean(slice, slices)}`)
 			continue
 		}
-		next[slice] = merge(next[slice], value, paths[slice], slice, slice)
+		next[slice] = merge(next[slice], value, paths[slice], slice, slice, defaults?.[slice])
+	}
+	if (problems.length === 0) {
+		const effects = applySettingEffects(visual, next as Visual, patch, opts)
+		Object.assign(next, effects.visual)
+		for (const p of effects.problems) problems.push(p)
 	}
 
 	// Per-panel ranges draw only on an unshared axis (the Facet panel

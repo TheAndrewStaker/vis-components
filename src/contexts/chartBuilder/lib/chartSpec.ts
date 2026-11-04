@@ -96,6 +96,10 @@ export type ComposeDeps = {
 	/** The dataset's latest version, stamped as `createdAtVersionId` the way
 	 * the editor's first save stamps it. */
 	latestVersionId?: string | null
+	/** The data set's rows, for the settings whose effects read them (an
+	 * "Order by" spec, thickness by field, facet counts; see
+	 * `settingsReadRows`). */
+	rows?: ReadonlyArray<Record<string, string>>
 	now?: number
 }
 
@@ -362,10 +366,11 @@ const applyCommon = (
 const withSettings = (
 	visual: Visual,
 	settings: unknown,
-	out: { problems: SpecProblem[] }
+	out: { problems: SpecProblem[] },
+	deps: ComposeDeps
 ): Visual => {
 	if (!isObj(settings)) return visual
-	const applied = applySettings(visual, settings)
+	const applied = applySettings(visual, settings, { theme: deps.theme, fields: deps.fields, rows: deps.rows })
 	for (const p of applied.problems) out.problems.push({ ...p, path: `settings.${p.path}` })
 	return applied.visual
 }
@@ -451,7 +456,7 @@ export const composeVisual = (spec: ChartSpec, deps: ComposeDeps): ComposeResult
 	}
 	const visual = applyCommon(spec, base, deps, out)
 	visual.name = spec.name?.trim() || spec.title?.trim() || UNTITLED_VISUAL_NAME
-	return { visual: intake(withSettings(visual, spec.settings, out)), ...out }
+	return { visual: intake(withSettings(visual, spec.settings, out, deps)), ...out }
 }
 
 /** An edit of a stored chart: only the keys the edit names change. */
@@ -508,5 +513,5 @@ export const editVisual = (
 		out
 	)
 	if (patch.name !== undefined) visual.name = patch.name.trim() || stored.name
-	return { visual: intake(withSettings(visual, patch.settings, out)), ...out }
+	return { visual: intake(withSettings(visual, patch.settings, out, deps)), ...out }
 }
