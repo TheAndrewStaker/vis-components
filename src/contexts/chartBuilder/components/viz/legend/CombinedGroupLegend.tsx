@@ -4,7 +4,15 @@ import {
 	type LineDashPattern,
 } from "../../../lib/channelConfig"
 import { GlyphMark, resolveGlyph, stripNudge } from "../../../lib/customGlyphs"
-import { DASH_CYCLE, dashArrayFor } from "../../../lib/dashPatterns"
+import {
+	DASH_CYCLE,
+	dashArrayFor,
+	resolveDashGapColor,
+} from "../../../lib/dashPatterns"
+import {
+	segmentDashArray,
+	type SegmentPatternContext,
+} from "../../../lib/segmentPattern"
 import type { GradientBarStyle, LegendSwatchShape } from "../../../lib/labelsConfig"
 import {
 	buildLegendFormatter,
@@ -85,6 +93,12 @@ type CombinedGroupLegendProps = ReversibleLegendProps & {
 	 *  default polygon pattern over every hue swatch) and the line-dash
 	 *  overlay is dropped — radar polygons don't dash. */
 	polygonPatternFill?: boolean
+	/** Scatter line segments (no connection): when pattern shares the
+	 *  section, each swatch is a segment at the chart's thickness — the
+	 *  tile as its stroke paint (fill mode) or the category's dash (dash
+	 *  mode) over the hue color, as the marks draw. Null = the usual
+	 *  rectangle / glyph swatches. */
+	segmentSwatch?: SegmentPatternContext | null
 	/** Hue-legend swatch shape (`SHAPE_PALETTE` index). Reshapes the color
 	 *  swatches when no per-mark shape encoding is present. `null` /
 	 *  undefined keeps the default rectangle. */
@@ -180,6 +194,7 @@ export const CombinedGroupLegend = ({
 	entryColumns,
 	highlightField,
 	themeInkFallback,
+	segmentSwatch = null,
 }: CombinedGroupLegendProps) => {
 	const hasHue = channels.includes("hue")
 	const hasOutline = channels.includes("outlineHue")
@@ -497,6 +512,46 @@ export const CombinedGroupLegend = ({
 				}
 			}
 		}
+		// Segment scatter with pattern in the section: the swatch is the
+		// segment itself. Fill mode keeps `pattern` as the stroke paint; dash
+		// mode drops the tile and carries the category's dash (same
+		// resolution as the marks) over the gap ink when "Fill dash gaps" is
+		// on — auto OFF here, since pattern shares hue's variable (true gaps
+		// restate the color split), unless the section has no hue.
+		let segment: Parameters<typeof ComposedSwatch>[0]["segment"] = null
+		if (segmentSwatch && hasPat && patCategories && !polygonPatternFill) {
+			if (segmentSwatch.mode === "fill") {
+				segment = { ...segmentSwatch, dashArray: null, gapColor: null }
+			} else {
+				const dashArray = segmentDashArray({
+					patternValue: v,
+					domain: patCategories,
+					patternCfg: configs.pattern,
+					connectionCfg: configs.connection,
+				})
+				const gapFill = configs.connection?.dashGapFill ?? !hasHue
+				const gapPalette = inkPaletteForHue(configs, type)
+				const gapColor =
+					gapFill && dashArray !== null
+						? resolveDashGapColor({
+								overrideKeys: [v],
+								patternValue: v,
+								hueColor: hasHue ? preModulationColor : null,
+								lineColor: preModulationColor,
+								overrides: configs.connection?.dashAlternateColors ?? {},
+								singleOverride: configs.connection?.dashGapColor ?? null,
+								inkColors: configs.pattern?.inkColors ?? {},
+								palette: gapPalette.palette,
+								patternInks: gapPalette.inks,
+								themeInkFallback,
+								defaultInk:
+									configs.defaultPatternInk ?? configs.patternInkColor ?? null,
+							})
+						: null
+				pattern = null
+				segment = { ...segmentSwatch, dashArray, gapColor }
+			}
+		}
 		// Size the glyph by the area channel (ordinal combined section). Force a
 		// glyph so the varying radius is visible — reuse the shape descriptor
 		// when one exists (shape / outline channel), else synthesize the
@@ -530,7 +585,16 @@ export const CombinedGroupLegend = ({
 		const outlineStroke =
 			splitStroke ?? (shape ? null : (swatchOutline?.color ?? null))
 		const outlineWidth = splitStroke ? null : (swatchOutline?.width ?? null)
-		return { color, opacity, pattern, shape, dash, outlineStroke, outlineWidth }
+		return {
+			color,
+			opacity,
+			pattern,
+			shape,
+			dash,
+			segment,
+			outlineStroke,
+			outlineWidth,
+		}
 	}
 
 	const hasLength = channels.includes("length")

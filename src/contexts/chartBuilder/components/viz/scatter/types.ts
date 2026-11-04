@@ -47,6 +47,16 @@ export type Mark = {
 	glyph: ResolvedGlyph | null
 	line: { x1: number; y1: number; x2: number; y2: number } | null
 	patternId: string | null
+	/** How Pattern paints this segment (`line` marks only; null for glyphs
+	 * and for segments Pattern leaves plain). `fill`: the stroke IS the
+	 * pattern tile (`patternId`). `dash`: the stroke carries `dashArray`
+	 * (null = solid) over a `gapColor` underlay when "Fill dash gaps" is on
+	 * (null = true gaps). Resolved in `buildMarks` through
+	 * `resolveSegmentPatternContext` / `segmentDashArray`. */
+	segmentPattern:
+		| { kind: "fill" }
+		| { kind: "dash"; dashArray: string | null; gapColor: string | null }
+		| null
 	markOpacity: number
 	rotation: number | null
 	row: Record<string, unknown>

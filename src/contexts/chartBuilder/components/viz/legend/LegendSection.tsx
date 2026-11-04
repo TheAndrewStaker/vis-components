@@ -21,6 +21,7 @@ import { ColorLegend } from "./ColorLegend"
 import { LengthLegend } from "./LengthLegend"
 import { OpacityLegend } from "./OpacityLegend"
 import { PatternLegend } from "./PatternLegend"
+import type { SegmentPatternContext } from "../../../lib/segmentPattern"
 import { ShapeLegend } from "./ShapeLegend"
 import { DEFAULT_GRADIENT_BAR_STYLE } from "./swatches"
 
@@ -62,6 +63,10 @@ export type LegendSectionProps = {
 	 *  category) and the line-dash overlay is dropped. Computed by the
 	 *  parent, where the chart mode is resolved. */
 	polygonPatternFill?: boolean
+	/** Scatter line segments (no connection): the pattern swatches draw as
+	 *  segments — tile-stroked or dashed per the Pattern menu's Segments
+	 *  toggle. Computed by the parent, where the chart mode is resolved. */
+	segmentSwatch?: SegmentPatternContext | null
 	/** Per-quantitative-channel break + format overrides. Sparse: only
 	 * channels the user has touched appear here; missing channels resolve
 	 * to defaults via `resolveLegendChannelConfig`. */
@@ -151,6 +156,7 @@ export const LegendSection = ({
 	legendStrokeColor,
 	connectionMapped = false,
 	polygonPatternFill = false,
+	segmentSwatch = null,
 	channelLegendCfgs,
 	auxSwatchColor,
 	auxSwatchStroke,
@@ -328,6 +334,7 @@ export const LegendSection = ({
 						highlightField={highlightField}
 						connectionMapped={connectionMapped}
 						polygonPatternFill={polygonPatternFill}
+						segmentSwatch={segmentSwatch}
 						defaultSwatchOpacity={defaultSwatchOpacity}
 						auxSwatchColor={auxSwatchColor}
 						auxSwatchStroke={auxSwatchStroke}
@@ -495,6 +502,7 @@ export const LegendSection = ({
 						values={values}
 						configs={configs}
 						polygonPatternFill={polygonPatternFill}
+						segmentSwatch={segmentSwatch}
 						pinnedOrder={pinnedOrder}
 						reverseCategorical={reverseCategorical}
 						orientation={orientation}

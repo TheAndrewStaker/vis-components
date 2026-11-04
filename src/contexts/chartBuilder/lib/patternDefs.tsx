@@ -31,6 +31,20 @@ export const dedupPatternDefs = (specs: PatternDefSpec[]): PatternDefSpec[] => {
  * legend swatches, the Pattern menu's chips, the theme sampler, the map's
  * no-data chips — renders through here so they can't drift. Place inside
  * `<defs>`. */
+/** Side (px) of the palette tile at `paletteIdx` zoomed by `scale` — the
+ * repeat distance between marks, exactly as `PatternTile` sizes its
+ * `<pattern>`. The segment-pattern auto rule compares a segment's thickness
+ * against it (one full repeat must fit across the stroke). */
+export const patternTileSide = (
+	paletteIdx: number,
+	scale?: number | null
+): number => {
+	const def = PATTERN_PALETTE[paletteIdx % PATTERN_PALETTE.length]
+	const s = effectivePatternScale(scale)
+	// Rounded so float noise (10 × 0.3) doesn't leak into the attribute.
+	return Number((def.size * s ** def.spacingExponent).toFixed(3))
+}
+
 export const PatternTile = ({
 	id,
 	paletteIdx,
@@ -46,8 +60,7 @@ export const PatternTile = ({
 }) => {
 	const def = PATTERN_PALETTE[paletteIdx % PATTERN_PALETTE.length]
 	const s = effectivePatternScale(scale)
-	// Rounded so float noise (10 × 0.3) doesn't leak into the attribute.
-	const side = Number((def.size * s ** def.spacingExponent).toFixed(3))
+	const side = patternTileSide(paletteIdx, scale)
 	return (
 		<pattern id={id} patternUnits="userSpaceOnUse" width={side} height={side}>
 			<rect width={side} height={side} fill={bgColor} />

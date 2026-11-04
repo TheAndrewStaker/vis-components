@@ -955,7 +955,18 @@ export type PatternConfig = {
 	/** The polygon-fill twins of `scales` / `defaultScale` (filled radar). */
 	polygonScales?: Record<string, number>
 	defaultPolygonScale?: number | null
+	/** How Pattern paints a scatter LINE SEGMENT (Length / Angle marks).
+	 * `"fill"` strokes the segment with the pattern tile, as a bar would be
+	 * filled; `"dash"` makes Pattern the segment's dash style (the same
+	 * dash cycle / per-category dash picks a connection line uses). Absent
+	 * = auto: fill when the segment is at least one pattern tile thick
+	 * (`resolveSegmentPatternMode`), else dash. The Pattern menu's
+	 * "Segments" toggle writes it; its reset clears the key. */
+	segmentPattern?: SegmentPatternMode
 }
+
+/** See `PatternConfig.segmentPattern`. */
+export type SegmentPatternMode = "dash" | "fill"
 export const DEFAULT_PATTERN_CONFIG: PatternConfig = {
 	overrides: {},
 	dashOverrides: {},

@@ -1,6 +1,11 @@
 import { DEFAULT_FILL } from "../../../lib/channelConfig"
+import { resolveDashGapColor } from "../../../lib/dashPatterns"
 import { orderCategories } from "../../../lib/legendSections"
 import { PatternTile } from "../../../lib/patternDefs"
+import {
+	segmentDashArray,
+	type SegmentPatternContext,
+} from "../../../lib/segmentPattern"
 import {
 	inkForHueColor,
 	inkPaletteForHue,
@@ -10,7 +15,12 @@ import {
 import { polygonPatternView } from "../../../lib/resolveLayerColor"
 import { LEGEND_SWATCH_OUTLINE } from "../../../lib/previewInk"
 import { useThemeInkFallback } from "../../../store/useThemeInkFallback"
-import { EntryHoverWrap, renderEntryList, SwatchCell } from "./swatches"
+import {
+	EntryHoverWrap,
+	renderEntryList,
+	SegmentSwatchLine,
+	SwatchCell,
+} from "./swatches"
 import type { ReversibleLegendProps } from "./types"
 
 export const PatternLegend = ({
@@ -24,12 +34,17 @@ export const PatternLegend = ({
 	entryColumns,
 	highlightField,
 	polygonPatternFill = false,
+	segmentSwatch = null,
 }: ReversibleLegendProps & {
 	defaultSwatchOpacity?: number
 	/** Filled radar: tiles mirror the separate "Polygon fill" picks
 	 *  (`pattern.polygonOverrides`, opt-in per category) instead of the
 	 *  point-fill overrides. */
 	polygonPatternFill?: boolean
+	/** Scatter line segments: each swatch is a segment at the chart's
+	 *  thickness — stroked with the tile (fill mode) or dashed (dash mode),
+	 *  as the marks are. Null = the rectangle tiles. */
+	segmentSwatch?: SegmentPatternContext | null
 }) => {
 	const rawCategories = patternCategoriesFor(values, type)
 	const patternCfg = polygonPatternFill
@@ -64,7 +79,59 @@ export const PatternLegend = ({
 	const labelClass = isHorizontal
 		? "vc-legend-label whitespace-nowrap"
 		: "min-w-0 truncate"
+	// Segment DASH mode: the swatch is the plain-colored segment carrying
+	// the category's dash (the same resolution the marks use), over the gap
+	// ink when "Fill dash gaps" is on (auto on: a standalone pattern legend
+	// means Pattern doesn't share hue's variable).
+	const segmentDashSwatch = (
+		v: string,
+		segment: SegmentPatternContext
+	): React.ReactNode => {
+		const segmentColor = configs.defaultFill ?? DEFAULT_FILL
+		const dashArray = segmentDashArray({
+			patternValue: v,
+			domain: rawCategories,
+			patternCfg: configs.pattern,
+			connectionCfg: configs.connection,
+		})
+		const gapFill = configs.connection?.dashGapFill ?? true
+		const gapColor =
+			gapFill && dashArray !== null
+				? resolveDashGapColor({
+						overrideKeys: [],
+						patternValue: v,
+						hueColor: null,
+						lineColor: segmentColor,
+						overrides: configs.connection?.dashAlternateColors ?? {},
+						singleOverride: configs.connection?.dashGapColor ?? null,
+						inkColors: configs.pattern?.inkColors ?? {},
+						palette: huePalette.palette,
+						patternInks: huePalette.inks,
+						themeInkFallback,
+						defaultInk: configs.defaultPatternInk ?? configs.patternInkColor ?? null,
+					})
+				: null
+		return (
+			<SegmentSwatchLine
+				segment={{ ...segment, dashArray, gapColor }}
+				stroke={segmentColor}
+				opacity={defaultSwatchOpacity}
+			/>
+		)
+	}
 	const rows = display.map(({ v, i }) => {
+				if (segmentSwatch?.mode === "dash") {
+					return (
+						<EntryHoverWrap key={v} field={highlightField} value={v}>
+							<div className={cellClass}>
+								<SwatchCell>{segmentDashSwatch(v, segmentSwatch)}</SwatchCell>
+								<span className={labelClass} title={v}>
+									{v}
+								</span>
+							</div>
+						</EntryHoverWrap>
+					)
+				}
 				const resolved = resolvePatternForMark(
 					v,
 					i,
@@ -81,6 +148,13 @@ export const PatternLegend = ({
 						<EntryHoverWrap key={v} field={highlightField} value={v}>
 							<div className={cellClass}>
 								<SwatchCell>
+									{segmentSwatch ? (
+										<SegmentSwatchLine
+											segment={{ ...segmentSwatch, dashArray: null, gapColor: null }}
+											stroke={bgColor}
+											opacity={defaultSwatchOpacity}
+										/>
+									) : (
 									<svg
 										width={20}
 										height={14}
@@ -98,6 +172,7 @@ export const PatternLegend = ({
 											strokeWidth={0.5}
 										/>
 									</svg>
+									)}
 								</SwatchCell>
 								<span className={labelClass} title={v}>
 									{v}
@@ -108,10 +183,28 @@ export const PatternLegend = ({
 				}
 				const { paletteIdx, inkColor, svgId, scale } = resolved
 				const patId = `legend-${svgId}`
+				const tile = (
+					<PatternTile
+						id={patId}
+						paletteIdx={paletteIdx}
+						bgColor={bgColor}
+						inkColor={inkColor}
+						scale={scale}
+					/>
+				)
 				return (
 					<EntryHoverWrap key={v} field={highlightField} value={v}>
 						<div className={cellClass}>
 							<SwatchCell>
+								{segmentSwatch ? (
+									// Fill mode: the tile paints the segment's stroke.
+									<SegmentSwatchLine
+										segment={{ ...segmentSwatch, dashArray: null, gapColor: null }}
+										stroke={`url(#${patId})`}
+										opacity={defaultSwatchOpacity}
+										defs={tile}
+									/>
+								) : (
 								<svg
 									width={20}
 									height={14}
@@ -119,15 +212,7 @@ export const PatternLegend = ({
 									className="flex-shrink-0"
 									opacity={defaultSwatchOpacity}
 								>
-									<defs>
-										<PatternTile
-											id={patId}
-											paletteIdx={paletteIdx}
-											bgColor={bgColor}
-											inkColor={inkColor}
-											scale={scale}
-										/>
-									</defs>
+									<defs>{tile}</defs>
 									<rect
 										x={0}
 										y={0}
@@ -138,6 +223,7 @@ export const PatternLegend = ({
 										strokeWidth={0.5}
 									/>
 								</svg>
+								)}
 							</SwatchCell>
 							<span className={labelClass} title={v}>
 								{v}

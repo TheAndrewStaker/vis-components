@@ -10,6 +10,7 @@ import {
 	shapeDrawsGlyphs,
 	type AxisTitleState,
 } from "../../lib/accessibilityCheck"
+import { resolveSegmentPatternContext } from "../../lib/segmentPattern"
 import { DEFAULT_OPACITY } from "../../lib/channelConfig"
 import { effectiveType } from "../../lib/fieldType"
 import {
@@ -228,6 +229,14 @@ export const useAccessibilityState = (): AccessibilityState | null => {
 						levels: hue?.levels.map((l) => l.value) ?? [],
 						connectionRole: mode.canvas.connectionRole,
 						connectionMapped: !!encodings.connection?.field,
+						segmentDash:
+							!encodings.connection?.field &&
+							resolveSegmentPatternContext({
+								lengthRole: mode.canvas.lengthRole,
+								encodings,
+								channelConfigs: configs,
+								patternMapped: !!encodings.pattern?.field,
+							})?.mode === "dash",
 						overrides: configs.pattern?.overrides,
 						dashOverrides: configs.pattern?.dashOverrides,
 						customDashOverrides: configs.pattern?.customDashOverrides,

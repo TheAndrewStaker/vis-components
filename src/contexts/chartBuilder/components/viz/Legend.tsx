@@ -4,6 +4,7 @@ import { DEFAULT_OPACITY } from "../../lib/channelConfig"
 import { isFlowModeId } from "../../lib/packedMeasure"
 import { resolveStackMode } from "../../lib/stackMode"
 import { useChartModeDef } from "../../store/useChartModeDef"
+import { resolveSegmentPatternContext } from "../../lib/segmentPattern"
 import { DEFAULT_TOOLTIP_CONFIG } from "../../lib/labelsConfig"
 import {
 	DEFAULT_LEGEND_CONFIG,
@@ -210,6 +211,18 @@ export const Legend = ({
 	// `legendCfg.hidden` read below is mode-aware. An explicit user toggle
 	// (stored true OR false) still wins — see resolveLegendHidden.
 	legendCfg.hidden = resolveLegendHidden(legendCfg.hidden, modeDef.legend)
+	// Segment scatter (Length / Angle marks, no connection): the pattern
+	// swatches mirror the marks — a segment stroked with the tile or
+	// dashed, per the Pattern menu's Segments toggle. With a connection
+	// mapped the line-chart dash overlay already owns the swatch.
+	const segmentSwatch = encodings.connection?.field
+		? null
+		: resolveSegmentPatternContext({
+				lengthRole: modeDef.canvas.lengthRole,
+				encodings,
+				channelConfigs: configs,
+				patternMapped: !!encodings.pattern?.field,
+			})
 
 	if (!dataset) return null
 	// The legend renders whenever ≥1 section ends up visible; per-channel
@@ -372,6 +385,7 @@ export const Legend = ({
 									!!encodings.connection?.field &&
 									configs.connection?.fillPolygon === true
 								}
+								segmentSwatch={segmentSwatch}
 								channelLegendCfgs={legendCfg.channels}
 								auxSwatchColor={resolvedAuxSwatchColor}
 								auxSwatchStroke={resolvedAuxSwatchStroke}

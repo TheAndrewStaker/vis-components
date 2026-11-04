@@ -7,6 +7,13 @@ import {
 } from "../../../lib/channelConfig"
 import { ptToPx } from "../../../lib/fontUnit"
 import { resolvePatternDefForItem } from "../../../lib/buildPatternDefs"
+import { resolveDashGapColor, resolveDashGapFill } from "../../../lib/dashPatterns"
+import { inkPaletteForHue } from "../../../lib/patterns"
+import {
+	resolveSegmentPatternContext,
+	resolveSegmentPatternMode,
+	segmentDashArray,
+} from "../../../lib/segmentPattern"
 import { effectiveType } from "../../../lib/fieldType"
 import { resolveMarkAesthetics } from "../../../lib/resolveMarkAesthetics"
 import { slotModulationResolver } from "../../../lib/resolveLayerColor"
@@ -24,6 +31,7 @@ import { resolveShapeColors } from "../../../lib/shapeColors"
 import { resolveRuleColor } from "../../../lib/textColorRules"
 import { formatTextValue, resolveTextColor } from "../../../lib/textEncoding"
 import type { Encodings } from "../../../lib/types"
+import { uniqueValues } from "../../../lib/uniqueFieldValues"
 import type { AestheticScales } from "../../../store/useAestheticScales"
 import {
 	rowHighlight,
@@ -48,7 +56,10 @@ export const renderMarkPaths = (args: {
 	highlight: LegendHighlight | null
 	/** Publish the hovered mark's series to the highlight atom on mark enter,
 	 * so direct hover recolors / outlines / fades like a legend hover. */
-	publishHover: (row: Record<string, unknown>) => void
+	publishHover: (row: Record<string, unknown>, node?: string) => void
+	/** Single-element hover (a violin / box chart): each mark's own key, so
+	 * hovering one lights that mark alone instead of its whole series. */
+	nodeKeyOf?: (m: Mark) => string
 }): React.ReactNode => {
 	const {
 		marks,
@@ -59,6 +70,7 @@ export const renderMarkPaths = (args: {
 		setHovered,
 		highlight,
 		publishHover,
+		nodeKeyOf,
 	} = args
 	return (
 		<g>
@@ -84,6 +96,7 @@ export const renderMarkPaths = (args: {
 				// and fade the rest. When the highlight atom is active (a legend
 				// entry OR another mark's series is hovered), the atom drives the
 				// fade — skip the ad-hoc per-point dim so they don't compound.
+				const nodeKey = nodeKeyOf?.(m)
 				const mh = rowHighlight(highlight, m.row)
 				const localDim = highlight
 					? 1
@@ -92,23 +105,61 @@ export const renderMarkPaths = (args: {
 						: 0.3
 				const hoverFocus = localDim * mh.opacityMul
 				if (m.line) {
+					const onEnter = (e: React.MouseEvent) => {
+						setHovered({
+							i: m.i,
+							row: m.row,
+							clientX: e.clientX,
+							clientY: e.clientY,
+						})
+						publishHover(m.row, nodeKey)
+					}
+					const segment = m.segmentPattern
+					// Pattern on a segment: in fill mode the tile IS the stroke
+					// paint (SVG lets a <pattern> paint a stroke, so the capsule
+					// fills like a bar would, caps included); in dash mode the
+					// stroke carries the dasharray, over the gap-color underlay
+					// when "Fill dash gaps" is on. The highlight recolor wins over
+					// the pattern paint, as it does on a patterned bar.
+					const patternStroke =
+						segment?.kind === "fill" && effectivePatternId
+							? `url(#${effectivePatternId})`
+							: m.fill
+					const dashArray = segment?.kind === "dash" ? segment.dashArray : null
+					const gapColor =
+						segment?.kind === "dash" && dashArray !== null
+							? segment.gapColor
+							: null
+					const strokeProps = {
+						strokeWidth: resolveSegmentThickness(channelConfigs.length, m.row),
+						strokeLinecap: segmentStrokeLinecap(channelConfigs.length),
+					}
+					if (gapColor !== null) {
+						return (
+							<g
+								key={m.i}
+								opacity={hoverFocus * m.markOpacity}
+								onMouseEnter={onEnter}
+							>
+								<line {...m.line} stroke={gapColor} {...strokeProps} />
+								<line
+									{...m.line}
+									stroke={mh.fill ?? patternStroke}
+									strokeDasharray={dashArray ?? undefined}
+									{...strokeProps}
+								/>
+							</g>
+						)
+					}
 					return (
 						<line
 							key={m.i}
 							{...m.line}
-							stroke={mh.fill ?? m.fill}
-							strokeWidth={resolveSegmentThickness(channelConfigs.length, m.row)}
-							strokeLinecap={segmentStrokeLinecap(channelConfigs.length)}
+							stroke={mh.fill ?? patternStroke}
+							strokeDasharray={dashArray ?? undefined}
+							{...strokeProps}
 							opacity={hoverFocus * m.markOpacity}
-							onMouseEnter={(e) => {
-								setHovered({
-									i: m.i,
-									row: m.row,
-									clientX: e.clientX,
-									clientY: e.clientY,
-								})
-								publishHover(m.row)
-							}}
+							onMouseEnter={onEnter}
 						/>
 					)
 				}
@@ -270,6 +321,34 @@ export const buildMarks = ({
 	const xName = encodings.x?.field as string
 	const yName = encodings.y?.field as string
 
+	// Segment-pattern state, resolved ONCE per chart (the Pattern menu's
+	// toggle and the legends resolve the same way, so they agree with the
+	// marks). Per row only a Vary-by thickness re-runs the auto rule. The
+	// scatter renderer is the only caller of buildMarks, so `lengthRole`
+	// is its own: "mark".
+	const segmentCtx = resolveSegmentPatternContext({
+		lengthRole: "mark",
+		encodings,
+		channelConfigs,
+		patternMapped: !!pattern,
+	})
+	const patternDomain: readonly string[] =
+		segmentCtx && pattern
+			? uniqueValues(
+					rowsForChart.map((r) => r[pattern.name]),
+					{ skipBlank: false }
+				)
+			: []
+	const hueField = encodings.hue?.field ?? null
+	const segmentGapFill = segmentCtx
+		? resolveDashGapFill({
+				configured: channelConfigs.connection?.dashGapFill ?? null,
+				patternField: pattern?.name ?? null,
+				hueField,
+			})
+		: false
+	const gapInkPalette = inkPaletteForHue(channelConfigs, hue?.type)
+
 	return rowsForChart
 		.map((row, i): Mark | null => {
 			const cx = applyPositionScale(xScale, row[xName], xType)
@@ -394,6 +473,58 @@ export const buildMarks = ({
 				}
 			}
 
+			// How Pattern paints this segment — see `Mark.segmentPattern`.
+			let segmentPattern: Mark["segmentPattern"] = null
+			if (line !== null && segmentCtx) {
+				const mode = resolveSegmentPatternMode({
+					configured: channelConfigs.pattern?.segmentPattern,
+					thickness: resolveSegmentThickness(channelConfigs.length, row),
+					tileSide: segmentCtx.tileSide,
+				})
+				if (mode === "fill") {
+					segmentPattern = patternId !== null ? { kind: "fill" } : null
+				} else {
+					const rawPattern = pattern ? row[pattern.name] : undefined
+					const patternValue =
+						rawPattern === undefined || rawPattern === null
+							? null
+							: String(rawPattern)
+					const dashArray = segmentDashArray({
+						patternValue,
+						domain: patternDomain,
+						patternCfg: channelConfigs.pattern,
+						connectionCfg: channelConfigs.connection,
+					})
+					const rawHue = hueField ? row[hueField] : null
+					// Gap ink pairs on the PRE-modulation color, like a connection
+					// line's underlay (`resolveDashGapColor`).
+					const gapColor =
+						segmentGapFill && dashArray !== null
+							? resolveDashGapColor({
+									overrideKeys: [
+										rawHue === null || rawHue === undefined
+											? null
+											: String(rawHue),
+									],
+									patternValue,
+									hueColor: hue ? preModulationHue : null,
+									lineColor: preModulationHue,
+									overrides: channelConfigs.connection?.dashAlternateColors ?? {},
+									singleOverride: channelConfigs.connection?.dashGapColor ?? null,
+									inkColors: channelConfigs.pattern?.inkColors ?? {},
+									palette: gapInkPalette.palette,
+									patternInks: gapInkPalette.inks,
+									themeInkFallback: aestheticScales.themeInkFallback,
+									defaultInk:
+										channelConfigs.defaultPatternInk ??
+										channelConfigs.patternInkColor ??
+										null,
+								})
+							: null
+					segmentPattern = { kind: "dash", dashArray, gapColor }
+				}
+			}
+
 			// Pass angle through for shape rotation (when not in line mode)
 			const rotation =
 				lenValue === null && angValue != null
@@ -411,6 +542,7 @@ export const buildMarks = ({
 				glyph,
 				line,
 				patternId,
+				segmentPattern,
 				markOpacity,
 				rotation,
 				row,

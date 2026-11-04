@@ -15,6 +15,7 @@ import {
 	resolveGradientBarStyle,
 } from "../../../lib/labelsConfig"
 import { PatternTile } from "../../../lib/patternDefs"
+import type { SegmentPatternContext } from "../../../lib/segmentPattern"
 import { symbolPath } from "../../../lib/scales"
 import {
 	lineSwatchStrokeWidth,
@@ -464,6 +465,76 @@ export const Swatch = ({
 	</div>
 )
 
+/** A legend swatch standing for a scatter LINE SEGMENT (Length / Angle
+ *  marks): a short stroke at the chart's segment thickness and cap. In
+ *  pattern FILL mode the stroke paint is the pattern tile (`patternId`); in
+ *  DASH mode it carries `dashArray` over a `gapColor` underlay ("Fill dash
+ *  gaps"), exactly as `renderMarkPaths` draws the marks. */
+export type SegmentSwatchSpec = Pick<SegmentPatternContext, "thickness" | "cap"> & {
+	dashArray: string | null
+	gapColor: string | null
+}
+
+/** Box of a segment swatch — mirrors `LengthLegend`'s sizing: the height
+ *  grows with the stroke so thick segments aren't clipped, and round caps
+ *  (which reach half a stroke past each endpoint) inset the line. */
+export const segmentSwatchBox = (
+	thickness: number,
+	cap: "round" | "butt",
+): { w: number; h: number; pad: number } => {
+	const pad = cap === "round" ? Math.max(2, thickness / 2) : 2
+	return {
+		w: Math.ceil(SEGMENT_SWATCH_LENGTH + pad * 2),
+		h: Math.max(8, Math.ceil(thickness) + 2),
+		pad,
+	}
+}
+const SEGMENT_SWATCH_LENGTH = 20
+
+/** The `<svg>` of a segment swatch. `stroke` is the segment's paint — a
+ *  color, or `url(#…)` for a pattern tile whose `<pattern>` the caller
+ *  places in `defs`. */
+export const SegmentSwatchLine = ({
+	segment,
+	stroke,
+	opacity = 1,
+	defs,
+}: {
+	segment: SegmentSwatchSpec
+	stroke: string
+	opacity?: number
+	defs?: React.ReactNode
+}) => {
+	const { w, h, pad } = segmentSwatchBox(segment.thickness, segment.cap)
+	const cy = h / 2
+	const line = { x1: pad, y1: cy, x2: w - pad, y2: cy }
+	const strokeProps = {
+		strokeWidth: segment.thickness,
+		strokeLinecap: segment.cap,
+	}
+	return (
+		<svg
+			width={w}
+			height={h}
+			viewBox={`0 0 ${w} ${h}`}
+			aria-hidden="true"
+			className="flex-shrink-0"
+			style={{ opacity }}
+		>
+			{defs && <defs>{defs}</defs>}
+			{segment.gapColor !== null && segment.dashArray !== null && (
+				<line {...line} stroke={segment.gapColor} {...strokeProps} />
+			)}
+			<line
+				{...line}
+				stroke={stroke}
+				strokeDasharray={segment.dashArray ?? undefined}
+				{...strokeProps}
+			/>
+		</svg>
+	)
+}
+
 /** Swatch that composes color, opacity, optional pattern overlay, and an
  * optional shape glyph — mirrors what a mark/slice looks like in the chart.
  * Used by the combined group legend when 2+ group encodings share the same
@@ -506,6 +577,11 @@ export type ComposedSwatchProps = {
 	 *  patterns alongside the shape pattern in a combined legend. `null`
 	 *  for the array means solid. */
 	dash?: { strokeDashArray: string | null; stroke: string } | null
+	/** Scatter line segments (Length / Angle marks, no connection): the
+	 *  swatch is a stroke at the chart's segment thickness, painted with the
+	 *  pattern tile (`pattern` set) or dashed (`dashArray`), like the marks.
+	 *  Wins over every other route. */
+	segment?: SegmentSwatchSpec | null
 	/** Hue-legend swatch shape (a `SHAPE_PALETTE` index). When set — and no
 	 *  per-mark `shape` encoding is present — the otherwise-rectangular
 	 *  swatch is drawn as this symbol, filled with the swatch color (or
@@ -545,6 +621,10 @@ export const composedSwatchSize = (
 ): { w: number; h: number } => {
 	const { shape, dash, swatchShape, swatchSize, outlineStroke, outlineWidth } =
 		props
+	if (props.segment) {
+		const { w, h } = segmentSwatchBox(props.segment.thickness, props.segment.cap)
+		return { w, h }
+	}
 	if (dash) {
 		// Glyph radius honors the user's swatch-size choice — `shape.size` when
 		// a shape channel is mapped, otherwise the hue swatch-size picker. 4.5
@@ -609,6 +689,29 @@ export const ComposedSwatch = (props: ComposedSwatchProps) => {
 		outlineWidth,
 	} = props
 	const { w, h } = composedSwatchSize(props)
+	// Segment scatter: the swatch IS a segment — pattern tile as the stroke
+	// paint, or the dash — see `SegmentSwatchLine`.
+	if (props.segment) {
+		const patId = pattern ? `legend-combined-${pattern.svgId}` : null
+		return (
+			<SegmentSwatchLine
+				segment={props.segment}
+				stroke={patId ? `url(#${patId})` : color}
+				opacity={opacity}
+				defs={
+					pattern && patId ? (
+						<PatternTile
+							id={patId}
+							paletteIdx={pattern.paletteIdx}
+							bgColor={pattern.bg}
+							inkColor={pattern.ink}
+							scale={pattern.scale}
+						/>
+					) : undefined
+				}
+			/>
+		)
+	}
 	// Line chart context: mirror the rendered visual — dash line passing
 	// behind a (patterned) point. Shape uses the encoded shape index when
 	// available, otherwise defaults to a circle. Pattern fills the shape.

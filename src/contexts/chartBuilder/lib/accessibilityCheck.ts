@@ -722,14 +722,17 @@ export const shapeDrawsGlyphs = (
 
 /** Whether a Pattern mapping on the color field actually draws distinct
  *  patterns for its levels. On a drawn line (`connectionRole` "line" with a
- *  Connection field) Pattern becomes the line DASH, read from
- *  `dashOverrides` (a custom dasharray counts as a dash); everywhere else
- *  it is the mark's fill pattern, from `overrides`. A level set to "none"
- *  draws plain — two or more such levels can't be told apart by pattern. */
+ *  Connection field) — and on scatter line segments in dash mode
+ *  (`segmentDash`, see `resolveSegmentPatternContext`) — Pattern becomes
+ *  the DASH, read from `dashOverrides` (a custom dasharray counts as a
+ *  dash); everywhere else it is the mark's fill pattern, from `overrides`.
+ *  A level set to "none" draws plain — two or more such levels can't be
+ *  told apart by pattern. */
 export const patternDistinguishesLevels = ({
 	levels,
 	connectionRole,
 	connectionMapped,
+	segmentDash = false,
 	overrides,
 	dashOverrides,
 	customDashOverrides,
@@ -737,12 +740,13 @@ export const patternDistinguishesLevels = ({
 	levels: readonly string[]
 	connectionRole: "line" | "layer" | "polygon" | "key" | "none"
 	connectionMapped: boolean
+	segmentDash?: boolean
 	overrides?: Readonly<Record<string, number | "none">>
 	dashOverrides?: Readonly<Record<string, number | "none">>
 	customDashOverrides?: Readonly<Record<string, string>>
 }): boolean => {
 	if (levels.length < 2) return false
-	const dash = connectionRole === "line" && connectionMapped
+	const dash = (connectionRole === "line" && connectionMapped) || segmentDash
 	const map = dash ? dashOverrides : overrides
 	const plain = levels.filter(
 		(v) => map?.[v] === "none" && !(dash && customDashOverrides?.[v]?.trim())

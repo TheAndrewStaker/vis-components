@@ -6385,6 +6385,16 @@
 				"number"
 			]
 		},
+		"channelConfigs.pattern.segmentPattern": {
+			"doc": "How Pattern paints a scatter LINE SEGMENT (Length / Angle marks). `\"fill\"` strokes the segment with the pattern tile, as a bar would be filled; `\"dash\"` makes Pattern the segment's dash style (the same dash cycle / per-category dash picks a connection line uses).",
+			"kinds": [
+				"string"
+			],
+			"values": [
+				"dash",
+				"fill"
+			]
+		},
 		"channelConfigs.pattern.stackMode": {
 			"doc": "Stack/group/overlay layout when pattern is the highest-precedence mapped color channel (hue > pattern > brightness > opacity > saturation). Read by `resolveStackMode`; the Pattern panel exposes the toggle only when it owns layout.",
 			"kinds": [

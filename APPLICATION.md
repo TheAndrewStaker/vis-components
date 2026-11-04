@@ -1835,6 +1835,20 @@ Behavior depends on chart context:
   when hue is unmapped; `defaultPatternInk` null = the fill's paired
   ink, else the theme ink — `resolveDefaultPatternInk`). Geo and
   structure modes keep their own pattern semantics and ignore it.
+- **Scatter line segments, no connection** (Length / Angle marks — see
+  "Pattern on segments" under the Length panel): the panel leads with a
+  **Segments** toggle, *Dash* / *Fill*, showing the resolved state (auto
+  = Fill once the base segment thickness holds one pattern tile; a
+  `.vc-help` line names the threshold while auto; a reset link returns
+  to auto by STRIPPING the key). In Fill the panel is the fill form
+  above (the tile paints the segment's stroke). In Dash it is the
+  dash-only form: the **Line dash** default picker, **Fill dash gaps**
+  with its gap-color swatches, and one dash picker per category with a
+  variable mapped — the same connection-config fields the line chart
+  writes, minus "Apply pattern to range" (a segment has no from / to).
+  The Pattern legend's swatches draw as segments too: tile-stroked or
+  dashed, at the chart's thickness and cap (the combined legend likewise
+  when pattern shares hue's variable).
 - **Connection mapped, no shape encoded** (line chart): swatches are
   line dashes (`dashed`, `dotted`, `dash-dot` — `solid` is implicit
   via the "None" button). Patterns drive line stroke style; points
@@ -2072,6 +2086,21 @@ properties** subsection, modeled on Connection → Line properties:
 
 The Length legend's segment swatches follow the single thickness and
 the line cap (the swatch box grows with the stroke).
+
+**Pattern on segments.** A line segment has no fill, so Pattern paints
+it one of two ways (`PatternConfig.segmentPattern`, chosen by the
+Pattern panel's **Segments** toggle — see §4.2): *Fill* strokes the
+segment with the pattern tile (SVG lets a `<pattern>` paint a stroke, so
+the capsule fills like a bar would, caps included); *Dash* makes Pattern
+the segment's dash style, with the connection-line dash pickers. Absent
+= auto: Fill once the base thickness (Segment properties → Thickness)
+holds one full pattern tile, else Dash (`resolveSegmentPatternMode`).
+The tile side the auto rule compares against is chart-wide
+(`chartLevelTileSide`): the default pattern's tile at its Scale, or with
+a pattern variable mapped the largest tile any category could draw, so
+the toggle, the legend swatches and the marks all resolve the same way;
+only a *Vary by* thickness re-resolves per segment. A legend-hover
+highlight recolors a patterned segment as it does a patterned bar.
 
 **Angle** on the polar modes (radar, pies) groups its controls under
 collapsible subsections (all start collapsed), so the panel opens as a
