@@ -8,6 +8,7 @@ import {
 	STABLE_POLLS,
 	chartLayoutReady,
 	serializeEmbedCapture,
+	withoutDisplayScale,
 } from "./captureThumbnail"
 import { embedFontsInSvg } from "./fontEmbed"
 import { withJpegDpi, withPngDpi } from "./imageDpi"
@@ -58,31 +59,41 @@ export const resolveExportSize = (opts: {
 	return { width, height, pixelRatio }
 }
 
+export type RenderExportOptions = {
+	/** The element to capture instead of the page's export root: the
+	 *  editor's own figure (`[data-chart-root]`) for the published picture. */
+	root?: HTMLElement | null
+	/** Paint white under the chart (a JPEG always is). A picture that stands
+	 *  alone on a slide wants it; a PNG download keeps its transparency. */
+	opaqueBackground?: boolean
+}
+
 /** Capture the chart in `source` and build the export file. The chart must
  *  be laid out at `width × height` CSS px; `height` is the whole image's,
  *  so with an included data table (`table=image`) it is the chart's height
- *  plus the table's. `pixelRatio` is the already-clamped multiplier. */
+ *  plus the table's. `pixelRatio` is the already-clamped multiplier; a
+ *  raster carries it as its DPI stamp, so a consumer that places images at
+ *  physical size (PowerPoint, Word) lands it true to size. */
 export const renderExport = async (
 	source: ExportSource,
 	format: ImageFormat,
 	width: number,
 	height: number,
-	pixelRatio: number
+	pixelRatio: number,
+	opts: RenderExportOptions = {}
 ): Promise<Blob> => {
 	// Inline webfont faces (Google-hosted presets + user library fonts)
 	// as data: @font-face rules — the raster path loads the SVG through
 	// an <img>, which can't fetch external stylesheets, and downloaded
 	// SVGs must render on machines without the fonts installed.
-	const captured = await waitForChartSvg(source)
+	const captured = await waitForChartSvg(source, opts.root)
 	// The SVG download is opened in PowerPoint & co., which ignore
 	// baselines, dy and webfonts — re-serialize the now-stable layout
 	// with text flattened for them (lib/portableSvg.ts).
 	const doc = source ? documentOf(source) : null
 	const portable =
 		format === "svg" && doc
-			? serializeEmbedCapture(doc, {
-					portable: true,
-				})
+			? serializeEmbedCapture(doc, { portable: true, root: opts.root })
 			: null
 	const svgText = await embedFontsInSvg(portable ?? captured)
 	return format === "svg"
@@ -91,7 +102,7 @@ export const renderExport = async (
 			})
 		: format === "pdf"
 			? await generatePdf(svgText, width, height, pixelRatio)
-			: await rasterizeSvg(svgText, width, height, pixelRatio, format)
+			: await rasterizeSvg(svgText, width, height, pixelRatio, format, opts.opaqueBackground)
 }
 
 // ---------------------------------------------------------------------------
@@ -116,7 +127,7 @@ export const renderExport = async (
 const CAPTURE_TIMEOUT_MS = 15_000
 const POLL_INTERVAL_MS = 100
 
-const waitForChartSvg = async (source: ExportSource): Promise<string> => {
+const waitForChartSvg = async (source: ExportSource, root?: HTMLElement | null): Promise<string> => {
 	if (!source) {
 		throw new Error("Preview not ready yet — try again in a moment.")
 	}
@@ -131,7 +142,7 @@ const waitForChartSvg = async (source: ExportSource): Promise<string> => {
 		const fontsSettled = !doc?.fonts || doc.fonts.status !== "loading"
 		const svgText =
 			doc && fontsSettled && chartLayoutReady(doc)
-				? serializeEmbedCapture(doc)
+				? withoutDisplayScale(doc, () => serializeEmbedCapture(doc, { root }))
 				: null
 		if (svgText !== null && svgText === lastSvgText) {
 			matchingPolls++
@@ -267,15 +278,10 @@ const rasterizeSvg = async (
 	width: number,
 	height: number,
 	pixelRatio: number,
-	format: "png" | "jpeg"
+	format: "png" | "jpeg",
+	opaqueBackground = format === "jpeg"
 ): Promise<Blob> => {
-	const canvas = await renderChartToCanvas(
-		svgText,
-		width,
-		height,
-		pixelRatio,
-		format === "jpeg"
-	)
+	const canvas = await renderChartToCanvas(svgText, width, height, pixelRatio, opaqueBackground)
 	const mime = format === "png" ? "image/png" : "image/jpeg"
 	const blob = await canvasToBlob(
 		canvas,

@@ -382,9 +382,9 @@ const ChartCanvasBody = ({
 
 	return (
 		// data-chart-root: the figure as a whole — plot panels, HTML legend and
-		// the canvas background — which the editor's own image capture
-		// (`captureThumbnail({ figure: true })`) composes the same way the
-		// export root does on an embed page.
+		// the canvas background — which the published picture captures
+		// (`renderExport(document, …, { root })`) the same way the export root
+		// is captured on an embed page.
 		<div
 			ref={rowRef}
 			data-chart-root

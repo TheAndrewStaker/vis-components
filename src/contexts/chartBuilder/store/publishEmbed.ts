@@ -23,9 +23,7 @@ import {
 	unpublishEmbedRequest,
 	type EmbedPublishUrls,
 } from "../lib/embedPublish"
-import { captureThumbnail } from "../lib/captureThumbnail"
-import { stampPngDpi } from "../lib/pngDpi"
-import { pngFileFromDataUrl } from "../lib/storage/thumbnailUpload"
+import { clampPixelRatio, renderExport } from "../lib/exportImage"
 import { loadZctaTopology } from "../lib/geo/zctaTopology"
 import { getStorageAdapter } from "../lib/storage/registry"
 import type { Dataset, SavedTheme } from "../lib/types"
@@ -163,55 +161,33 @@ export const usePublishEmbed = () =>
 		)
 	)
 
-/** Capture the on-screen figure (chart + legend) and upload it as the
- *  embed's picture. Rasterized at 2 raster px per CSS px so it stays crisp
- *  projected, and stamped with the matching dpi (`pHYs`, 96 × the scale
- *  actually achieved under the cap) so a consumer places it at its true
- *  size — 12pt in the app is 12pt on the slide. Resolves to its public url,
- *  or null on any failure. */
-const EMBED_IMAGE_MAX_DIM = 4096
+/** Capture the on-screen figure (chart + legend + canvas colour) through
+ *  the export pipeline and upload it as the embed's picture: the figure at
+ *  its laid-out size, 2 raster px per CSS px so it stays crisp projected,
+ *  stamped with that resolution so a consumer places it at its true size —
+ *  12pt in the app is 12pt on the slide. The export capture waits for the
+ *  layout to settle, which is where a "Republish on every save" lands, 800
+ *  ms after an edit. Resolves to the picture's public url, or null on any
+ *  failure (no figure on screen, a capture that never settled, an upload
+ *  that failed). */
 const EMBED_IMAGE_SCALE = 2
-const CSS_DPI = 96
-/** The capture declines (null) while the chart is mid-layout — exactly where
- *  a "Republish on every save" lands, 800 ms after an edit. The HTML publish
- *  has already deleted the old picture at that point, so giving up would
- *  leave a PowerPoint figure with nothing to fetch until the next save.
- *  Retry for a moment first. */
-const CAPTURE_ATTEMPTS = 6
-const CAPTURE_RETRY_MS = 250
 const publishEmbedImage = async (publishId: string): Promise<string | null> => {
 	try {
-		let dataUrl: string | null = null
-		for (let attempt = 0; attempt < CAPTURE_ATTEMPTS && dataUrl === null; attempt++) {
-			if (attempt > 0) await new Promise((r) => setTimeout(r, CAPTURE_RETRY_MS))
-			dataUrl = await captureThumbnail({
-				maxDim: EMBED_IMAGE_MAX_DIM,
-				scale: EMBED_IMAGE_SCALE,
-				allowNetwork: true,
-				// A picture that stands alone on a slide: legend and canvas colour
-				// included, white under an unset canvas colour.
-				figure: true,
-				opaqueBackground: true,
-			})
-		}
-		if (dataUrl === null) return null
-		const png = pngFileFromDataUrl(dataUrl, "image.png")
-		if (png === null) return null
-		// The scale actually achieved: the cap may have pulled it under 2.
-		// Layout width (offsetWidth) ignores the editor's display-only zoom.
-		const bytes = new Uint8Array(await png.arrayBuffer())
+		// Layout size (offsetWidth) ignores the editor's display-only zoom.
 		const root = document.querySelector<HTMLElement>("[data-chart-root]")
-		const pngWidth = new DataView(bytes.buffer).getUint32(16)
-		const scale = root && root.offsetWidth > 0 ? pngWidth / root.offsetWidth : EMBED_IMAGE_SCALE
-		const stampedBytes = stampPngDpi(bytes, CSS_DPI * scale)
-		// `slice` yields a plain ArrayBuffer (BlobPart); the typed array's
-		// buffer is ArrayBufferLike and TS 5.7+ rejects it.
-		const stamped = new File(
-			[stampedBytes.buffer.slice(stampedBytes.byteOffset, stampedBytes.byteOffset + stampedBytes.byteLength) as ArrayBuffer],
-			"image.png",
-			{ type: "image/png" }
+		if (!root || root.offsetWidth === 0 || root.offsetHeight === 0) return null
+		const width = root.offsetWidth
+		const height = root.offsetHeight
+		const blob = await renderExport(
+			document,
+			"png",
+			width,
+			height,
+			clampPixelRatio(width, height, EMBED_IMAGE_SCALE),
+			{ root, opaqueBackground: true }
 		)
-		return await publishEmbedImageRequest(publishId, stamped)
+		const png = new File([blob], "image.png", { type: "image/png" })
+		return await publishEmbedImageRequest(publishId, png)
 	} catch {
 		return null
 	}

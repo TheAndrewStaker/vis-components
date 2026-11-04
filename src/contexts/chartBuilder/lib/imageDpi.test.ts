@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { crc32, withJpegDpi, withPngDpi } from "./imageDpi"
+
+import { crc32, readPngDpi, withJpegDpi, withPngDpi } from "./imageDpi"
 
 // ---------------------------------------------------------------------------
 // Fixture builders
@@ -160,5 +161,25 @@ describe("withJpegDpi", () => {
 	it("returns non-JPEG input untouched", () => {
 		const junk = new Uint8Array([1, 2, 3, 4])
 		expect(withJpegDpi(junk, 96)).toBe(junk)
+	})
+})
+
+describe("readPngDpi", () => {
+	// A 1×1 PNG with no pHYs chunk (signature, IHDR, IDAT, IEND).
+	const tiny = (): Uint8Array<ArrayBuffer> =>
+		Uint8Array.from([
+			0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49,
+			0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06,
+			0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44,
+			0x41, 0x54, 0x78, 0x9c, 0x63, 0x60, 0x00, 0x02, 0x00, 0x00, 0x05, 0x00, 0x01,
+			0xe2, 0x26, 0x05, 0x9b, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+			0x42, 0x60, 0x82,
+		])
+
+	it("reads back what withPngDpi stamped, and null before", () => {
+		expect(readPngDpi(tiny())).toBeNull()
+		expect(readPngDpi(withPngDpi(tiny(), 192))).toBeCloseTo(192, 0)
+		expect(readPngDpi(withPngDpi(withPngDpi(tiny(), 96), 288))).toBeCloseTo(288, 0)
+		expect(readPngDpi(Uint8Array.from([1, 2, 3]))).toBeNull()
 	})
 })

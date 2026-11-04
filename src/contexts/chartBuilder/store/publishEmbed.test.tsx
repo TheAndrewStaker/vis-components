@@ -2,7 +2,6 @@ import { act, renderHook } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { ReactNode } from "react"
 
-import { readPngDpi } from "../lib/pngDpi"
 import { EMPTY_CHANNEL_CONFIGS } from "../lib/channelConfig"
 import { SYSTEM_LIGHT_THEME } from "../lib/systemThemes"
 import { labelsFromTheme } from "../lib/themeConfig"
@@ -14,16 +13,26 @@ import { usePublishEmbed } from "./publishEmbed"
 
 /** The linked picture is a best-effort second step of a publish: success
  *  adds `image` to the recorded urls; a failed capture or upload still
- *  records the HTML publish, without a stale `image` from before. */
+ *  records the HTML publish, without a stale `image` from before. It
+ *  renders through the export pipeline (`renderExport`), mocked here. */
 
-// 1×1 transparent PNG.
-const PNG =
-	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+const PNG_BLOB = new Blob([Uint8Array.from([0x89, 0x50, 0x4e, 0x47])], { type: "image/png" })
 
-const capture = vi.fn<(opts?: unknown) => Promise<string | null>>()
-vi.mock("../lib/captureThumbnail", () => ({
-	captureThumbnail: (opts?: unknown) => capture(opts),
+const render = vi.fn<(...args: unknown[]) => Promise<Blob>>()
+vi.mock("../lib/exportImage", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../lib/exportImage")>()),
+	renderExport: (...args: unknown[]) => render(...args),
 }))
+
+/** The editor's figure root, sized as layout would size it. */
+const mountFigure = (width = 1100, height = 700): HTMLElement => {
+	const root = document.createElement("div")
+	root.setAttribute("data-chart-root", "")
+	Object.defineProperty(root, "offsetWidth", { value: width })
+	Object.defineProperty(root, "offsetHeight", { value: height })
+	document.body.appendChild(root)
+	return root
+}
 const publishHtml = vi.fn()
 const publishImage = vi.fn<(id: string, png: File) => Promise<string>>()
 vi.mock("../lib/embedPublish", async (importOriginal) => ({
@@ -53,7 +62,8 @@ const IMAGE_URL = "https://x/embeds/p/image.png"
 
 beforeEach(() => {
 	installInMemoryLocalStorage()
-	capture.mockReset()
+	document.body.innerHTML = ""
+	render.mockReset()
 	publishHtml.mockReset().mockResolvedValue(HTML_URLS)
 	publishImage.mockReset().mockResolvedValue(IMAGE_URL)
 })
@@ -80,28 +90,21 @@ const setup = () => {
 }
 
 describe("usePublishEmbed linked picture", () => {
-	it("captures uncapped with network fonts and records the image url", async () => {
-		capture.mockResolvedValue(PNG)
+	it("renders the figure root at its laid-out size, 2× and opaque, and records the image url", async () => {
+		const root = mountFigure(1100, 700)
+		render.mockResolvedValue(PNG_BLOB)
 		const { publish, recordedUrls } = setup()
 		await publish()
-		expect(capture).toHaveBeenCalledWith({
-			maxDim: 4096,
-			scale: 2,
-			allowNetwork: true,
-			figure: true,
-			opaqueBackground: true,
-		})
+		expect(render).toHaveBeenCalledWith(document, "png", 1100, 700, 2, { root, opaqueBackground: true })
 		const [, png] = publishImage.mock.calls[0]
 		expect(png.name).toBe("image.png")
-		// Stamped with the dpi of the 2× capture so a consumer (PowerPoint, the
-		// add-in) places it at its true size. No figure root in this DOM, so
-		// the requested scale stands in for the achieved one.
-		expect(readPngDpi(new Uint8Array(await png.arrayBuffer()))).toBeCloseTo(192, 0)
+		expect(png.type).toBe("image/png")
 		expect(recordedUrls()).toEqual({ ...HTML_URLS, image: IMAGE_URL })
 	})
 
 	it("a republish whose upload fails records the HTML urls without the old image", async () => {
-		capture.mockResolvedValue(PNG)
+		mountFigure()
+		render.mockResolvedValue(PNG_BLOB)
 		const { publish, recordedUrls } = setup()
 		await publish()
 		expect(recordedUrls()?.image).toBe(IMAGE_URL)
@@ -110,23 +113,20 @@ describe("usePublishEmbed linked picture", () => {
 		expect(recordedUrls()).toEqual(HTML_URLS)
 	})
 
-	it("a null capture still records the publish, with no upload, after retrying", async () => {
-		capture.mockResolvedValue(null)
+	it("a capture that never settles still records the publish, with no upload", async () => {
+		mountFigure()
+		render.mockRejectedValue(new Error("Couldn't capture the chart"))
 		const { publish, recordedUrls } = setup()
 		await publish()
-		expect(capture).toHaveBeenCalledTimes(6)
 		expect(publishImage).not.toHaveBeenCalled()
 		expect(recordedUrls()).toEqual(HTML_URLS)
 	})
 
-	it("retries a capture that declines mid-layout and keeps the picture", async () => {
-		// A republish on save lands 800 ms after an edit, often before the
-		// chart's layout settles; the first captures say "not yet".
-		capture.mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValue(PNG)
+	it("no figure on screen: nothing to render, the publish still lands", async () => {
 		const { publish, recordedUrls } = setup()
 		await publish()
-		expect(capture).toHaveBeenCalledTimes(3)
-		expect(publishImage).toHaveBeenCalledTimes(1)
-		expect(recordedUrls()).toEqual({ ...HTML_URLS, image: IMAGE_URL })
+		expect(render).not.toHaveBeenCalled()
+		expect(publishImage).not.toHaveBeenCalled()
+		expect(recordedUrls()).toEqual(HTML_URLS)
 	})
 })

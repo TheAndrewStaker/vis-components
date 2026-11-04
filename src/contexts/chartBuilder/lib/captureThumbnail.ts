@@ -645,36 +645,23 @@ export const MAX_THUMBNAIL_DIM = 480
 
 /** Options shared by the capture entry points. Defaults reproduce the
  *  library-thumbnail capture exactly: 480px longest edge, cache-only fonts.
- *  The published-embed picture lifts the cap and lets fonts hit the network. */
+ *  (The published picture is not a thumbnail: it renders through the export
+ *  pipeline, `lib/exportImage.ts`.) */
 export type CaptureOptions = {
-	/** Longest-edge ceiling in px. Applied after `scale`. */
+	/** Longest-edge ceiling in px. */
 	maxDim?: number
-	/** Raster pixels per CSS px (default 1). The published picture uses 2 so
-	 *  it stays crisp on a projector; thumbnails never upscale. */
-	scale?: number
 	/** Let webfont embedding fetch uncached faces from the network. */
 	allowNetwork?: boolean
-	/** Capture the whole figure — plot panels, HTML legend and the canvas
-	 *  background (`[data-chart-root]`) — instead of the plot SVG alone. A
-	 *  thumbnail wants the bare plot (the library card paints the canvas
-	 *  colour itself); a picture that stands on its own does not. */
-	figure?: boolean
-	/** Paint white under the chart before drawing, as the PNG export does.
-	 *  Without it a theme with light text on an unset canvas colour comes
-	 *  out as white text on a transparent PNG. */
-	opaqueBackground?: boolean
 }
 
-/** The canvas size a `srcW`×`srcH` SVG rasterizes to: `scale` raster px per
- *  CSS px (default 1 — thumbnails never upscale), then scaled down so the
- *  longest edge fits `maxDim`. */
+/** The canvas size a `srcW`×`srcH` SVG rasterizes to: scaled down so the
+ *  longest edge fits `maxDim`, never up. */
 export const rasterTargetSize = (
 	srcW: number,
 	srcH: number,
-	maxDim: number = MAX_THUMBNAIL_DIM,
-	scale = 1
+	maxDim: number = MAX_THUMBNAIL_DIM
 ): { w: number; h: number } => {
-	scale = Math.min(scale, maxDim / Math.max(srcW, srcH))
+	const scale = Math.min(1, maxDim / Math.max(srcW, srcH))
 	return {
 		w: Math.max(1, Math.round(srcW * scale)),
 		h: Math.max(1, Math.round(srcH * scale)),
@@ -686,9 +673,7 @@ export const rasterTargetSize = (
  *  has zero intrinsic dimensions, or the canvas read is blocked. */
 const rasterizeSvg = (
 	svgDataUrl: string,
-	maxDim: number = MAX_THUMBNAIL_DIM,
-	opaqueBackground = false,
-	scale = 1
+	maxDim: number = MAX_THUMBNAIL_DIM
 ): Promise<string | null> =>
 	new Promise((resolve) => {
 		const img = new Image()
@@ -699,7 +684,7 @@ const rasterizeSvg = (
 				resolve(null)
 				return
 			}
-			const { w, h } = rasterTargetSize(srcW, srcH, maxDim, scale)
+			const { w, h } = rasterTargetSize(srcW, srcH, maxDim)
 			const canvas = document.createElement("canvas")
 			canvas.width = w
 			canvas.height = h
@@ -707,10 +692,6 @@ const rasterizeSvg = (
 			if (!ctx) {
 				resolve(null)
 				return
-			}
-			if (opaqueBackground) {
-				ctx.fillStyle = "#ffffff"
-				ctx.fillRect(0, 0, w, h)
 			}
 			ctx.drawImage(img, 0, 0, w, h)
 			try {
@@ -748,9 +729,7 @@ export const thumbnailFromChartSvgText = async (
 				allowNetwork: opts.allowNetwork ?? false,
 			})
 		),
-		opts.maxDim ?? MAX_THUMBNAIL_DIM,
-		opts.opaqueBackground ?? false,
-		opts.scale ?? 1
+		opts.maxDim ?? MAX_THUMBNAIL_DIM
 	)
 
 /** Capture the chart rendered in `doc` as a small PNG data URL for use as a
@@ -762,7 +741,7 @@ export const thumbnailFromChartSvgText = async (
  *  display-only CSS transform (EditorLayout). Every rect this module reads
  *  is in screen space, so lift the transform for the synchronous DOM walk
  *  and put it straight back — no paint happens in between. */
-const withoutDisplayScale = <T>(doc: Document, fn: () => T): T => {
+export const withoutDisplayScale = <T>(doc: Document, fn: () => T): T => {
 	const el = doc.querySelector<HTMLElement>("[data-editor-chart-viewport]")
 	const prev = el?.style.transform ?? ""
 	if (el && prev) el.style.transform = "none"
@@ -783,21 +762,15 @@ const captureThumbnailFromDocument = async (
 	// stored a collapsed, giant-text preview with a current stamp, which the
 	// library's refresh then trusted. Null keeps the old picture and the
 	// old stamp, so the refresh re-renders it offscreen instead.
-	const svgText = withoutDisplayScale(doc, () => {
-		if (!chartLayoutReady(doc)) return null
-		if (!opts.figure) return serializeChartSvg(doc)
-		// The whole figure: ChartCanvas's root carries the canvas colour and
-		// holds both the plot panels and the HTML legend. Falls back to the
-		// bare plot when the editor has no figure root (no data set yet).
-		const root = doc.querySelector<HTMLElement>("[data-chart-root]")
-		return root ? serializeEmbedCapture(doc, { root }) : serializeChartSvg(doc)
-	})
+	const svgText = withoutDisplayScale(doc, () =>
+		chartLayoutReady(doc) ? serializeChartSvg(doc) : null
+	)
 	if (!svgText) return null
 	return thumbnailFromChartSvgText(svgText, opts)
 }
 
-/** Capture the editor's own chart — the autosave path (default options),
- *  and the published-embed picture (cap lifted, network fonts allowed). */
+/** Capture the editor's own chart for its library thumbnail (the autosave
+ *  path; the backfill lifts the cap and lets fonts hit the network). */
 export const captureThumbnail = (
 	opts: CaptureOptions = {}
 ): Promise<string | null> => captureThumbnailFromDocument(document, opts)

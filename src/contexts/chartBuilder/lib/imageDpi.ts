@@ -65,6 +65,27 @@ const buildPhysChunk = (dpi: number): Uint8Array<ArrayBuffer> => {
 	return chunk
 }
 
+const INCHES_PER_METRE = 1 / 0.0254
+
+/** Dots per inch recorded in the PNG's `pHYs` chunk, or null when absent
+ *  (or in the chunk's "unknown unit" form). The add-in reads this to size
+ *  the slide shape; tests read it back. */
+export const readPngDpi = (png: Uint8Array): number | null => {
+	if (png.length < 8 + 12 || PNG_SIGNATURE.some((b, i) => png[i] !== b)) return null
+	const view = new DataView(png.buffer, png.byteOffset, png.byteLength)
+	let at = 8
+	while (at + 12 <= png.length) {
+		const length = view.getUint32(at)
+		const type = String.fromCharCode(png[at + 4], png[at + 5], png[at + 6], png[at + 7])
+		if (type === "pHYs" && length >= 9) {
+			if (view.getUint8(at + 8 + 8) !== 1) return null
+			return view.getUint32(at + 8) / INCHES_PER_METRE
+		}
+		at += 12 + length
+	}
+	return null
+}
+
 /** Return a copy of `png` carrying a pHYs chunk for `dpi` — replacing an
  *  existing pHYs, else inserted right after IHDR (the spec requires pHYs
  *  before the first IDAT). Anything that doesn't parse as expected returns
