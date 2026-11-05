@@ -248,6 +248,15 @@ describe("chart undo", () => {
 		await call("chart undo", { id, caller: "c" })
 		expect((await stored(id)).labelsConfig.title).toBe("")
 	})
+
+	it("refuses to put a chart back into, or over one in, the stock Examples folder", async () => {
+		const { id } = await chart()
+		const { undo } = await edit(id, "t")
+		const planted = { ...undo, previous: { ...undo.previous, folderId: PUBLIC_SEED_FOLDER_IDS[0] } }
+		const e = await refusal(call("chart undo", { id, undo: planted }))
+		expect(e.code).toBe("invalid")
+		expect((await stored(id)).labelsConfig.title).toBe("t")
+	})
 })
 
 describe("guide", () => {
